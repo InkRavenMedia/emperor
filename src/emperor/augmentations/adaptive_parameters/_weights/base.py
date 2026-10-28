@@ -33,7 +33,7 @@ class DynamicWeightAbstract(Module):
         self.output_dim = self.cfg.output_dim
         self.generator_depth = self.cfg.generator_depth
         self._decay_policy = DecayPolicy(self.cfg)
-        self._normalization_policy = WeightNormalizationPolicy(self.cfg)
+        self.normalization_policy = WeightNormalizationPolicy(self.cfg)
 
     def _init_model(
         self, overrides: "DepthMappingHandlerConfig"
@@ -55,14 +55,14 @@ class DynamicWeightAbstract(Module):
         input_vectors: Tensor,
         output_vectors: Tensor,
     ) -> Tensor:
-        input_vectors = self._normalization_policy.normalize_before_outer_product(
+        input_vectors = self.normalization_policy.normalize_before_outer_product(
             input_vectors
         )
-        output_vectors = self._normalization_policy.normalize_before_outer_product(
+        output_vectors = self.normalization_policy.normalize_before_outer_product(
             output_vectors
         )
         outer_product = self._compute_raw_outer_product(input_vectors, output_vectors)
-        return self._normalization_policy.normalize_after_outer_product(outer_product)
+        return self.normalization_policy.normalize_after_outer_product(outer_product)
 
     def _compute_raw_outer_product(
         self,
@@ -75,7 +75,7 @@ class DynamicWeightAbstract(Module):
         self,
         vectors: Tensor,
     ) -> Tensor:
-        return self._normalization_policy(vectors)
+        return self.normalization_policy(vectors)
 
     def _maybe_apply_weight_decay(self, weight_params: Tensor) -> Tensor:
         return self._decay_policy(weight_params)
