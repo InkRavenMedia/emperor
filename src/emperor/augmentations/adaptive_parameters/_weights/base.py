@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.augmentations.adaptive_parameters._weights.config import (
     DynamicWeightConfig,
 )

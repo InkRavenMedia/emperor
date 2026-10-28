@@ -147,7 +147,7 @@ class AdaptiveGeneratorValidatorBase:
 
     @staticmethod
     def validate_decay_parameters(cfg) -> None:
-        from emperor.augmentations.adaptive_parameters._options import (
+        from emperor.augmentations.adaptive_parameters._decay.options import (
             WeightDecayScheduleOptions,
         )
 
