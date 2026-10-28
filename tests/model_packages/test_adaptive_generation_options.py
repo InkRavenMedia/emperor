@@ -112,13 +112,17 @@ def test_generation_settings_reach_executable_adaptive_layers(
             assert weights.output_factor_model_config.hidden_dim == 7
             assert weights.coefficient_model_config.hidden_dim == 5
 
-    layer_config = AdaptiveLinearLayerConfig(
+    template_config = import_module(
+        "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
+    ).AdaptiveLinearLayerTemplateConfig
+    layer_config = template_config(
         input_dim=6,
         output_dim=4,
         bias_flag=True,
         adaptive_augmentation_config=deepcopy(augmentations[0]),
     )
-    layer = layer_config.registry_owner()(layer_config)
+    original_template = deepcopy(layer_config)
+    layer = layer_config.build()
     inputs = torch.randn(6, 6, requires_grad=True)
     outputs = layer(inputs)
     assert outputs.shape == (6, 4)
@@ -129,6 +133,21 @@ def test_generation_settings_reach_executable_adaptive_layers(
         parameter.grad is not None
         for parameter in layer.adaptive_behaviour.parameters()
     )
+    narrower_layer = layer_config.build(AdaptiveLinearLayerConfig(input_dim=5))
+    assert narrower_layer(torch.ones(2, 5)).shape == (2, 4)
+    for concrete_layer, expected_width in ((layer, 6), (narrower_layer, 5)):
+        bias = concrete_layer.adaptive_behaviour.bias_model
+        assert bias.cfg.sampler_config.router_config.input_dim == expected_width
+        assert bias.cfg.sampler_config.num_experts == bias.cfg.num_experts
+        assert bias.cfg.sampler_config.top_k == bias.cfg.top_k
+    assert layer_config == original_template
+    router = layer_config.adaptive_augmentation_config.bias_config.sampler_config.router_config
+    router.input_dim = 7
+    rng_state = torch.get_rng_state().clone()
+    with pytest.raises(ValueError, match="router_config.input_dim.*match"):
+        layer_config.build()
+    assert router.input_dim == 7
+    torch.testing.assert_close(torch.get_rng_state(), rng_state, rtol=0, atol=0)
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
@@ -169,13 +188,16 @@ def test_grouping_summaries_can_generate_mixture_parameters(package_name, method
         isinstance(augmentation.grouping_config, method)
         for augmentation in augmentations
     )
-    layer_config = AdaptiveLinearLayerConfig(
+    template_config = import_module(
+        "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
+    ).AdaptiveLinearLayerTemplateConfig
+    layer_config = template_config(
         input_dim=6,
         output_dim=4,
         bias_flag=True,
         adaptive_augmentation_config=deepcopy(augmentations[0]),
     )
-    layer = layer_config.registry_owner()(layer_config)
+    layer = layer_config.build()
     inputs = torch.randn(7, 6, requires_grad=True)
     outputs = layer(inputs)
     assert outputs.shape == (7, 4)

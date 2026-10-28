@@ -26,6 +26,9 @@ from emperor.layers import (
     RecurrentLayerConfig,
 )
 from emperor.sampler import RouterConfig, SamplerConfig
+from models.neuron.expert_linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.neuron.expert_linear_adaptive._generation import (
     mixture_generation_fields,
     weight_generation_fields,
@@ -250,7 +253,7 @@ class ControlConfigFactory:
         self,
         bias_flag: bool,
     ) -> AdaptiveLinearLayerConfig:
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=bias_flag,
             adaptive_augmentation_config=self.hidden_adaptive_augmentation_config,
         )
@@ -259,7 +262,7 @@ class ControlConfigFactory:
         self,
         bias_flag: bool,
     ) -> AdaptiveLinearLayerConfig:
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=bias_flag,
             adaptive_augmentation_config=self.router_adaptive_augmentation_config,
         )

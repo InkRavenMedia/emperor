@@ -264,14 +264,31 @@ class AdaptiveParameterConfigFactory:
             num_experts=getattr(options, f"{family}_mixture_num_experts"),
             top_k=getattr(options, f"{family}_mixture_top_k"),
             sampler_config=SamplerConfig(
-                normalize_probabilities_flag=getattr(
-                    options, f"{family}_mixture_normalize_probabilities_flag"
+                num_experts=getattr(options, f"{family}_mixture_num_experts"),
+                top_k=getattr(options, f"{family}_mixture_top_k"),
+                threshold=0.0,
+                filter_above_threshold=False,
+                num_topk_samples=0,
+                noisy_topk_flag=False,
+                coefficient_of_variation_loss_weight=0.0,
+                switch_loss_weight=0.0,
+                zero_centred_loss_weight=0.0,
+                mutual_information_loss_weight=0.0,
+                normalize_probabilities_flag=(
+                    getattr(options, f"{family}_mixture_normalize_probabilities_flag")
+                    if getattr(
+                        options, f"{family}_mixture_normalize_probabilities_flag"
+                    )
+                    is not None
+                    else (getattr(options, f"{family}_mixture_top_k") or 0) > 1
                 ),
                 router_config=RouterConfig(
+                    num_experts=getattr(options, f"{family}_mixture_num_experts"),
+                    noisy_topk_flag=False,
                     model_config=_independent_stack_config(
                         getattr(options, f"{family}_mixture_router_generator_stack"),
                         self._runtime.residual_stack,
-                    )
+                    ),
                 ),
             ),
         )

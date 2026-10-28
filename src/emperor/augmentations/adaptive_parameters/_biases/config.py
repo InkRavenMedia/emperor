@@ -117,7 +117,7 @@ class MatrixBiasMixtureConfig(DynamicBiasConfig):
     )
     top_k: int | None = optional_field("Number of selected entries per context.")
     sampler_config: "SamplerConfig | None" = optional_field(
-        "Required independent bounded top-k sampler and router for this parameter variant."
+        "Required sampler and router; routing controls and loss weights must be explicit."
     )
 
     def _registry_owner(self) -> type:

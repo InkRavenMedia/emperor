@@ -28,6 +28,9 @@ from emperor.sampler import RouterConfig, SamplerConfig
 from models.gpt.expert_linear_adaptive._adaptive_generator_stack_config_factory import (
     AdaptiveGeneratorStackConfigFactory,
 )
+from models.gpt.expert_linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.gpt.expert_linear_adaptive._adaptive_parameter_config_factory import (
     build_bias_config,
     build_diagonal_config,
@@ -251,7 +254,7 @@ class ControlConfigFactory:
         self,
         bias_flag: bool,
     ) -> AdaptiveLinearLayerConfig:
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=bias_flag,
             adaptive_augmentation_config=self.hidden_adaptive_augmentation_config,
         )
@@ -260,7 +263,7 @@ class ControlConfigFactory:
         self,
         bias_flag: bool,
     ) -> AdaptiveLinearLayerConfig:
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=bias_flag,
             adaptive_augmentation_config=self.router_adaptive_augmentation_config,
         )

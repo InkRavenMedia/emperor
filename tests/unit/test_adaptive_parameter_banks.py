@@ -3,8 +3,11 @@
 import pytest
 import torch
 
-from emperor.sampler import SamplerConfig
-from support.adaptive_generation import bias_mixture_config, weight_mixture_config
+from support.adaptive_generation import (
+    bias_mixture_config,
+    matrix_sampler_config,
+    weight_mixture_config,
+)
 
 
 @pytest.mark.parametrize("with_indices", [True, False])
@@ -22,7 +25,7 @@ def test_singleton_bank_preserves_independent_contexts(kind, with_indices, monke
             output_dim=3,
             num_experts=1,
             top_k=1,
-            sampler_config=SamplerConfig(),
+            sampler_config=matrix_sampler_config(num_experts=1, top_k=1),
             model_config=linear_stack_config(2, 1),
         )
         .build()
@@ -36,7 +39,12 @@ def test_singleton_bank_preserves_independent_contexts(kind, with_indices, monke
     monkeypatch.setattr(
         model.sampler,
         "sample_probabilities_and_indices",
-        lambda context: (probabilities, indices, None, context.new_zeros(())),
+        lambda context, skip_mask=None: (
+            probabilities,
+            indices,
+            None,
+            context.new_zeros(()),
+        ),
     )
     output = model(
         torch.zeros_like(model.parameter_bank[0]), torch.ones(2, 2, dtype=torch.float64)
@@ -112,7 +120,9 @@ def test_routes_follow_existing_sampler_probabilities_and_gradients(
     cfg = config_factory(
         num_experts=experts,
         top_k=k,
-        sampler_config=SamplerConfig(normalize_probabilities_flag=normalize),
+        sampler_config=matrix_sampler_config(
+            num_experts=experts, top_k=k, normalize_probabilities_flag=normalize
+        ),
     )
     if k == 1 and normalize:
         with pytest.raises(
@@ -155,21 +165,21 @@ def test_routes_follow_existing_sampler_probabilities_and_gradients(
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"threshold": 0.1},
-        {"num_topk_samples": 1},
-        {"noisy_topk_flag": True},
-        {"switch_loss_weight": 0.2},
-        {"coefficient_of_variation_loss_weight": 0.1},
-        {"zero_centred_loss_weight": 0.1},
-        {"mutual_information_loss_weight": 0.1},
+        {"threshold": -0.1},
+        {"num_topk_samples": 3},
+        {"noisy_topk_flag": "yes"},
+        {"switch_loss_weight": -0.2},
+        {"coefficient_of_variation_loss_weight": -0.1},
+        {"zero_centred_loss_weight": -0.1},
+        {"mutual_information_loss_weight": -0.1},
         {"num_experts": 5},
         {"top_k": 3},
     ],
 )
-def test_unsupported_or_disagreeing_sampler_options_fail_before_initialization(kwargs):
+def test_invalid_or_disagreeing_sampler_options_fail_before_initialization(kwargs):
     rng = torch.get_rng_state().clone()
     with pytest.raises((ValueError, TypeError)):
-        weight_mixture_config(sampler_config=SamplerConfig(**kwargs)).build()
+        weight_mixture_config(sampler_config=matrix_sampler_config(**kwargs)).build()
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
 
 
@@ -207,7 +217,12 @@ def test_malformed_sampler_routes_cannot_broadcast_silently(
     monkeypatch.setattr(
         model.sampler,
         "sample_probabilities_and_indices",
-        lambda context: (bad_probs, bad_indices, None, context.new_zeros(())),
+        lambda context, skip_mask=None: (
+            bad_probs,
+            bad_indices,
+            None,
+            context.new_zeros(()),
+        ),
     )
     with pytest.raises((TypeError, ValueError)):
         model(torch.zeros_like(model.parameter_bank[0]), torch.ones(2, 2))

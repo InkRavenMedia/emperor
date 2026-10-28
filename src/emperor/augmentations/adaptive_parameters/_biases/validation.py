@@ -111,7 +111,7 @@ class MatrixBiasMixtureValidator(DynamicBiasValidator):
     @classmethod
     def validate(cls, model) -> None:
         cls.validate_initialization_config(model.cfg)
-        cls.validate_resolved_config(model.cfg)
+        cls.validate_routing_config(model.cfg)
 
     @staticmethod
     def validate_configuration(cfg):
@@ -184,40 +184,48 @@ class MatrixBiasMixtureValidator(DynamicBiasValidator):
         cls.validate_supported_fields(sampler)
         cls.validate_field_types(sampler)
         for name in ("num_experts", "top_k"):
-            cls.validate_matching_value(
-                f"sampler_config.{name}", getattr(sampler, name), getattr(cfg, name)
-            )
-
-    @staticmethod
-    def validate_sampler_option(name, value, expected) -> None:
-        if value is not None and value != expected:
-            raise ValueError(
-                f"matrix mixture sampler_config.{name} must be {expected!r}."
-            )
+            value, expected = getattr(sampler, name), getattr(cfg, name)
+            if type(value) is not type(expected) or value != expected:
+                raise ValueError(
+                    f"sampler_config.{name} must match {expected!r}, received {value!r}."
+                )
 
     @staticmethod
     def validate_router_config(router_config) -> None:
         from emperor.sampler import RouterConfig
 
-        if router_config is not None and not isinstance(router_config, RouterConfig):
+        if router_config is None:
+            raise ValueError(
+                "sampler_config.router_config is required for an adaptive matrix mixture."
+            )
+        if not isinstance(router_config, RouterConfig):
             raise TypeError("sampler_config.router_config must be a RouterConfig.")
 
     @classmethod
     def validate_router_fields(cls, router, cfg) -> None:
         cls.validate_supported_fields(router)
         cls.validate_field_types(router)
-        for name in ("input_dim", "num_experts"):
-            cls.validate_matching_value(
-                f"sampler_config.router_config.{name}",
-                getattr(router, name),
-                getattr(cfg, name),
-            )
-        if router.noisy_topk_flag not in (None, False):
-            raise ValueError("matrix mixture router noisy_topk_flag must be False.")
+        for name, expected in (
+            ("input_dim", cfg.input_dim),
+            ("num_experts", cfg.num_experts),
+            ("noisy_topk_flag", cfg.sampler_config.noisy_topk_flag),
+        ):
+            value = getattr(router, name)
+            if type(value) is not type(expected) or value != expected:
+                raise ValueError(
+                    f"sampler_config.router_config.{name} must match {expected!r}, received {value!r}."
+                )
 
-    @staticmethod
-    def validate_resolved_config(cfg) -> None:
-        cfg.sampler_config.validate_for_router_input_dim(cfg.input_dim)
+    @classmethod
+    def validate_routing_config(cls, cfg) -> None:
+        sampler = cfg.sampler_config
+        cls.validate_sampler_fields(sampler, cfg)
+        cls.validate_router_config(sampler.router_config)
+        cls.validate_router_fields(sampler.router_config, cfg)
+        if sampler.router_config.model_config is None:
+            raise ValueError("sampler_config.router_config.model_config is required.")
+        cls.validate_generator_stack(sampler.router_config.model_config)
+        sampler.validate_for_router_input_dim()
 
     @staticmethod
     def validate_matching_value(name, value, expected):
@@ -246,13 +254,6 @@ class MatrixBiasMixtureValidator(DynamicBiasValidator):
     def validate_sampler_available(sampler) -> None:
         if sampler is None:
             raise ValueError("Adaptive matrix mixture requires an initialized sampler.")
-
-    @staticmethod
-    def validate_sampler_result(skip_mask: Tensor | None, loss: Tensor) -> None:
-        if skip_mask is not None or loss.detach().ne(0).any():
-            raise RuntimeError(
-                "Matrix mixture sampler returned unsupported skip/loss state."
-            )
 
     @classmethod
     def validate_forward_inputs(cls, model, bias_params, context):
