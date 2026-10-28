@@ -22,6 +22,9 @@ from models.bert.linear_adaptive._adaptive_hidden_model_config_factory import (
     HiddenModelConfigDependencies,
     HiddenModelConfigFactory,
 )
+from models.bert.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.bert.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
     HiddenAdaptiveBiasOptions,
@@ -60,7 +63,7 @@ class LinearLayerConfigFactory:
         effective_bias_flag = (
             bias_flag or self.adaptive_augmentation_config.bias_config is not None
         )
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=effective_bias_flag,
             adaptive_augmentation_config=self.adaptive_augmentation_config,
         )

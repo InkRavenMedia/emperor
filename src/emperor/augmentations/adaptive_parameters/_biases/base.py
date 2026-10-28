@@ -6,12 +6,14 @@ from emperor.augmentations.adaptive_parameters._biases.config import (
 from emperor.augmentations.adaptive_parameters._biases.validation import (
     DynamicBiasValidator,
 )
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.layers import Layer, LayerStack, LayerStackConfig
 from emperor.nn import Module
 
 
 class DynamicBiasAbstract(Module):
+    """Common runtime contract and setup for dynamic-bias variants."""
+
     VALIDATOR = DynamicBiasValidator
 
     def __init__(
@@ -24,8 +26,11 @@ class DynamicBiasAbstract(Module):
         self.VALIDATOR.validate(self)
         self.input_dim = self.cfg.input_dim
         self.output_dim = self.cfg.output_dim
-        self.model_config = self.cfg.model_config
         self._decay_policy = DecayPolicy(self.cfg)
+        self.model_config = self.cfg.model_config
+
+    def get_auxiliary_loss(self) -> Tensor | None:
+        return None
 
     def _init_model(self, output_dim: int) -> "Layer | LayerStack":
         overrides = LayerStackConfig(

@@ -1,0 +1,1 @@
+"""Private decay factor implementations."""

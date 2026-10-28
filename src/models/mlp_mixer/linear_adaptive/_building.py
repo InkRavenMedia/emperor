@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from emperor.attention import MixerAttentionConfig
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     AxisMaskConfig,
     DiagonalAxisMaskConfig,
@@ -41,6 +40,9 @@ from emperor.transformer import (
     FeedForwardConfig,
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
+)
+from models.mlp_mixer.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
 )
 
 from ._adaptive_options import (
@@ -238,10 +240,27 @@ def _mixture_generation_fields(runtime, family, defaults):
         "num_experts": getattr(runtime, family + "_mixture_num_experts"),
         "top_k": getattr(runtime, family + "_mixture_top_k"),
         "sampler_config": SamplerConfig(
-            normalize_probabilities_flag=getattr(
-                runtime, family + "_mixture_normalize_probabilities_flag"
+            num_experts=getattr(runtime, family + "_mixture_num_experts"),
+            top_k=getattr(runtime, family + "_mixture_top_k"),
+            threshold=0.0,
+            filter_above_threshold=False,
+            num_topk_samples=0,
+            noisy_topk_flag=False,
+            coefficient_of_variation_loss_weight=0.0,
+            switch_loss_weight=0.0,
+            zero_centred_loss_weight=0.0,
+            mutual_information_loss_weight=0.0,
+            normalize_probabilities_flag=(
+                getattr(runtime, family + "_mixture_normalize_probabilities_flag")
+                if getattr(runtime, family + "_mixture_normalize_probabilities_flag")
+                is not None
+                else (getattr(runtime, family + "_mixture_top_k") or 0) > 1
             ),
-            router_config=RouterConfig(model_config=router_model_config),
+            router_config=RouterConfig(
+                num_experts=getattr(runtime, family + "_mixture_num_experts"),
+                noisy_topk_flag=False,
+                model_config=router_model_config,
+            ),
         ),
     }
 
@@ -390,7 +409,7 @@ def _backend_linear_config(
 ):
     options = adaptive_options(runtime)
     bias_config = _bias_config(runtime, options.bias, options.generator_stack)
-    return AdaptiveLinearLayerConfig(
+    return AdaptiveLinearLayerTemplateConfig(
         bias_flag=bias_flag or bias_config is not None,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             grouping_config=grouping_from_runtime(runtime, grouping_prefix),

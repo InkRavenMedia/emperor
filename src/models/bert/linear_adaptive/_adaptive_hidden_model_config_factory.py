@@ -22,6 +22,9 @@ from models.bert.linear_adaptive import _config_defaults as config_defaults
 from models.bert.linear_adaptive._adaptive_generator_stack_config_factory import (
     AdaptiveGeneratorStackConfigFactory,
 )
+from models.bert.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.bert.linear_adaptive._adaptive_parameter_config_factory import (
     build_bias_config,
     build_diagonal_config,
@@ -240,7 +243,7 @@ class HiddenModelConfigFactory:
         )
 
     def __build_layer_model_config(self) -> AdaptiveLinearLayerConfig:
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=self.stack_options.bias_flag,
             adaptive_augmentation_config=self.adaptive_augmentation_config,
         )

@@ -1,9 +1,10 @@
 import torch
 from torch import Tensor
 
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.augmentations.adaptive_parameters._weights.config import (
     DynamicWeightConfig,
+    MatrixWeightsMixtureConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
     DepthMappingHandlerConfig,
@@ -19,6 +20,8 @@ from emperor.nn import Module
 
 
 class DynamicWeightAbstract(Module):
+    """Common runtime contract and setup for dynamic-weight variants."""
+
     VALIDATOR = DynamicWeightValidator
 
     def __init__(
@@ -31,9 +34,16 @@ class DynamicWeightAbstract(Module):
         self.VALIDATOR.validate(self)
         self.input_dim = self.cfg.input_dim
         self.output_dim = self.cfg.output_dim
-        self.generator_depth = self.cfg.generator_depth
         self._decay_policy = DecayPolicy(self.cfg)
-        self._normalization_policy = WeightNormalizationPolicy(self.cfg)
+        self.__init_depth_and_normalization()
+
+    def __init_depth_and_normalization(self) -> None:
+        if not isinstance(self.cfg, MatrixWeightsMixtureConfig):
+            self.generator_depth = self.cfg.generator_depth
+            self.normalization_policy = WeightNormalizationPolicy(self.cfg)
+
+    def get_auxiliary_loss(self) -> Tensor | None:
+        return None
 
     def _init_model(
         self, overrides: "DepthMappingHandlerConfig"
@@ -55,14 +65,14 @@ class DynamicWeightAbstract(Module):
         input_vectors: Tensor,
         output_vectors: Tensor,
     ) -> Tensor:
-        input_vectors = self._normalization_policy.normalize_before_outer_product(
+        input_vectors = self.normalization_policy.normalize_before_outer_product(
             input_vectors
         )
-        output_vectors = self._normalization_policy.normalize_before_outer_product(
+        output_vectors = self.normalization_policy.normalize_before_outer_product(
             output_vectors
         )
         outer_product = self._compute_raw_outer_product(input_vectors, output_vectors)
-        return self._normalization_policy.normalize_after_outer_product(outer_product)
+        return self.normalization_policy.normalize_after_outer_product(outer_product)
 
     def _compute_raw_outer_product(
         self,
@@ -75,7 +85,7 @@ class DynamicWeightAbstract(Module):
         self,
         vectors: Tensor,
     ) -> Tensor:
-        return self._normalization_policy(vectors)
+        return self.normalization_policy(vectors)
 
     def _maybe_apply_weight_decay(self, weight_params: Tensor) -> Tensor:
         return self._decay_policy(weight_params)

@@ -96,6 +96,13 @@ class Layer(LayerModuleBase):
         state: LayerState,
     ) -> LayerState:
         state.hidden = self.model(state.hidden)
+        get_auxiliary_loss = getattr(self.model, "get_auxiliary_loss", None)
+        if callable(get_auxiliary_loss):
+            auxiliary_loss = get_auxiliary_loss()
+            if auxiliary_loss is not None:
+                state.loss = self._accumulate_auxiliary_loss(
+                    state.loss, self._reduce_auxiliary_loss(auxiliary_loss)
+                )
         return state
 
     def _handle_layer_output(self, state: LayerState) -> LayerState:

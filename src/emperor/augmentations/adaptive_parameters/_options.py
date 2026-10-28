@@ -1,5 +1,9 @@
 from enum import Enum
 
+from emperor.augmentations.adaptive_parameters._decay.options import (
+    WeightDecayScheduleOptions as WeightDecayScheduleOptions,
+)
+
 
 class LowRankFactorSourceOptions(Enum):
     GENERATED = 1
@@ -56,10 +60,3 @@ class WeightNormalizationPositionOptions(Enum):
     DISABLED = 0
     BEFORE_OUTER_PRODUCT = 1
     AFTER_OUTER_PRODUCT = 2
-
-
-class WeightDecayScheduleOptions(Enum):
-    DISABLED = 0
-    EXPONENTIAL = 1
-    LINEAR = 2
-    MULTIPLICATIVE = 3

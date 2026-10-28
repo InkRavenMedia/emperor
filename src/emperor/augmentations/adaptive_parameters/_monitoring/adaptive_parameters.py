@@ -187,7 +187,7 @@ class _AdaptiveParameterDiagnostics:
             return ()
         metrics: list[_AdaptiveParameterMetric] = []
         decay_policy = getattr(option, "_decay_policy", None)
-        normalization_policy = getattr(option, "_normalization_policy", None)
+        normalization_policy = getattr(option, "normalization_policy", None)
         for metric_owner, attribute_name in (
             (decay_policy, "decay_step"),
             (decay_policy, "warmup_step"),

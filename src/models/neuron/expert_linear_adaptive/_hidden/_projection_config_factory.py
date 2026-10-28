@@ -22,6 +22,9 @@ from emperor.layers import (
     LayerNormPositionOptions,
     NormalizationOptions,
 )
+from models.neuron.expert_linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.neuron.expert_linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
@@ -172,7 +175,7 @@ class BoundaryModelConfigFactory:
             ),
             model_config=self.shared_adaptive_generator_stack_config,
         )
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=self.stack_options.bias_flag,
             adaptive_augmentation_config=augmentation,
         )

@@ -7,6 +7,7 @@ focused_tests = [
   "tests/unit/test_config_foundations.py",
   "tests/unit/test_validator_base.py",
   "tests/unit/test_nn.py",
+  "tests/unit/test_forward_schedule.py",
   "tests/unit/test_nn_visualization.py",
   "tests/unit/test_monitor_emission_policy.py",
   "tests/unit/test_foundational_imports.py",
@@ -37,6 +38,7 @@ modules = [
   "src/emperor/monitoring/_metadata.py",
   "src/emperor/nn/__init__.py",
   "src/emperor/nn/_module.py",
+  "src/emperor/nn/_forward_schedule.py",
   "src/emperor/nn/_parameters.py",
   "src/emperor/nn/_visualization.py",
 ]
@@ -381,6 +383,7 @@ modules = [
 [families.adaptive_parameters]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_adaptive_matrix_sampler_options.py",
   "tests/unit/test_matrix_mixture_variants.py",
   "tests/unit/test_adaptive_generation*.py",
   "tests/unit/test_augmentation*.py",
@@ -426,7 +429,15 @@ modules = [
   "src/emperor/augmentations/adaptive_parameters/_biases/validation.py",
   "src/emperor/augmentations/adaptive_parameters/_biases/variants/weighted_bank.py",
   "src/emperor/augmentations/adaptive_parameters/_config.py",
-  "src/emperor/augmentations/adaptive_parameters/_decay.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/__init__.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/base.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/options.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/policy.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/validation.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/variants/__init__.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/variants/exponential.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/variants/linear.py",
+  "src/emperor/augmentations/adaptive_parameters/_decay/variants/multiplicative.py",
   "src/emperor/augmentations/adaptive_parameters/_grouping/plan.py",
   "src/emperor/augmentations/adaptive_parameters/_grouping/splitter.py",
   "src/emperor/augmentations/adaptive_parameters/_diagonals/__init__.py",

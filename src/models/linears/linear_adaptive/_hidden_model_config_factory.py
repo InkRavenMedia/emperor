@@ -1,8 +1,10 @@
-from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
 from emperor.layers import (
     LayerConfig,
     LayerStackConfig,
     RecurrentLayerConfig,
+)
+from models.linears.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
 )
 from models.linears.linear_adaptive._adaptive_parameter_config_factory import (
     AdaptiveParameterConfigFactory,
@@ -51,7 +53,7 @@ class HiddenModelConfigFactory:
                 halting_config=self._control_factory.build_halting_config(
                     runtime.halting
                 ),
-                layer_model_config=AdaptiveLinearLayerConfig(
+                layer_model_config=AdaptiveLinearLayerTemplateConfig(
                     bias_flag=runtime.stack.bias_flag,
                     adaptive_augmentation_config=(
                         self._adaptive_factory.build_hidden_config()

@@ -67,6 +67,11 @@ class AdaptiveLinearLayer(LinearAbstract):
             X,
         )
 
+    def get_auxiliary_loss(self) -> Tensor | None:
+        if self.adaptive_behaviour is None:
+            return None
+        return self.adaptive_behaviour.get_auxiliary_loss()
+
     def _compute_affine_transformation_callback(
         self, weights: Tensor, bias: Tensor | None, X: Tensor
     ) -> Tensor:
