@@ -383,6 +383,7 @@ modules = [
 [families.adaptive_parameters]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_adaptive_matrix_sampler_options.py",
   "tests/unit/test_matrix_mixture_variants.py",
   "tests/unit/test_adaptive_generation*.py",
   "tests/unit/test_augmentation*.py",

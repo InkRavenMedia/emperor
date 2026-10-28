@@ -10,7 +10,6 @@ from emperor.attention import (
     SelfAttentionProjectionStrategy,
 )
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     MatrixBiasMixtureConfig,
     MatrixWeightsMixtureConfig,
@@ -37,6 +36,9 @@ from emperor.transformer import (
     TransformerDecoderLayerConfig,
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
+)
+from models.transformer.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
 )
 
 from ._residual import (
@@ -146,8 +148,24 @@ def _adaptive_augmentation(
             "num_experts": options.weight_mixture_num_experts,
             "top_k": options.weight_mixture_top_k,
             "sampler_config": SamplerConfig(
-                normalize_probabilities_flag=options.weight_mixture_normalize_probabilities_flag,
+                num_experts=options.weight_mixture_num_experts,
+                top_k=options.weight_mixture_top_k,
+                threshold=0.0,
+                filter_above_threshold=False,
+                num_topk_samples=0,
+                noisy_topk_flag=False,
+                coefficient_of_variation_loss_weight=0.0,
+                switch_loss_weight=0.0,
+                zero_centred_loss_weight=0.0,
+                mutual_information_loss_weight=0.0,
+                normalize_probabilities_flag=(
+                    options.weight_mixture_normalize_probabilities_flag
+                    if options.weight_mixture_normalize_probabilities_flag is not None
+                    else (options.weight_mixture_top_k or 0) > 1
+                ),
                 router_config=RouterConfig(
+                    num_experts=options.weight_mixture_num_experts,
+                    noisy_topk_flag=False,
                     model_config=_component_generator_stack(
                         options.weight_mixture_router_generator_stack_options,
                         resolve_controller_stack_options(
@@ -155,7 +173,7 @@ def _adaptive_augmentation(
                             options.generator_stack_options,
                         ),
                         residual_stack_options,
-                    )
+                    ),
                 ),
             ),
             "generator_depth": options.generator_depth,
@@ -197,8 +215,24 @@ def _adaptive_augmentation(
             "num_experts": options.bias_mixture_num_experts,
             "top_k": options.bias_mixture_top_k,
             "sampler_config": SamplerConfig(
-                normalize_probabilities_flag=options.bias_mixture_normalize_probabilities_flag,
+                num_experts=options.bias_mixture_num_experts,
+                top_k=options.bias_mixture_top_k,
+                threshold=0.0,
+                filter_above_threshold=False,
+                num_topk_samples=0,
+                noisy_topk_flag=False,
+                coefficient_of_variation_loss_weight=0.0,
+                switch_loss_weight=0.0,
+                zero_centred_loss_weight=0.0,
+                mutual_information_loss_weight=0.0,
+                normalize_probabilities_flag=(
+                    options.bias_mixture_normalize_probabilities_flag
+                    if options.bias_mixture_normalize_probabilities_flag is not None
+                    else (options.bias_mixture_top_k or 0) > 1
+                ),
                 router_config=RouterConfig(
+                    num_experts=options.bias_mixture_num_experts,
+                    noisy_topk_flag=False,
                     model_config=_component_generator_stack(
                         options.bias_mixture_router_generator_stack_options,
                         resolve_controller_stack_options(
@@ -206,7 +240,7 @@ def _adaptive_augmentation(
                             options.generator_stack_options,
                         ),
                         residual_stack_options,
-                    )
+                    ),
                 ),
             ),
             "decay_schedule": options.bias_decay_schedule,
@@ -309,7 +343,7 @@ def _adaptive_stack(
             gate_config=None,
             halting_config=None,
             memory_config=None,
-            layer_model_config=AdaptiveLinearLayerConfig(
+            layer_model_config=AdaptiveLinearLayerTemplateConfig(
                 bias_flag=stack_options.bias_flag,
                 adaptive_augmentation_config=_adaptive_augmentation(
                     adaptive_options,

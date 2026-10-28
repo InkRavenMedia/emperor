@@ -42,6 +42,9 @@ class DynamicWeightAbstract(Module):
             self.generator_depth = self.cfg.generator_depth
             self.normalization_policy = WeightNormalizationPolicy(self.cfg)
 
+    def get_auxiliary_loss(self) -> Tensor | None:
+        return None
+
     def _init_model(
         self, overrides: "DepthMappingHandlerConfig"
     ) -> DepthMappingLayerStack:

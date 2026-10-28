@@ -50,6 +50,20 @@ class AdaptiveParameterAugmentation(Module):
     def adaptive_parameter_grouping_enabled(self) -> bool:
         return self.grouping_config is not None
 
+    def get_auxiliary_loss(self) -> Tensor | None:
+        auxiliary_loss = None
+        for model in (self.weight_model, self.bias_model):
+            if model is None:
+                continue
+            model_loss = model.get_auxiliary_loss()
+            if model_loss is not None:
+                auxiliary_loss = (
+                    model_loss
+                    if auxiliary_loss is None
+                    else auxiliary_loss + model_loss
+                )
+        return auxiliary_loss
+
     def __build_grouper(self) -> "GrouperAbstract | None":
         if self.grouping_config is None:
             return None
@@ -101,6 +115,10 @@ class AdaptiveParameterAugmentation(Module):
     ) -> Tensor:
         self.VALIDATOR.validate_grouped_forward_inputs(weight_params, bias_params)
         if self.grouping_config.chunk_size is not None and input.size(0) == 0:
+            for model in (self.weight_model, self.bias_model):
+                sampler = getattr(model, "sampler", None)
+                if sampler is not None:
+                    sampler.reset_runtime_observation()
             return input[:, :1].expand(0, self.output_dim)
         context, group_plan = self.grouper(input)
         grouped_output = self.__apply_augmentation(

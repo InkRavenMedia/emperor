@@ -321,7 +321,6 @@ class AdaptiveParameterAugmentationValidator(
                     variant,
                     input_dim=input_dim,
                     output_dim=output_dim,
-                    model_config=config.model_config,
                 )
 
     @classmethod

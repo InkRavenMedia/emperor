@@ -24,6 +24,9 @@ from emperor.layers import (
 from models.experts.linear_adaptive._adaptive_generator_stack_config_factory import (
     AdaptiveGeneratorStackConfigFactory,
 )
+from models.experts.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.experts.linear_adaptive._adaptive_parameter_config_factory import (
     build_bias_config,
     build_diagonal_config,
@@ -171,7 +174,7 @@ class BoundaryModelConfigFactory:
             ),
             model_config=self.shared_adaptive_generator_stack_config,
         )
-        return AdaptiveLinearLayerConfig(
+        return AdaptiveLinearLayerTemplateConfig(
             bias_flag=self.stack_options.bias_flag,
             adaptive_augmentation_config=augmentation,
         )

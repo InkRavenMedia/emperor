@@ -15,7 +15,7 @@ from emperor.augmentations.adaptive_parameters._biases.base import DynamicBiasAb
 from emperor.augmentations.adaptive_parameters._weights.base import (
     DynamicWeightAbstract,
 )
-from emperor.sampler import SamplerConfig
+from support.adaptive_generation import matrix_sampler_config
 from support.adaptive_grouping import linear_stack_config
 
 
@@ -73,7 +73,7 @@ def test_matrix_mixture_runtime_and_validation_are_owned_by_each_family(
         output_dim=3,
         num_experts=3,
         top_k=2,
-        sampler_config=SamplerConfig(
+        sampler_config=matrix_sampler_config(
             router_config=RouterConfig(
                 input_dim=2,
                 num_experts=3,
@@ -125,9 +125,8 @@ def test_matrix_mixture_validators_only_check_configuration(config_type):
     ],
 )
 @pytest.mark.parametrize("top_k", [1, 2, 3])
-@pytest.mark.parametrize("model_source", ["parent", "variant", "router"])
-def test_owner_preflight_and_build_preserve_configuration_and_router_defaults(
-    slot, config_type, top_k, model_source
+def test_owner_preflight_and_build_preserve_explicit_router_configuration(
+    slot, config_type, top_k
 ):
     from copy import deepcopy
 
@@ -138,28 +137,20 @@ def test_owner_preflight_and_build_preserve_configuration_and_router_defaults(
     variant_model.hidden_dim = 5
     router_model = linear_stack_config(2, 3)
     router_model.hidden_dim = 7
-    router_config = None
-    selected_model = None
-    expected_model = parent_model
-    if model_source != "parent":
-        selected_model = variant_model
-        expected_model = variant_model
-    if model_source == "router":
-        router_config = RouterConfig(model_config=router_model)
-        expected_model = router_model
+    router_config = RouterConfig(
+        input_dim=2, num_experts=3, noisy_topk_flag=False, model_config=router_model
+    )
     source = config_type(
         num_experts=3,
         top_k=top_k,
-        model_config=selected_model,
-        sampler_config=SamplerConfig(router_config=router_config),
+        model_config=variant_model,
+        sampler_config=matrix_sampler_config(top_k=top_k, router_config=router_config),
     )
     original = deepcopy(source)
     original_parent_model = deepcopy(parent_model)
     rng = torch.get_rng_state().clone()
     assert (
-        source.registry_owner().validate_owner_config(
-            source, input_dim=2, output_dim=3, model_config=parent_model
-        )
+        source.registry_owner().validate_owner_config(source, input_dim=2, output_dim=3)
         is None
     )
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
@@ -180,8 +171,8 @@ def test_owner_preflight_and_build_preserve_configuration_and_router_defaults(
     assert sampler.router_config.input_dim == 2
     assert sampler.router_config.num_experts == 3
     assert sampler.router_config.noisy_topk_flag is False
-    assert sampler.router_config.model_config == expected_model
-    assert sampler.router_config.model_config is not expected_model
+    assert sampler.router_config.model_config == router_model
+    assert sampler.router_config.model_config is not router_model
     assert source == original and parent_model == original_parent_model
     assert source.sampler_config is not sampler
 
@@ -198,7 +189,7 @@ def test_owner_preflight_and_build_preserve_configuration_and_router_defaults(
     [
         ({"num_experts": 4}, "num_experts.*match"),
         ({"top_k": 3}, "top_k.*match"),
-        ({"switch_loss_weight": 0.5}, "switch_loss_weight"),
+        ({"switch_loss_weight": -0.5}, "switch_loss_weight"),
         ({"normalize_probabilities_flag": "yes"}, "normalize_probabilities_flag"),
         ({"router_config": object()}, "router_config"),
     ],
@@ -209,7 +200,7 @@ def test_parent_preflight_rejects_invalid_sampler_without_mutation_or_initializa
     source = config_type(
         num_experts=3,
         top_k=2,
-        sampler_config=SamplerConfig(**invalid_options),
+        sampler_config=matrix_sampler_config(**invalid_options),
     )
     config = AdaptiveLinearLayerConfig(
         input_dim=2,
@@ -239,7 +230,7 @@ def test_forward_samples_once_and_uses_the_selected_probabilities_and_indices(
         output_dim=3,
         num_experts=3,
         top_k=2,
-        sampler_config=SamplerConfig(),
+        sampler_config=matrix_sampler_config(),
         model_config=linear_stack_config(2, 3),
     ).build()
     context = torch.ones(2, 2)
@@ -247,9 +238,9 @@ def test_forward_samples_once_and_uses_the_selected_probabilities_and_indices(
     forward_outputs = []
     original_sample = model.sampler.sample_probabilities_and_indices
 
-    def observe_sample(input_matrix):
+    def observe_sample(input_matrix, skip_mask=None):
         assert input_matrix is context
-        sample = original_sample(input_matrix)
+        sample = original_sample(input_matrix, skip_mask)
         samples.append(sample)
         return sample
 
@@ -293,7 +284,7 @@ def test_forward_has_no_external_route_argument(config_type):
         output_dim=3,
         num_experts=2,
         top_k=2,
-        sampler_config=SamplerConfig(),
+        sampler_config=matrix_sampler_config(num_experts=2),
         model_config=linear_stack_config(2, 2),
     ).build()
     assert "route" not in inspect.signature(model.forward).parameters
@@ -352,6 +343,8 @@ def test_owner_rejects_missing_mixture_sampler_before_parameter_initialization(
     "config_type", [MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig]
 )
 def test_matrix_mixture_requires_a_router_model_as_well_as_sampler_config(config_type):
+    sampler_config = matrix_sampler_config(num_experts=2)
+    sampler_config.router_config.model_config = None
     rng = torch.get_rng_state().clone()
     with pytest.raises((TypeError, ValueError), match="model_config|LayerStackConfig"):
         config_type(
@@ -359,7 +352,7 @@ def test_matrix_mixture_requires_a_router_model_as_well_as_sampler_config(config
             output_dim=3,
             num_experts=2,
             top_k=2,
-            sampler_config=SamplerConfig(),
+            sampler_config=sampler_config,
         ).build()
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
 
@@ -386,12 +379,14 @@ def test_independent_mixture_selection_preserves_base_parameters(
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             model_config=linear_stack_config(2, 3),
             weight_config=MatrixWeightsMixtureConfig(
-                num_experts=3, top_k=2, sampler_config=SamplerConfig()
+                num_experts=3, top_k=2, sampler_config=matrix_sampler_config()
             )
             if weight_enabled
             else None,
             bias_config=MatrixBiasMixtureConfig(
-                num_experts=2, top_k=1, sampler_config=SamplerConfig()
+                num_experts=2,
+                top_k=1,
+                sampler_config=matrix_sampler_config(num_experts=2, top_k=1),
             )
             if bias_enabled
             else None,
@@ -443,7 +438,7 @@ def test_mixture_adds_supplied_base_without_mutating_configuration(
         num_experts=3,
         top_k=2,
         model_config=linear_stack_config(2, 3),
-        sampler_config=SamplerConfig(normalize_probabilities_flag=False),
+        sampler_config=matrix_sampler_config(normalize_probabilities_flag=False),
     )
     original = deepcopy(source)
     model = source.build(config_type(input_dim=2, output_dim=3)).double()
@@ -468,7 +463,9 @@ def test_bias_mixture_cannot_enable_a_bias_disabled_linear():
             adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
                 model_config=linear_stack_config(2, 3),
                 bias_config=MatrixBiasMixtureConfig(
-                    num_experts=2, top_k=1, sampler_config=SamplerConfig()
+                    num_experts=2,
+                    top_k=1,
+                    sampler_config=matrix_sampler_config(top_k=1),
                 ),
             ),
         ).build()
@@ -488,13 +485,17 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             weight_config=weight_mixture_config(
-                sampler_config=SamplerConfig(normalize_probabilities_flag=False),
+                sampler_config=matrix_sampler_config(
+                    normalize_probabilities_flag=False
+                ),
                 decay_schedule=WeightDecayScheduleOptions.LINEAR,
                 decay_rate=0.25,
                 decay_warmup_batches=1,
             ),
             bias_config=bias_mixture_config(
-                sampler_config=SamplerConfig(normalize_probabilities_flag=False),
+                sampler_config=matrix_sampler_config(
+                    normalize_probabilities_flag=False
+                ),
                 decay_schedule=WeightDecayScheduleOptions.MULTIPLICATIVE,
                 decay_rate=0.5,
                 decay_warmup_batches=0,
@@ -578,7 +579,9 @@ def test_matrix_mixture_decay_schedules_scale_only_the_base(config_type, schedul
             output_dim=3,
             num_experts=3,
             top_k=3,
-            sampler_config=SamplerConfig(normalize_probabilities_flag=False),
+            sampler_config=matrix_sampler_config(
+                top_k=3, normalize_probabilities_flag=False
+            ),
             model_config=linear_stack_config(2, 3),
             decay_schedule=schedule,
             decay_rate=0.25,
@@ -634,7 +637,7 @@ def test_invalid_matrix_decay_config_fails_before_parameter_initialization(
             "output_dim": 3,
             "num_experts": 3,
             "top_k": 2,
-            "sampler_config": SamplerConfig(),
+            "sampler_config": matrix_sampler_config(),
             "model_config": linear_stack_config(2, 3),
             "decay_schedule": WeightDecayScheduleOptions.LINEAR,
             "decay_rate": 0.25,
@@ -659,7 +662,7 @@ def test_matrix_mixture_requires_base_parameters_before_sampling(
         output_dim=3,
         num_experts=3,
         top_k=2,
-        sampler_config=SamplerConfig(),
+        sampler_config=matrix_sampler_config(),
         model_config=linear_stack_config(2, 3),
     ).build()
     sampler_calls = []

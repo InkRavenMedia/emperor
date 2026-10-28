@@ -1,9 +1,11 @@
-from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
 from emperor.layers import (
     ActivationOptions,
     LayerConfig,
     LayerNormPositionOptions,
     NormalizationOptions,
+)
+from models.neuron.linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
 )
 from models.neuron.linear_adaptive._hidden._adaptive_parameter_config_factory import (
     AdaptiveParameterConfigFactory,
@@ -45,7 +47,7 @@ class ProjectionConfigFactory:
             dropout_probability=0.0,
             gate_config=None,
             halting_config=None,
-            layer_model_config=AdaptiveLinearLayerConfig(
+            layer_model_config=AdaptiveLinearLayerTemplateConfig(
                 bias_flag=self._runtime.stack.bias_flag,
                 adaptive_augmentation_config=(
                     self._adaptive_factory.build_projection_config(options)

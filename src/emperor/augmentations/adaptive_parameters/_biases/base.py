@@ -29,6 +29,9 @@ class DynamicBiasAbstract(Module):
         self._decay_policy = DecayPolicy(self.cfg)
         self.model_config = self.cfg.model_config
 
+    def get_auxiliary_loss(self) -> Tensor | None:
+        return None
+
     def _init_model(self, output_dim: int) -> "Layer | LayerStack":
         overrides = LayerStackConfig(
             input_dim=self.input_dim,

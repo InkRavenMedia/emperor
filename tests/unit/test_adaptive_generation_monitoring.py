@@ -114,9 +114,9 @@ def test_bank_monitor_observes_sampler_routes_without_changing_outputs_or_gradie
     samples = []
     original_sample = bank.sampler.sample_probabilities_and_indices
 
-    def observe_sample(input_matrix):
+    def observe_sample(input_matrix, skip_mask=None):
         assert input_matrix is context
-        sample = original_sample(input_matrix)
+        sample = original_sample(input_matrix, skip_mask)
         samples.append(sample)
         return sample
 
