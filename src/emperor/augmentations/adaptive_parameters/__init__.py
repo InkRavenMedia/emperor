@@ -18,7 +18,10 @@ from emperor.augmentations.adaptive_parameters._config import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
 )
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._decay.options import (
+    WeightDecayScheduleOptions,
+)
+from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.augmentations.adaptive_parameters._diagonals.config import (
     AntiDynamicDiagonalConfig,
     CombinedDynamicDiagonalConfig,
@@ -51,7 +54,6 @@ from emperor.augmentations.adaptive_parameters._options import (
     DynamicDepthOptions,
     LowRankFactorSourceOptions,
     MaskDimensionOptions,
-    WeightDecayScheduleOptions,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )

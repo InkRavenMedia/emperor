@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import pickle
 import unittest
 
 import pytest
@@ -35,6 +36,8 @@ from emperor.augmentations.adaptive_parameters import (
 from emperor.augmentations.adaptive_parameters._biases.base import (
     DynamicBiasAbstract,
 )
+from emperor.augmentations.adaptive_parameters._decay.base import DecayAbstract
+from emperor.augmentations.adaptive_parameters._decay.validation import DecayValidator
 from emperor.augmentations.adaptive_parameters._linear_adapter import (
     AdaptiveLinearLayer,
 )
@@ -211,6 +214,99 @@ class FailingGenerator(nn.Module):
 
 
 class AdaptiveParameterDecayPolicyTests(unittest.TestCase):
+    def test_policy_dispatches_variant_validation_after_warmup(self) -> None:
+        class RejectingDecayValidator(DecayValidator):
+            @staticmethod
+            def validate_decay_variant(
+                decay_variant: DecayAbstract | None,
+                decay_schedule_option: object,
+            ) -> DecayAbstract:
+                raise ValueError("Selected decay variant rejected.")
+
+        class ValidatedDecayPolicy(DecayPolicy):
+            VALIDATOR = RejectingDecayValidator
+
+        config = bias_config(
+            AdditiveDynamicBiasConfig,
+            WeightDecayScheduleOptions.EXPONENTIAL,
+            rate=0.1,
+            warmup_batches=1,
+        )
+        policy = ValidatedDecayPolicy(config)
+        parameters = torch.ones(2)
+
+        warmup_output = policy(parameters)
+        self.assertIs(warmup_output, parameters)
+        self.assertEqual(policy.warmup_step.item(), 1)
+        with self.assertRaisesRegex(ValueError, "^Selected decay variant rejected\\.$"):
+            policy(parameters)
+        self.assertEqual(policy.decay_step.item(), 0)
+
+    def test_existing_decay_imports_and_serialized_options_remain_compatible(
+        self,
+    ) -> None:
+        from emperor.augmentations.adaptive_parameters._decay import (
+            DecayPolicy as ExistingDecayPolicy,
+        )
+        from emperor.augmentations.adaptive_parameters._options import (
+            WeightDecayScheduleOptions as ExistingDecayOptions,
+        )
+
+        self.assertIs(ExistingDecayPolicy, DecayPolicy)
+        self.assertIs(ExistingDecayOptions, WeightDecayScheduleOptions)
+        for option in WeightDecayScheduleOptions:
+            with self.subTest(option=option):
+                serialized_option = (
+                    "cemperor.augmentations.adaptive_parameters._options\n"
+                    "WeightDecayScheduleOptions\n"
+                    f"(I{option.value}\ntR."
+                ).encode("ascii")
+                restored_option = pickle.loads(serialized_option)
+                self.assertIs(restored_option, option)
+
+    def test_runtime_schedule_changes_preserve_progress_and_evaluation_mode(
+        self,
+    ) -> None:
+        config = bias_config(
+            AdditiveDynamicBiasConfig,
+            WeightDecayScheduleOptions.EXPONENTIAL,
+            rate=0.1,
+            warmup_batches=1,
+        )
+        policy = DecayPolicy(config).double()
+        parameters = torch.tensor([2.0, -4.0], dtype=torch.float64)
+
+        warmup_output = policy(parameters)
+        initial_decay_output = policy(parameters)
+        self.assertIs(warmup_output, parameters)
+        torch.testing.assert_close(initial_decay_output, parameters)
+        self.assertEqual(policy.warmup_step.item(), 1)
+        self.assertEqual(policy.decay_step.item(), 1)
+
+        policy.decay_schedule_option = WeightDecayScheduleOptions.LINEAR
+        policy.decay_rate = 0.25
+        linear_output = policy(parameters)
+        expected_linear_output = parameters * 0.75
+        torch.testing.assert_close(linear_output, expected_linear_output)
+        self.assertEqual(policy.decay_step.item(), 2)
+
+        policy.eval()
+        policy.decay_schedule_option = WeightDecayScheduleOptions.MULTIPLICATIVE
+        multiplicative_output = policy(parameters)
+        expected_multiplicative_output = parameters * 0.5625
+        torch.testing.assert_close(
+            multiplicative_output, expected_multiplicative_output
+        )
+        self.assertEqual(policy.decay_step.item(), 2)
+
+        for disabled_option in (None, WeightDecayScheduleOptions.DISABLED):
+            with self.subTest(option=disabled_option):
+                policy.decay_schedule_option = disabled_option
+                disabled_output = policy(parameters)
+                self.assertIs(disabled_output, parameters)
+                self.assertEqual(policy.decay_step.item(), 2)
+                self.assertEqual(policy.warmup_step.item(), 1)
+
     def test_decay_policy_uses_module_composition_and_forward(self) -> None:
         self.assertTupleEqual(DynamicWeightAbstract.__bases__, (Module,))
         self.assertTupleEqual(DynamicBiasAbstract.__bases__, (Module,))

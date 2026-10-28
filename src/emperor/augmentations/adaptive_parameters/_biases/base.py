@@ -6,7 +6,7 @@ from emperor.augmentations.adaptive_parameters._biases.config import (
 from emperor.augmentations.adaptive_parameters._biases.validation import (
     DynamicBiasValidator,
 )
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.layers import Layer, LayerStack, LayerStackConfig
 from emperor.nn import Module
 

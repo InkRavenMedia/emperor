@@ -1,9 +1,11 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from emperor.augmentations.adaptive_parameters._decay.options import (
+    WeightDecayScheduleOptions,
+)
 from emperor.augmentations.adaptive_parameters._options import (
     BankExpansionFactorOptions,
-    WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase, optional_field
 
