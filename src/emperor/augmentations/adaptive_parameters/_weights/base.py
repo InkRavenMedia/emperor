@@ -4,6 +4,7 @@ from torch import Tensor
 from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.augmentations.adaptive_parameters._weights.config import (
     DynamicWeightConfig,
+    MatrixWeightsMixtureConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
     DepthMappingHandlerConfig,
@@ -19,6 +20,8 @@ from emperor.nn import Module
 
 
 class DynamicWeightAbstract(Module):
+    """Common runtime contract and setup for dynamic-weight variants."""
+
     VALIDATOR = DynamicWeightValidator
 
     def __init__(
@@ -31,9 +34,13 @@ class DynamicWeightAbstract(Module):
         self.VALIDATOR.validate(self)
         self.input_dim = self.cfg.input_dim
         self.output_dim = self.cfg.output_dim
-        self.generator_depth = self.cfg.generator_depth
         self._decay_policy = DecayPolicy(self.cfg)
-        self.normalization_policy = WeightNormalizationPolicy(self.cfg)
+        self.__init_depth_and_normalization()
+
+    def __init_depth_and_normalization(self) -> None:
+        if not isinstance(self.cfg, MatrixWeightsMixtureConfig):
+            self.generator_depth = self.cfg.generator_depth
+            self.normalization_policy = WeightNormalizationPolicy(self.cfg)
 
     def _init_model(
         self, overrides: "DepthMappingHandlerConfig"

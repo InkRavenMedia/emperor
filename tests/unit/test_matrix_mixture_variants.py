@@ -11,6 +11,10 @@ from emperor.augmentations.adaptive_parameters import (
     MatrixBiasMixtureConfig,
     MatrixWeightsMixtureConfig,
 )
+from emperor.augmentations.adaptive_parameters._biases.base import DynamicBiasAbstract
+from emperor.augmentations.adaptive_parameters._weights.base import (
+    DynamicWeightAbstract,
+)
 from emperor.sampler import SamplerConfig
 from support.adaptive_grouping import linear_stack_config
 
@@ -45,22 +49,49 @@ def test_matrix_mixture_configuration_belongs_to_its_parameter_family(
 
 
 @pytest.mark.parametrize(
-    "config_type, owner",
-    [(MatrixWeightsMixtureConfig, "_weights"), (MatrixBiasMixtureConfig, "_biases")],
+    "config_type, base, owner",
+    [
+        (MatrixWeightsMixtureConfig, DynamicWeightAbstract, "_weights"),
+        (MatrixBiasMixtureConfig, DynamicBiasAbstract, "_biases"),
+    ],
 )
 def test_matrix_mixture_runtime_and_validation_are_owned_by_each_family(
-    config_type, owner
+    config_type, base, owner
 ):
-    from emperor.nn import Module
+    from emperor.sampler import RouterConfig
 
     variant = config_type().registry_owner()
-    assert variant.__bases__ == (Module,)
+    assert issubclass(variant, base)
     assert "forward" in vars(variant)
     assert not hasattr(variant, "compute_mixture")
     assert variant.VALIDATOR.__module__.endswith(f"{owner}.validation")
     assert not hasattr(variant.VALIDATOR, "resolve_config")
-    assert f"_{variant.__name__}__resolve_config" in vars(variant)
     assert "validate_route" in vars(variant.VALIDATOR)
+
+    model = config_type(
+        input_dim=2,
+        output_dim=3,
+        num_experts=3,
+        top_k=2,
+        sampler_config=SamplerConfig(
+            router_config=RouterConfig(
+                input_dim=2,
+                num_experts=3,
+                noisy_topk_flag=False,
+                model_config=linear_stack_config(2, 3),
+            )
+        ),
+    ).build()
+    assert isinstance(model, base)
+    assert set(model.state_dict()) == {
+        "parameter_bank",
+        "sampler.sampler_model.default_loss",
+        "sampler.sampler_model.auxiliary_loss_model.default_loss",
+        "sampler.router.model.layers.0.model.weight_params",
+        "sampler.router.model.layers.0.model.bias_params",
+        "_decay_policy.decay_step",
+        "_decay_policy.warmup_step",
+    }
 
 
 @pytest.mark.parametrize(

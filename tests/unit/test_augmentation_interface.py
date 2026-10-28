@@ -184,14 +184,17 @@ print(json.dumps({
         expected_heavy_modules[
             "emperor.augmentations.adaptive_parameters._biases.variants"
         ] = True
-        # Public matrix variants now import their family-owned validators.
-        for validator_module in (
+        # Public matrix variants import their family bases and validators.
+        for family_module in (
+            "emperor.augmentations.adaptive_parameters._weights.base",
+            "emperor.augmentations.adaptive_parameters._weights.depth_mapping",
+            "emperor.augmentations.adaptive_parameters._biases.base",
             "emperor.augmentations.adaptive_parameters._weights.validation",
             "emperor.augmentations.adaptive_parameters._biases.validation",
             "emperor.augmentations.adaptive_parameters._validation",
             "emperor.augmentations.adaptive_parameters._grouping.validation",
         ):
-            expected_heavy_modules[validator_module] = True
+            expected_heavy_modules[family_module] = True
         expected_heavy_modules[
             "emperor.augmentations.adaptive_parameters._monitoring.adaptive_parameters"
         ] = True
