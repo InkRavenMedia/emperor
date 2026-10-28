@@ -3,18 +3,19 @@ from dataclasses import replace
 
 from torch import Tensor
 
-from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.augmentations.adaptive_parameters._weights.base import (
+    DynamicWeightAbstract,
+)
 from emperor.augmentations.adaptive_parameters._weights.config import (
     MatrixWeightsMixtureConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.validation import (
     MatrixWeightsMixtureValidator,
 )
-from emperor.nn import Module
 from emperor.sampler import RouterConfig
 
 
-class MatrixWeightsMixture(Module):
+class MatrixWeightsMixture(DynamicWeightAbstract):
     VALIDATOR = MatrixWeightsMixtureValidator
 
     def __init__(
@@ -22,16 +23,13 @@ class MatrixWeightsMixture(Module):
         cfg: MatrixWeightsMixtureConfig,
         overrides: MatrixWeightsMixtureConfig | None = None,
     ):
-        super().__init__()
-        self.cfg = self.__resolve_config(self._override_config(cfg, overrides))
-        self.input_dim = self.cfg.input_dim
-        self.output_dim = self.cfg.output_dim
+        config = self.__resolve_config(self._override_config(cfg, overrides))
+        super().__init__(config)
         self.num_experts = self.cfg.num_experts
         self.top_k = self.cfg.top_k
         self.parameter_bank_shape = (self.num_experts, self.input_dim, self.output_dim)
         self.parameter_bank = self._init_parameter_bank(self.parameter_bank_shape)
         self.sampler = self.__init_sampler()
-        self._decay_policy = DecayPolicy(self.cfg)
 
     @classmethod
     def __resolve_config(cls, cfg, model_config=None):
@@ -111,7 +109,7 @@ class MatrixWeightsMixture(Module):
         self.VALIDATOR.validate_sampler_result(skip_mask, loss)
         self.VALIDATOR.validate_route(self, probabilities, indices)
         generated_parameters = self.__reduce_mixture(probabilities, indices)
-        decayed_parameters = self._decay_policy(weight_params)
+        decayed_parameters = self._maybe_apply_weight_decay(weight_params)
         return decayed_parameters + generated_parameters
 
     def __reduce_mixture(self, probabilities: Tensor, indices: Tensor | None) -> Tensor:

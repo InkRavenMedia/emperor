@@ -108,6 +108,11 @@ class DynamicBiasValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
 class MatrixBiasMixtureValidator(DynamicBiasValidator):
     OPTIONAL_FIELDS = {"model_config"}
 
+    @classmethod
+    def validate(cls, model) -> None:
+        cls.validate_initialization_config(model.cfg)
+        cls.validate_resolved_config(model.cfg)
+
     @staticmethod
     def validate_configuration(cfg):
         if vars(cfg).keys() - {field.name for field in fields(cfg)} - {"_passed_args"}:
