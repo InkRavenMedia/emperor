@@ -28,6 +28,7 @@ from emperor.layers._composition.recurrent.validation import (
     RecurrentExecutionValidator,
 )
 from emperor.layers._state import LayerState
+from emperor.nn import once_per_recurrent_run
 
 if TYPE_CHECKING:
     from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
@@ -39,6 +40,7 @@ class RecurrentExecution(Generic[_StateT]):
     VALIDATOR = RecurrentExecutionValidator
     __runtime_state_guard = RecurrentRuntimeStateGuard()
 
+    @once_per_recurrent_run()
     def execute(
         self,
         adapter: RecurrentExecutionAdapter[_StateT],

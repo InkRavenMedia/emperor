@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
+from emperor.nn import preserve_forward_schedule_updates
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -54,7 +56,8 @@ class RecurrentRuntimeStateGuard:
         """Restore runtime state after a provisional branch finishes or fails."""
         runtime_state_snapshot = self.__snapshot_runtime_state(recurrent_module)
         try:
-            yield
+            with preserve_forward_schedule_updates():
+                yield
         finally:
             self.__restore_runtime_state(runtime_state_snapshot)
 
