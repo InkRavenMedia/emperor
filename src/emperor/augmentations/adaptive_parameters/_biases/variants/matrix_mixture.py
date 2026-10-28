@@ -51,22 +51,31 @@ class MatrixBiasMixture(DynamicBiasAbstract):
     ) -> Tensor:
         self.VALIDATOR.validate_forward_inputs(self, bias_params, context)
         self.VALIDATOR.validate_sampler_available(self.sampler)
-        skip_mask = None
-        if (
-            self.cfg.sampler_config.threshold != 0.0
-            or self.cfg.sampler_config.mutual_information_loss_weight != 0.0
-        ):
-            skip_mask = context.new_ones((context.shape[0], 1))
+        skip_mask = self.__create_skip_mask(context)
         probabilities, indices, skip_mask, _ = (
             self.sampler.sample_probabilities_and_indices(context, skip_mask)
         )
-        if skip_mask is not None:
-            mask_shape = (-1,) + (1,) * (probabilities.ndim - 1)
-            probabilities = probabilities * skip_mask.reshape(mask_shape)
+        probabilities = self.__apply_skip_mask(probabilities, skip_mask)
         self.VALIDATOR.validate_route(self, probabilities, indices)
         generated_parameters = self.__reduce_mixture(probabilities, indices)
         decayed_parameters = self._maybe_apply_bias_decay(bias_params)
         return decayed_parameters + generated_parameters
+
+    def __create_skip_mask(self, context: Tensor) -> Tensor | None:
+        if (
+            self.cfg.sampler_config.threshold != 0.0
+            or self.cfg.sampler_config.mutual_information_loss_weight != 0.0
+        ):
+            return context.new_ones((context.shape[0], 1))
+        return None
+
+    def __apply_skip_mask(
+        self, probabilities: Tensor, skip_mask: Tensor | None
+    ) -> Tensor:
+        if skip_mask is None:
+            return probabilities
+        mask_shape = (-1,) + (1,) * (probabilities.ndim - 1)
+        return probabilities * skip_mask.reshape(mask_shape)
 
     def __reduce_mixture(self, probabilities: Tensor, indices: Tensor | None) -> Tensor:
         selected_parameters = self.__select_parameters(indices)
