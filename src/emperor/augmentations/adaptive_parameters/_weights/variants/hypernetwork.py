@@ -19,7 +19,6 @@ class HypernetworkDynamicWeight(DynamicWeightAbstract):
         overrides: HypernetworkDynamicWeightConfig | None = None,
     ):
         super().__init__(cfg, overrides)
-
         self.model = self._init_model()
 
     def _init_model(self) -> DepthMappingLayerStack:
