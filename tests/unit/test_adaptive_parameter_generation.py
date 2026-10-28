@@ -77,7 +77,7 @@ def test_all_factor_sources_match_dense_diagonal_and_propagate_gradients(
             p
             for name, p in model.named_parameters()
             if name
-            not in ("_normalization_policy.scale", "_normalization_policy.clamp_limit")
+            not in ("normalization_policy.scale", "normalization_policy.clamp_limit")
         ),
     )
     actual_gradients = torch.autograd.grad(
@@ -91,7 +91,7 @@ def test_all_factor_sources_match_dense_diagonal_and_propagate_gradients(
     actual.square().sum().backward()
     assert context.grad.abs().sum() > 0
     for name, parameter in model.named_parameters():
-        if name in ("_normalization_policy.scale", "_normalization_policy.clamp_limit"):
+        if name in ("normalization_policy.scale", "normalization_policy.clamp_limit"):
             continue
         assert parameter.grad is not None, name
         assert torch.isfinite(parameter.grad).all(), name
@@ -160,14 +160,14 @@ def test_normalization_precedes_rank_coefficients_on_feature_axes(
     u = normalize_reference(
         u,
         normalization,
-        model._normalization_policy.scale,
-        model._normalization_policy.clamp_limit,
+        model.normalization_policy.scale,
+        model.normalization_policy.clamp_limit,
     )
     v = normalize_reference(
         v,
         normalization,
-        model._normalization_policy.scale,
-        model._normalization_policy.clamp_limit,
+        model.normalization_policy.scale,
+        model.normalization_policy.clamp_limit,
     )
     d = coefficient_output.bias_params
     expected = torch.stack(

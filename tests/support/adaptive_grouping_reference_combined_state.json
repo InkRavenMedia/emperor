@@ -72,8 +72,8 @@
     "adaptive_behaviour.weight_model._decay_policy.warmup_step": [
       0.0
     ],
-    "adaptive_behaviour.weight_model._normalization_policy.scale": 1.0,
-    "adaptive_behaviour.weight_model._normalization_policy.clamp_limit": 1.0,
+    "adaptive_behaviour.weight_model.normalization_policy.scale": 1.0,
+    "adaptive_behaviour.weight_model.normalization_policy.clamp_limit": 1.0,
     "adaptive_behaviour.weight_model.input_model.model.layers.0.model.weight_params": [
       [
         [
