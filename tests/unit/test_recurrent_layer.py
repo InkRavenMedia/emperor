@@ -4219,7 +4219,7 @@ class TestRecurrentLayer(unittest.TestCase):
             smooth_result = smooth_model(LayerState(hidden=smooth_input))
 
         torch.testing.assert_close(
-            adaptive_weight._decay_policy.decay_step, torch.tensor([4.0])
+            adaptive_weight._decay_policy.decay_step, torch.tensor([1.0])
         )
         self.assertIs(
             smooth_model.recurrent_iteration_schedule.forward_call_progress,

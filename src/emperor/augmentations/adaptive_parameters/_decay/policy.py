@@ -19,6 +19,7 @@ from emperor.augmentations.adaptive_parameters._decay.variants.linear import (
 from emperor.augmentations.adaptive_parameters._decay.variants.multiplicative import (
     MultiplicativeDecay,
 )
+from emperor.nn import ForwardSchedule, ForwardScheduleCounterOptions
 
 if TYPE_CHECKING:
     from emperor.augmentations.adaptive_parameters._biases.config import (
@@ -46,6 +47,7 @@ class DecayPolicy(nn.Module):
         self.register_buffer("decay_step", initial_decay_step)
         initial_warmup_step = torch.zeros(1)
         self.register_buffer("warmup_step", initial_warmup_step)
+        self.schedule = ForwardSchedule(self)
 
     @property
     def decay_schedule_option(self) -> WeightDecayScheduleOptions | None:
@@ -83,9 +85,16 @@ class DecayPolicy(nn.Module):
         )
 
     def __advance_warmup_if_active(self) -> bool:
-        if self.warmup_step < self.decay_warmup_batches:
+        current_warmup_step = self.schedule.run_value(
+            ForwardScheduleCounterOptions.WARMUP_STEP
+        )
+        if current_warmup_step < self.decay_warmup_batches:
             if self.training:
-                self.warmup_step += 1
+                next_warmup_step = current_warmup_step + 1
+                self.schedule.set_run_value(
+                    ForwardScheduleCounterOptions.WARMUP_STEP,
+                    next_warmup_step,
+                )
             return True
         return False
 
@@ -94,7 +103,9 @@ class DecayPolicy(nn.Module):
             self.decay_variant, self.decay_schedule_option
         )
         active_decay_rate = cast(float, self.decay_rate)
-        current_decay_step = self.decay_step
+        current_decay_step = self.schedule.run_value(
+            ForwardScheduleCounterOptions.DECAY_STEP
+        )
         decay_factor = active_decay_variant.compute_factor(
             active_decay_rate, current_decay_step
         )
@@ -102,4 +113,11 @@ class DecayPolicy(nn.Module):
 
     def __advance_decay_step(self) -> None:
         if self.training:
-            self.decay_step += 1
+            current_decay_step = self.schedule.run_value(
+                ForwardScheduleCounterOptions.DECAY_STEP
+            )
+            next_decay_step = current_decay_step + 1
+            self.schedule.set_run_value(
+                ForwardScheduleCounterOptions.DECAY_STEP,
+                next_decay_step,
+            )

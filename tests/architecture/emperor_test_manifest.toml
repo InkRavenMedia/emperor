@@ -7,6 +7,7 @@ focused_tests = [
   "tests/unit/test_config_foundations.py",
   "tests/unit/test_validator_base.py",
   "tests/unit/test_nn.py",
+  "tests/unit/test_forward_schedule.py",
   "tests/unit/test_nn_visualization.py",
   "tests/unit/test_monitor_emission_policy.py",
   "tests/unit/test_foundational_imports.py",
@@ -37,6 +38,7 @@ modules = [
   "src/emperor/monitoring/_metadata.py",
   "src/emperor/nn/__init__.py",
   "src/emperor/nn/_module.py",
+  "src/emperor/nn/_forward_schedule.py",
   "src/emperor/nn/_parameters.py",
   "src/emperor/nn/_visualization.py",
 ]

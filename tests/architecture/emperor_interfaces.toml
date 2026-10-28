@@ -245,8 +245,8 @@ owners = ["emperor.neuron._axons.core", "emperor.neuron._config", "emperor.neuro
 [[interfaces]]
 module = "emperor.nn"
 kind = "runtime"
-exports = ["Module"]
-owners = ["emperor.nn._module"]
+exports = ["Module", "ForwardSchedule", "ForwardScheduleCounterOptions", "freeze_forward_schedules", "grouped_forward_calls", "once_per_recurrent_run", "preserve_forward_schedule_updates"]
+owners = ["emperor.nn._module", "emperor.nn._forward_schedule", "emperor.nn._forward_schedule", "emperor.nn._forward_schedule", "emperor.nn._forward_schedule", "emperor.nn._forward_schedule", "emperor.nn._forward_schedule"]
 
 [[interfaces]]
 module = "emperor.parametric"

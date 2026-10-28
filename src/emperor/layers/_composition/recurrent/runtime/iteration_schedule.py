@@ -15,6 +15,7 @@ from emperor.layers._composition.recurrent.config import (
 from emperor.layers._composition.recurrent.validation.iteration_schedule import (
     RecurrentIterationScheduleValidator,
 )
+from emperor.nn import ForwardSchedule, ForwardScheduleCounterOptions
 
 
 @dataclass(frozen=True)
@@ -178,6 +179,7 @@ class RecurrentIterationSchedule(nn.Module):
             persistent=True,
         )
         self.register_load_state_dict_pre_hook(self.__prepare_checkpoint)
+        self.schedule = ForwardSchedule(self)
 
     def __compute_saturation_progress(self) -> int:
         remaining_iterations = self.maximum_iterations - self.initial_iterations
@@ -276,7 +278,11 @@ class RecurrentIterationSchedule(nn.Module):
         return self.__runtime_for_progress(self.__current_progress())
 
     def __current_progress(self) -> int:
-        return int(self.forward_call_progress.item())
+        return int(
+            self.schedule.value(
+                ForwardScheduleCounterOptions.FORWARD_CALL_PROGRESS
+            ).item()
+        )
 
     @property
     def active_iterations(self) -> int:
@@ -303,7 +309,9 @@ class RecurrentIterationSchedule(nn.Module):
             self.__current_progress() + 1,
             self.__saturation_progress,
         )
-        self.forward_call_progress.fill_(progress)
+        self.schedule.set_value(
+            ForwardScheduleCounterOptions.FORWARD_CALL_PROGRESS, progress
+        )
 
     def snapshot(self) -> RecurrentIterationScheduleSnapshot:
         progress = self.__current_progress()

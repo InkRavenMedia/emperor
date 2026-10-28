@@ -181,7 +181,15 @@ print(json.dumps({
         self.assertEqual(
             result,
             {
-                "all": ["Module"],
+                "all": [
+                    "Module",
+                    "ForwardSchedule",
+                    "ForwardScheduleCounterOptions",
+                    "freeze_forward_schedules",
+                    "grouped_forward_calls",
+                    "once_per_recurrent_run",
+                    "preserve_forward_schedule_updates",
+                ],
                 "ipython_display": False,
                 "matplotlib_pyplot": True,
                 "module_exported": True,
