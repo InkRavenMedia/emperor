@@ -1,3 +1,5 @@
 from emperor.experiments.language_model._experiment import LanguageModelExperiment
 
-__all__ = ("LanguageModelExperiment",)
+from ._config import HierarchicalObjectiveConfig
+
+__all__ = ("LanguageModelExperiment", "HierarchicalObjectiveConfig")

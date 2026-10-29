@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 
 from emperor.config import ConfigBase, optional_field
-from emperor.decoding.hierarchical import HierarchicalLanguageModelConfig
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
 from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
+from emperor.experiments.language_model import HierarchicalObjectiveConfig
 from emperor.layers import LayerStackConfig, NormalizationOptions, RecurrentLayerConfig
+from emperor.transformer.hierarchical import HierarchicalLanguageModelConfig
 from models.gpt.expert_linear_adaptive._boundary_config_factory import (
     GptBoundaryConfig,
 )
@@ -13,6 +14,13 @@ from models.gpt.expert_linear_adaptive._boundary_config_factory import (
 
 @dataclass
 class ExperimentConfig(ConfigBase):
+    hierarchical_objective_config: HierarchicalObjectiveConfig | None = field(
+        default=None,
+        kw_only=True,
+        metadata={
+            "help": "Explicit hierarchical loss reduction and auxiliary weighting; None uses HAT Eq.5."
+        },
+    )
     hierarchical_language_model_config: HierarchicalLanguageModelConfig | None = (
         optional_field("Complete vocabulary-free language model configuration.")
     )

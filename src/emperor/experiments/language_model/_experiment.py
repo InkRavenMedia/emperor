@@ -5,11 +5,11 @@ import torch.nn as nn
 from lightning import LightningModule
 from torch import Tensor
 
-from emperor.decoding.hierarchical import HierarchicalLanguageModelBatch
 from emperor.experiments._auxiliary_loss import AuxiliaryLoss
 from emperor.experiments._config_validation import _ExperimentConfigValidator
+from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
 
-from ._hierarchical import HierarchicalLanguageModelHandler
+from ._config import HierarchicalObjectiveConfig
 from ._metrics import LanguageModelMetricsLogger
 from ._records import (
     HierarchicalLanguageModelStepOutput,
@@ -33,7 +33,10 @@ class LanguageModelExperiment(LightningModule):
         self.loss_fn = nn.CrossEntropyLoss()
         self.metrics = LanguageModelMetricsLogger()
         self._auxiliary_loss = AuxiliaryLoss("Language-model")
-        self.hierarchical_handler = HierarchicalLanguageModelHandler()
+        objective = getattr(
+            cfg.experiment_config, "hierarchical_objective_config", None
+        )
+        self.hierarchical_handler = (objective or HierarchicalObjectiveConfig()).build()
 
     def training_step(self, batch: LanguageModelBatch, batch_idx: int) -> Tensor:
         output = self._model_step_outputs(batch)

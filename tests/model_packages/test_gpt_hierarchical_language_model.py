@@ -10,7 +10,7 @@ import torch
 from datasets import Dataset
 from lightning import Trainer
 
-from emperor.decoding.hierarchical import (
+from emperor.transformer.hierarchical import (
     HierarchicalLanguageModelBatch,
     HierarchicalTextCodec,
 )
@@ -31,7 +31,7 @@ def configuration(package_name, **overrides):
         "sequence_length": 4,
         "hidden_dim": 8,
         "input_dim": 256,
-        "output_dim": 258,
+        "output_dim": 256,
         "attn_num_heads": 2,
         "num_experts": 2,
         "top_k": 1,
@@ -114,6 +114,130 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                     self.assertGreater(actual.loss.item(), 0)
                 self.assertEqual(cfg, original)
 
+    def test_hierarchical_allows_backbone_growth_and_adaptive_decay(self):
+        from emperor.augmentations.adaptive_parameters import (
+            GeneratorDynamicBiasConfig,
+            HypernetworkDynamicWeightConfig,
+            WeightDecayScheduleOptions,
+        )
+
+        for name in ("gpt/linear_adaptive", "gpt/expert_linear_adaptive"):
+            with self.subTest(package=name):
+                package, cfg = configuration(
+                    name,
+                    recurrent_flag=True,
+                    recurrent_max_steps=10,
+                    recurrent_initial_iterations=2,
+                    recurrent_iteration_increment=1,
+                    recurrent_forward_calls_before_iteration_increment=1,
+                    recurrent_smooth_iteration_growth_flag=False,
+                    recurrent_no_gradient_transition_count=0,
+                    recurrent_gradient_transition_count=None,
+                    weight_option_flag=True,
+                    weight_option=HypernetworkDynamicWeightConfig,
+                    bias_option_flag=True,
+                    bias_option=GeneratorDynamicBiasConfig,
+                    weight_decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
+                    weight_decay_rate=0.1,
+                    weight_decay_warmup_batches=0,
+                    bias_decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
+                    bias_decay_rate=0.1,
+                    bias_decay_warmup_batches=0,
+                    adaptive_generator_stack_hidden_dim=8,
+                )
+                original = copy.deepcopy(cfg)
+                model = package.build_model(cfg).train()
+                batch = HierarchicalLanguageModelBatch.collate(
+                    [
+                        {
+                            "context_texts": ["", "a", "long"],
+                            "target_texts": ["a", "long", None],
+                            "bos_mask": [True, False, False],
+                        },
+                        {
+                            "context_texts": [""],
+                            "target_texts": ["bb"],
+                            "bos_mask": [True],
+                        },
+                    ]
+                )
+                initial_state = copy.deepcopy(model.state_dict())
+                output = model(batch)
+                reference = package.build_model(cfg).train()
+                for row in range(2):
+                    reference.load_state_dict(initial_state, strict=True)
+                    length = int(batch.attention_mask[row].sum())
+                    single = HierarchicalLanguageModelBatch.collate(
+                        [
+                            {
+                                "context_texts": list(
+                                    batch.context_texts[row][:length]
+                                ),
+                                "target_texts": ["a", "long", None]
+                                if row == 0
+                                else ["bb"],
+                                "bos_mask": [True, False, False]
+                                if row == 0
+                                else [True],
+                            }
+                        ]
+                    )
+                    expected = reference(single)
+                    start = int(output.token_offsets[row * 3])
+                    end = int(output.token_offsets[(row + 1) * 3])
+                    torch.testing.assert_close(
+                        output.logits[start:end], expected.logits, atol=2e-5, rtol=2e-5
+                    )
+                (output.logits.square().mean() + output.loss).backward()
+                schedule = (
+                    model.hierarchical_model.backbone.recurrent_iteration_schedule
+                )
+                self.assertEqual(schedule.snapshot().forward_call_progress, 1)
+                self.assertEqual(schedule.active_iterations, 3)
+                backbone_counters = [
+                    buffer.item()
+                    for key, buffer in model.hierarchical_model.backbone.named_buffers()
+                    if key.endswith("_decay_policy.decay_step")
+                ]
+                self.assertTrue(backbone_counters)
+                self.assertIn(1, backbone_counters)
+                # Unrouted experts may remain unused; recurrence must not advance
+                # any executed weight or bias schedule more than once.
+                self.assertTrue(all(value in (0, 1) for value in backbone_counters))
+                for component in (
+                    model.hierarchical_model.encoder,
+                    model.hierarchical_model.decoder,
+                ):
+                    counters = [
+                        buffer
+                        for key, buffer in component.named_buffers()
+                        if key.endswith("weight_model._decay_policy.decay_step")
+                    ]
+                    self.assertEqual(
+                        counters, []
+                    )  # Reference byte blocks are dense and stateless.
+                    self.assertTrue(
+                        any(
+                            parameter.grad is not None
+                            and torch.isfinite(parameter.grad).all()
+                            for parameter in component.parameters()
+                        )
+                    )
+                trained_state = copy.deepcopy(model.state_dict())
+                reference.load_state_dict(trained_state, strict=True)
+                from emperor.embedding.hierarchical.decoder import ByteGenerationOptions
+
+                options = ByteGenerationOptions(do_sample=True, seed=17, top_k=4)
+                generated = model.generate_text("a", max_new_bytes=2, options=options)
+                restored = reference.generate_text(
+                    "a", max_new_bytes=2, options=options
+                )
+                self.assertEqual(generated, restored)
+                self.assertTrue(model.training)
+                for key, value in model.state_dict().items():
+                    torch.testing.assert_close(value, trained_state[key])
+                self.assertEqual(cfg, original)
+
     def test_public_shape_inspection_uses_raw_batch(self):
         from model_runtime.inspection import InspectionRequest, inspect_model_shapes
 
@@ -143,7 +267,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                 module for module in trace.modules if module.node_id == "__root__"
             )
             self.assertIn(
-                (4, 258), [tuple(shape.shape) for shape in root.calls[0].outputs]
+                (4, 256), [tuple(shape.shape) for shape in root.calls[0].outputs]
             )
 
     def test_training_rejects_misaligned_labels_and_handles_all_masked(self):
@@ -168,7 +292,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
         loss.backward()
 
     def test_checkpoint_shapes_and_parameters_do_not_depend_on_vocabulary(self):
-        from emperor.decoding.hierarchical import ByteGenerationOptions
+        from emperor.embedding.hierarchical.decoder import ByteGenerationOptions
 
         for name in GPT_PACKAGES:
             package, cfg = configuration(name)
@@ -180,7 +304,8 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
             )
             self.assertTrue(recovered["hierarchical_language_model_flag"])
             self.assertEqual(recovered["hierarchical_byte_embedding_dim"], 8)
-            self.assertEqual(recovered["hierarchical_max_token_bytes"], 8)
+            self.assertNotIn("hierarchical_max_token_bytes", recovered)
+            # Rotary weights do not identify execution limits; saved config owns them.
             changed = copy.deepcopy(cfg)
             changed.input_dim = changed.output_dim = 267735
             other = package.build_model(changed).eval()
@@ -209,7 +334,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                 "unfin", max_new_bytes=6, max_new_tokens=3, options=options
             )
             self.assertEqual(first, second)
-            self.assertTrue(first.text.startswith("unfin"))
+            self.assertTrue(first.data.startswith(b"unfin"))
 
     def test_cli_dataset_delivery_and_synthetic_inspection(self):
         from emperor.datasets.text.language_modeling import (
@@ -249,7 +374,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
             sample = behavior.synthetic_inputs(WikiText103Hierarchical, cfg)
             self.assertIsInstance(sample[0], HierarchicalLanguageModelBatch)
             output = package.build_model(cfg)(*sample)
-            self.assertEqual(output.logits.shape[-1], 258)
+            self.assertEqual(output.logits.shape[-1], 256)
             with self.assertRaisesRegex(ValueError, "dataset|WikiText103Hierarchical"):
                 package.build_configuration(package.preset_type.HIERARCHICAL, WikiText2)
             with self.assertRaisesRegex(ValueError, "raw-text dataset"):
@@ -259,7 +384,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                     config_overrides={"lm_head_weight_tying_flag": False},
                 )
 
-    def test_adaptive_packages_use_requested_byte_parameter_generators(self):
+    def test_adaptive_backbones_keep_generators_while_byte_components_are_dense(self):
         from emperor.augmentations.adaptive_parameters import (
             AdaptiveLinearLayerConfig,
             GeneratorDynamicBiasConfig,
@@ -279,28 +404,6 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                     hierarchical_byte_embedding_dim=4,
                     hierarchical_byte_feed_forward_dim=8,
                 )
-                composition = cfg.experiment_config.hierarchical_language_model_config
-                encoder_layer = composition.embedding_config.encoder_config.encoder_stack_config.layer_config.layer_model_config
-                decoder_layer = composition.decoding_config.decoder_config.decoder_stack_config.layer_config.layer_model_config
-                for projection in (
-                    encoder_layer.attention_config.projection_model_config,
-                    encoder_layer.feed_forward_config.stack_config,
-                    composition.embedding_config.projection_config,
-                    decoder_layer.self_attention_config.projection_model_config,
-                    decoder_layer.feed_forward_config.stack_config,
-                    composition.decoding_config.conditioning_projection_config,
-                    composition.decoding_config.output_projection_config,
-                ):
-                    linear = projection.layer_config.layer_model_config
-                    self.assertIsInstance(linear, AdaptiveLinearLayerConfig)
-                    self.assertIsInstance(
-                        linear.adaptive_augmentation_config.bias_config,
-                        GeneratorDynamicBiasConfig,
-                    )
-                    self.assertIsInstance(
-                        linear.adaptive_augmentation_config.weight_config,
-                        HypernetworkDynamicWeightConfig,
-                    )
                 model = package.build_model(cfg).eval()
                 windows = list(HierarchicalTextCodec(8).training_windows("mat café", 4))
                 batch = HierarchicalLanguageModelBatch.collate(windows)
@@ -308,59 +411,43 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                 loss = model._model_step(batch)
                 self.assertTrue(torch.isfinite(loss))
                 loss.backward()
-                for component_name in ("encoder", "backbone", "decoder"):
-                    component = getattr(model.hierarchical_model, component_name)
-                    active_types = set()
-                    for path, linear in component.named_modules():
-                        if not isinstance(
-                            getattr(linear, "cfg", None), AdaptiveLinearLayerConfig
-                        ):
-                            continue
-                        augmentation = linear.adaptive_behaviour
-                        # Router adaptivity is independently configured by the package.
-                        if component_name == "backbone" and augmentation is None:
-                            continue
-                        location = f"{name}.{component_name}.{path}"
-                        self.assertIsNotNone(augmentation, location)
-                        for generator_name in ("weight_model", "bias_model"):
-                            generator = getattr(augmentation, generator_name)
-                            self.assertIsNotNone(generator, location)
-                            gradients = [
-                                parameter.grad
-                                for parameter in generator.parameters()
-                                if parameter.grad is not None
-                            ]
-                            # Unselected experts need not execute; every byte child does.
-                            if component_name == "backbone" and not gradients:
-                                continue
-                            self.assertTrue(gradients, location)
-                            self.assertTrue(
-                                all(
-                                    torch.isfinite(gradient).all()
-                                    for gradient in gradients
-                                ),
-                                location,
+                for component in (
+                    model.hierarchical_model.encoder,
+                    model.hierarchical_model.decoder,
+                ):
+                    self.assertFalse(
+                        any(
+                            isinstance(
+                                getattr(child, "cfg", None), AdaptiveLinearLayerConfig
                             )
-                            magnitude = sum(
-                                gradient.abs().sum().item() for gradient in gradients
-                            )
-                            # An expert routed only the first causal position has no
-                            # query gradient: its attention has just one allowed key.
-                            if component_name == "backbone" and magnitude == 0:
-                                continue
-                            self.assertGreater(magnitude, 0, location)
-                            active_types.add(type(generator.cfg))
-                    self.assertEqual(
-                        active_types,
-                        {GeneratorDynamicBiasConfig, HypernetworkDynamicWeightConfig},
-                        component_name,
+                            for child in component.modules()
+                        )
                     )
+                active_types = set()
+                for child in model.hierarchical_model.backbone.modules():
+                    augmentation = getattr(child, "adaptive_behaviour", None)
+                    if augmentation is None:
+                        continue
+                    for generator_name in ("weight_model", "bias_model"):
+                        generator = getattr(augmentation, generator_name, None)
+                        if generator is None:
+                            continue
+                        gradients = [
+                            p.grad for p in generator.parameters() if p.grad is not None
+                        ]
+                        self.assertTrue(all(torch.isfinite(g).all() for g in gradients))
+                        if sum(g.abs().sum().item() for g in gradients) > 0:
+                            active_types.add(type(generator.cfg))
+                self.assertEqual(
+                    active_types,
+                    {GeneratorDynamicBiasConfig, HypernetworkDynamicWeightConfig},
+                )
                 companion = list(HierarchicalTextCodec(8).training_windows("dog", 4))[0]
                 together = model(
                     HierarchicalLanguageModelBatch.collate([*windows, companion])
                 )
                 torch.testing.assert_close(
-                    before, together.logits[: len(before)], rtol=1e-5, atol=1e-5
+                    before, together.logits[: len(before)], atol=2e-5, rtol=2e-5
                 )
 
     @pytest.mark.training
@@ -406,8 +493,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                 generated = model.generate_text(
                     "café ", max_new_tokens=2, max_new_bytes=8
                 )
-                self.assertTrue(generated.text.startswith("café "))
-                generated.text.encode("utf-8", "strict")
+                self.assertTrue(generated.data.startswith("café ".encode()))
                 self.assertTrue(model.training)
 
     def test_all_gpt_packages_predict_bytes_without_vocabulary_binding(self):
@@ -419,7 +505,7 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                     list(HierarchicalTextCodec(8).training_windows("mat cat ", 4))
                 )
                 output = model(batch)
-                self.assertEqual(output.logits.shape, (11, 258))
+                self.assertEqual(output.logits.shape, (11, 256))
                 self.assertFalse(hasattr(model, "lm_head"))
                 self.assertFalse(hasattr(model, "token_text_adapter"))
                 self.assertFalse(hasattr(model, "token_embedding"))

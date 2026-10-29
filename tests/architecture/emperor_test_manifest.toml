@@ -94,32 +94,39 @@ modules = [
 [families.embedding]
 status = "partial"
 focused_tests = [
+  "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_absolute_positional_embedding_validator.py",
   "tests/unit/test_byte_contextual_embedding.py",
   "tests/unit/test_embedding_behavior.py",
   "tests/unit/test_embedding_regressions.py",
+  "tests/unit/test_hierarchical_byte_decoder.py",
   "tests/unit/test_hierarchical_byte_embedding.py",
   "tests/unit/test_relative_positional_embedding_validator.py",
   "tests/unit/test_transformer_absolute_positional_embedding.py",
   "tests/unit/test_transformer_relative_positional_embedding.py",
 ]
 integration_tests = [
-  "tests/integration/test_hierarchical_language_model.py","tests/integration/test_hierarchical_embedding_composition.py"]
+  "tests/integration/test_hierarchical_embedding_composition.py",
+  "tests/integration/test_hierarchical_language_model.py",
+  "tests/model_packages/test_gpt_hierarchical_embedding.py",
+  "tests/model_packages/test_gpt_hierarchical_language_model.py",
+]
 mutation_scope = ["src/emperor/embedding/*"]
 environment = ["cpu", "float32", "float64", "bfloat16-autocast", "meta-device", "cuda-conditional"]
-coverage_evidence = "tests/architecture/emperor_behavioral/evidence/embedding-coverage.toml"
-mutation_evidence = "tests/architecture/emperor_behavioral/evidence/embedding-mutation.toml"
+coverage_evidence = ""
+mutation_evidence = ""
 review_evidence = ""
 blocked_reason = ""
 modules = [
+  "src/emperor/embedding/hierarchical/_symbols.py",
   "src/emperor/embedding/__init__.py",
   "src/emperor/embedding/absolute/__init__.py",
   "src/emperor/embedding/absolute/_base.py",
   "src/emperor/embedding/absolute/_config.py",
+  "src/emperor/embedding/absolute/_validation.py",
   "src/emperor/embedding/absolute/_variants/__init__.py",
   "src/emperor/embedding/absolute/_variants/learned.py",
   "src/emperor/embedding/absolute/_variants/sinusoidal.py",
-  "src/emperor/embedding/absolute/_validation.py",
   "src/emperor/embedding/contextual/__init__.py",
   "src/emperor/embedding/contextual/_component.py",
   "src/emperor/embedding/contextual/_config.py",
@@ -128,14 +135,21 @@ modules = [
   "src/emperor/embedding/contextual/_state.py",
   "src/emperor/embedding/contextual/_validation.py",
   "src/emperor/embedding/hierarchical/__init__.py",
-  "src/emperor/embedding/hierarchical/_component.py",
-  "src/emperor/embedding/hierarchical/_config.py",
-  "src/emperor/embedding/hierarchical/_validation.py",
+  "src/emperor/embedding/hierarchical/decoder/__init__.py",
+  "src/emperor/embedding/hierarchical/decoder/_component.py",
+  "src/emperor/embedding/hierarchical/decoder/_config.py",
+  "src/emperor/embedding/hierarchical/decoder/_generation.py",
+  "src/emperor/embedding/hierarchical/decoder/_records.py",
+  "src/emperor/embedding/hierarchical/decoder/_validation.py",
+  "src/emperor/embedding/hierarchical/encoder/__init__.py",
+  "src/emperor/embedding/hierarchical/encoder/_component.py",
+  "src/emperor/embedding/hierarchical/encoder/_config.py",
+  "src/emperor/embedding/hierarchical/encoder/_validation.py",
   "src/emperor/embedding/relative/__init__.py",
-  "src/emperor/embedding/relative/_variants/__init__.py",
-  "src/emperor/embedding/relative/_variants/bias.py",
   "src/emperor/embedding/relative/_config.py",
   "src/emperor/embedding/relative/_validation.py",
+  "src/emperor/embedding/relative/_variants/__init__.py",
+  "src/emperor/embedding/relative/_variants/bias.py",
 ]
 
 [families.patch]
@@ -565,6 +579,7 @@ modules = [
 [families.attention]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_hat_reference_primitives.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
   "tests/unit/test_attention*.py",
   "tests/unit/test_*attention_validator_adapter.py",
@@ -653,9 +668,11 @@ modules = [
 [families.transformer]
 status = "pending"
 focused_tests = [
+  "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
   "tests/unit/test_attention_model_mixer.py",
   "tests/unit/test_feed_forward_validator.py",
+  "tests/unit/test_hierarchical_text_batch.py",
   "tests/unit/test_transformer.py",
   "tests/unit/test_transformer_adaptive_grouping.py",
   "tests/unit/test_transformer_behavioral_contracts.py",
@@ -668,8 +685,10 @@ focused_tests = [
   "tests/unit/test_transformer_validator_adapter.py",
 ]
 integration_tests = [
-  "tests/unit/test_transformer_translation_integration.py",
+  "tests/integration/test_hierarchical_language_model.py",
+  "tests/model_packages/test_gpt_hierarchical_language_model.py",
   "tests/model_packages/transformer/test_variable_chunking_configuration.py",
+  "tests/unit/test_transformer_translation_integration.py",
 ]
 mutation_scope = ["src/emperor/transformer/*"]
 environment = ["cpu", "float32", "lightning-trainer"]
@@ -678,6 +697,7 @@ mutation_evidence = ""
 review_evidence = ""
 blocked_reason = ""
 modules = [
+  "src/emperor/transformer/hierarchical/_reference.py",
   "src/emperor/transformer/__init__.py",
   "src/emperor/transformer/_config.py",
   "src/emperor/transformer/_feed_forward.py",
@@ -685,6 +705,13 @@ modules = [
   "src/emperor/transformer/_model.py",
   "src/emperor/transformer/_state.py",
   "src/emperor/transformer/_validation.py",
+  "src/emperor/transformer/hierarchical/__init__.py",
+  "src/emperor/transformer/hierarchical/_batch.py",
+  "src/emperor/transformer/hierarchical/_config.py",
+  "src/emperor/transformer/hierarchical/_language_model.py",
+  "src/emperor/transformer/hierarchical/_records.py",
+  "src/emperor/transformer/hierarchical/_text.py",
+  "src/emperor/transformer/hierarchical/_validation.py",
 ]
 
 [families.neuron]
@@ -890,6 +917,7 @@ modules = [
 [families.experiments]
 status = "pending"
 focused_tests = [
+  "tests/integration/test_hat_v2_fidelity.py",
   "tests/model_packages/test_gpt_hierarchical_language_model.py",
   "tests/unit/test_*experiment*.py",
   "tests/unit/test_classifier.py",
@@ -906,6 +934,7 @@ mutation_evidence = ""
 review_evidence = ""
 blocked_reason = ""
 modules = [
+  "src/emperor/experiments/language_model/_config.py",
   "src/emperor/experiments/language_model/_hierarchical.py",
   "src/emperor/experiments/__init__.py",
   "src/emperor/experiments/_auxiliary_loss.py",
@@ -940,27 +969,4 @@ modules = [
   "src/emperor/experiments/translation/_experiment.py",
   "src/emperor/experiments/translation/_metrics.py",
   "src/emperor/experiments/translation/_records.py",
-]
-
-[families.decoding]
-status = "partial"
-focused_tests = ["tests/unit/test_hierarchical_byte_decoder.py", "tests/unit/test_hierarchical_text_batch.py", "tests/integration/test_hierarchical_language_model.py", "tests/model_packages/test_gpt_hierarchical_language_model.py"]
-integration_tests = ["tests/integration/test_hierarchical_language_model.py", "tests/model_packages/test_gpt_hierarchical_language_model.py"]
-mutation_scope = ["src/emperor/decoding/*"]
-environment = ["cpu", "float32", "float64", "lightning-trainer", "local-text-fixtures"]
-coverage_evidence = "tests/architecture/emperor_behavioral/evidence/decoding-coverage.toml"
-mutation_evidence = ""
-review_evidence = ""
-blocked_reason = ""
-modules = [
-  "src/emperor/decoding/__init__.py",
-  "src/emperor/decoding/hierarchical/__init__.py",
-  "src/emperor/decoding/hierarchical/_batch.py",
-  "src/emperor/decoding/hierarchical/_component.py",
-  "src/emperor/decoding/hierarchical/_config.py",
-  "src/emperor/decoding/hierarchical/_generation.py",
-  "src/emperor/decoding/hierarchical/_language_model.py",
-  "src/emperor/decoding/hierarchical/_records.py",
-  "src/emperor/decoding/hierarchical/_text.py",
-  "src/emperor/decoding/hierarchical/_validation.py",
 ]

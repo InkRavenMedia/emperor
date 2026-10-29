@@ -8,7 +8,6 @@ import torch
 from emperor.attention import MixtureOfAttentionHeadsConfig
 from emperor.augmentations.adaptive_parameters import (
     MeanGroupingConfig,
-    WeightDecayScheduleOptions,
 )
 from emperor.embedding.absolute import TextSinusoidalPositionalEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
@@ -32,6 +31,61 @@ from tests.support.hierarchical_embedding import (
 class TestHierarchicalByteEmbedding(unittest.TestCase):
     def setUp(self):
         torch.manual_seed(73)
+
+    def test_group_validation_dispatches_before_encoder_execution(self):
+        from emperor.embedding.hierarchical.encoder._component import (
+            HierarchicalByteEmbedding,
+        )
+        from emperor.embedding.hierarchical.encoder._validation import (
+            HierarchicalByteEmbeddingValidator,
+        )
+
+        class RejectingValidator(HierarchicalByteEmbeddingValidator):
+            @staticmethod
+            def validate_token_group_sizes(token_groups, max_group_tokens):
+                raise ValueError("Token group rejected by configured validator")
+
+        class ValidatedEmbedding(HierarchicalByteEmbedding):
+            VALIDATOR = RejectingValidator
+
+        config = embedding_config()
+        model = ValidatedEmbedding(config)
+        encoder_inputs = []
+        hook = model.encoder.register_forward_pre_hook(
+            lambda _module, inputs: encoder_inputs.append(inputs)
+        )
+        try:
+            with self.assertRaisesRegex(ValueError, "Token group rejected"):
+                model([["a"]])
+        finally:
+            hook.remove()
+        self.assertEqual(encoder_inputs, [])
+
+    def test_byte_transformer_growth_replays_each_length_group(self):
+        from emperor.layers import RecurrentLayerConfig
+
+        cfg = embedding_config()
+        cfg.encoder_config.encoder_stack_config = RecurrentLayerConfig(
+            input_dim=8,
+            output_dim=8,
+            max_steps=3,
+            initial_iterations=1,
+            iteration_increment=1,
+            forward_calls_before_iteration_increment=1,
+            no_gradient_transition_count=0,
+            gradient_transition_count=None,
+            block_config=cfg.encoder_config.encoder_stack_config,
+        )
+        model = cfg.build().train()
+        schedule = model.encoder.encoder_model.recurrent_iteration_schedule
+        for expected_depth in (2, 3):
+            output = model([["a", "long", "bb"]]).hidden
+            output.square().mean().backward()
+            self.assertEqual(schedule.active_iterations, expected_depth)
+            self.assertEqual(
+                schedule.snapshot().forward_call_progress, expected_depth - 1
+            )
+        self.assertTrue(torch.isfinite(model.byte_embedding.weight.grad).all())
 
     def test_utf8_tokens_produce_independent_vectors_in_original_order(self):
         model = embedding_config().build().eval()
@@ -125,7 +179,7 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
             model([["a", "b"]])
 
     def test_rejects_stateful_and_cross_token_adaptive_children(self):
-        for setting in ("memory", "grouping", "decay"):
+        for setting in ("memory", "grouping"):
             cfg = embedding_config()
             cfg.projection_config = adaptive_stack(8, 6)
             augmentation = cfg.projection_config.layer_config.layer_model_config.adaptive_augmentation_config
@@ -136,16 +190,11 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
             elif setting == "grouping":
                 augmentation.grouping_config = MeanGroupingConfig()
                 message = "grouping_config"
-            else:
-                augmentation.bias_config.decay_schedule = (
-                    WeightDecayScheduleOptions.LINEAR
-                )
-                message = "decay_schedule"
             with self.subTest(setting=setting):
                 with self.assertRaisesRegex(ValueError, message):
                     cfg.build()
 
-    def test_rejects_changing_recurrent_schedule_and_attention_on_flat_rows(self):
+    def test_allows_recurrent_growth_but_rejects_attention_on_flat_rows(self):
         cfg = embedding_config(output_dim=8)
         cfg.projection_config = RecurrentLayerConfig(
             input_dim=8,
@@ -156,8 +205,11 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
             forward_calls_before_iteration_increment=1,
             block_config=linear_stack(8, 8),
         )
-        with self.assertRaisesRegex(ValueError, "initial_iterations"):
-            cfg.build()
+        model = cfg.build()
+        model([["a", "long"]])
+        self.assertEqual(
+            model.projection.recurrent_iteration_schedule.active_iterations, 2
+        )
         cfg = embedding_config()
         cfg.projection_config.layer_config.layer_model_config = (
             encoder_layer_config().attention_config

@@ -112,7 +112,6 @@ class GptLinearConfigBuilder:
 
     def build(self) -> "ModelConfig":
         from emperor.config import ModelConfig
-        from emperor.linears import LinearLayerConfig
 
         model_config = ModelConfig(
             learning_rate=self.learning_rate,
@@ -139,7 +138,6 @@ class GptLinearConfigBuilder:
                 build_hierarchical_config(
                     model_config,
                     options,
-                    LinearLayerConfig(bias_flag=True),
                 )
             )
         return model_config

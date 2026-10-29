@@ -11,8 +11,8 @@ from tests.support.hierarchical_embedding import embedding_config
 
 
 def language_model_config():
-    from emperor.decoding.hierarchical import HierarchicalLanguageModelConfig
     from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
+    from emperor.transformer.hierarchical import HierarchicalLanguageModelConfig
 
     return HierarchicalLanguageModelConfig(
         sequence_length=4,
@@ -32,7 +32,7 @@ class HierarchicalLanguageModelTests(unittest.TestCase):
     def test_invalid_bos_masks_do_not_silently_discard_context(self):
         from dataclasses import replace
 
-        from emperor.decoding.hierarchical import (
+        from emperor.transformer.hierarchical import (
             HierarchicalLanguageModelBatch,
             HierarchicalTextCodec,
         )
@@ -50,17 +50,17 @@ class HierarchicalLanguageModelTests(unittest.TestCase):
 
     def test_metrics_accumulate_symbol_and_byte_counts_across_batches(self):
         from emperor.config import ModelConfig
-        from emperor.decoding.hierarchical import (
-            HierarchicalByteDecoderOutput,
+        from emperor.embedding.hierarchical.decoder import HierarchicalByteDecoderOutput
+        from emperor.experiments.language_model import LanguageModelExperiment
+        from emperor.transformer.hierarchical import (
             HierarchicalLanguageModelBatch,
             HierarchicalTextCodec,
         )
-        from emperor.experiments.language_model import LanguageModelExperiment
 
         class UniformModel(LanguageModelExperiment):
             def __init__(self):
-                super().__init__(ModelConfig(learning_rate=0.01, output_dim=258))
-                self.scores = torch.nn.Parameter(torch.zeros(258))
+                super().__init__(ModelConfig(learning_rate=0.01, output_dim=256))
+                self.scores = torch.nn.Parameter(torch.zeros(256))
 
             def forward(self, batch):
                 counts = torch.where(
@@ -90,16 +90,14 @@ class HierarchicalLanguageModelTests(unittest.TestCase):
                 UniformModel(), dataloaders=loader, verbose=False
             )[0]
         self.assertAlmostEqual(
-            result["validation/symbol_cross_entropy"], math.log(258), places=5
+            result["validation/symbol_cross_entropy"], math.log(256), places=5
         )
         # Empty doc: EOS; nonempty doc: two UTF-8 bytes, EOW, EOS.
         self.assertAlmostEqual(
-            result["validation/bits_per_byte"], 5 * math.log2(258) / 2, places=5
+            result["validation/bits_per_byte"], math.log2(256), places=5
         )
         self.assertAlmostEqual(result["validation/auxiliary_loss"], 0.25, places=5)
-        self.assertAlmostEqual(
-            result["validation/loss"], math.log(258) + 0.25, places=5
-        )
+        self.assertAlmostEqual(result["validation/loss"], 2.5 * math.log(256), places=5)
         empty_loader = DataLoader(
             windows[:1], batch_size=1, collate_fn=HierarchicalLanguageModelBatch.collate
         )
@@ -108,10 +106,10 @@ class HierarchicalLanguageModelTests(unittest.TestCase):
         )[0]
         self.assertTrue(math.isnan(empty["validation/bits_per_byte"]))
         self.assertAlmostEqual(
-            empty["validation/symbol_cross_entropy"], math.log(258), places=5
+            empty["validation/symbol_cross_entropy"], math.log(256), places=5
         )
 
-    def test_generation_rolls_context_and_preserves_partial_prompts(self):
+    def test_generation_preserves_partial_prompts_and_reports_truncation(self):
         model = language_model_config().build().train()
         model.encoder.byte_position.eval()
         with torch.no_grad():
@@ -119,24 +117,25 @@ class HierarchicalLanguageModelTests(unittest.TestCase):
                 parameter.zero_()
             model.decoder.output_projection.layers[0].model.bias_params[97] = 10
         generated = model.generate_text("", max_new_tokens=6, max_new_bytes=100)
-        self.assertEqual(generated.text, "a" * 48)
-        self.assertEqual(generated.stop_reason, "token_budget")
-        partial = model.generate_text("café", max_new_tokens=2, max_new_bytes=5)
-        self.assertEqual(partial.text, "café" + "a" * 5)
+        self.assertEqual(generated.text, "a" * 8)
+        self.assertEqual(generated.new_tokens, 0)
+        self.assertEqual(generated.stop_reason, "byte_limit")
+        partial = model.generate_text("café", max_new_tokens=2, max_new_bytes=2)
+        self.assertEqual(partial.text, "café" + "a" * 2)
         self.assertEqual(partial.stop_reason, "byte_budget")
         self.assertTrue(model.training)
         self.assertFalse(model.encoder.byte_position.training)
         with torch.no_grad():
-            model.decoder.output_projection.layers[0].model.bias_params[257] = 30
-        eos = model.generate_text("complete ", max_new_bytes=8)
-        self.assertEqual(eos.text, "complete ")
+            model.decoder.output_projection.layers[0].model.bias_params[255] = 30
+        eos = model.generate_text("done ", max_new_bytes=8)
+        self.assertEqual(eos.text, "done ")
         self.assertEqual(eos.stop_reason, "end_of_document")
         explicit = model.generate_text("word", prompt_is_complete=True)
         self.assertEqual(explicit.text, "word")
         self.assertEqual(explicit.stop_reason, "end_of_document")
 
     def test_bos_shifting_causality_and_padding_independence(self):
-        from emperor.decoding.hierarchical import (
+        from emperor.transformer.hierarchical import (
             HierarchicalLanguageModelBatch,
             HierarchicalTextCodec,
         )

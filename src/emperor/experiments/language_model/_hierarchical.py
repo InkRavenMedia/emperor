@@ -1,11 +1,14 @@
+import copy
 import math
 
 import torch
 from torch import nn
-from torchmetrics import Metric
+from torchmetrics import Metric, SumMetric
 
-from emperor.decoding.hierarchical import HierarchicalByteDecoderOutput
+from emperor.embedding.hierarchical import END_OF_DOCUMENT, END_OF_TOKEN, OUTPUT_SYMBOLS
+from emperor.embedding.hierarchical.decoder import HierarchicalByteDecoderOutput
 
+from ._config import HierarchicalObjectiveConfig
 from ._records import HierarchicalLanguageModelStepOutput
 
 
@@ -39,8 +42,20 @@ class _AccumulatedRatio(Metric):
 
 
 class HierarchicalLanguageModelHandler(nn.Module):
-    def __init__(self):
+    def __init__(self, cfg=None, overrides=None):
         super().__init__()
+        self.cfg = copy.deepcopy(cfg or HierarchicalObjectiveConfig())
+        if overrides is not None:
+            self.cfg.update(overrides)
+        if self.cfg.reduction not in ("sum", "mean"):
+            raise ValueError("hierarchical objective reduction must be sum or mean")
+        if (
+            not math.isfinite(self.cfg.auxiliary_weight)
+            or self.cfg.auxiliary_weight < 0
+        ):
+            raise ValueError(
+                "hierarchical auxiliary_weight must be finite and nonnegative"
+            )
         self.metrics = nn.ModuleDict(
             {
                 f"{stage}_stage": nn.ModuleDict(
@@ -51,12 +66,16 @@ class HierarchicalLanguageModelHandler(nn.Module):
                             "symbol_cross_entropy",
                             "auxiliary_loss",
                             "bits_per_byte",
+                            "sequence_bits_per_byte",
                         )
                     }
                 )
                 for stage in ("train", "validation", "test")
             }
         )
+        for metrics in self.metrics.values():
+            metrics["symbol_nll"] = SumMetric()
+            metrics["control_nll"] = SumMetric()
 
     def step(self, model, batch):
         batch = batch.to(model.device)
@@ -65,14 +84,14 @@ class HierarchicalLanguageModelHandler(nn.Module):
             raise TypeError(
                 "hierarchical batches require HierarchicalByteDecoderOutput"
             )
-        if output.logits.shape != (batch.labels.numel(), 258):
+        if output.logits.shape != (batch.labels.numel(), OUTPUT_SYMBOLS):
             raise ValueError(
                 "packed hierarchical logits must align with all byte/control labels"
             )
         if (
             batch.labels.dtype != torch.long
             or batch.labels.ndim != 1
-            or bool(((batch.labels < 0) | (batch.labels >= 258)).any())
+            or bool(((batch.labels < 0) | (batch.labels >= OUTPUT_SYMBOLS)).any())
         ):
             raise ValueError(
                 "packed labels must be a rank-1 long tensor of byte/control IDs"
@@ -105,7 +124,10 @@ class HierarchicalLanguageModelHandler(nn.Module):
             )
         controls = batch.labels[expected_offsets[1:][valid] - 1]
         if bool(
-            ((controls != 256) & ((controls != 257) | (lengths[valid] != 0))).any()
+            (
+                (controls != END_OF_TOKEN)
+                & ((controls != END_OF_DOCUMENT) | (lengths[valid] != 0))
+            ).any()
         ):
             raise ValueError(
                 "labels must end each token with EOW, or encode EOS as a single prediction"
@@ -115,36 +137,49 @@ class HierarchicalLanguageModelHandler(nn.Module):
         ):
             raise ValueError("byte_count must equal the number of target bytes")
         if batch.labels.numel():
-            nll = nn.functional.cross_entropy(
-                output.logits, batch.labels, reduction="sum"
+            position_nll = nn.functional.cross_entropy(
+                output.logits, batch.labels, reduction="none"
             )
-            # Normalize the symbol objective before adding native auxiliary losses.
-            # This is not a word-perplexity objective or the paper's written sum.
-            cross_entropy = nll / batch.labels.numel()
+            nll = position_nll.sum()
+            byte_nll = position_nll[packed_positions[byte_mask]].sum()
+            control_nll = position_nll[expected_offsets[1:][valid] - 1].sum()
+            cross_entropy = (
+                nll if self.cfg.reduction == "sum" else nll / batch.labels.numel()
+            )
         else:
             # Retain a differentiable zero for an entirely masked training batch.
             nll = next(model.parameters()).sum() * 0
             cross_entropy = nll
+            byte_nll = control_nll = nll
         auxiliary_loss = model._auxiliary_loss.resolve(
             output.loss, reference=output.logits
         )
         return HierarchicalLanguageModelStepOutput(
-            total_loss=cross_entropy + auxiliary_loss,
+            total_loss=cross_entropy + self.cfg.auxiliary_weight * auxiliary_loss,
             cross_entropy=cross_entropy,
             logits=output.logits,
             labels=batch.labels,
             auxiliary_loss=auxiliary_loss,
             nll_sum=nll,
             byte_count=batch.byte_count,
+            byte_nll_sum=byte_nll,
+            control_nll_sum=control_nll,
         )
 
     def log(self, log_fn, stage, output):
         count = output.labels.numel()
         metrics = self.metrics[f"{stage}_stage"]
-        metrics["loss"].update(output.total_loss * count, count)
+        metrics["loss"].update(output.total_loss, 1)
         metrics["symbol_cross_entropy"].update(output.nll_sum, count)
         metrics["auxiliary_loss"].update(output.auxiliary_loss * count, count)
-        metrics["bits_per_byte"].update(output.nll_sum / math.log(2), output.byte_count)
+        metrics["bits_per_byte"].update(
+            output.byte_nll_sum / math.log(2), output.byte_count
+        )
+        metrics["sequence_bits_per_byte"].update(
+            output.nll_sum / math.log(2), output.byte_count
+        )
+        metrics["symbol_nll"].update(output.nll_sum.detach())
+        metrics["control_nll"].update(output.control_nll_sum.detach())
         log_fn(
             {f"{stage}/{name}": metric for name, metric in metrics.items()},
             on_step=False,

@@ -16,6 +16,10 @@ external_interface_scopes = [
 documentation_scopes = ["README.md", "docs", "apps/workbench/README.md"]
 
 retired_modules = [
+  "emperor.decoding",
+  "emperor.embedding.hierarchical._component",
+  "emperor.embedding.hierarchical._config",
+  "emperor.embedding.hierarchical._validation",
   "emperor.nn.module",
   "emperor.monitoring.metadata",
   "emperor.monitoring.emission",
@@ -164,8 +168,8 @@ owners = ["emperor.embedding.contextual._config", "emperor.embedding.contextual.
 [[interfaces]]
 module = "emperor.embedding.hierarchical"
 kind = "configuration"
-exports = ["HierarchicalByteEmbeddingConfig"]
-owners = ["emperor.embedding.hierarchical._config"]
+exports = ["HierarchicalByteEmbeddingConfig", "HierarchicalByteDecoderConfig", "BYTE_VALUES", "OUTPUT_SYMBOLS", "END_OF_TOKEN", "END_OF_DOCUMENT", "HAT_PROTOCOL_VERSION"]
+owners = ["emperor.embedding.hierarchical.encoder._config", "emperor.embedding.hierarchical.decoder._config", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols"]
 
 [[interfaces]]
 module = "emperor.embedding.relative"
@@ -311,8 +315,8 @@ owners = ["emperor.experiments.classifier._experiment"]
 [[interfaces]]
 module = "emperor.experiments.language_model"
 kind = "runtime"
-exports = ["LanguageModelExperiment"]
-owners = ["emperor.experiments.language_model._experiment"]
+exports = ["LanguageModelExperiment", "HierarchicalObjectiveConfig"]
+owners = ["emperor.experiments.language_model._experiment", "emperor.experiments.language_model._config"]
 
 [[interfaces]]
 module = "emperor.experiments.masked_language_model"
@@ -351,13 +355,19 @@ exports = []
 owners = []
 
 [[interfaces]]
-module = "emperor.decoding"
+module = "emperor.embedding.hierarchical.encoder"
 kind = "configuration"
-exports = ["hierarchical"]
-owners = ["emperor.decoding"]
+exports = ["HierarchicalByteEmbeddingConfig"]
+owners = ["emperor.embedding.hierarchical.encoder._config"]
 
 [[interfaces]]
-module = "emperor.decoding.hierarchical"
+module = "emperor.embedding.hierarchical.decoder"
 kind = "runtime"
-exports = ["HierarchicalByteDecoderConfig", "HierarchicalByteDecoderOutput", "ByteGenerationOptions", "ByteTokenGenerationOutput", "HierarchicalTextGenerationOutput", "HierarchicalLanguageModelBatch", "HierarchicalTextCodec", "HierarchicalLanguageModelConfig"]
-owners = ["emperor.decoding.hierarchical._config", "emperor.decoding.hierarchical._records", "emperor.decoding.hierarchical._records", "emperor.decoding.hierarchical._records", "emperor.decoding.hierarchical._records", "emperor.decoding.hierarchical._batch", "emperor.decoding.hierarchical._text", "emperor.decoding.hierarchical._config"]
+exports = ["HierarchicalByteDecoderConfig", "HierarchicalByteDecoderOutput", "ByteGenerationOptions", "ByteTokenGenerationOutput", "BYTE_VALUES", "END_OF_TOKEN", "END_OF_DOCUMENT", "OUTPUT_SYMBOLS"]
+owners = ["emperor.embedding.hierarchical.decoder._config", "emperor.embedding.hierarchical.decoder._records", "emperor.embedding.hierarchical.decoder._records", "emperor.embedding.hierarchical.decoder._records", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols", "emperor.embedding.hierarchical._symbols"]
+
+[[interfaces]]
+module = "emperor.transformer.hierarchical"
+kind = "runtime"
+exports = ["hat_v2_reference_config", "HierarchicalLanguageModelConfig", "HierarchicalLanguageModelBatch", "HierarchicalTextCodec", "HierarchicalTextGenerationOutput"]
+owners = ["emperor.transformer.hierarchical._reference", "emperor.transformer.hierarchical._config", "emperor.transformer.hierarchical._batch", "emperor.transformer.hierarchical._text", "emperor.transformer.hierarchical._records"]

@@ -18,3 +18,5 @@ class LanguageModelStepOutput:
 class HierarchicalLanguageModelStepOutput(LanguageModelStepOutput):
     nll_sum: Tensor
     byte_count: int
+    byte_nll_sum: Tensor
+    control_nll_sum: Tensor

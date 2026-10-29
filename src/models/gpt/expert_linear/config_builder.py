@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 
 import models.gpt.expert_linear.config as config
-from emperor.linears import LinearLayerConfig
 from models.gpt.expert_linear._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -114,7 +113,6 @@ class _GptExpertLinearConfigBuilderImplementation:
                 build_hierarchical_config(
                     model_config,
                     self.embedding_options,
-                    LinearLayerConfig(bias_flag=True),
                 )
             )
         return model_config
