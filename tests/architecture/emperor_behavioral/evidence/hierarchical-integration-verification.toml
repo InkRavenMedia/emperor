@@ -56,6 +56,7 @@ notes = "Run after final source formatting, validation changes, and coverage/led
 
 [offline_example]
 result = "pass"
+notes = "Historical verification: the example script has since been removed. The command below records the earlier run and is no longer runnable from this checkout."
 command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MPLCONFIGDIR=/tmp/emperor-hat-mpl torchenv/bin/python examples/hierarchical_language_model.py --model gpt/expert_linear_adaptive --tiny --adaptive-bytes --steps 1 --save /tmp/hat-example.pt --cache /tmp/hat-example-cache --max-new-bytes 4"
 reload = "Strict reload of that checkpoint and generation from a café prompt also passed."
 
@@ -105,3 +106,58 @@ adaptive_check = "Both adaptive packages use HypernetworkDynamicWeightConfig and
 scope = "Existing runtime wiring already supports this composition. Added regression coverage and documentation, including rectangular adaptive-weight compatibility and the native four-projection mirrored feed-forward topology. No runtime algorithm change."
 other_checks = ["Ruff on changed Python files", "git diff --check", "documentation links resolve"]
 coverage_note = "The focused coverage measurements above remain the earlier measurement of unchanged Emperor source; this package-level test expansion did not rerun coverage."
+
+[schedule_support]
+result = "pass after updating the expected neural-foundation export"
+scope = "Allow adaptive decay and recurrent depth growth in encoder, decoder and backbone; preserve schedules across length groups; freeze schedule progression during generation."
+focused_passed = 117
+focused_skipped = 2
+focused_subtests_passed = 884
+focused_command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 torchenv/bin/python -m pytest -q tests/unit/test_forward_schedule.py tests/unit/test_hierarchical_byte_embedding.py tests/unit/test_hierarchical_byte_decoder.py tests/integration/test_hierarchical_language_model.py tests/unit/test_adaptive_parameter_decay_policy.py tests/unit/test_recurrent_iteration_schedule.py tests/model_packages/test_gpt_hierarchical_language_model.py tests/model_packages/test_gpt_hierarchical_embedding.py tests/architecture/test_emperor_interfaces.py tests/architecture/test_emperor_source_layout.py tests/architecture/test_emperor_test_manifest.py"
+regression_passed = 554
+regression_subtests_passed = 1622
+regression_initial_failures = 1
+regression_command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 torchenv/bin/python -m pytest -q tests/unit/test_recurrent_composition*.py tests/unit/test_recurrent_layer*.py tests/unit/test_augmentation_weight.py tests/unit/test_augmentation_bias.py tests/unit/test_nn.py tests/unit/test_foundational_imports.py tests/model_packages/gpt/linear tests/model_packages/gpt/linear_adaptive tests/model_packages/gpt/expert_linear tests/model_packages/gpt/expert_linear_adaptive tests/integration/test_hierarchical_embedding_composition.py"
+followup = "The only regression failure expected the old emperor.nn exports; updated for ForwardSchedule, then the targeted test passed."
+followup_command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 torchenv/bin/python -m pytest -q tests/unit/test_foundational_imports.py -k nn_interface"
+limitations = "CPU verification; two CUDA skips. Coverage measurements above predate schedule support and remain historical, not measurements of this revision."
+
+[recurrent_decay_once_per_run]
+result = "pass"
+scope = "Adaptive warmup and decay use one factor and advance once per successful outer recurrent forward; nested recurrence shares that boundary. Depth-growth scheduling remains separate. Provisional branches discard deferred updates."
+reproduction = "Before the fix, a real four-step recurrent adaptive layer and nested eight-call recurrence used different factors within one forward; both regression subtests failed."
+regression_passed = 350
+regression_subtests_passed = 542
+regression_command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 torchenv/bin/python -m pytest -q tests/unit/test_forward_schedule.py tests/unit/test_adaptive_parameter_decay_policy.py tests/unit/test_recurrent_composition*.py tests/unit/test_recurrent_layer*.py tests/unit/test_recurrent_iteration_schedule.py tests/model_packages/test_gpt_hierarchical_language_model.py"
+integration_passed = 242
+integration_skipped = 2
+integration_subtests_passed = 1784
+integration_command = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 torchenv/bin/python -m pytest -q tests/unit/test_hierarchical_byte_embedding.py tests/unit/test_hierarchical_byte_decoder.py tests/integration/test_hierarchical_language_model.py tests/unit/test_foundational_imports.py tests/model_packages/gpt/linear tests/model_packages/gpt/linear_adaptive tests/model_packages/gpt/expert_linear tests/model_packages/gpt/expert_linear_adaptive tests/architecture/test_emperor_interfaces.py tests/architecture/test_emperor_source_layout.py tests/architecture/test_emperor_test_manifest.py tests/architecture/test_model_runtime_boundaries.py"
+followup = "After binding the regression hook's loop variable for Ruff, test_forward_schedule.py passed again: eight tests and eight subtests."
+other_checks = ["scoped Ruff check and formatting", "git diff --check"]
+limitations = "CPU checks; CUDA tests skipped. Historical coverage percentages are not refreshed by these regression runs. Existing checkpoint counters are preserved, not retrospectively corrected."
+
+[hat_v2_fidelity_correction_2026_10_29]
+reference = "https://arxiv.org/html/2501.10322v2"
+scope = "Shared 256-symbol protocol; shared C; dense connectors; native RoPE/RMSNorm/SwiGLU reference; Eq5 sum; byte-only BPB; raw learned-boundary generation; explicit variants; checkpoint versioning; four native GPT backbones retained."
+status = "partial: behavior and scoped independent review verified; fresh coverage and mutation certification not performed"
+report = "docs/hat-v2-fidelity-audit-2026-10-29.md"
+baseline = "/tmp/hat-v2-implementation-baseline"
+environment = "PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MPLCONFIGDIR=/tmp/emperor-mpl HF_DATASETS_OFFLINE=1 HF_HUB_OFFLINE=1"
+focused_command = "torchenv/bin/python -m pytest -q -m 'not training' tests/unit/test_hierarchical_byte_embedding.py tests/unit/test_hierarchical_byte_decoder.py tests/unit/test_hierarchical_text_batch.py tests/unit/test_wikitext_hierarchical.py tests/integration/test_hierarchical_embedding_composition.py tests/integration/test_hierarchical_language_model.py tests/model_packages/test_gpt_hierarchical_embedding.py tests/model_packages/test_gpt_hierarchical_language_model.py tests/unit/test_hat_reference_primitives.py tests/integration/test_hat_v2_fidelity.py"
+focused_result = "76 passed; 2 CUDA skips; 1 training test deselected; 64 subtests passed"
+native_command = "torchenv/bin/python -m pytest -q -m 'not training' tests/unit/test_attention_numerics.py tests/unit/test_attention_runtime_layout.py tests/unit/test_attention_static_sources.py tests/unit/test_attention_projector.py tests/unit/test_attention_contracts.py tests/unit/test_attention_validator.py tests/unit/test_transformer.py tests/unit/test_transformer_feed_forward.py tests/unit/test_transformer_layer.py tests/unit/test_transformer_behavioral_contracts.py tests/unit/test_transformer_adaptive_grouping.py tests/unit/test_transformer_validator_adapter.py tests/unit/test_language_model.py"
+native_result = "205 passed; 2 CUDA skips; 1029 subtests passed"
+package_command = "torchenv/bin/python -m pytest -q -m 'not training' tests/model_packages/gpt/linear tests/model_packages/gpt/linear_adaptive tests/model_packages/gpt/expert_linear tests/model_packages/gpt/expert_linear_adaptive tests/unit/test_model_package_checkpoint_capability.py tests/integration/test_checkpoint_continuation.py tests/unit/test_embedding_behavior.py tests/unit/test_foundational_imports.py"
+package_result = "180 passed; 9 training tests deselected; 936 subtests passed; 2 obsolete lightweight-export assertions failed and were corrected"
+interface_followup_command = "torchenv/bin/python -m pytest -q tests/unit/test_embedding_behavior.py::EmbeddingInterfaceBehaviorTests"
+interface_followup_result = "4 passed; 21 subtests passed; both former failures resolved"
+boundary_command = "torchenv/bin/python -m pytest -q tests/architecture/test_emperor_interfaces.py tests/architecture/test_emperor_source_layout.py tests/architecture/test_emperor_test_manifest.py tests/architecture/test_model_runtime_boundaries.py"
+boundary_result = "59 passed; 824 subtests passed"
+audit_command = "torchenv/bin/python -m pytest -q tests/architecture/test_emperor_interfaces.py tests/architecture/test_emperor_test_manifest.py tests/architecture/test_validator_conventions.py tests/architecture/test_training_test_classification.py"
+audit_result = "25 passed; 648 subtests passed; 2 unrelated baseline failures reproduced on saved before-state"
+baseline_failures = ["Neuron terminal/cluster hardcoded validator dispatch", "Six unmarked training tests in test_attention_residual_options.py and test_runs_execution.py"]
+independent_review = "Read-only source review against before-state plus independent CPU probes. Constant-export and constrained-cap findings fixed and rechecked. Final global-RNG lookahead fix reviewed. No remaining blocker reported."
+review_limits = "Native GPT backbones remain variants; constrained UTF-8 sampling is budget dependent; no experimental-result reproduction claim."
+additional_checks = ["Ruff check and format check on changed Python files", "git diff --check", "shared table identity and exact logits after ordinary and assign=True loading", "algebraic rotary pair rotation and SwiGLU references", "raw-byte and seeded/global-RNG continuation"]
+not_performed = ["optimizer steps or training", "dataset/model downloads", "dependency installation", "GPU execution", "fresh coverage/mutation measurements", "author-checkpoint parity", "commit or publication"]
