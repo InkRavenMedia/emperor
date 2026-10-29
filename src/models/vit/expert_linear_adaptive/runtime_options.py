@@ -6,7 +6,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     MaskDimensionOptions,
@@ -561,7 +560,7 @@ class HiddenAdaptiveWeightOptions:
     generation: WeightGenerationOptions = field(
         default_factory=WeightGenerationOptions, kw_only=True
     )
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     option_flag: bool
     option: type[DynamicWeightConfig] | None
     normalization_option: WeightNormalizationOptions

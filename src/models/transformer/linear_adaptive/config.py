@@ -12,7 +12,6 @@ from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,  # noqa: F401
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GeneratorDynamicBiasConfig,  # noqa: F401
@@ -482,7 +481,7 @@ WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
 BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
 WEIGHT_OPTION_FLAG: bool = True
 WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-GENERATOR_DEPTH: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_ONE
+GENERATOR_DEPTH: int = 1
 WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
 WEIGHT_DECAY_RATE: float = 0.0
 WEIGHT_DECAY_WARMUP_BATCHES: int = 0

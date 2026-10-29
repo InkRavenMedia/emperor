@@ -6,7 +6,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GroupingConfig,
@@ -128,7 +127,7 @@ class AdaptiveGenerationOptions:
 class AdaptiveWeightOptions:
     enabled: bool
     option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     normalization_option: WeightNormalizationOptions
     normalization_position_option: WeightNormalizationPositionOptions
     decay_schedule: WeightDecayScheduleOptions
@@ -175,7 +174,7 @@ class AdaptiveProjectionOptions:
         default_factory=AdaptiveGenerationOptions, kw_only=True
     )
     weight_option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int

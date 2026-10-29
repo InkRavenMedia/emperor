@@ -67,6 +67,7 @@ def test_generation_settings_reach_executable_adaptive_layers(
         config_overrides=dict(
             weight_option_flag=True,
             weight_option=weight_option,
+            generator_depth=32,
             bias_option_flag=True,
             bias_option=MatrixBiasMixtureConfig,
             weight_mixture_num_experts=3,
@@ -104,6 +105,8 @@ def test_generation_settings_reach_executable_adaptive_layers(
             assert weights.sampler_config.router_config.model_config.hidden_dim == 7
             assert weights.sampler_config is not biases.sampler_config
         else:
+            assert type(weights.generator_depth) is int
+            assert weights.generator_depth == 32
             assert (
                 weights.input_factor_source
                 is LowRankFactorSourceOptions.SHARED_PARAMETER
@@ -228,6 +231,10 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
     config_module = import_module(
         "models." + package_name.replace("/", ".") + ".config"
     )
+    assert not schema["generator_depth"].choices
+    parsed_depth = parse_config_value(config_module, "GENERATOR_DEPTH", "32")
+    assert type(parsed_depth) is int
+    assert parsed_depth == 32
     for key, value in (
         ("weight_option", MatrixWeightsMixtureConfig),
         ("weight_option", DiagonallyModulatedLowRankDynamicWeightConfig),

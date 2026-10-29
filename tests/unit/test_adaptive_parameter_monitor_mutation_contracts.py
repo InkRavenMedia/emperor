@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     MaskDimensionOptions,
     MultiplicativeDynamicBiasConfig,
     PerAxisScoreMaskConfig,
@@ -81,7 +80,7 @@ def soft_weight_bank() -> SoftWeightedBankDynamicWeight:
         SoftWeightedBankDynamicWeightConfig(
             input_dim=2,
             output_dim=2,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.DISABLED,
             decay_rate=0.0,
             decay_warmup_batches=0,

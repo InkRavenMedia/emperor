@@ -15,7 +15,6 @@ from emperor.attention import (
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     CombinedDynamicDiagonalConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
@@ -275,7 +274,7 @@ class TestBertExpertLinearAdaptiveModel(unittest.TestCase):
         )
         self.assertEqual(
             adaptive_config.weight_config.generator_depth,
-            DynamicDepthOptions.DEPTH_OF_FIVE,
+            5,
         )
         self.assertEqual(
             adaptive_config.weight_config.normalization_option,

@@ -21,7 +21,6 @@ class LayeredWeightedBankDynamicWeight(DynamicWeightAbstract):
     ):
         super().__init__(cfg, overrides)
         self.bank_expansion_factor = self.cfg.bank_expansion_factor.value
-        self.depth_value = self.generator_depth.value
         weight_bank_shape = self.__get_weight_bank_shape()
         self.weight_bank = self._init_parameter_bank(weight_bank_shape)
         self.model = self._init_model()
@@ -30,7 +29,7 @@ class LayeredWeightedBankDynamicWeight(DynamicWeightAbstract):
         broadcast_batch = 1
         return (
             broadcast_batch,
-            self.depth_value,
+            self.generator_depth,
             self.bank_expansion_factor * self.input_dim,
             self.output_dim,
         )
@@ -62,7 +61,7 @@ class LayeredWeightedBankDynamicWeight(DynamicWeightAbstract):
     def __get_split_weights_by_factor_shape(self) -> tuple[int, int, int, int, int]:
         return (
             -1,
-            self.depth_value,
+            self.generator_depth,
             self.input_dim,
             self.bank_expansion_factor,
             self.output_dim,

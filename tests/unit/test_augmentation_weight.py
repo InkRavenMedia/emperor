@@ -8,7 +8,6 @@ import torch.nn.functional as F
 from emperor.augmentations.adaptive_parameters import (
     BankExpansionFactorOptions,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     DynamicWeightConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -61,7 +60,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         hidden_dim: int = 36,
         output_dim: int = 24,
         bias_flag: bool = True,
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth: int = 2,
         last_layer_bias_option: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT,
         apply_output_postprocessing_flag: bool = True,
         normalization_option: WeightNormalizationOptions = (
@@ -251,7 +250,7 @@ class TestWeightHandlerForward(unittest.TestCase):
             config_cls=LayeredWeightedBankDynamicWeightConfig,
             input_dim=input_dim,
             output_dim=output_dim,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+            generator_depth=2,
             bank_expansion_factor=bank_expansion_factor,
         )
         weight_params = Module()._init_parameter_bank((input_dim, output_dim))
@@ -271,7 +270,7 @@ class TestWeightHandlerForward(unittest.TestCase):
             config_cls=SoftWeightedBankDynamicWeightConfig,
             input_dim=input_dim,
             output_dim=output_dim,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+            generator_depth=2,
             bank_expansion_factor=bank_expansion_factor,
         )
         weight_params = Module()._init_parameter_bank((input_dim, output_dim))
@@ -714,7 +713,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                     input_dim=input_dim,
                     hidden_dim=4,
                     output_dim=output_dim,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     apply_output_postprocessing_flag=False,
                     normalization_option=WeightNormalizationOptions.DISABLED,
                     normalization_position_option=(
@@ -837,7 +836,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                     input_dim=input_dim,
                     hidden_dim=4,
                     output_dim=output_dim,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     apply_output_postprocessing_flag=False,
                     normalization_option=WeightNormalizationOptions.DISABLED,
                     normalization_position_option=(
@@ -940,7 +939,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                         else:
                             self.assertEqual(restored_value, source_value)
 
-    def test_generator_depth_options(self):
+    def test_positive_integer_generator_depths(self):
         batch_size = 2
         input_dim = 12
         for config_cls, _, effective_output_dim in self.weight_cases():
@@ -954,9 +953,7 @@ class TestWeightHandlerForward(unittest.TestCase):
             weight_shape = (input_dim, effective_output_dim)
             expected_shape = (batch_size, input_dim, effective_output_dim)
             weight_params = Module()._init_parameter_bank(weight_shape)
-            for depth in DynamicDepthOptions:
-                if depth == DynamicDepthOptions.DISABLED:
-                    continue
+            for depth in (*range(1, 11), 32):
                 msg = f"config_cls={config_cls.__name__}, depth={depth}"
                 with self.subTest(msg=msg):
                     cfg = self.preset(
@@ -1052,7 +1049,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         input_dim = 2
         output_dim = 3
         batch_size = 2
-        depth = DynamicDepthOptions.DEPTH_OF_ONE
+        depth = 1
         bank_factor = BankExpansionFactorOptions.FACTOR_OF_TWO
         expanded_bank_rows = input_dim * bank_factor.value
         cfg = self.preset(
@@ -1071,13 +1068,13 @@ class TestWeightHandlerForward(unittest.TestCase):
             generated_logits.shape,
             (
                 batch_size,
-                depth.value,
+                depth,
                 input_dim * expanded_bank_rows,
             ),
         )
         self.assertEqual(
             model.weight_bank.shape,
-            (depth.value, expanded_bank_rows, output_dim),
+            (depth, expanded_bank_rows, output_dim),
         )
         raw_logits = torch.tensor(
             [[[-8.0, -8.0, -8.0, 8.0, 8.0, -8.0, -8.0, -8.0]]],
@@ -1111,7 +1108,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         output = model(weight_params, input_tensor)
         bank_logits = model.model(input_tensor).view(
             batch_size,
-            depth.value,
+            depth,
             input_dim,
             expanded_bank_rows,
         )
@@ -1122,14 +1119,14 @@ class TestWeightHandlerForward(unittest.TestCase):
         torch.testing.assert_close(output, expected_update)
         torch.testing.assert_close(
             bank_distribution.sum(dim=-1),
-            torch.ones(batch_size, depth.value, input_dim),
+            torch.ones(batch_size, depth, input_dim),
         )
 
     def test_layered_weighted_bank_forward_applies_depth_and_factor_reduction(self):
         input_dim = 2
         output_dim = 3
         batch_size = 2
-        depth = DynamicDepthOptions.DEPTH_OF_ONE
+        depth = 1
         bank_factor = BankExpansionFactorOptions.FACTOR_OF_TWO
         cfg = self.preset(
             config_cls=LayeredWeightedBankDynamicWeightConfig,
@@ -1171,7 +1168,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         weighted_bank = model.weight_bank * bank_distribution.unsqueeze(-1)
         expected = weighted_bank.view(
             batch_size,
-            depth.value,
+            depth,
             input_dim,
             bank_factor.value,
             output_dim,

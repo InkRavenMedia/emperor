@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     )
     from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
         DepthMappingLayer,
-        DepthMappingLayerConfig,
     )
     from emperor.layers import LayerStackConfig
 
@@ -95,6 +94,7 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
             input_dim=model.cfg.input_dim,
             output_dim=model.cfg.output_dim,
         )
+        DepthMappingValidator.validate_generator_depth(model.cfg.generator_depth)
         cls.validate_decay_parameters(model.cfg)
 
     @classmethod
@@ -167,8 +167,6 @@ class ModulatedLowRankValidator(DynamicWeightValidator):
         cls.validate_supported_fields(model.cfg)
         cls.validate_initialization_fields(model)
         cls.validate_active_models(model.cfg)
-        if model.cfg.generator_depth.value <= 0:
-            raise ValueError("generator_depth must be greater than zero.")
 
     @classmethod
     def validate_active_models(cls, cfg, fallback=None) -> None:
@@ -213,15 +211,13 @@ class DepthMappingValidator(ValidatorBase):
             input_dim=model.cfg.input_dim,
             output_dim=model.cfg.output_dim,
         )
-        cls._validate_generator_depth(model.cfg)
+        cls.validate_generator_depth(model.cfg.generator_depth)
 
     @staticmethod
-    def _validate_generator_depth(cfg: "DepthMappingLayerConfig") -> None:
-        if cfg.generator_depth is None or cfg.generator_depth.value == 0:
+    def validate_generator_depth(generator_depth: object) -> None:
+        if type(generator_depth) is not int or generator_depth <= 0:
             raise ValueError(
-                f"generator_depth must be greater than 0 for DepthMappingLayer, "
-                f"received {cfg.generator_depth}. "
-                f"Use DEPTH_OF_ONE, DEPTH_OF_TWO, or DEPTH_OF_THREE."
+                f"generator_depth must be a positive integer, received {generator_depth}."
             )
 
     @staticmethod

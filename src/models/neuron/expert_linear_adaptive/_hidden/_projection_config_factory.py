@@ -7,7 +7,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GroupingConfig,
@@ -56,7 +55,7 @@ class AdaptiveBoundaryModelOptions:
         default_factory=BiasGenerationOptions, kw_only=True
     )
     weight_option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int

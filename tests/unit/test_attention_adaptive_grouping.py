@@ -15,7 +15,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdditiveDynamicBiasConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
     WeightNormalizationOptions,
@@ -95,7 +94,7 @@ def grouped_weight_projection_model_config(group_count: int = 2) -> LayerStackCo
                         input_order="SEQUENCE_FIRST",
                     ),
                     weight_config=DualModelDynamicWeightConfig(
-                        generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                        generator_depth=1,
                         decay_schedule=WeightDecayScheduleOptions.DISABLED,
                         decay_rate=0.0,
                         decay_warmup_batches=0,
@@ -118,7 +117,7 @@ def grouped_single_weight_projection_model_config(
     adaptive_config = config.layer_config.layer_model_config
     adaptive_config.adaptive_augmentation_config.weight_config = (
         SingleModelDynamicWeightConfig(
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.DISABLED,
             decay_rate=0.0,
             decay_warmup_batches=0,

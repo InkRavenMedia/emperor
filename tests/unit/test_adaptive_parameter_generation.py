@@ -4,7 +4,6 @@ import pytest
 import torch
 
 from emperor.augmentations.adaptive_parameters import (
-    DynamicDepthOptions,
     LowRankFactorSourceOptions,
     WeightDecayScheduleOptions,
     WeightNormalizationOptions,
@@ -134,7 +133,7 @@ def test_normalization_precedes_rank_coefficients_on_feature_axes(
             input_factor_source=sources[0],
             output_factor_source=sources[1],
             normalization_option=normalization,
-            generator_depth=DynamicDepthOptions(rank),
+            generator_depth=rank,
         )
         .build()
         .double()
@@ -256,7 +255,7 @@ def test_state_roundtrip_and_context_isolation(sources):
             "input_factor_source": LowRankFactorSourceOptions.SHARED_PARAMETER,
             "input_factor_model_config": linear_stack_config(3, 2),
         },
-        {"generator_depth": DynamicDepthOptions.DISABLED},
+        {"generator_depth": 0},
         {"coefficient_model_config": object()},
     ],
 )

@@ -20,7 +20,6 @@ class SoftWeightedBankDynamicWeight(DynamicWeightAbstract):
         overrides: SoftWeightedBankDynamicWeightConfig | None = None,
     ):
         super().__init__(cfg, overrides)
-        self.depth_value = self.generator_depth.value
         self.bank_expansion_factor = self.cfg.bank_expansion_factor.value
         self.expanded_bank_row_count = self.input_dim * self.bank_expansion_factor
         weight_bank_shape = self.__get_weight_bank_shape()
@@ -30,7 +29,7 @@ class SoftWeightedBankDynamicWeight(DynamicWeightAbstract):
 
     def __get_weight_bank_shape(self) -> tuple[int, int, int]:
         return (
-            self.depth_value,
+            self.generator_depth,
             self.expanded_bank_row_count,
             self.output_dim,
         )
@@ -70,7 +69,7 @@ class SoftWeightedBankDynamicWeight(DynamicWeightAbstract):
     ) -> Tensor:
         per_input_weight_bank_mixture_shape = (
             -1,
-            self.depth_value,
+            self.generator_depth,
             self.input_dim,
             self.expanded_bank_row_count,
         )

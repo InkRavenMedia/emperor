@@ -8,7 +8,6 @@ from emperor.attention import AttentionLayerState
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
@@ -794,7 +793,7 @@ class TestRecurrentLayer(unittest.TestCase):
                 weight_config=SingleModelDynamicWeightConfig(
                     input_dim=dim,
                     output_dim=dim,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     normalization_option=WeightNormalizationOptions.DISABLED,
                     normalization_position_option=(
                         WeightNormalizationPositionOptions.DISABLED
