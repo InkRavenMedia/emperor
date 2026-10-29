@@ -606,6 +606,7 @@ def _bert_embedding_options_from_kwargs(
         normalization=config_module.EMBEDDING_NORMALIZATION,
         dropout_probability=config_module.EMBEDDING_DROPOUT_PROBABILITY,
         hierarchical_embedding_config=config_module.HIERARCHICAL_EMBEDDING_CONFIG,
+        contextual_embedding_config=config_module.CONTEXTUAL_EMBEDDING_CONFIG,
     )
     updates = _pop_updates(
         kwargs,
@@ -615,6 +616,7 @@ def _bert_embedding_options_from_kwargs(
             "embedding_normalization": "normalization",
             "embedding_dropout_probability": "dropout_probability",
             "hierarchical_embedding_config": "hierarchical_embedding_config",
+            "contextual_embedding_config": "contextual_embedding_config",
         },
     )
     return replace(options, **updates) if updates else options
