@@ -120,6 +120,7 @@ blocked_reason = ""
 modules = [
   "src/emperor/embedding/hierarchical/_symbols.py",
   "src/emperor/embedding/__init__.py",
+  "src/emperor/embedding/_token_text.py",
   "src/emperor/embedding/absolute/__init__.py",
   "src/emperor/embedding/absolute/_base.py",
   "src/emperor/embedding/absolute/_config.py",
