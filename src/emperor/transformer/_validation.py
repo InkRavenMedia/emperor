@@ -35,6 +35,15 @@ class TransformerValidator(ValidatorBase):
 
     @classmethod
     def validate_transformer(cls, model: "Transformer") -> None:
+        from emperor.layers import NormalizationOptions
+
+        final_normalization = getattr(model.cfg, "final_normalization", None)
+        if final_normalization is not None and not isinstance(
+            final_normalization, NormalizationOptions
+        ):
+            raise TypeError(
+                "final_normalization must be a NormalizationOptions value or None"
+            )
         encoder_stack_config = model.cfg.encoder_stack_config
         decoder_stack_config = model.cfg.decoder_stack_config
         if encoder_stack_config is None and decoder_stack_config is None:

@@ -118,6 +118,9 @@ class TransformerConfig(ConfigBase):
     decoder_stack_config: "LayerStackConfig | RecurrentCompositionConfig | None" = (
         optional_field("Generic decoder block-stack configuration.")
     )
+    final_normalization: "NormalizationOptions | None" = optional_field(
+        "Final encoder/decoder feature normalization; None preserves LayerNorm."
+    )
 
     def _registry_owner(self) -> type:
         from emperor.transformer._model import Transformer
