@@ -53,7 +53,7 @@ class Model(BertPretrainingExperiment):
         self.__validate_pretraining_dimensions()
         self.token_embedding = self._build_token_embedding()
         self.token_type_embedding = self.__build_token_type_embedding()
-        self.positional_embedding = self.__build_positional_embedding()
+        self.positional_embedding = self._build_positional_embedding()
         self.embedding_layer_norm = self.__build_embedding_layer_norm()
         self.embedding_dropout = self.__build_embedding_dropout()
         self.transformer = self.__build_encoder_model()
@@ -104,9 +104,6 @@ class Model(BertPretrainingExperiment):
             self.boundary_config.embedding_options.token_type_vocab_size,
             self.cfg.hidden_dim,
         )
-
-    def __build_positional_embedding(self) -> nn.Module:
-        return self.experiment_config.positional_embedding_config.build()
 
     def __build_embedding_layer_norm(self) -> nn.Module:
         if not self.boundary_config.embedding_options.layer_norm_flag:
@@ -220,9 +217,11 @@ class Model(BertPretrainingExperiment):
     ) -> tuple[Tensor, Tensor]:
         embedding_state = self._build_token_embedding_state(input_ids, attention_mask)
         token_embedding = embedding_state.hidden
-        positional_embedding = self.positional_embedding(input_ids)
+        positioned_token_embeddings = self._add_sentence_positions(
+            token_embedding, input_ids
+        )
         segment_embedding = self.token_type_embedding(token_type_ids)
-        hidden = token_embedding + positional_embedding + segment_embedding
+        hidden = positioned_token_embeddings + segment_embedding
         hidden = self.embedding_layer_norm(hidden)
         processed_embeddings = self.embedding_dropout(hidden)
         return processed_embeddings, embedding_state.loss

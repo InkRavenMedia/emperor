@@ -51,6 +51,7 @@ from emperor.embedding.absolute import (
     AbsolutePositionalEmbeddingConfig,
     TextLearnedPositionalEmbeddingConfig,
 )
+from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.experts import SoftMoEConfig
 from emperor.halting import (
@@ -157,6 +158,7 @@ EMBEDDING_LAYER_NORM_FLAG: bool = True
 EMBEDDING_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
 EMBEDDING_DROPOUT_PROBABILITY: float = STACK_DROPOUT_PROBABILITY
 HIERARCHICAL_EMBEDDING_CONFIG: HierarchicalByteEmbeddingConfig | None = None
+CONTEXTUAL_EMBEDDING_CONFIG: ByteContextualEmbeddingConfig | None = None
 
 #########################################################################
 # MASKED-LANGUAGE-MODELLING HEAD

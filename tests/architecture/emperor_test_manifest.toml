@@ -94,6 +94,7 @@ modules = [
 [families.embedding]
 status = "partial"
 focused_tests = [
+  "tests/model_packages/test_bert_adaptive_feature_parity.py",
   "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_absolute_positional_embedding_validator.py",
@@ -688,6 +689,7 @@ focused_tests = [
 ]
 integration_tests = [
   "tests/model_packages/test_bert_hierarchical_soft_moe.py",
+  "tests/model_packages/test_bert_adaptive_feature_parity.py",
   "tests/integration/test_hierarchical_language_model.py",
   "tests/model_packages/test_gpt_hierarchical_language_model.py",
   "tests/model_packages/transformer/test_variable_chunking_configuration.py",
@@ -921,6 +923,7 @@ modules = [
 [families.experiments]
 status = "pending"
 focused_tests = [
+  "tests/model_packages/test_bert_adaptive_feature_parity.py",
   "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/model_packages/test_gpt_hierarchical_language_model.py",

@@ -83,6 +83,7 @@ def bert_embedding_options(config: ModuleType) -> BertEmbeddingOptions:
         normalization=config.EMBEDDING_NORMALIZATION,
         dropout_probability=config.EMBEDDING_DROPOUT_PROBABILITY,
         hierarchical_embedding_config=config.HIERARCHICAL_EMBEDDING_CONFIG,
+        contextual_embedding_config=config.CONTEXTUAL_EMBEDDING_CONFIG,
     )
 
 

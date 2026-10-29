@@ -17,6 +17,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightNormalizationPositionOptions,
 )
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.experts import SoftMoEConfig
 from emperor.halting import (
@@ -139,6 +140,9 @@ def resolve_controller_stack_options(
 
 @dataclass(frozen=True)
 class BertEmbeddingOptions:
+    contextual_embedding_config: ByteContextualEmbeddingConfig | None = field(
+        default=None, kw_only=True
+    )
     hierarchical_embedding_config: HierarchicalByteEmbeddingConfig | None = field(
         default=None, kw_only=True
     )

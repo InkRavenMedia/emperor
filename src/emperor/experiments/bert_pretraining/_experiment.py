@@ -16,6 +16,8 @@ from ._records import BertPretrainingBatch, BertPretrainingStepOutput
 
 if TYPE_CHECKING:
     from emperor.config import ModelConfig
+    from emperor.embedding.contextual import ByteContextualEmbeddingConfig
+    from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 
 
 _INTEGER_DTYPES = {
@@ -39,12 +41,10 @@ class BertPretrainingExperiment(LightningModule):
         self._auxiliary_loss = AuxiliaryLoss("BERT-pretraining")
 
     def _build_token_embedding(self) -> nn.Module:
-        boundary_config = self.cfg.experiment_config.boundary_config
-        embedding_config = (
-            boundary_config.embedding_options.hierarchical_embedding_config
-        )
+        embedding_config = self.__resolve_text_embedding_config()
         if embedding_config is None:
             return nn.Embedding(self.cfg.input_dim, self.cfg.hidden_dim)
+        boundary_config = self.cfg.experiment_config.boundary_config
         if boundary_config.mlm_head_options.decoder_weight_tying_flag:
             raise ValueError(
                 "BERT text-based embedding requires MLM decoder weight tying to be disabled."
@@ -52,6 +52,40 @@ class BertPretrainingExperiment(LightningModule):
         return BertTextTokenEmbedding(
             embedding_config, self.cfg.input_dim, self.cfg.hidden_dim
         )
+
+    def __resolve_text_embedding_config(
+        self,
+    ) -> "HierarchicalByteEmbeddingConfig | ByteContextualEmbeddingConfig | None":
+        embedding_options = self.cfg.experiment_config.boundary_config.embedding_options
+        hierarchical_config = embedding_options.hierarchical_embedding_config
+        contextual_config = embedding_options.contextual_embedding_config
+        if hierarchical_config is not None and contextual_config is not None:
+            raise ValueError(
+                "BERT hierarchical and contextual embeddings are mutually exclusive."
+            )
+        if contextual_config is not None:
+            return contextual_config
+        return hierarchical_config
+
+    def _build_positional_embedding(self) -> nn.Module:
+        if self.__uses_contextual_embeddings():
+            return nn.Identity()
+        return self.cfg.experiment_config.positional_embedding_config.build()
+
+    def __uses_contextual_embeddings(self) -> bool:
+        token_embedding = getattr(self, "token_embedding", None)
+        return (
+            isinstance(token_embedding, BertTextTokenEmbedding)
+            and token_embedding.uses_contextual_embedding
+        )
+
+    def _add_sentence_positions(
+        self, token_embeddings: Tensor, input_ids: Tensor
+    ) -> Tensor:
+        if self.__uses_contextual_embeddings():
+            return token_embeddings
+        position_embeddings = self.positional_embedding(input_ids)
+        return token_embeddings + position_embeddings
 
     def set_token_vocabulary(self, token_texts: Sequence[str]) -> None:
         """Bind exact token spellings, including BERT special tokens, in ID order."""

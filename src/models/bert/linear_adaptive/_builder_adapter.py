@@ -467,6 +467,7 @@ def _bert_boundary_builder_kwargs(
         "embedding_normalization",
         "embedding_dropout_probability",
         "hierarchical_embedding_config",
+        "contextual_embedding_config",
     }
     if _option_requested(kwargs, "embedding_options", embedding_keys):
         provided = cast(BertEmbeddingOptions | None, kwargs.get("embedding_options"))
@@ -1389,6 +1390,7 @@ def _embedding_options_from_kwargs(
                 "embedding_normalization": "normalization",
                 "embedding_dropout_probability": "dropout_probability",
                 "hierarchical_embedding_config": "hierarchical_embedding_config",
+                "contextual_embedding_config": "contextual_embedding_config",
             },
         ),
     )

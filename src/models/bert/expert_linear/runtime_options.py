@@ -5,6 +5,7 @@ from types import ModuleType
 from typing import cast
 
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.experts import (
     DroppedTokenOptions,
@@ -246,6 +247,9 @@ class TransformerFeedForwardOptions:
 
 @dataclass(frozen=True)
 class BertEmbeddingOptions:
+    contextual_embedding_config: ByteContextualEmbeddingConfig | None = field(
+        default=None, kw_only=True
+    )
     hierarchical_embedding_config: HierarchicalByteEmbeddingConfig | None = field(
         default=None, kw_only=True
     )
