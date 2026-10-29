@@ -269,8 +269,8 @@ owners = ["emperor.sampler._config", "emperor.sampler._config", "emperor.sampler
 [[interfaces]]
 module = "emperor.transformer"
 kind = "runtime"
-exports = ["Transformer", "TransformerConfig", "TransformerEncoderLayer", "TransformerEncoderBlockLayer", "TransformerDecoderBlockLayer", "TransformerDecoderLayerState", "TransformerDecoderLayer", "TransformerEncoderLayerConfig", "TransformerEncoderBlockLayerConfig", "TransformerDecoderBlockLayerConfig", "TransformerDecoderLayerConfig", "FeedForward", "FeedForwardConfig"]
-owners = ["emperor.transformer._model", "emperor.transformer._config", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._state", "emperor.transformer._layers", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward"]
+exports = ["Transformer", "TransformerConfig", "TransformerEncoderLayer", "TransformerEncoderBlockLayer", "TransformerDecoderBlockLayer", "TransformerDecoderLayerState", "TransformerDecoderLayer", "TransformerEncoderLayerConfig", "TransformerEncoderBlockLayerConfig", "TransformerDecoderBlockLayerConfig", "TransformerDecoderLayerConfig", "FeedForward", "FeedForwardConfig", "SwiGLUFeedForward", "SwiGLUFeedForwardConfig"]
+owners = ["emperor.transformer._model", "emperor.transformer._config", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._state", "emperor.transformer._layers", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward"]
 
 [[interfaces]]
 module = "emperor.datasets.image.classification"

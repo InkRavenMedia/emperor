@@ -18,7 +18,10 @@ if TYPE_CHECKING:
         RecurrentCompositionConfig,
         ResidualConfig,
     )
-    from emperor.transformer._feed_forward import FeedForwardConfig
+    from emperor.transformer._feed_forward import (
+        FeedForwardConfig,
+        SwiGLUFeedForwardConfig,
+    )
 
     DecoderSelfAttentionConfig = (
         SelfAttentionConfig | MixtureOfAttentionHeadsConfig | MixerAttentionConfig
@@ -45,8 +48,8 @@ class TransformerEncoderLayerConfig(ConfigBase):
     attention_config: "SelfAttentionConfig | MixtureOfAttentionHeadsConfig | MixerAttentionConfig | None" = optional_field(  # noqa: E501
         "Supported self-processing configuration for the encoder attention sub-block."
     )
-    feed_forward_config: "FeedForwardConfig | None" = optional_field(
-        "Feed-forward configuration for the encoder sub-block."
+    feed_forward_config: "FeedForwardConfig | SwiGLUFeedForwardConfig | None" = (
+        optional_field("Feed-forward configuration for the encoder sub-block.")
     )
     normalization: "NormalizationOptions | None" = optional_field(
         "Feature normalization used in every encoder sub-block. Defaults to RMS_NORM."
@@ -86,8 +89,8 @@ class TransformerDecoderLayerConfig(ConfigBase):
     cross_attention_config: "DecoderCrossAttentionConfig | None" = optional_field(
         "Cross-attention configuration querying encoder outputs."
     )
-    feed_forward_config: "FeedForwardConfig | None" = optional_field(
-        "Feed-forward configuration for the decoder sub-block."
+    feed_forward_config: "FeedForwardConfig | SwiGLUFeedForwardConfig | None" = (
+        optional_field("Feed-forward configuration for the decoder sub-block.")
     )
     normalization: "NormalizationOptions | None" = optional_field(
         "Feature normalization used in every decoder sub-block. Defaults to RMS_NORM."
