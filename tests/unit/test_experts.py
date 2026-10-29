@@ -233,8 +233,7 @@ class MixtureOfExpertsPresetMixin:
         output_dim: int = 6,
         experts_stack_num_layers: int = 2,
         experts_stack_activation: ActivationOptions = ActivationOptions.RELU,
-        experts_stack_residual_connection_option: type[ResidualConfig]
-        | None = None,
+        experts_stack_residual_connection_option: type[ResidualConfig] | None = None,
         experts_stack_dropout_probability: float = 0.0,
         **kwargs: object,
     ) -> LayerStackConfig:

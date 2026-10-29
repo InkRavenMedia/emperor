@@ -314,7 +314,9 @@ class AdaptiveParameterMonitorMutationContractTests(unittest.TestCase):
         multiplicative = multiplicative_bias()
 
         actual = scalar_map(collect_facts("bias", multiplicative, observation))
-        torch.testing.assert_close(actual["effective_scale_mean"], (output / base).mean())
+        torch.testing.assert_close(
+            actual["effective_scale_mean"], (output / base).mean()
+        )
         torch.testing.assert_close(
             actual["effective_scale_var"],
             (output / base).var(unbiased=False),
@@ -335,9 +337,7 @@ class AdaptiveParameterMonitorMutationContractTests(unittest.TestCase):
         )
         self.assertNotIn(
             "effective_scale_mean",
-            scalar_map(
-                collect_facts("bias", multiplicative, threshold_observation)
-            ),
+            scalar_map(collect_facts("bias", multiplicative, threshold_observation)),
         )
 
     def test_bias_facts_preserve_effective_scale_without_weight_internals(
