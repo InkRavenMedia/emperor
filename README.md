@@ -179,6 +179,87 @@ The Workbench has grown into a local experiment workbench with three workspaces:
 - **Logs** - browse historical TensorBoard runs, inspect saved graphs, and
   review metrics and monitor data from completed runs.
 
+## Optional Soft Mixture of Experts
+
+Core mixture configurations can select the noncausal Soft MoE method from
+[From Sparse to Soft Mixtures of Experts](https://arxiv.org/pdf/2308.00951v2).
+It forms learned weighted token summaries, runs the existing expert networks on
+those slots, and combines their outputs back into token positions. The existing
+token sampler is unchanged. Leaving `soft_moe_config=None` preserves existing
+routing, seeded initialization, and checkpoint keys.
+
+For an existing `MixtureOfExpertsConfig` with a pointwise linear expert stack:
+
+```python
+from dataclasses import replace
+
+from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
+from emperor.experts import (
+    DroppedTokenOptions,
+    ExpertWeightingPositionOptions,
+    RoutingInitializationMode,
+    SoftMoEConfig,
+)
+
+soft_config = replace(
+    existing_mixture_config,
+    soft_moe_config=SoftMoEConfig(
+        slots_per_expert=1,
+        model_config=DepthMappingHandlerConfig(model_config=scoring_stack_config),
+    ),
+    top_k=existing_mixture_config.num_experts,
+    capacity_factor=0.0,
+    dropped_token_behavior=DroppedTokenOptions.ZEROS,
+    routing_initialization_mode=RoutingInitializationMode.LAYER,
+    sampler_config=None,
+    compute_expert_mixture_flag=True,
+    weighted_parameters_flag=True,
+    weighting_position_option=ExpertWeightingPositionOptions.AFTER_EXPERTS,
+)
+mixture = soft_config.build()
+output, returned_mask, expert_loss = mixture(tokens, skip_mask=active_tokens)
+```
+
+Inputs are explicitly `[batch, tokens, features]`; optional `active_tokens` is
+Boolean `[batch, tokens, 1]`, with True meaning valid. Slot count is fixed while
+token count can vary. Masked values are removed before arithmetic; fully masked
+sequences produce zero mixture outputs. All experts process their fixed slots;
+`top_k=num_experts` is configuration coherence, with no top-k operation or capacity
+dropping. Expert auxiliary losses retain their existing semantics, including
+execution on zero slots for fully masked sequences.
+
+The existing `MixtureOfExpertsLayerConfig` / `MixtureOfExpertsModelConfig` path
+also supports this option: select LAYER routing, matching `top_k`, and no sampler
+on the outer model. A `FeedForwardConfig` directly wrapping that model preserves
+sequence boundaries. Transformer blocks transport padding and explicit
+`batch_first_flag` layout. Direct feed-forward calls accept `batch_first=False`
+for `[tokens, batch, features]` and `padding_mask` of shape `[batch, tokens]`, where
+Boolean True or additive negative infinity excludes tokens. The surrounding
+Transformer residual retains its ordinary padded-output behavior.
+
+Causal attention and explicit attention masks are rejected: global slot pooling
+does not preserve their visibility constraints. Shared routing, attention
+Map/Reduce, recurrent wrappers, adaptive grouping, and context controllers are
+unsupported in this mode. Existing ordinary linear and compatible per-row
+adaptive linear expert stacks are reused without replacing their networks.
+This is a core configuration option; package-specific CLI presets are unchanged.
+
+Scoring uses a configurable depth-mapping stack with independent expert parameters
+in each layer. Supply an ordinary `LayerStackConfig` as `scoring_stack_config`,
+with `apply_output_postprocessing_flag=False` so its final layer returns raw
+logits. Inputs use `x / sqrt(sum(x*x) + 1e-6)`, followed by the stack and a learned
+scalar initialized to one. This extends the paper's normalized linear scorer.
+Slots pool original token values. Scoring inputs and parameter views are promoted
+to float32 (float64 for float64 inputs), while eligible operations follow the
+caller's autocast setting. Weighted sums use the routing weights' dtype; expert
+execution follows normal model dtype/autocast settings. No routing noise or
+balancing loss is added.
+
+The independent numerical oracle and integration tests are in
+`tests/unit/test_expert_soft_moe.py`. They validate forward values, gradients,
+masking, precision, sequence independence, checkpoints, and Transformer wiring.
+They do not establish training-quality, GPU, distributed, or performance parity.
+
 ## Quick Start
 
 After `mise run dev`, use this path to inspect the stable model and run one
