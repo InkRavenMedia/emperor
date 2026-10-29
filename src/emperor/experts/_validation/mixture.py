@@ -257,16 +257,6 @@ class MixtureOfExpertsValidator(ValidatorBase):
                 "Adaptive grouping requires all-active skip_mask rows; inactive rows are not removed by dispatch."
             )
 
-    @staticmethod
-    def validate_expert_output_rows(model, expert_samples, output) -> None:
-        if _adaptive_grouping_paths(
-            model.expert_model_config, root="MixtureOfExpertsConfig.expert_model_config"
-        ):
-            expected = (expert_samples.size(0), model.output_dim)
-            if not isinstance(output, Tensor) or tuple(output.shape) != expected:
-                raise ValueError(
-                    f"Grouped expert must return one row per retained assignment: expected {expected}."
-                )
 
     @staticmethod
     def validate_sampler_is_initialized(model: "MixtureOfExperts") -> None:
