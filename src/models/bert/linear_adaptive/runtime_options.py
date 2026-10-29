@@ -17,6 +17,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightNormalizationPositionOptions,
 )
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -137,6 +138,9 @@ def resolve_controller_stack_options(
 
 @dataclass(frozen=True)
 class BertEmbeddingOptions:
+    hierarchical_embedding_config: HierarchicalByteEmbeddingConfig | None = field(
+        default=None, kw_only=True
+    )
     token_type_vocab_size: int
     layer_norm_flag: bool
     normalization: NormalizationOptions = field(

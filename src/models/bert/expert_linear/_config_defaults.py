@@ -44,6 +44,7 @@ def bert_embedding_options(config: ModuleType) -> BertEmbeddingOptions:
         layer_norm_flag=config.EMBEDDING_LAYER_NORM_FLAG,
         normalization=config.EMBEDDING_NORMALIZATION,
         dropout_probability=config.EMBEDDING_DROPOUT_PROBABILITY,
+        hierarchical_embedding_config=config.HIERARCHICAL_EMBEDDING_CONFIG,
     )
 
 

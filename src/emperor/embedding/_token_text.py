@@ -6,9 +6,12 @@ from torch import Tensor, nn
 
 
 class TokenTextAdapter(nn.Module):
-    def __init__(self, vocabulary_size: int) -> None:
+    def __init__(
+        self, vocabulary_size: int, max_token_bytes: int | None = None
+    ) -> None:
         super().__init__()
         self.vocabulary_size = vocabulary_size
+        self.max_token_bytes = max_token_bytes
         self.token_texts: tuple[str, ...] | None = None
 
     def bind(self, token_texts: Sequence[str]) -> None:
@@ -24,6 +27,7 @@ class TokenTextAdapter(nn.Module):
             )
         if any(type(token) is not str for token in token_texts):
             raise TypeError("Every token vocabulary entry must be an exact str.")
+        self.__validate_token_byte_lengths(token_texts)
         bound_token_texts = tuple(token_texts)
         if self.token_texts is not None and self.token_texts != bound_token_texts:
             raise ValueError(
@@ -31,12 +35,29 @@ class TokenTextAdapter(nn.Module):
             )
         self.token_texts = bound_token_texts
 
+    def __validate_token_byte_lengths(self, token_texts: Sequence[str]) -> None:
+        if self.max_token_bytes is None:
+            return
+        for token_text in token_texts:
+            byte_count = len(token_text.encode("utf-8", "surrogatepass"))
+            if byte_count > self.max_token_bytes:
+                raise ValueError(
+                    f"Vocabulary token {token_text!r} has {byte_count} bytes; "
+                    f"the hierarchical embedding supports {self.max_token_bytes}."
+                )
+
     def bind_datamodule(self, datamodule) -> None:
         vocabulary = getattr(datamodule, "vocab", None)
         if vocabulary is None:
-            raise ValueError(
-                "Contextual embedding requires a prepared datamodule vocabulary."
-            )
+            tokenizer = getattr(datamodule, "tokenizer", None)
+            if tokenizer is None:
+                raise ValueError(
+                    "Text-based embedding requires a prepared datamodule vocabulary or tokenizer."
+                )
+            vocabulary_size = tokenizer.get_vocab_size(with_added_tokens=True)
+            tokens = [tokenizer.id_to_token(index) for index in range(vocabulary_size)]
+            self.bind(tokens)
+            return
         if hasattr(vocabulary, "get_itos"):
             tokens = vocabulary.get_itos()
         elif hasattr(vocabulary, "itos"):

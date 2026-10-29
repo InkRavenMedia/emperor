@@ -424,6 +424,7 @@ def _modern_embedding_options(
                 "embedding_layer_norm_flag": "layer_norm_flag",
                 "embedding_normalization": "normalization",
                 "embedding_dropout_probability": "dropout_probability",
+                "hierarchical_embedding_config": "hierarchical_embedding_config",
             },
         ),
     )
@@ -846,6 +847,7 @@ def _modern_supported_flat_keys() -> set[str]:
         "embedding_layer_norm_flag",
         "embedding_normalization",
         "embedding_dropout_probability",
+        "hierarchical_embedding_config",
         "hidden_dim",
         "stack_num_layers",
         "stack_activation",

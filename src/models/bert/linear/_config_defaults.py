@@ -3,6 +3,7 @@ from types import ModuleType
 from typing import Literal, Protocol
 
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
 from emperor.layers import (
     ActivationOptions,
@@ -35,6 +36,7 @@ class _ConfigDefaults(Protocol):
     EMBEDDING_LAYER_NORM_FLAG: bool
     EMBEDDING_NORMALIZATION: NormalizationOptions
     EMBEDDING_DROPOUT_PROBABILITY: float
+    HIERARCHICAL_EMBEDDING_CONFIG: HierarchicalByteEmbeddingConfig | None
     MLM_ACTIVATION: ActivationOptions
     MLM_DENSE_BIAS_FLAG: bool
     MLM_LAYER_NORM_FLAG: bool
@@ -77,6 +79,7 @@ def bert_embedding_options(config: _ConfigDefaults) -> BertEmbeddingOptions:
         layer_norm_flag=config.EMBEDDING_LAYER_NORM_FLAG,
         normalization=config.EMBEDDING_NORMALIZATION,
         dropout_probability=config.EMBEDDING_DROPOUT_PROBABILITY,
+        hierarchical_embedding_config=config.HIERARCHICAL_EMBEDDING_CONFIG,
     )
 
 
