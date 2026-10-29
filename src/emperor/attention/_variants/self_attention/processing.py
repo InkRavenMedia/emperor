@@ -56,6 +56,12 @@ class SelfAttentionProcessor(ProcessorBase):
         self,
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> Tensor:
+        if self.cfg.rotary_base is not None:
+            attention_inputs = replace(
+                attention_inputs,
+                query=self.__rotate_positions(attention_inputs.query),
+                key=self.__rotate_positions(attention_inputs.key),
+            )
         scaled_inputs = replace(
             attention_inputs,
             query=self.__scale_query(attention_inputs.query),
@@ -71,6 +77,25 @@ class SelfAttentionProcessor(ProcessorBase):
             scaled_inputs.merged_attention_mask,
         )
         return masked_attention_logits
+
+    def __rotate_positions(self, features: Tensor) -> Tensor:
+        head_dim = features.shape[-1]
+        frequency_dtype = (
+            torch.float64 if features.dtype == torch.float64 else torch.float32
+        )
+        pair_indices = torch.arange(
+            0, head_dim, 2, device=features.device, dtype=frequency_dtype
+        )
+        inverse_frequencies = self.cfg.rotary_base ** (-pair_indices / head_dim)
+        positions = torch.arange(
+            features.shape[-2], device=features.device, dtype=frequency_dtype
+        )
+        angles = positions[:, None] * inverse_frequencies
+        cosine, sine = angles.cos().to(features.dtype), angles.sin().to(features.dtype)
+        even, odd = features[..., 0::2], features[..., 1::2]
+        return torch.stack(
+            (even * cosine - odd * sine, even * sine + odd * cosine), dim=-1
+        ).flatten(-2)
 
     def _compute_normalized_attention_weights(
         self,

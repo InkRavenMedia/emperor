@@ -1,5 +1,6 @@
 """Private self-attention validation implementation."""
 
+import math
 from typing import TYPE_CHECKING
 
 from torch import Tensor
@@ -16,11 +17,33 @@ if TYPE_CHECKING:
 
 
 class SelfAttentionValidator(MultiHeadAttentionValidator):
+    OPTIONAL_FIELDS = MultiHeadAttentionValidator.OPTIONAL_FIELDS | {"rotary_base"}
+
     @classmethod
     def validate(cls, model: "MultiHeadAttentionAbstract") -> None:
         super().validate(model)
         cls.validate_self_attention_dimensions_equal(model)
         cls.validate_projection_strategy(model)
+        cls.validate_rotary_config(model)
+
+    @staticmethod
+    def validate_rotary_config(model):
+        base = model.cfg.rotary_base
+        if base is None:
+            return
+        if (
+            isinstance(base, bool)
+            or not isinstance(base, (int, float))
+            or not math.isfinite(base)
+            or base <= 0
+        ):
+            raise ValueError("rotary_base must be finite and positive")
+        if (model.embedding_dim // model.cfg.num_heads) % 2:
+            raise ValueError("RoPE requires an even attention head dimension")
+        if model.cfg.relative_positional_embedding_config is not None:
+            raise ValueError("RoPE cannot be combined with relative positional logits")
+        if model.cfg.zero_attention_flag or model.cfg.add_key_value_bias_flag:
+            raise ValueError("RoPE does not support synthetic key/value positions")
 
     @staticmethod
     def validate_projection_strategy(
@@ -69,6 +92,18 @@ class SelfAttentionValidator(MultiHeadAttentionValidator):
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> None:
         super().validate_forward_inputs(model, attention_inputs)
+        if model.cfg.rotary_base is not None:
+            if (
+                attention_inputs.static_key is not None
+                or attention_inputs.static_value is not None
+            ):
+                raise ValueError(
+                    "RoPE requires full sequences; static KV positions are unsupported"
+                )
+            if attention_inputs.query is not attention_inputs.key:
+                raise ValueError(
+                    "RoPE requires self-attention over the same full sequence"
+                )
         cls.validate_query_key_value_are_same_tensor(
             attention_inputs.query,
             attention_inputs.key,
