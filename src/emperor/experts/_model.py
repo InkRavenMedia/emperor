@@ -34,6 +34,10 @@ class MixtureOfExpertsModel(Module):
         self.stack_config = self.cfg.stack_config
 
         self.VALIDATOR.validate(self)
+        self.uses_soft_moe = (
+            self.stack_config.layer_config.layer_model_config.soft_moe_config
+            is not None
+        )
         self.shared_sampler = self.__maybe_create_shared_sampler()
         self.expert_stack = self.__build_expert_stack()
 
@@ -49,6 +53,11 @@ class MixtureOfExpertsModel(Module):
         existing_routing_probabilities = getattr(state, "probabilities", None)
         existing_expert_indices = getattr(state, "indices", None)
         existing_skip_mask = getattr(state, "skip_mask", None)
+        hidden = state.hidden
+        if self.uses_soft_moe:
+            self.VALIDATOR.validate_soft_forward_inputs(self, state)
+            if existing_skip_mask is not None:
+                hidden = hidden.masked_fill(~existing_skip_mask, 0)
         self.VALIDATOR.validate_grouping_forward_inputs(
             self, state.hidden, existing_skip_mask
         )
@@ -62,7 +71,7 @@ class MixtureOfExpertsModel(Module):
         )
         self.VALIDATOR.validate_grouping_forward_inputs(self, state.hidden, skip_mask)
         mixture_of_experts_state = MixtureOfExpertsLayerState(
-            hidden=state.hidden,
+            hidden=hidden,
             probabilities=probabilities,
             indices=indices,
             skip_mask=skip_mask,
@@ -70,6 +79,10 @@ class MixtureOfExpertsModel(Module):
             halting_state=state.halting_state,
         )
         mixture_of_experts_state = self.expert_stack(mixture_of_experts_state)
+        if self.uses_soft_moe and skip_mask is not None:
+            mixture_of_experts_state.hidden = (
+                mixture_of_experts_state.hidden.masked_fill(~skip_mask, 0)
+            )
         mixture_of_experts_state.loss = self.__combine_losses(
             shared_sampler_loss, mixture_of_experts_state.loss
         )

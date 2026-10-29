@@ -16,13 +16,15 @@ from emperor.experts._options import (
     ExpertWeightingPositionOptions,
     RoutingInitializationMode,
 )
+from emperor.experts._validation.soft import SoftMoEValidator
 
 if TYPE_CHECKING:
     from emperor.experts._layers.mixture import MixtureOfExperts
 
 
 class MixtureOfExpertsValidator(ValidatorBase):
-    OPTIONAL_FIELDS = {"dropped_token_behavior", "sampler_config"}
+    OPTIONAL_FIELDS = {"dropped_token_behavior", "sampler_config", "soft_moe_config"}
+    SOFT_MOE_VALIDATOR = SoftMoEValidator
 
     @classmethod
     def validate(cls, model: "MixtureOfExperts") -> None:
@@ -30,6 +32,10 @@ class MixtureOfExpertsValidator(ValidatorBase):
         cls.validate_required_fields(model.cfg)
         cls.validate_field_types(model.cfg)
         cls.validate_forward_reference_types(model)
+        if model.cfg.soft_moe_config is not None:
+            cls.validate_dimensions(model)
+            cls.SOFT_MOE_VALIDATOR.validate_mixture(model)
+            return
         cls.validate_owned_routing_config_types(model)
         cls.validate_owned_routing_config_coherence(model)
         cls.validate_dimensions(model)
@@ -257,7 +263,6 @@ class MixtureOfExpertsValidator(ValidatorBase):
                 "Adaptive grouping requires all-active skip_mask rows; inactive rows are not removed by dispatch."
             )
 
-
     @staticmethod
     def validate_sampler_is_initialized(model: "MixtureOfExperts") -> None:
         if model.routing_initialization_mode != RoutingInitializationMode.LAYER:
@@ -315,6 +320,12 @@ class MixtureOfExpertsValidator(ValidatorBase):
         indices: Tensor | None,
         skip_mask: Tensor | None = None,
     ) -> None:
+        if model.cfg.soft_moe_config is not None:
+            cls.SOFT_MOE_VALIDATOR.validate_inputs(
+                input_batch, model.input_dim, skip_mask
+            )
+            cls.validate_external_probabilities_are_not_given(probabilities, indices)
+            return
         cls.validate_input_batch(model, input_batch)
         cls.validate_probabilities(model, input_batch, probabilities)
         cls.validate_indices(model, input_batch, indices)

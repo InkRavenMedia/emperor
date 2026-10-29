@@ -5,6 +5,7 @@ import torch
 from emperor._validation import (
     ValidatorBase,
     _adaptive_grouping_configs,
+    _configuration_visits,
     _first_adaptive_grouping_path,
     _validate_adaptive_sequence_input,
     _validate_grouped_row_preservation,
@@ -185,6 +186,9 @@ class TransformerValidator(ValidatorBase):
         cls.validate_dimensions(embedding_dim=model.embedding_dim)
         cls._validate_layer_norm_position(model.layer_norm_position)
         cls._validate_encoder_attention_config(model.cfg.attention_config)
+        cls._validate_soft_moe_attention(
+            model.cfg.feed_forward_config, model.cfg.attention_config
+        )
         cls._validate_feed_forward_grouping(
             model.cfg.feed_forward_config,
             owner_name="TransformerEncoderLayerConfig",
@@ -202,6 +206,11 @@ class TransformerValidator(ValidatorBase):
         cls._validate_layer_norm_position(model.layer_norm_position)
         cls._validate_decoder_self_attention_config(model.cfg.self_attention_config)
         cls._validate_decoder_cross_attention_config(model.cfg.cross_attention_config)
+        cls._validate_soft_moe_attention(
+            model.cfg.feed_forward_config,
+            model.cfg.self_attention_config,
+            model.cfg.cross_attention_config,
+        )
         cls._validate_feed_forward_grouping(
             model.cfg.feed_forward_config,
             owner_name="TransformerDecoderLayerConfig",
@@ -297,6 +306,49 @@ class TransformerValidator(ValidatorBase):
         )
 
     @staticmethod
+    def _validate_soft_moe_attention(feed_forward_config, *attention_configs) -> None:
+        from emperor.experts import SoftMoEConfig
+
+        if not any(
+            isinstance(visit.config, SoftMoEConfig)
+            for visit in _configuration_visits(feed_forward_config, "feed_forward")
+        ):
+            return
+        for config in attention_configs:
+            if config is None:
+                continue
+            if getattr(config, "causal_attention_mask_flag", False):
+                raise ValueError(
+                    "Soft MoE is noncausal and cannot follow causal attention."
+                )
+            if not isinstance(getattr(config, "batch_first_flag", None), bool):
+                raise ValueError(
+                    "Soft MoE requires explicit batch_first_flag on attention."
+                )
+
+    @staticmethod
+    def _validate_soft_moe_masks(model, attention_mask, cross_attention_mask) -> None:
+        if not getattr(
+            getattr(model, "feed_forward_model", None), "uses_soft_moe", False
+        ):
+            return
+        attention_models = (
+            model.self_attention_model,
+            getattr(model, "cross_attention_model", None),
+        )
+        if (
+            attention_mask is not None
+            or cross_attention_mask is not None
+            or any(
+                getattr(attention, "causal_attention_mask_flag", False)
+                for attention in attention_models
+            )
+        ):
+            raise ValueError(
+                "Soft MoE is noncausal; causal or explicitly masked attention is unsupported."
+            )
+
+    @staticmethod
     def _validate_feed_forward_grouping(
         feed_forward_config,
         *,
@@ -335,6 +387,7 @@ class TransformerValidator(ValidatorBase):
         encoder_output=None,
         encoder_padding_mask=None,
     ) -> None:
+        cls._validate_soft_moe_masks(model, attention_mask, cross_attention_mask)
         consumers = (model.cfg.feed_forward_config, model.cfg.residual_config)
         root = type(model.cfg).__name__
         if not tuple(_adaptive_grouping_configs(consumers, root=root)):
@@ -536,13 +589,31 @@ class TransformerValidator(ValidatorBase):
             )
 
 
+
+
 class FeedForwardValidator(ValidatorBase):
+    @staticmethod
+    def uses_soft_moe(config) -> bool:
+        from emperor.experts import SoftMoEConfig
+
+        return any(
+            isinstance(visit.config, SoftMoEConfig)
+            for visit in _configuration_visits(config, "FeedForward")
+        )
+
     @classmethod
     def validate(cls, model: "FeedForward") -> None:
         cls.validate_required_fields(model.cfg)
         cls.validate_dimensions(input_dim=model.input_dim, output_dim=model.output_dim)
         cls._validate_stack_config_type(model.stack_config)
         cls._validate_mirrorable_stack_topology(model.stack_config)
+        if cls.uses_soft_moe(model.stack_config):
+            from emperor.experts import MixtureOfExpertsModelConfig
+
+            if not isinstance(model.stack_config, MixtureOfExpertsModelConfig):
+                raise ValueError(
+                    "Soft MoE FeedForward requires a direct MixtureOfExpertsModelConfig, preserving sequence and mask ownership."
+                )
         _validate_grouped_row_preservation(
             model.stack_config, root="FeedForward.stack_config"
         )
@@ -594,6 +665,16 @@ class FeedForwardValidator(ValidatorBase):
     def validate_forward_inputs(
         cls, model: "FeedForward", input_batch: "Tensor"
     ) -> None:
+        if cls.uses_soft_moe(model.stack_config):
+            if (
+                not isinstance(input_batch, torch.Tensor)
+                or input_batch.ndim != 3
+                or input_batch.size(-1) != model.input_dim
+            ):
+                raise ValueError(
+                    "Soft MoE FeedForward requires rank-three sequence input with the configured feature dimension."
+                )
+            return
         grouped = tuple(
             _adaptive_grouping_configs(
                 model.stack_config, root="FeedForward.stack_config"
@@ -628,3 +709,28 @@ class FeedForwardValidator(ValidatorBase):
             sequence_length=sequence_length,
             input_order=order.name,
         )
+
+    @staticmethod
+    def validate_soft_layout(inputs, padding_mask, batch_first) -> None:
+        if not isinstance(batch_first, bool):
+            raise TypeError("Soft MoE batch_first must be Boolean.")
+        if padding_mask is None:
+            return
+        expected = inputs.shape[:2] if batch_first else (inputs.size(1), inputs.size(0))
+        if (
+            not isinstance(padding_mask, torch.Tensor)
+            or padding_mask.shape != expected
+            or padding_mask.device != inputs.device
+        ):
+            raise ValueError(
+                "Soft MoE padding_mask must have shape [batch, tokens] on the input device."
+            )
+        if padding_mask.dtype != torch.bool:
+            if not padding_mask.is_floating_point():
+                raise TypeError(
+                    "Soft MoE padding_mask must be Boolean or additive floating point."
+                )
+            if (padding_mask.isnan() | padding_mask.isposinf()).any():
+                raise ValueError(
+                    "Soft MoE additive padding masks cannot contain NaN or positive infinity."
+                )

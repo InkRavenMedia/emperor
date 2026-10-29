@@ -100,13 +100,25 @@ class _DecoderCrossAttentionLayer(_TransformerSubLayer):
 
 
 class _FeedForwardLayer(_TransformerSubLayer):
+    def __init__(self, cfg: LayerConfig, *, batch_first: bool = True):
+        super().__init__(cfg)
+        self.batch_first = batch_first
+
     def _handle_model_processing(
         self,
         state: LayerState,
     ) -> LayerState:
-        output, loss = self.model(
-            state.hidden,
-        )
+        if getattr(self.model, "uses_soft_moe", False):
+            padding_mask = getattr(
+                state,
+                "target_key_padding_mask",
+                getattr(state, "key_padding_mask", None),
+            )
+            output, loss = self.model(
+                state.hidden, padding_mask=padding_mask, batch_first=self.batch_first
+            )
+        else:
+            output, loss = self.model(state.hidden)
         self._accumulate_model_loss(state, loss)
         state.hidden = output
         return state
@@ -164,7 +176,8 @@ class TransformerEncoderLayer(Module):
                 embedding_dim=self.embedding_dim,
                 owner_config=self.cfg,
                 model_config=self.cfg.feed_forward_config,
-            )
+            ),
+            batch_first=self.cfg.attention_config.batch_first_flag,
         )
 
     @property
@@ -284,7 +297,8 @@ class TransformerDecoderLayer(Module):
                 embedding_dim=self.embedding_dim,
                 owner_config=self.cfg,
                 model_config=self.cfg.feed_forward_config,
-            )
+            ),
+            batch_first=self.cfg.self_attention_config.batch_first_flag,
         )
 
     def __build_cross_attention_layer(self):
