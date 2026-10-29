@@ -6,6 +6,7 @@ from importlib import import_module
 import pytest
 import torch
 
+from emperor.layers import RecurrentLayerConfig
 from models.catalog import model_package
 from models.cli_selection import resolve_cli_selection
 from models.experiment_cli_parser import get_experiment_parser
@@ -66,7 +67,7 @@ def test_every_shared_gpt_adaptive_control_is_available_in_bert(variant):
         assert bert_module.__annotations__[name] == gpt_module.__annotations__[name]
 
 
-@pytest.mark.parametrize("variant", ("expert_linear_adaptive",))
+@pytest.mark.parametrize("variant", ADAPTIVE_VARIANTS)
 def test_bert_cli_exposes_reasoning_growth_and_halting_controls(variant):
     package = model_package("bert/" + variant)
     parser = get_experiment_parser(package)
@@ -114,6 +115,102 @@ def test_bert_cli_exposes_reasoning_growth_and_halting_controls(variant):
     if "expert" in variant:
         assert recurrent_config.halting_config.min_steps == 2
         assert recurrent_config.halting_config.ponder_cost_weight == 0.25
+
+
+@pytest.mark.parametrize("variant", ADAPTIVE_VARIANTS)
+@pytest.mark.parametrize("smooth", [False, True])
+@pytest.mark.parametrize(
+    "gradient_window",
+    [
+        {"recurrent_no_gradient_transition_count": 0},
+        {"recurrent_gradient_transition_count": 1},
+    ],
+)
+def test_bert_reasoning_growth_matches_the_gpt_schedule(
+    variant, smooth, gradient_window
+):
+    growth_options = dict(
+        recurrent_flag=True,
+        recurrent_max_steps=5,
+        recurrent_initial_iterations=2,
+        recurrent_iteration_increment=1,
+        recurrent_forward_calls_before_iteration_increment=2,
+        recurrent_smooth_iteration_growth_flag=smooth,
+        **gradient_window,
+    )
+    bert_config = configuration(
+        "bert/" + variant, hierarchical=False, soft=False, **growth_options
+    )
+    gpt_config = gpt_configuration(variant, **growth_options)
+    assert isinstance(
+        bert_config.experiment_config.encoder_config, RecurrentLayerConfig
+    )
+    bert_model = model_package("bert/" + variant).build_model(bert_config).eval()
+    gpt_model = model_package("gpt/" + variant).build_model(gpt_config).eval()
+    bert_schedule = bert_model.transformer.recurrent_iteration_schedule
+    gpt_schedule = gpt_model.transformer.recurrent_iteration_schedule
+    token_ids, attention_mask, token_type_ids = inputs()
+    observed_depths = []
+    with torch.no_grad():
+        for forward_index in range(7):
+            assert bert_schedule.snapshot() == gpt_schedule.snapshot()
+            observed_depths.append(bert_schedule.active_iterations)
+            bert_model(token_ids, attention_mask, token_type_ids)
+            gpt_model(token_ids, attention_mask)
+            if forward_index == 2:
+                checkpoint = copy.deepcopy(bert_model.state_dict())
+                checkpoint_schedule = bert_schedule.snapshot()
+    assert observed_depths[0] == 2
+    assert observed_depths[-1] == 5
+    assert bert_schedule.snapshot() == gpt_schedule.snapshot()
+    restored_model = (
+        model_package("bert/" + variant).build_model(copy.deepcopy(bert_config)).eval()
+    )
+    restored_model.load_state_dict(checkpoint, strict=True)
+    assert (
+        restored_model.transformer.recurrent_iteration_schedule.snapshot()
+        == checkpoint_schedule
+    )
+    bert_model.load_state_dict(checkpoint, strict=True)
+    with torch.no_grad():
+        original_outputs = bert_model(token_ids, attention_mask, token_type_ids)
+        restored_outputs = restored_model(token_ids, attention_mask, token_type_ids)
+    for original_output, restored_output in zip(
+        original_outputs, restored_outputs, strict=True
+    ):
+        torch.testing.assert_close(original_output, restored_output)
+    assert (
+        restored_model.transformer.recurrent_iteration_schedule.snapshot()
+        == bert_schedule.snapshot()
+    )
+
+
+@pytest.mark.parametrize("variant", ADAPTIVE_VARIANTS)
+def test_reasoning_growth_composes_with_hierarchical_embeddings_and_soft_moe(variant):
+    bert_config = configuration(
+        "bert/" + variant,
+        recurrent_flag=True,
+        recurrent_max_steps=3,
+        recurrent_initial_iterations=2,
+        recurrent_no_gradient_transition_count=0,
+        recurrent_forward_calls_before_iteration_increment=2,
+        recurrent_smooth_iteration_growth_flag=True,
+    )
+    model = model_package("bert/" + variant).build_model(bert_config).eval()
+    model.set_token_vocabulary(TOKEN_TEXTS)
+    schedule = model.transformer.recurrent_iteration_schedule
+    assert schedule.active_iterations == 2
+    for _ in range(3):
+        mlm_logits, nsp_logits, auxiliary_loss = model(*inputs())
+    assert schedule.active_iterations == 3
+    loss = (
+        mlm_logits.square().mean() + nsp_logits.square().mean() + auxiliary_loss.sum()
+    )
+    loss.backward()
+    assert torch.isfinite(loss)
+    for router in model.modules():
+        if router.__class__.__name__ == "SoftMoERouter":
+            assert all(parameter.grad is not None for parameter in router.parameters())
 
 
 def test_minimum_steps_and_ponder_weight_reach_bert_recurrent_halting():
