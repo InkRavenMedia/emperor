@@ -10,7 +10,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterMonitorCallback,
     AdditiveDynamicBiasConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     MaskDimensionOptions,
     MultiplicativeDynamicBiasConfig,
     PerAxisScoreMaskConfig,
@@ -242,7 +241,7 @@ class TestAdaptiveParameterMonitorCallback(unittest.TestCase):
             weight_config=DualModelDynamicWeightConfig(
                 input_dim=input_dim,
                 output_dim=output_dim,
-                generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                generator_depth=1,
                 decay_schedule=WeightDecayScheduleOptions.DISABLED,
                 decay_rate=0.0,
                 decay_warmup_batches=0,

@@ -12,7 +12,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
     AdditiveDynamicBiasConfig,
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     LayeredWeightedBankDynamicWeightConfig,
     MaskDimensionOptions,
     PerAxisScoreMaskConfig,
@@ -102,7 +101,7 @@ def depth_mapping_config(
         input_dim=2,
         output_dim=3,
         bias_flag=True,
-        generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+        generator_depth=1,
         model_config=model_config or linear_stack_config(),
     )
 
@@ -395,7 +394,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
         invalid_nested_model = SingleModelDynamicWeightConfig(
             input_dim=2,
             output_dim=2,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.DISABLED,
             decay_rate=0.0,
             decay_warmup_batches=0,
@@ -524,7 +523,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
         weight_config = SingleModelDynamicWeightConfig(
             input_dim=2,
             output_dim=2,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
             decay_rate=-0.1,
             decay_warmup_batches=0,
@@ -584,7 +583,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 config = LayeredWeightedBankDynamicWeightConfig(
                     input_dim=2,
                     output_dim=3,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
@@ -628,7 +627,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
             SingleModelDynamicWeightConfig(
                 input_dim=2,
                 output_dim=2,
-                generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                generator_depth=1,
                 decay_schedule=WeightDecayScheduleOptions.DISABLED,
                 decay_rate=0.0,
                 decay_warmup_batches=0,
@@ -656,7 +655,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 SingleModelDynamicWeightConfig(
                     input_dim=2,
                     output_dim=3,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
@@ -686,7 +685,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 LayeredWeightedBankDynamicWeightConfig(
                     input_dim=2,
                     output_dim=3,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
@@ -745,7 +744,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 SingleModelDynamicWeightConfig(
                     input_dim=2,
                     output_dim=2,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
@@ -927,7 +926,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
             SingleModelDynamicWeightConfig(
                 input_dim=2,
                 output_dim=2,
-                generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                generator_depth=1,
                 decay_schedule=WeightDecayScheduleOptions.DISABLED,
                 decay_rate=0.0,
                 decay_warmup_batches=0,
@@ -942,7 +941,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                     input_dim=2,
                     output_dim=3,
                     bias_flag=True,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                 )
             ),
         )
@@ -970,7 +969,7 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
         config = SingleModelDynamicWeightConfig(
             input_dim=2,
             output_dim=3,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.DISABLED,
             decay_rate=0.0,
             decay_warmup_batches=0,
@@ -991,15 +990,13 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
     ) -> None:
         self.assert_exact_error(
             ValueError,
-            "generator_depth must be greater than 0 for DepthMappingLayer, "
-            "received DynamicDepthOptions.DISABLED. Use DEPTH_OF_ONE, "
-            "DEPTH_OF_TWO, or DEPTH_OF_THREE.",
+            "generator_depth must be a positive integer, received 0.",
             lambda: DepthMappingLayer(
                 DepthMappingLayerConfig(
                     input_dim=2,
                     output_dim=3,
                     bias_flag=True,
-                    generator_depth=DynamicDepthOptions.DISABLED,
+                    generator_depth=0,
                 )
             ),
         )

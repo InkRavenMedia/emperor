@@ -16,7 +16,6 @@ from emperor.augmentations.adaptive_parameters import (
     DiagonalAxisMaskConfig,
     DualModelDynamicWeightConfig,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GeneratorDynamicBiasConfig,
@@ -62,6 +61,8 @@ from emperor.linears import LinearLayerConfig
 from emperor.nn import Module
 
 ADAPTIVE_PARAMETER_PUBLIC_EXPORTS = (
+    "DepthMappingHandlerConfig",
+    "DepthMappingLayerStack",
     "DecayPolicy",
     "WeightNormalizationPolicy",
     "MatrixWeightsMixtureConfig",
@@ -106,7 +107,6 @@ ADAPTIVE_PARAMETER_PUBLIC_EXPORTS = (
     "OuterProductMaskConfig",
     "DiagonalAxisMaskConfig",
     "BankExpansionFactorOptions",
-    "DynamicDepthOptions",
     "MaskDimensionOptions",
     "WeightDecayScheduleOptions",
     "WeightNormalizationOptions",
@@ -150,7 +150,7 @@ class TestAdaptiveParameterAugmentation(unittest.TestCase):
         normalization_position_option: WeightNormalizationPositionOptions = (
             WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
         ),
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth: int = 2,
         bank_expansion_factor: BankExpansionFactorOptions | None = None,
         decay_schedule: WeightDecayScheduleOptions = (
             WeightDecayScheduleOptions.DISABLED

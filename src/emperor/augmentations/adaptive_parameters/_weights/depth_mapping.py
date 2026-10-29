@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
 
 import torch
 from torch import Tensor
@@ -11,15 +10,12 @@ from emperor.layers import Layer, LayerStackConfig
 from emperor.linears import LinearLayerConfig
 from emperor.nn import Module
 
-if TYPE_CHECKING:
-    from emperor.augmentations.adaptive_parameters._options import DynamicDepthOptions
-
 
 @dataclass
 class DepthMappingLayerConfig(LinearLayerConfig):
-    generator_depth: "DynamicDepthOptions | None" = field(
+    generator_depth: int | None = field(
         default=None,
-        metadata={"help": "Generator depth for adaptive parameters."},
+        metadata={"help": "Positive number of parallel mappings."},
     )
 
     def _registry_owner(self) -> type:
@@ -40,20 +36,19 @@ class DepthMappingLayer(Module):
         self.input_dim: int = self.cfg.input_dim
         self.output_dim: int = self.cfg.output_dim
         self.bias_flag: bool = self.cfg.bias_flag
-        self.generator_depth: DynamicDepthOptions = self.cfg.generator_depth
-        self.depth_value: int = self.generator_depth.value
+        self.generator_depth: int = self.cfg.generator_depth
 
         self.__init_parameters()
 
     def __init_parameters(self):
-        weight_shape = (self.depth_value, self.input_dim, self.output_dim)
+        weight_shape = (self.generator_depth, self.input_dim, self.output_dim)
         self.weight_params = self._init_parameter_bank(weight_shape)
         self.bias_params = self.__init_bias_parameters()
 
     def __init_bias_parameters(self):
         if not self.bias_flag:
             return None
-        bias_shape = (self.depth_value, self.output_dim)
+        bias_shape = (self.generator_depth, self.output_dim)
         return self._init_parameter_bank(bias_shape)
 
     def forward(
@@ -71,9 +66,9 @@ class DepthMappingLayer(Module):
 
 @dataclass
 class DepthMappingHandlerConfig(LinearLayerConfig):
-    generator_depth: "DynamicDepthOptions | None" = field(
+    generator_depth: int | None = field(
         default=None,
-        metadata={"help": "Generator depth for adaptive parameters."},
+        metadata={"help": "Positive number of parallel mappings."},
     )
     model_config: "LayerStackConfig | None" = field(
         default=None,
@@ -96,8 +91,8 @@ class DepthMappingLayerStack(Module):
         self.cfg = self._override_config(cfg, overrides)
         self.input_dim: int = self.cfg.input_dim
         self.output_dim: int = self.cfg.output_dim
-        self.generator_depth: DynamicDepthOptions = self.cfg.generator_depth
-        self.depth_value: int = self.generator_depth.value
+        self.generator_depth: int = self.cfg.generator_depth
+        self.VALIDATOR.validate_generator_depth(self.generator_depth)
         self.model_config: LayerStackConfig = self.__build_depth_mapping_stack_config()
         self.model = self.model_config.build()
 
@@ -139,6 +134,6 @@ class DepthMappingLayerStack(Module):
         self.VALIDATOR.validate_input_is_2d(X, self.input_dim)
 
         X = X.unsqueeze(1)
-        X = X.repeat(1, self.depth_value, 1)
+        X = X.repeat(1, self.generator_depth, 1)
         depth_mapping_state = Layer.run_model_from_hidden(self.model, X)
         return depth_mapping_state.hidden

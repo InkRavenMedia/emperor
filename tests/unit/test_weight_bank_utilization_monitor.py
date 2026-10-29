@@ -5,7 +5,6 @@ from torch import nn
 
 from emperor.augmentations.adaptive_parameters import (
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     LayeredWeightedBankDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
     WeightBankUtilizationMonitorCallback,
@@ -131,7 +130,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
         bank_expansion_factor: BankExpansionFactorOptions = (
             BankExpansionFactorOptions.FACTOR_OF_THREE
         ),
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth: int = 2,
     ) -> SoftWeightedBankDynamicWeight:
         cfg = SoftWeightedBankDynamicWeightConfig(
             input_dim=input_dim,
@@ -152,7 +151,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
         bank_expansion_factor: BankExpansionFactorOptions = (
             BankExpansionFactorOptions.FACTOR_OF_THREE
         ),
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth: int = 2,
     ) -> LayeredWeightedBankDynamicWeight:
         cfg = LayeredWeightedBankDynamicWeightConfig(
             input_dim=input_dim,
@@ -439,7 +438,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
         batch_size = 2
         input_dim = 2
         bank_factor = BankExpansionFactorOptions.FACTOR_OF_TWO
-        depth = DynamicDepthOptions.DEPTH_OF_ONE
+        depth = 1
         soft_bank = self.build_soft_weighted_bank_weight(
             input_dim=input_dim,
             output_dim=3,
@@ -476,7 +475,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
                 torch.softmax(
                     soft_weight_logits.view(
                         batch_size,
-                        depth.value,
+                        depth,
                         input_dim,
                         expanded_bank_rows,
                     ),
@@ -485,7 +484,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
                 torch.softmax(
                     soft_weight_logits.view(
                         batch_size,
-                        depth.value,
+                        depth,
                         input_dim,
                         expanded_bank_rows,
                     ),
@@ -497,7 +496,7 @@ class TestWeightBankUtilizationMonitorCallback(unittest.TestCase):
                 layered_bank,
                 layered_weight_logits,
                 torch.softmax(layered_weight_logits, dim=-1).view(
-                    batch_size, depth.value, input_dim, bank_factor.value
+                    batch_size, depth, input_dim, bank_factor.value
                 ),
                 torch.softmax(layered_weight_logits, dim=-1),
                 lambda distribution: distribution.sum(dim=2).mean(dim=(0, 1)),

@@ -6,7 +6,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     MaskDimensionOptions,
@@ -38,7 +37,7 @@ from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
 @dataclass(frozen=True, kw_only=True)
 class AdaptiveDefaultValues:
     weight_option_flag: bool | None = None
-    generator_depth: DynamicDepthOptions = config.GENERATOR_DEPTH
+    generator_depth: int = config.GENERATOR_DEPTH
     diagonal_option: type[DynamicDiagonalConfig] | None = config.DIAGONAL_OPTION
     diagonal_option_flag: bool | None = None
     bias_option: type[DynamicBiasConfig] | None = config.BIAS_OPTION
@@ -265,9 +264,7 @@ class AdaptiveDefaultValues:
     input_layer_weight_option: type[DynamicWeightConfig] | None = (
         config.INPUT_LAYER_WEIGHT_OPTION
     )
-    input_layer_generator_depth: DynamicDepthOptions = (
-        config.INPUT_LAYER_GENERATOR_DEPTH
-    )
+    input_layer_generator_depth: int = config.INPUT_LAYER_GENERATOR_DEPTH
     input_layer_weight_decay_schedule: WeightDecayScheduleOptions = (
         config.INPUT_LAYER_WEIGHT_DECAY_SCHEDULE
     )
@@ -311,9 +308,7 @@ class AdaptiveDefaultValues:
     output_layer_weight_option: type[DynamicWeightConfig] | None = (
         config.OUTPUT_LAYER_WEIGHT_OPTION
     )
-    output_layer_generator_depth: DynamicDepthOptions = (
-        config.OUTPUT_LAYER_GENERATOR_DEPTH
-    )
+    output_layer_generator_depth: int = config.OUTPUT_LAYER_GENERATOR_DEPTH
     output_layer_weight_decay_schedule: WeightDecayScheduleOptions = (
         config.OUTPUT_LAYER_WEIGHT_DECAY_SCHEDULE
     )
@@ -358,7 +353,7 @@ class AdaptiveDefaultValues:
     )
     router_weight_option_flag: bool | None = None
     router_weight_option: type[DynamicWeightConfig] | None = config.ROUTER_WEIGHT_OPTION
-    router_generator_depth: DynamicDepthOptions = config.ROUTER_GENERATOR_DEPTH
+    router_generator_depth: int = config.ROUTER_GENERATOR_DEPTH
     router_weight_normalization_option: WeightNormalizationOptions = (
         config.ROUTER_WEIGHT_NORMALIZATION_OPTION
     )
@@ -636,7 +631,7 @@ class _GeneratorStackSourceValues:
 
 @dataclass(frozen=True, slots=True)
 class _WeightValues:
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     option_flag: bool
     option: type[DynamicWeightConfig] | None
     normalization_option: WeightNormalizationOptions
@@ -681,7 +676,7 @@ class _MaskValues:
 @dataclass(frozen=True, slots=True)
 class _BoundaryValues:
     weight_option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int

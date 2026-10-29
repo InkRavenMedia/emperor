@@ -17,6 +17,19 @@ _RUNTIME_CASES = (
 )
 
 
+@pytest.mark.parametrize("runtime_from_flat,package_name", _RUNTIME_CASES)
+@pytest.mark.parametrize(
+    "key",
+    ("generator_depth", "input_layer_generator_depth", "output_layer_generator_depth"),
+)
+@pytest.mark.parametrize("invalid_depth", (True, 1.5, "32"))
+def test_generator_depth_requires_an_integer_at_the_runtime_boundary(
+    runtime_from_flat, package_name, key, invalid_depth
+):
+    with pytest.raises(TypeError, match=f"runtime key '{key}'.*expected int"):
+        runtime_from_flat({key: invalid_depth})
+
+
 @pytest.mark.parametrize(
     ("runtime_from_flat", "package_name"),
     _RUNTIME_CASES,

@@ -4,7 +4,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     MaskDimensionOptions,
     SingleModelDynamicWeightConfig,
     StandardDynamicDiagonalConfig,
@@ -225,7 +224,7 @@ class TestTransformerConfigurationFlexibility(unittest.TestCase):
                 f"{prefix}grouping_input_order": AdaptiveParameterInputOrderOptions.SEQUENCE_FIRST,
                 f"{prefix}group_count": 2,
                 f"{prefix}weight_option": SingleModelDynamicWeightConfig,
-                f"{prefix}generator_depth": DynamicDepthOptions.DEPTH_OF_THREE,
+                f"{prefix}generator_depth": 3,
                 f"{prefix}weight_decay_schedule": (WeightDecayScheduleOptions.LINEAR),
                 f"{prefix}weight_decay_rate": 0.2,
                 f"{prefix}weight_decay_warmup_batches": 7,
@@ -318,7 +317,7 @@ class TestTransformerConfigurationFlexibility(unittest.TestCase):
                 )
                 self.assertIs(
                     augmentation.weight_config.generator_depth,
-                    DynamicDepthOptions.DEPTH_OF_THREE,
+                    3,
                 )
                 self.assertIs(
                     augmentation.weight_config.decay_schedule,

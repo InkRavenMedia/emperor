@@ -12,7 +12,6 @@ from emperor.augmentations.adaptive_parameters import (
     DiagonallyModulatedLowRankDynamicWeightConfig,  # noqa: F401
     DualModelDynamicWeightConfig,  # noqa: F401
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GeneratorDynamicBiasConfig,  # noqa: F401
@@ -357,7 +356,7 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 # If `WEIGHT_OPTION_FLAG` is False, the weight-specific parameters below are ignored.
 WEIGHT_OPTION_FLAG: bool = False
 WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-GENERATOR_DEPTH: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_THREE
+GENERATOR_DEPTH: int = 3
 WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
 WEIGHT_DECAY_RATE: float = 0.0
 WEIGHT_DECAY_WARMUP_BATCHES: int = 0
@@ -491,7 +490,7 @@ ATTN_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = True
 ### Attention Projection Adaptive Weight Options
 ATTN_WEIGHT_OPTION_FLAG: bool = WEIGHT_OPTION_FLAG
 ATTN_WEIGHT_OPTION: type[DynamicWeightConfig] | None = WEIGHT_OPTION
-ATTN_GENERATOR_DEPTH: DynamicDepthOptions = GENERATOR_DEPTH
+ATTN_GENERATOR_DEPTH: int = GENERATOR_DEPTH
 ATTN_WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WEIGHT_DECAY_SCHEDULE
 ATTN_WEIGHT_DECAY_RATE: float = WEIGHT_DECAY_RATE
 ATTN_WEIGHT_DECAY_WARMUP_BATCHES: int = WEIGHT_DECAY_WARMUP_BATCHES
@@ -809,7 +808,7 @@ FF_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = True
 ## Feed-Forward Adaptive Weight Options
 FF_WEIGHT_OPTION_FLAG: bool = WEIGHT_OPTION_FLAG
 FF_WEIGHT_OPTION: type[DynamicWeightConfig] | None = WEIGHT_OPTION
-FF_GENERATOR_DEPTH: DynamicDepthOptions = GENERATOR_DEPTH
+FF_GENERATOR_DEPTH: int = GENERATOR_DEPTH
 FF_WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WEIGHT_DECAY_SCHEDULE
 FF_WEIGHT_DECAY_RATE: float = WEIGHT_DECAY_RATE
 FF_WEIGHT_DECAY_WARMUP_BATCHES: int = WEIGHT_DECAY_WARMUP_BATCHES

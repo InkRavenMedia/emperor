@@ -4,7 +4,6 @@ from dataclasses import fields
 
 import torch
 
-from emperor.augmentations.adaptive_parameters import DynamicDepthOptions
 from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
     DepthMappingHandlerConfig,
     DepthMappingLayer,
@@ -36,7 +35,7 @@ class TestDepthMappingAugmentation(unittest.TestCase):
         input_dim: int = 12,
         output_dim: int = 6,
         bias_flag: bool = True,
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DISABLED,
+        generator_depth: int = 0,
     ) -> DepthMappingLayerConfig:
         return DepthMappingLayerConfig(
             input_dim=input_dim,
@@ -51,9 +50,9 @@ class TestDepthMappingAugmentation(unittest.TestCase):
         output_dim = 6
         bias_options = [True, False]
         valid_depths = [
-            DynamicDepthOptions.DEPTH_OF_ONE,
-            DynamicDepthOptions.DEPTH_OF_TWO,
-            DynamicDepthOptions.DEPTH_OF_THREE,
+            1,
+            2,
+            3,
         ]
         for depth in valid_depths:
             for bias_flag in bias_options:
@@ -66,9 +65,9 @@ class TestDepthMappingAugmentation(unittest.TestCase):
                     )
                     model = DepthMappingLayer(cfg)
 
-                    input_tensor = torch.randn(batch_size, depth.value, input_dim)
+                    input_tensor = torch.randn(batch_size, depth, input_dim)
                     output = model(input_tensor)
-                    expected_shape = (batch_size, depth.value, output_dim)
+                    expected_shape = (batch_size, depth, output_dim)
                     self.assertEqual(output.shape, expected_shape)
 
                     if bias_flag:
@@ -77,7 +76,7 @@ class TestDepthMappingAugmentation(unittest.TestCase):
                         self.assertIsNone(model.bias_params)
 
                     for i in range(batch_size):
-                        for j in range(depth.value):
+                        for j in range(depth):
                             weight_slice = model.weight_params[j]
                             expected_output = torch.matmul(
                                 input_tensor[i, j], weight_slice
@@ -87,27 +86,27 @@ class TestDepthMappingAugmentation(unittest.TestCase):
                             torch.testing.assert_close(output[i, j], expected_output)
 
     def test_build_creates_depth_mapping_layer(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_ONE)
+        cfg = self.preset(generator_depth=1)
         model = cfg.build()
         self.assertIsInstance(model, DepthMappingLayer)
 
     def test_build_with_overrides(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_ONE)
+        cfg = self.preset(generator_depth=1)
         overrides = self.preset(
             input_dim=8,
             output_dim=4,
             bias_flag=False,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+            generator_depth=2,
         )
         model = cfg.build(overrides)
         self.assertIsInstance(model, DepthMappingLayer)
         self.assertEqual(model.input_dim, 8)
         self.assertEqual(model.output_dim, 4)
         self.assertFalse(model.bias_flag)
-        self.assertEqual(model.depth_value, DynamicDepthOptions.DEPTH_OF_TWO.value)
+        self.assertEqual(model.generator_depth, 2)
 
-    def test_disabled_depth_raises_error(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DISABLED)
+    def test_zero_depth_raises_error(self):
+        cfg = self.preset(generator_depth=0)
         with self.assertRaises(ValueError):
             DepthMappingLayer(cfg)
 
@@ -115,15 +114,13 @@ class TestDepthMappingAugmentation(unittest.TestCase):
         batch_size = 2
         input_dim = 12
         output_dim = 6
-        depth = DynamicDepthOptions.DEPTH_OF_TWO
+        depth = 2
         cfg = self.preset(
             input_dim=input_dim, output_dim=output_dim, generator_depth=depth
         )
         model = DepthMappingLayer(cfg)
 
-        input_tensor = torch.randn(
-            batch_size, depth.value, input_dim, requires_grad=True
-        )
+        input_tensor = torch.randn(batch_size, depth, input_dim, requires_grad=True)
         output = model(input_tensor)
         output.sum().backward()
 
@@ -136,7 +133,7 @@ class TestDepthMappingAugmentation(unittest.TestCase):
     def test_float64_state_round_trip_preserves_bias_contract_and_output(self):
         input_dim = 3
         output_dim = 2
-        depth = DynamicDepthOptions.DEPTH_OF_TWO
+        depth = 2
 
         for bias_flag in (True, False):
             with self.subTest(bias_flag=bias_flag):
@@ -184,6 +181,29 @@ class TestDepthMappingAugmentation(unittest.TestCase):
 
 
 class TestDepthMappingLayerStack(unittest.TestCase):
+    def test_arbitrary_integer_depth_is_preserved_across_layers(self):
+        cfg = self.preset(generator_depth=32, stack_num_layers=3)
+        model = cfg.build().double().eval()
+        output = model(torch.randn(2, 12, dtype=torch.float64))
+        self.assertEqual(output.shape, (2, 32, 6))
+        self.assertEqual(len(model.model.layers), 3)
+        for layer in model.model.layers:
+            self.assertEqual(layer.model.weight_params.shape[0], 32)
+            self.assertEqual(layer.model.bias_params.shape[0], 32)
+
+    def test_invalid_parallel_counts_fail_for_layer_and_stack(self):
+        for depth in (0, -1, True, False, 1.5, "32", None):
+            with self.subTest(depth=depth):
+                with self.assertRaisesRegex((ValueError, TypeError), "generator_depth"):
+                    self.preset(generator_depth=depth).build()
+                with self.assertRaisesRegex((ValueError, TypeError), "generator_depth"):
+                    DepthMappingLayerConfig(
+                        input_dim=2,
+                        output_dim=1,
+                        bias_flag=False,
+                        generator_depth=depth,
+                    ).build()
+
     def preset(
         self,
         input_dim: int = 12,
@@ -205,7 +225,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         halting_config: "StickBreakingConfig | None" = None,
         memory_config: "GatedResidualDynamicMemoryConfig | None" = None,
         shared_memory_config: "GatedResidualDynamicMemoryConfig | None" = None,
-        generator_depth: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth: int = 2,
     ) -> DepthMappingHandlerConfig:
         return DepthMappingHandlerConfig(
             input_dim=input_dim,
@@ -317,9 +337,9 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         input_dim = 12
         output_dim = 6
         valid_depths = [
-            DynamicDepthOptions.DEPTH_OF_ONE,
-            DynamicDepthOptions.DEPTH_OF_TWO,
-            DynamicDepthOptions.DEPTH_OF_THREE,
+            1,
+            2,
+            3,
         ]
         valid_num_layers = [1, 2, 3]
         postprocessing_flags = [True, False]
@@ -341,17 +361,15 @@ class TestDepthMappingLayerStack(unittest.TestCase):
                         model = DepthMappingLayerStack(cfg)
                         input_tensor = torch.randn(batch_size, input_dim)
                         output = model(input_tensor)
-                        self.assertEqual(
-                            output.shape, (batch_size, depth.value, output_dim)
-                        )
+                        self.assertEqual(output.shape, (batch_size, depth, output_dim))
 
     def test_forward_shape_with_residual_connections(self):
         batch_size = 2
         dim = 12
         valid_depths = [
-            DynamicDepthOptions.DEPTH_OF_ONE,
-            DynamicDepthOptions.DEPTH_OF_TWO,
-            DynamicDepthOptions.DEPTH_OF_THREE,
+            1,
+            2,
+            3,
         ]
         valid_num_layers = [1, 2, 3]
         postprocessing_flags = [True, False]
@@ -375,7 +393,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
                         model = DepthMappingLayerStack(cfg)
                         input_tensor = torch.randn(batch_size, dim)
                         output = model(input_tensor)
-                        self.assertEqual(output.shape, (batch_size, depth.value, dim))
+                        self.assertEqual(output.shape, (batch_size, depth, dim))
 
     def test_gate_config_raises_error(self):
         cfg = self.preset(gate_config=self.gate_config())
@@ -471,7 +489,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
             DepthMappingLayerStack(cfg)
 
     def test_layer_config_replaced_with_depth_mapping(self):
-        depth = DynamicDepthOptions.DEPTH_OF_TWO
+        depth = 2
         cfg = self.preset(generator_depth=depth)
         model = DepthMappingLayerStack(cfg)
         layer_model_config = model.model_config.layer_config.layer_model_config
@@ -479,8 +497,8 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         self.assertEqual(layer_model_config.generator_depth, depth)
 
     def test_preconfigured_depth_mapping_config_is_synchronized_without_mutation(self):
-        handler_depth = DynamicDepthOptions.DEPTH_OF_THREE
-        configured_depth = DynamicDepthOptions.DEPTH_OF_ONE
+        handler_depth = 3
+        configured_depth = 1
         input_dim = 12
         output_dim = 6
         configured_input_dim = 8
@@ -514,12 +532,12 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         self.assertEqual(depth_mapping_config.generator_depth, configured_depth)
 
         output = model(torch.randn(2, input_dim))
-        self.assertEqual(output.shape, (2, handler_depth.value, output_dim))
+        self.assertEqual(output.shape, (2, handler_depth, output_dim))
 
     def test_preconfigured_depth_mapping_config_does_not_skip_validation(self):
         cfg = self.preset(
             gate_config=self.gate_config(),
-            generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+            generator_depth=2,
         )
         cfg.model_config.layer_config.layer_model_config = DepthMappingLayerConfig(
             input_dim=cfg.input_dim,
@@ -542,7 +560,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
     def test_gradients_flow(self):
         batch_size = 2
         input_dim = 12
-        depth = DynamicDepthOptions.DEPTH_OF_TWO
+        depth = 2
         cfg = self.preset(
             input_dim=input_dim,
             generator_depth=depth,
@@ -567,7 +585,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
     def test_float64_noncontiguous_input_and_strict_stack_state_round_trip(self):
         input_dim = 3
         output_dim = 2
-        depth = DynamicDepthOptions.DEPTH_OF_TWO
+        depth = 2
         config = self.preset(
             input_dim=input_dim,
             hidden_dim=4,
@@ -611,41 +629,41 @@ class TestDepthMappingLayerStack(unittest.TestCase):
             tuple(dict(source.named_parameters())),
             tuple(dict(restored.named_parameters())),
         )
-        self.assertEqual(source_output.shape, (2, depth.value, output_dim))
+        self.assertEqual(source_output.shape, (2, depth, output_dim))
         self.assertEqual(source_output.dtype, torch.float64)
         self.assertEqual(source_output.device.type, "cpu")
         self.assertTrue(torch.isfinite(source_output).all())
         torch.testing.assert_close(restored_output, source_output)
 
     def test_non_2d_input_raises_error(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_TWO)
+        cfg = self.preset(generator_depth=2)
         model = DepthMappingLayerStack(cfg)
         input_tensor = torch.randn(2, 4, 12)
         with self.assertRaises(ValueError):
             model(input_tensor)
 
     def test_non_tensor_input_raises_error(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_TWO)
+        cfg = self.preset(generator_depth=2)
         model = DepthMappingLayerStack(cfg)
         with self.assertRaises(TypeError):
             model([[0.0] * cfg.input_dim])
 
     def test_wrong_input_feature_dimension_raises_error(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_TWO)
+        cfg = self.preset(generator_depth=2)
         model = DepthMappingLayerStack(cfg)
         input_tensor = torch.randn(2, cfg.input_dim - 1)
         with self.assertRaises(ValueError):
             model(input_tensor)
 
     def test_disabled_depth_raises_error(self):
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DISABLED)
+        cfg = self.preset(generator_depth=0)
         with self.assertRaises(ValueError):
             DepthMappingLayerStack(cfg)
 
     def test_invalid_layer_model_config_type_raises_error(self):
         from emperor.config import ConfigBase
 
-        cfg = self.preset(generator_depth=DynamicDepthOptions.DEPTH_OF_TWO)
+        cfg = self.preset(generator_depth=2)
         cfg.model_config.layer_config.layer_model_config = ConfigBase()
         with self.assertRaises(TypeError):
             DepthMappingLayerStack(cfg)

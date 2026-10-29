@@ -14,7 +14,6 @@ from emperor.augmentations.adaptive_parameters import (
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -382,7 +381,7 @@ class TestLinearAdaptiveExpertModel(unittest.TestCase):
             bias_flag=False,
         )
         hidden_adaptive_weight_options = HiddenAdaptiveWeightOptions(
-            generator_depth=DynamicDepthOptions.DEPTH_OF_FOUR,
+            generator_depth=4,
             option_flag=True,
             option=DualModelDynamicWeightConfig,
             normalization_option=WeightNormalizationOptions.RMS,
@@ -433,7 +432,7 @@ class TestLinearAdaptiveExpertModel(unittest.TestCase):
             ),
         )
         router_adaptive_weight_options = HiddenAdaptiveWeightOptions(
-            generator_depth=DynamicDepthOptions.DEPTH_OF_THREE,
+            generator_depth=3,
             option_flag=True,
             option=LayeredWeightedBankDynamicWeightConfig,
             normalization_option=WeightNormalizationOptions.RMS,
@@ -1753,7 +1752,7 @@ class TestLinearAdaptiveExpertModel(unittest.TestCase):
             (
                 ExperimentPreset.DEEP_GENERATOR,
                 {
-                    "generator_depth": DynamicDepthOptions.DEPTH_OF_EIGHT,
+                    "generator_depth": 8,
                 },
             ),
         ]

@@ -1,7 +1,6 @@
 import models.gpt.expert_linear_adaptive.config as config
 from emperor.augmentations.adaptive_parameters import (
     CombinedDynamicDiagonalConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
@@ -267,7 +266,7 @@ _PRESET_DEFINITIONS = {
             "expert_bias_flag": True,
             "weight_option_flag": True,
             "weight_option": SingleModelDynamicWeightConfig,
-            "generator_depth": DynamicDepthOptions.DEPTH_OF_FIVE,
+            "generator_depth": 5,
             "weight_decay_schedule": WeightDecayScheduleOptions.EXPONENTIAL,
             "weight_decay_rate": 1e-4,
             "weight_decay_warmup_batches": 5000,

@@ -35,7 +35,7 @@ class DiagonallyModulatedLowRankDynamicWeight(DynamicWeightAbstract):
         config = self._override_config(cfg, overrides)
         config = self.__resolve_config(config)
         super().__init__(config)
-        self.rank = self.generator_depth.value
+        self.rank = self.generator_depth
         self.model_config = self.cfg.model_config
         self.input_factor_source = self.cfg.input_factor_source
         self.output_factor_source = self.cfg.output_factor_source

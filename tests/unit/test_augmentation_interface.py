@@ -9,6 +9,8 @@ from emperor.augmentations.adaptive_parameters import (
 )
 
 EXPECTED_EXPORTS = (
+    "DepthMappingHandlerConfig",
+    "DepthMappingLayerStack",
     "DecayPolicy",
     "WeightNormalizationPolicy",
     "MatrixWeightsMixtureConfig",
@@ -53,7 +55,6 @@ EXPECTED_EXPORTS = (
     "OuterProductMaskConfig",
     "DiagonalAxisMaskConfig",
     "BankExpansionFactorOptions",
-    "DynamicDepthOptions",
     "MaskDimensionOptions",
     "WeightDecayScheduleOptions",
     "WeightNormalizationOptions",
