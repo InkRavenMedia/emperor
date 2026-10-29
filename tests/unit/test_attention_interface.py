@@ -492,7 +492,7 @@ print(json.dumps({
         )
         self.assertEqual(
             tuple(field.name for field in fields(SelfAttentionConfig)),
-            (*BASE_CONFIG_FIELDS, "projection_strategy"),
+            (*BASE_CONFIG_FIELDS, "projection_strategy", "rotary_base"),
         )
         self.assertEqual(
             tuple(field.name for field in fields(MixtureOfAttentionHeadsConfig)),
