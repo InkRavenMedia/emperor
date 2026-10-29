@@ -138,18 +138,31 @@ class TestModelConventions(unittest.TestCase):
                         ]
                     },
                 )
-                self.assertEqual(
-                    {
-                        key: value
-                        for key, value in vars(gpt_search_module).items()
-                        if key.startswith("SEARCH_SPACE_") and isinstance(value, list)
-                    },
-                    {
-                        key: value
-                        for key, value in vars(bert_search_module).items()
-                        if key.startswith("SEARCH_SPACE_") and isinstance(value, list)
-                    },
+                gpt_search_axes = {
+                    axis_name: axis_values
+                    for axis_name, axis_values in vars(gpt_search_module).items()
+                    if axis_name.startswith("SEARCH_SPACE_")
+                    and isinstance(axis_values, list)
+                }
+                bert_search_axes = {
+                    axis_name: axis_values
+                    for axis_name, axis_values in vars(bert_search_module).items()
+                    if axis_name.startswith("SEARCH_SPACE_")
+                    and isinstance(axis_values, list)
+                }
+                gpt_output_normalization = gpt_search_axes.pop(
+                    "SEARCH_SPACE_DECODER_OUTPUT_NORMALIZATION"
                 )
+                bert_output_normalization = bert_search_axes.pop(
+                    "SEARCH_SPACE_ENCODER_OUTPUT_NORMALIZATION"
+                )
+                self.assertEqual(gpt_output_normalization, bert_output_normalization)
+                # BERT additionally searches normalization for its masked-token head.
+                bert_mlm_normalization = bert_search_axes.pop(
+                    "SEARCH_SPACE_MLM_NORMALIZATION"
+                )
+                self.assertTrue(bert_mlm_normalization)
+                self.assertEqual(gpt_search_axes, bert_search_axes)
 
     def test_catalog_package_public_exports_are_stable(self):
         for entry in MODEL_CATALOG.values():
