@@ -14,7 +14,7 @@ branch_count = 280
 covered_branches = 214
 mutation_result = "not run"
 independent_review = "not performed"
-notes = "Tests pass. Coverage includes the full decoding family; some negative validation and generation-option paths remain unexercised. This is partial evidence, not full behavioral certification."
+notes = "Tests pass. Coverage includes the full decoding family; some negative validation and generation-option paths remain unexercised. This is partial evidence, not full behavioral certification. These measurements and source hashes predate grouped schedule support; see hierarchical-integration-verification.toml schedule_support for subsequent regression evidence."
 command = """
 PYTHONPATH=src:tests:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 MPLCONFIGDIR=/tmp/emperor-hat-mpl torchenv/bin/python - <<'PY'
 # Preload torch: starting the coverage tracer before its native import crashes this environment.
