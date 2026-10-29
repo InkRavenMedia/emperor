@@ -144,7 +144,7 @@ class GptHierarchicalEmbeddingTests(unittest.TestCase):
         self.assertIsInstance(result.token_embedding, nn.Embedding)
         self.assertIsNone(result.token_text_adapter)
 
-    def test_encoder_reuses_adaptive_layers_without_experts_or_decay(self):
+    def test_encoder_reuses_adaptive_layers_with_decay_without_experts(self):
         config = configuration(
             weight_option_flag=True,
             weight_option=DualModelDynamicWeightConfig,
@@ -191,9 +191,7 @@ class GptHierarchicalEmbeddingTests(unittest.TestCase):
             child.decay_schedule for child in children if hasattr(child, "decay_schedule")
         ]
         self.assertTrue(schedules)
-        self.assertTrue(
-            all(schedule == WeightDecayScheduleOptions.DISABLED for schedule in schedules)
-        )
+        self.assertIn(WeightDecayScheduleOptions.EXPONENTIAL, schedules)
         # The transformer keeps its own experts and decay schedule.
         transformer_children = list(nested_configs(config.experiment_config.decoder_config))
         self.assertTrue(

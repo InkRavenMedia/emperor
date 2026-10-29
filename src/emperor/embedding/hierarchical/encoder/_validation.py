@@ -4,19 +4,20 @@ from dataclasses import fields
 import torch
 from torch import Tensor
 
-from emperor.augmentations.adaptive_parameters import WeightDecayScheduleOptions
 from emperor.config import ConfigBase
 from emperor.embedding.absolute import (
     TextLearnedPositionalEmbeddingConfig,
     TextSinusoidalPositionalEmbeddingConfig,
 )
-from emperor.embedding.hierarchical._config import HierarchicalByteEmbeddingConfig
+from emperor.embedding.hierarchical import END_OF_DOCUMENT, END_OF_TOKEN
+from emperor.embedding.hierarchical.encoder._config import (
+    HierarchicalByteEmbeddingConfig,
+)
 from emperor.experts import MixtureOfExpertsLayerConfig, MixtureOfExpertsModelConfig
 from emperor.layers import LayerConfig, LayerStackConfig, RecurrentCompositionConfig
 
 
 def _config_items(config: object, path: str):
-    """Visit the nested dataclass configurations used by native child models."""
     if isinstance(config, ConfigBase):
         yield path, config
         for field in fields(config):
@@ -26,7 +27,6 @@ def _config_items(config: object, path: str):
 
 
 def _byte_attention_paths(config, path: str):
-    """Attention is safe on the sequence axis, never in flattened row consumers."""
     if not isinstance(config, ConfigBase):
         return
     if hasattr(config, "attention_config") and hasattr(config, "feed_forward_config"):
@@ -45,6 +45,33 @@ def _byte_attention_paths(config, path: str):
 
 class HierarchicalByteEmbeddingValidator:
     @staticmethod
+    def validate_and_encode_token(token, index, token_count, max_token_bytes) -> bytes:
+        location = f"token_texts[{index // token_count}][{index % token_count}]"
+        try:
+            token_bytes = token.encode("utf-8") if isinstance(token, str) else token
+        except UnicodeEncodeError as error:
+            raise ValueError(f"{location} is not a valid UTF-8 string") from error
+        token_byte_count = len(token_bytes)
+        if END_OF_TOKEN in token_bytes or END_OF_DOCUMENT in token_bytes:
+            raise ValueError(f"{location} must not contain reserved control symbols")
+        if token_byte_count > max_token_bytes:
+            raise ValueError(
+                f"{location} contains {token_byte_count} UTF-8 bytes; "
+                f"max_token_bytes is {max_token_bytes}"
+            )
+        return token_bytes
+
+    @staticmethod
+    def validate_token_group_sizes(token_groups, max_group_tokens) -> None:
+        for byte_length, token_group in token_groups.items():
+            group_token_count = len(token_group)
+            if group_token_count > max_group_tokens:
+                raise ValueError(
+                    f"{group_token_count} tokens with {byte_length} UTF-8 bytes exceed encoder "
+                    f"batch_size bound {max_group_tokens}"
+                )
+
+    @staticmethod
     def validate_config_types(cfg, overrides) -> None:
         if not isinstance(cfg, HierarchicalByteEmbeddingConfig):
             raise TypeError("cfg must be HierarchicalByteEmbeddingConfig")
@@ -55,10 +82,9 @@ class HierarchicalByteEmbeddingValidator:
 
     @classmethod
     def resolve_config(cls, cfg: HierarchicalByteEmbeddingConfig) -> int:
-        """Validate and resolve dimensions only on the component's private config copy."""
         for name in ("byte_embedding_dim", "output_dim", "max_token_bytes"):
             cls._positive_integer(getattr(cfg, name), name)
-        for name in ("byte_position_config", "encoder_config", "projection_config"):
+        for name in ("encoder_config", "projection_config"):
             if not isinstance(getattr(cfg, name), ConfigBase):
                 raise TypeError(f"{name} must be a supplied ConfigBase configuration")
         cls._validate_independence(cfg)
@@ -70,6 +96,19 @@ class HierarchicalByteEmbeddingValidator:
     @classmethod
     def _resolve_positions(cls, cfg: HierarchicalByteEmbeddingConfig) -> None:
         position = cfg.byte_position_config
+        if position is None:
+            attentions = [
+                child
+                for _, child in _config_items(cfg.encoder_config, "encoder")
+                if hasattr(child, "batch_first_flag")
+            ]
+            if attentions and all(
+                getattr(child, "rotary_base", None) is not None for child in attentions
+            ):
+                return
+            raise TypeError(
+                "byte_position_config may be None only with rotary byte attention"
+            )
         if not isinstance(
             position,
             (
@@ -97,59 +136,74 @@ class HierarchicalByteEmbeddingValidator:
 
     @classmethod
     def _resolve_encoder(cls, cfg: HierarchicalByteEmbeddingConfig) -> int:
-        encoder = cfg.encoder_config
-        stack = getattr(encoder, "encoder_stack_config", None)
-        if not isinstance(stack, ConfigBase) or not hasattr(
-            encoder, "decoder_stack_config"
-        ):
-            raise TypeError(
-                "encoder_config must supply an encoder-only Transformer configuration"
-            )
-        if encoder.decoder_stack_config is not None:
-            raise ValueError(
-                "encoder_config must be encoder-only (decoder_stack_config=None)"
-            )
-        for name in ("input_dim", "output_dim"):
-            cls._dimension(
-                stack,
-                name,
-                cfg.byte_embedding_dim,
-                "encoder_config.encoder_stack_config",
-            )
-        if isinstance(stack, LayerStackConfig):
-            cls._dimension(
-                stack,
-                "hidden_dim",
-                cfg.byte_embedding_dim,
-                "encoder_config.encoder_stack_config",
-            )
+        encoder_config = cfg.encoder_config
+        encoder_stack = getattr(encoder_config, "encoder_stack_config", None)
+        cls._validate_encoder_stack(encoder_config, encoder_stack)
+        cls._resolve_encoder_stack_dimensions(encoder_stack, cfg.byte_embedding_dim)
         batch_bounds = []
-        for path, child in _config_items(encoder, "encoder_config"):
-            if hasattr(child, "attention_config") and hasattr(
-                child, "feed_forward_config"
+        for config_path, child_config in _config_items(
+            encoder_config, "encoder_config"
+        ):
+            if hasattr(child_config, "attention_config") and hasattr(
+                child_config, "feed_forward_config"
             ):
-                cls._dimension(child, "embedding_dim", cfg.byte_embedding_dim, path)
-            if not hasattr(child, "batch_first_flag"):
-                continue
-            if child.batch_first_flag is not True:
-                raise ValueError(f"{path}.batch_first_flag must explicitly be True")
-            if getattr(child, "causal_attention_mask_flag", None) is not False:
-                raise ValueError(
-                    f"{path}.causal_attention_mask_flag must be False for bidirectional byte attention"
+                cls._dimension(
+                    child_config, "embedding_dim", cfg.byte_embedding_dim, config_path
                 )
-            cls._dimension(child, "embedding_dim", cfg.byte_embedding_dim, path)
-            cls._positive_integer(child.batch_size, f"{path}.batch_size")
-            batch_bounds.append(child.batch_size)
-            for name in ("source_sequence_length", "target_sequence_length"):
-                limit = getattr(child, name, None)
-                cls._positive_integer(limit, f"{path}.{name}")
-                if limit < cfg.max_token_bytes + 1:
-                    raise ValueError(f"{path}.{name} must cover max_token_bytes + 1")
+            if not hasattr(child_config, "batch_first_flag"):
+                continue
+            batch_bound = cls._resolve_byte_attention(child_config, config_path, cfg)
+            batch_bounds.append(batch_bound)
         if not batch_bounds:
             raise ValueError(
                 "encoder_config requires a byte-attention encoder with explicit batch_first_flag"
             )
         return min(batch_bounds)
+
+    @staticmethod
+    def _validate_encoder_stack(encoder_config, encoder_stack):
+        if not isinstance(encoder_stack, ConfigBase) or not hasattr(
+            encoder_config, "decoder_stack_config"
+        ):
+            raise TypeError(
+                "encoder_config must supply an encoder-only Transformer configuration"
+            )
+        if encoder_config.decoder_stack_config is not None:
+            raise ValueError(
+                "encoder_config must be encoder-only (decoder_stack_config=None)"
+            )
+
+    @classmethod
+    def _resolve_encoder_stack_dimensions(cls, encoder_stack, byte_embedding_dim):
+        stack_path = "encoder_config.encoder_stack_config"
+        for dimension_name in ("input_dim", "output_dim"):
+            cls._dimension(
+                encoder_stack, dimension_name, byte_embedding_dim, stack_path
+            )
+        if isinstance(encoder_stack, LayerStackConfig):
+            cls._dimension(encoder_stack, "hidden_dim", byte_embedding_dim, stack_path)
+
+    @classmethod
+    def _resolve_byte_attention(cls, attention_config, config_path, cfg):
+        if attention_config.batch_first_flag is not True:
+            raise ValueError(f"{config_path}.batch_first_flag must explicitly be True")
+        if getattr(attention_config, "causal_attention_mask_flag", None) is not False:
+            raise ValueError(
+                f"{config_path}.causal_attention_mask_flag must be False for bidirectional byte attention"
+            )
+        cls._dimension(
+            attention_config, "embedding_dim", cfg.byte_embedding_dim, config_path
+        )
+        batch_size_path = f"{config_path}.batch_size"
+        cls._positive_integer(attention_config.batch_size, batch_size_path)
+        required_positions = cfg.max_token_bytes + 1
+        for dimension_name in ("source_sequence_length", "target_sequence_length"):
+            position_limit = getattr(attention_config, dimension_name, None)
+            dimension_path = f"{config_path}.{dimension_name}"
+            cls._positive_integer(position_limit, dimension_path)
+            if position_limit < required_positions:
+                raise ValueError(f"{dimension_path} must cover max_token_bytes + 1")
+        return attention_config.batch_size
 
     @classmethod
     def _resolve_projection(cls, cfg: HierarchicalByteEmbeddingConfig) -> None:
@@ -212,24 +266,7 @@ class HierarchicalByteEmbeddingValidator:
                 raise ValueError(
                     f"{path}.capacity_factor must be 0.0 to disable batch-dependent dropping"
                 )
-            schedule = getattr(child, "decay_schedule", None)
-            if schedule is not None and schedule != WeightDecayScheduleOptions.DISABLED:
-                raise ValueError(
-                    f"{path}.decay_schedule must be disabled; length groups must not advance schedules"
-                )
             if isinstance(child, RecurrentCompositionConfig):
-                maximum = next(
-                    (
-                        getattr(child, name)
-                        for name in ("max_steps", "answer_update_count", "high_cycles")
-                        if hasattr(child, name)
-                    ),
-                    None,
-                )
-                if child.initial_iterations != maximum:
-                    raise ValueError(
-                        f"{path}.initial_iterations must equal the recurrent maximum; per-forward growth is unsupported"
-                    )
                 if getattr(child, "sampler_config", None) is not None:
                     raise ValueError(
                         f"{path}.sampler_config must be None; token selection can couple independent rows"
@@ -273,9 +310,9 @@ class HierarchicalByteEmbeddingValidator:
             if len(row) != token_count:
                 raise ValueError("token_texts must be rectangular")
             for token_index, token in enumerate(row):
-                if not isinstance(token, str):
+                if not isinstance(token, (str, bytes)):
                     raise TypeError(
-                        f"token_texts[{batch_index}][{token_index}] must be str"
+                        f"token_texts[{batch_index}][{token_index}] must be str or raw bytes"
                     )
         shape = (len(token_texts), token_count)
         if attention_mask is not None:

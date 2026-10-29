@@ -19,6 +19,84 @@ def constant_output(decoder, scores):
 
 
 class HierarchicalByteDecoderTests(unittest.TestCase):
+    def test_group_validation_dispatches_before_conditioning_projection(self):
+        from emperor.embedding.hierarchical.decoder._component import (
+            HierarchicalByteDecoder,
+        )
+        from emperor.embedding.hierarchical.decoder._validation import (
+            HierarchicalByteDecoderValidator,
+        )
+
+        class RejectingValidator(HierarchicalByteDecoderValidator):
+            @staticmethod
+            def validate_prefix_group_sizes(selected_byte_lengths, max_group_tokens):
+                raise ValueError("Prefix group rejected by configured validator")
+
+        class ValidatedDecoder(HierarchicalByteDecoder):
+            VALIDATOR = RejectingValidator
+
+        config = decoder_config()
+        model = ValidatedDecoder(config)
+        projection_inputs = []
+        hook = model.conditioning_projection.register_forward_pre_hook(
+            lambda _module, inputs: projection_inputs.append(inputs)
+        )
+        conditioning = torch.zeros(1, 1, 6)
+        prefixes = torch.tensor([[[97]]])
+        lengths = torch.tensor([[1]])
+        try:
+            with self.assertRaisesRegex(ValueError, "Prefix group rejected"):
+                model(conditioning, prefixes, lengths)
+        finally:
+            hook.remove()
+        self.assertEqual(projection_inputs, [])
+
+    def test_invalid_generation_logits_restore_each_child_training_mode(self):
+        model = decoder_config().build().train()
+        model.byte_position.eval()
+        original_training_modes = {
+            name: child.training for name, child in model.named_modules()
+        }
+        invalid_logits = torch.full((256,), float("nan"))
+        constant_output(model, invalid_logits)
+        conditioning = torch.zeros(6)
+        with self.assertRaisesRegex(ValueError, "finite decoder logits"):
+            model.generate_token(conditioning)
+        restored_training_modes = {
+            name: child.training for name, child in model.named_modules()
+        }
+        self.assertEqual(restored_training_modes, original_training_modes)
+
+    def test_byte_transformer_growth_replays_each_length_group(self):
+        from emperor.layers import RecurrentLayerConfig
+
+        cfg = decoder_config()
+        cfg.decoder_config.decoder_stack_config = RecurrentLayerConfig(
+            input_dim=8,
+            output_dim=8,
+            max_steps=3,
+            initial_iterations=1,
+            iteration_increment=1,
+            forward_calls_before_iteration_increment=1,
+            no_gradient_transition_count=0,
+            gradient_transition_count=None,
+            block_config=cfg.decoder_config.decoder_stack_config,
+        )
+        model = cfg.build().train()
+        schedule = model.decoder.decoder_model.recurrent_iteration_schedule
+        for expected_depth in (2, 3):
+            output = model(
+                torch.zeros(1, 3, 6),
+                torch.zeros(1, 3, 4, dtype=torch.long),
+                torch.tensor([[1, 4, 2]]),
+            ).logits
+            output.square().mean().backward()
+            self.assertEqual(schedule.active_iterations, expected_depth)
+            self.assertEqual(
+                schedule.snapshot().forward_call_progress, expected_depth - 1
+            )
+        self.assertTrue(torch.isfinite(model.byte_embedding.weight.grad).all())
+
     def test_cpu_autocast_and_control_generation(self):
         decoder = decoder_config(max_bytes=4).build().eval()
         with torch.autocast("cpu", dtype=torch.bfloat16):
@@ -27,11 +105,11 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             )
         self.assertEqual(output.logits.dtype, torch.bfloat16)
         self.assertTrue(output.logits.isfinite().all())
-        scores = torch.zeros(258)
-        scores[256], scores[257], scores[97] = 30, 20, 10
+        scores = torch.zeros(256)
+        scores[254], scores[255], scores[97] = 30, 20, 10
         constant_output(decoder, scores)
         first = decoder.generate_token(torch.zeros(6))
-        self.assertEqual(first.stop_reason, "end_of_document")
+        self.assertEqual(first.stop_reason, "end_of_token")
         self.assertEqual(first.text, "")
         partial = decoder.generate_token(torch.zeros(6), prefix="m")
         self.assertEqual(partial.stop_reason, "end_of_token")
@@ -81,13 +159,13 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
                     layer.feed_forward_config.stack_config = moe_config(
                         adaptive=adaptive
                     )
-                    cfg.output_projection_config = moe_config(8, 258, adaptive=adaptive)
+                    cfg.output_projection_config = moe_config(8, 256, adaptive=adaptive)
                 else:
                     layer.self_attention_config.projection_model_config = (
                         adaptive_stack()
                     )
                     layer.feed_forward_config.stack_config = adaptive_stack()
-                    cfg.output_projection_config = adaptive_stack(8, 258)
+                    cfg.output_projection_config = adaptive_stack(8, 256)
                 decoder = cfg.build().eval()
                 losses = []
                 hook = decoder.decoder.register_forward_hook(
@@ -155,7 +233,7 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "memory_config"):
             cfg.build()
         cfg = decoder_config()
-        cfg.output_projection_config = adaptive_stack(8, 258)
+        cfg.output_projection_config = adaptive_stack(8, 256)
         cfg.output_projection_config.layer_config.layer_model_config.adaptive_augmentation_config.grouping_config = MeanGroupingConfig()
         with self.assertRaisesRegex(ValueError, "grouping_config"):
             cfg.build()
@@ -169,12 +247,20 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             forward_calls_before_iteration_increment=1,
             block_config=linear_stack(8, 8),
         )
-        with self.assertRaisesRegex(ValueError, "initial_iterations"):
-            cfg.build()
+        decoder = cfg.build()
+        decoder(
+            torch.zeros(1, 2, 8),
+            torch.zeros(1, 2, 2, dtype=torch.long),
+            torch.tensor([[1, 2]]),
+        )
+        self.assertEqual(
+            decoder.conditioning_projection.recurrent_iteration_schedule.active_iterations,
+            2,
+        )
 
     def test_rejects_incompatible_children_and_invalid_inputs(self):
         from emperor.augmentations.adaptive_parameters import WeightDecayScheduleOptions
-        from emperor.decoding.hierarchical import HierarchicalByteDecoderConfig
+        from emperor.embedding.hierarchical import HierarchicalByteDecoderConfig
         from tests.support.hierarchical_embedding import adaptive_stack, moe_config
 
         with self.assertRaisesRegex(ValueError, "conditioning_dim"):
@@ -193,13 +279,13 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, message):
                 cfg.build()
         cfg = decoder_config()
-        cfg.output_projection_config = moe_config(8, 258, capacity=1.0)
+        cfg.output_projection_config = moe_config(8, 256, capacity=1.0)
         with self.assertRaisesRegex(ValueError, "capacity_factor"):
             cfg.build()
-        cfg.output_projection_config = adaptive_stack(8, 258)
+        cfg.output_projection_config = adaptive_stack(8, 256)
         cfg.output_projection_config.layer_config.layer_model_config.adaptive_augmentation_config.bias_config.decay_schedule = WeightDecayScheduleOptions.EXPONENTIAL
-        with self.assertRaisesRegex(ValueError, "decay_schedule"):
-            cfg.build()
+        cfg.output_projection_config.layer_config.layer_model_config.adaptive_augmentation_config.bias_config.decay_rate = 0.1
+        cfg.build()
         decoder = decoder_config(max_batch=1).build()
         context = torch.zeros(1, 1, 6)
         with self.assertRaisesRegex(ValueError, "byte_lengths"):
@@ -223,10 +309,10 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             )
 
     def test_seeded_sampling_prefix_limits_and_control_symbols(self):
-        from emperor.decoding.hierarchical import ByteGenerationOptions
+        from emperor.embedding.hierarchical.decoder import ByteGenerationOptions
 
         decoder = decoder_config(max_bytes=8).build()
-        scores = torch.full((258,), -20.0)
+        scores = torch.full((256,), -20.0)
         scores[97:100] = 0
         constant_output(decoder, scores)
         options = ByteGenerationOptions(
@@ -251,17 +337,19 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             )
 
     def test_generation_constrains_utf8_and_restores_training_state(self):
-        from emperor.decoding.hierarchical import ByteGenerationOptions
+        from emperor.embedding.hierarchical.decoder import ByteGenerationOptions
 
         decoder = decoder_config(max_bytes=5).build().train()
         decoder.byte_position.eval()
-        scores = torch.full((258,), -100.0)
-        scores[255] = 100  # Invalid UTF-8 must never win.
+        scores = torch.full((256,), -100.0)
+        scores[192] = 100  # Invalid UTF-8 must never win.
         scores[240] = 20
         scores[159] = 19
-        scores[256] = 18
+        scores[254] = 18
         constant_output(decoder, scores)
-        result = decoder.generate_token(torch.zeros(6), options=ByteGenerationOptions())
+        result = decoder.generate_token(
+            torch.zeros(6), options=ByteGenerationOptions(constrain_utf8=True)
+        )
         self.assertEqual(result.text.encode(), bytes([240, 159, 159, 159]))
         self.assertEqual(result.stop_reason, "end_of_token")
         self.assertEqual(result.new_bytes, 4)
@@ -288,7 +376,7 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             lengths.fill_(-1),
             torch.zeros(1, 2, dtype=torch.bool),
         )
-        self.assertEqual(empty.logits.shape, (0, 258))
+        self.assertEqual(empty.logits.shape, (0, 256))
         self.assertEqual(empty.token_offsets.tolist(), [0, 0, 0])
         self.assertEqual(empty.loss.item(), 0)
         buffer = io.BytesIO()
@@ -311,7 +399,7 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
         lengths = torch.tensor([[3, 0], [1, 0]])
         mask = torch.tensor([[True, True], [True, False]])
         output = decoder(conditioning, prefixes, lengths, mask)
-        self.assertEqual(tuple(output.logits.shape), (7, 258))
+        self.assertEqual(tuple(output.logits.shape), (7, 256))
         self.assertEqual(output.token_offsets.tolist(), [0, 4, 5, 7, 7])
         self.assertEqual(output.loss.ndim, 0)
         for flat_index in range(3):
@@ -323,7 +411,7 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             )
             start, end = output.token_offsets[flat_index : flat_index + 2]
             torch.testing.assert_close(output.logits[start:end], single.logits)
-        labels = torch.tensor([109, 97, 116, 256, 257, 99, 256])
+        labels = torch.tensor([109, 97, 116, 254, 255, 99, 254])
         (
             torch.nn.functional.cross_entropy(output.logits, labels) + output.loss
         ).backward()

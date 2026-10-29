@@ -8,7 +8,7 @@ import torch
 from datasets import Dataset, Features, Sequence, Value, load_dataset
 
 from emperor.datasets._base import DataModule
-from emperor.decoding.hierarchical import (
+from emperor.transformer.hierarchical import (
     HierarchicalLanguageModelBatch,
     HierarchicalTextCodec,
 )
@@ -39,10 +39,10 @@ def _windows(source, sequence_length, max_token_bytes):
 
 
 class WikiText103Hierarchical(DataModule):
-    """No vocabulary binding; labels are 256 bytes plus EOW and EOS."""
+    """No vocabulary binding; labels are 256 byte values including reserved EOW and EOS."""
 
     flattened_input_dim = 256
-    num_classes = 258
+    num_classes = 256
     sequence_length = 35
     hierarchical_language_model_flag = True
 
@@ -84,7 +84,7 @@ class WikiText103Hierarchical(DataModule):
 
     def _build_split(self, split):
         source = self._dataset(split)
-        identity = f"hat-raw-v1:{split}:{source._fingerprint}:{self.sequence_length}:{self.max_token_bytes}"
+        identity = f"hat-raw-v2:{split}:{source._fingerprint}:{self.sequence_length}:{self.max_token_bytes}"
         fingerprint = hashlib.sha256(identity.encode()).hexdigest()
         return Dataset.from_generator(
             _windows,

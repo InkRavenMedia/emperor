@@ -4,15 +4,17 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.decoding.hierarchical import (
+from emperor.embedding.hierarchical.decoder import (
     ByteGenerationOptions,
     HierarchicalByteDecoderOutput,
-    HierarchicalLanguageModelBatch,
-    HierarchicalTextGenerationOutput,
 )
 from emperor.experiments.language_model import LanguageModelExperiment
 from emperor.layers import LayerConfig, LayerNormPositionOptions
 from emperor.transformer import TransformerDecoderLayerState
+from emperor.transformer.hierarchical import (
+    HierarchicalLanguageModelBatch,
+    HierarchicalTextGenerationOutput,
+)
 from models.gpt.expert_linear._boundary_config_factory import GptBoundaryConfig
 from models.gpt.expert_linear.experiment_config import ExperimentConfig
 
@@ -232,12 +234,13 @@ class Model(LanguageModelExperiment):
 
     def generate_text(
         self,
-        prompt: str = "",
+        prompt: str | HierarchicalTextGenerationOutput = "",
         *,
         max_new_tokens: int = 32,
         max_new_bytes: int = 256,
         options: ByteGenerationOptions | None = None,
         prompt_is_complete: bool = False,
+        roll_context: bool = False,
     ) -> HierarchicalTextGenerationOutput:
         if not hasattr(self, "hierarchical_model"):
             raise ValueError(
@@ -249,6 +252,7 @@ class Model(LanguageModelExperiment):
             max_new_bytes=max_new_bytes,
             options=options,
             prompt_is_complete=prompt_is_complete,
+            roll_context=roll_context,
         )
 
     def generate(self, input_ids: Tensor, max_new_tokens: int) -> Tensor:
