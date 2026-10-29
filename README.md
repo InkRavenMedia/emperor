@@ -366,6 +366,34 @@ Contextual embeddings supply sentence positions internally; BERT still adds
 segment embeddings and keeps its bidirectional encoder. This mode also requires
 an untied MLM head and vocabulary binding.
 
+Both adaptive BERT packages share GPT's recurrent reasoning schedule controls:
+
+```python
+reasoning_options = {
+    "recurrent_flag": True,
+    "recurrent_initial_iterations": 2,
+    "recurrent_max_steps": 10,
+    "recurrent_iteration_increment": 1,
+    "recurrent_forward_calls_before_iteration_increment": 20_000,
+    "recurrent_smooth_iteration_growth_flag": True,
+    "recurrent_no_gradient_transition_count": 0,
+}
+```
+
+Pass these values through `config_overrides` to start with two iterations and
+smoothly grow toward ten, with a 20,000-forward-call growth interval. The counter
+tracks successful recurrent-owner forward calls and is saved in checkpoints.
+Explicit `recurrent_no_gradient_transition_count=0` keeps gradients through all
+iterations; `recurrent_gradient_transition_count` can instead limit the gradient
+suffix. Whole-encoder recurrence can be combined with hierarchical embeddings
+and Soft MoE feed-forward layers.
+
+`bert/expert_linear_adaptive` also accepts `recurrent_min_steps` and
+`recurrent_ponder_cost_weight`, matching its GPT counterpart. Nondefault values
+require both `recurrent_flag=True` and `recurrent_stack_halting_flag=True`.
+Minimum steps delay early halting; the ponder-cost weight scales the halting
+auxiliary loss. These controls are distinct from the scheduled iteration budget.
+
 Each training run writes a Lightning/TensorBoard run directory under:
 
 ```text
