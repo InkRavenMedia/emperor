@@ -321,9 +321,13 @@ mise run experiment -- \
   --config --num-epochs 1
 ```
 
-The GPT packages use causal next-token loss and return token IDs from greedy
-generation. The selectable download-backed datasets are `penn-treebank`,
-`wiki-text2`, `wiki-text103`, and `open-web-text`.
+The default GPT modes use causal next-token loss and return token IDs from greedy
+generation. Their datasets are `penn-treebank`, `wiki-text2`, `wiki-text103`, and
+`open-web-text`. All four GPT packages (`linear`, `linear_adaptive`,
+`expert_linear`, and `expert_linear_adaptive`) also offer the `hierarchical`
+preset with `wiki-text103-hierarchical`: a vocabulary-free byte
+encoder, GPT backbone, and byte decoder with `generate_text`. See the
+[explicit reference configuration](src/emperor/transformer/hierarchical/_reference.py).
 
 Each training run writes a Lightning/TensorBoard run directory under:
 
