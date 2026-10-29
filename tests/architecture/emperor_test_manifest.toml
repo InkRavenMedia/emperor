@@ -518,6 +518,7 @@ modules = [
   "src/emperor/experts/_options.py",
   "src/emperor/experts/_routing/__init__.py",
   "src/emperor/experts/_routing/capacity.py",
+  "src/emperor/experts/_routing/soft.py",
   "src/emperor/experts/_routing/weighting.py",
   "src/emperor/experts/_state.py",
   "src/emperor/experts/_validation/__init__.py",
@@ -525,6 +526,7 @@ modules = [
   "src/emperor/experts/_validation/layer.py",
   "src/emperor/experts/_validation/mixture.py",
   "src/emperor/experts/_validation/model.py",
+  "src/emperor/experts/_validation/soft.py",
 ]
 
 [families.parametric]

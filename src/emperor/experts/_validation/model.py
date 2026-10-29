@@ -2,13 +2,28 @@ from typing import TYPE_CHECKING
 
 from emperor._validation import ValidatorBase, _adaptive_grouping_paths
 from emperor.experts._options import RoutingInitializationMode
+from emperor.experts._validation.soft import SoftMoEValidator
 
 if TYPE_CHECKING:
     from emperor.experts._model import MixtureOfExpertsModel
 
 
 class MixtureOfExpertsModelValidator(ValidatorBase):
+    SOFT_MOE_VALIDATOR = SoftMoEValidator
     OPTIONAL_FIELDS = {"sampler_config"}
+
+    @classmethod
+    def validate_soft_forward_inputs(cls, model, state) -> None:
+        cls.SOFT_MOE_VALIDATOR.validate_inputs(
+            state.hidden, model.input_dim, getattr(state, "skip_mask", None)
+        )
+        if (
+            getattr(state, "probabilities", None) is not None
+            or getattr(state, "indices", None) is not None
+        ):
+            raise ValueError(
+                "Soft MoE model cannot consume external routing probabilities or indices."
+            )
 
     @staticmethod
     def validate_grouping_forward_inputs(model, hidden, skip_mask) -> None:
@@ -34,6 +49,11 @@ class MixtureOfExpertsModelValidator(ValidatorBase):
         cls.validate_top_k_coherence(model)
         cls.validate_routing_mode_coherence(model)
         cls.validate_shared_routing_config_when_shared(model)
+        leaf = model.stack_config.layer_config.layer_model_config
+        if leaf.soft_moe_config is not None:
+            if model.sampler_config is not None:
+                raise ValueError("Soft MoE model requires sampler_config=None.")
+            cls.SOFT_MOE_VALIDATOR.validate_no_controllers(model.stack_config)
 
     @classmethod
     def validate_cfg_type(cls, model: "MixtureOfExpertsModel") -> None:

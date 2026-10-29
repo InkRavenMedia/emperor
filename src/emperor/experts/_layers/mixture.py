@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from emperor.experts._config import MixtureOfExpertsConfig
+from emperor.experts._config import MixtureOfExpertsConfig, SoftMoEConfig
 from emperor.experts._layers.experts import Experts
 from emperor.experts._options import (
     DroppedTokenOptions,
@@ -17,6 +17,7 @@ from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
 from emperor.nn import Module
 
 if TYPE_CHECKING:
+    from emperor.experts._routing.soft import SoftMoERouter
     from emperor.sampler import SamplerConfig, SamplerModel
 
 
@@ -52,9 +53,11 @@ class MixtureOfExperts(Module):
             self.cfg.weighting_position_option
         )
         self.sampler_config: SamplerConfig = self.cfg.sampler_config
+        self.soft_moe_config = self.cfg.soft_moe_config
 
         self.VALIDATOR.validate(self)
         self.sampler = self.__maybe_create_sampler()
+        self.soft_router = self.__maybe_create_soft_router()
         self.expert_modules: Experts = Experts(self.cfg)
         self.capacity_handler: ExpertCapacityHandler = (
             self.expert_modules.capacity_handler
@@ -66,12 +69,22 @@ class MixtureOfExperts(Module):
     def __maybe_create_sampler(
         self,
     ) -> "SamplerModel | None":
-        if self.routing_initialization_mode != RoutingInitializationMode.LAYER:
+        if (
+            self.soft_moe_config is not None
+            or self.routing_initialization_mode != RoutingInitializationMode.LAYER
+        ):
             return None
         self.VALIDATOR.validate_sampler_config_exists(self)
         self.VALIDATOR.validate_router_config_exists(self)
         return self.sampler_config.build_with_router_input_dim(self.input_dim)
 
+    def __maybe_create_soft_router(self) -> "SoftMoERouter | None":
+        if self.soft_moe_config is None:
+            return None
+        router_dimension_overrides = SoftMoEConfig(
+            input_dim=self.input_dim, num_experts=self.num_experts
+        )
+        return self.soft_moe_config.build(router_dimension_overrides)
 
     def get_top_k(self) -> int:
         return self.top_k
@@ -86,6 +99,8 @@ class MixtureOfExperts(Module):
         self.VALIDATOR.validate_forward_inputs(
             self, input_batch, probabilities, indices, skip_mask
         )
+        if self.soft_router is not None:
+            return self.__compute_soft_mixture(input_batch, skip_mask)
         probabilities, indices, skip_mask, sampler_loss = (
             self._maybe_compute_expert_indices(
                 input_batch, probabilities, indices, skip_mask
@@ -101,7 +116,27 @@ class MixtureOfExperts(Module):
         total_loss = sampler_loss + expert_loss
         return mixture_output, skip_mask, total_loss
 
+    def __compute_soft_mixture(
+        self, inputs: Tensor, skip_mask: Tensor | None
+    ) -> tuple[Tensor, Tensor | None, Tensor]:
+        dispatch_weights, combine_weights = self.soft_router(inputs, skip_mask)
+        output_slots, expert_loss = self.expert_modules.forward_soft_tokens(
+            inputs, dispatch_weights, skip_mask
+        )
+        output = self.__combine_expert_slots(
+            output_slots, combine_weights, inputs.device.type
+        )
+        return output, skip_mask, expert_loss
 
+    def __combine_expert_slots(
+        self, output_slots: Tensor, combine_weights: Tensor, device_type: str
+    ) -> Tensor:
+        with torch.autocast(device_type=device_type, enabled=False):
+            combination_slot_features = output_slots.to(combine_weights.dtype)
+            token_outputs = torch.einsum(
+                "btes,besd->btd", combine_weights, combination_slot_features
+            )
+        return token_outputs.to(output_slots.dtype)
 
     def _maybe_compute_expert_indices(
         self,

@@ -203,8 +203,8 @@ owners = ["emperor.augmentations.adaptive_parameters._weights.depth_mapping", "e
 [[interfaces]]
 module = "emperor.experts"
 kind = "runtime"
-exports = ["MixtureOfExpertsConfig", "MixtureOfExpertsLayerConfig", "MixtureOfExpertsModelConfig", "DroppedTokenOptions", "ExpertWeightingPositionOptions", "RoutingInitializationMode", "MixtureOfExpertsLayerState"]
-owners = ["emperor.experts._config", "emperor.experts._config", "emperor.experts._config", "emperor.experts._options", "emperor.experts._options", "emperor.experts._options", "emperor.experts._state"]
+exports = ["MixtureOfExpertsConfig", "MixtureOfExpertsLayerConfig", "MixtureOfExpertsModelConfig", "DroppedTokenOptions", "ExpertWeightingPositionOptions", "RoutingInitializationMode", "MixtureOfExpertsLayerState", "SoftMoEConfig"]
+owners = ["emperor.experts._config", "emperor.experts._config", "emperor.experts._config", "emperor.experts._options", "emperor.experts._options", "emperor.experts._options", "emperor.experts._state", "emperor.experts._config"]
 
 [[interfaces]]
 module = "emperor.halting"

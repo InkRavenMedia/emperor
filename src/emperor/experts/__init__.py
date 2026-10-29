@@ -4,6 +4,7 @@ from emperor.experts._config import (
     MixtureOfExpertsConfig,
     MixtureOfExpertsLayerConfig,
     MixtureOfExpertsModelConfig,
+    SoftMoEConfig,
 )
 from emperor.experts._options import (
     DroppedTokenOptions,
@@ -20,4 +21,5 @@ __all__ = (
     "ExpertWeightingPositionOptions",
     "RoutingInitializationMode",
     "MixtureOfExpertsLayerState",
+    "SoftMoEConfig",
 )
