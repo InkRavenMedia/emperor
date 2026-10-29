@@ -14,10 +14,7 @@ from emperor.attention import (
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
-    DynamicBiasConfig,
-    DynamicWeightConfig,
     GroupingConfig,
-    WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase
 from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
@@ -80,14 +77,9 @@ def _isolate_token_rows(stack_config: _StackConfig) -> _StackConfig:
     """Copy a stack so each byte-encoded token stays independent of the batch."""
     isolated = copy.deepcopy(stack_config)
     for child in _nested_configs(isolated):
-        # Grouping mixes rows and decay schedules advance once per length group.
+        # Grouping mixes rows; schedules are coordinated by the byte component.
         if isinstance(child, AdaptiveParameterAugmentationConfig):
             child.grouping_config = None
-        if (
-            isinstance(child, (DynamicWeightConfig, DynamicBiasConfig))
-            and child.decay_schedule is not None
-        ):
-            child.decay_schedule = WeightDecayScheduleOptions.DISABLED
     return isolated
 
 
@@ -107,7 +99,6 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
                 build_hierarchical_config(
                     model_config,
                     self.embedding_options,
-                    self._build_linear_layer_config(bias_flag=True),
                 )
             )
         return model_config

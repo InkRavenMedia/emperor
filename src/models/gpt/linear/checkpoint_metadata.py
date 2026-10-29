@@ -15,17 +15,19 @@ def checkpoint_config_overrides(
     if (
         len(encoder) != 2
         or len(decoder) != 2
-        or encoder[0] != 257
+        or encoder[0] != 256
         or decoder[0] != 256
         or encoder[1] != decoder[1]
     ):
-        raise ValueError("Incompatible hierarchical byte tables in checkpoint")
+        raise ValueError(
+            "Incompatible HAT v2 protocol: legacy independent byte tables cannot be merged losslessly; use the original model or an explicit conversion"
+        )
     result = {
         "hierarchical_language_model_flag": True,
         "lm_head_weight_tying_flag": False,
         "hierarchical_byte_embedding_dim": encoder[1],
         "input_dim": 256,
-        "output_dim": 258,
+        "output_dim": 256,
     }
     beginning = tensor_shapes.get(prefix + "beginning_of_document")
     if beginning and len(beginning) == 1:

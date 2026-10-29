@@ -6,13 +6,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from torch import Tensor
 
-# Emperor reserves separate controls rather than reusing unused UTF-8 byte IDs
-# as paper v2 does. These output IDs are not the encoder's [W] input embedding.
-BYTE_VALUES = 256
-END_OF_TOKEN = 256
-END_OF_DOCUMENT = 257
-OUTPUT_SYMBOLS = 258
-
 
 @dataclass(frozen=True)
 class HierarchicalByteDecoderOutput:
@@ -32,18 +25,28 @@ class ByteGenerationOptions:
     top_k: int | None = None
     top_p: float = 1.0
     seed: int | None = None
+    constrain_utf8: bool = False
 
 
 @dataclass(frozen=True)
 class ByteTokenGenerationOutput:
-    text: str
+    data: bytes
     stop_reason: str
     new_bytes: int
 
+    @property
+    def text(self) -> str | None:
+        try:
+            return self.data.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
 
-@dataclass(frozen=True)
-class HierarchicalTextGenerationOutput:
-    text: str
-    stop_reason: str
-    new_bytes: int
-    new_tokens: int
+    @property
+    def utf8_status(self) -> str:
+        try:
+            self.data.decode("utf-8")
+        except UnicodeDecodeError as error:
+            return (
+                "incomplete" if error.reason == "unexpected end of data" else "invalid"
+            )
+        return "valid"

@@ -21,6 +21,8 @@ class HierarchicalByteEmbeddingConfig(ConfigBase):
     )
 
     def _registry_owner(self) -> type:
-        from emperor.embedding.hierarchical._component import HierarchicalByteEmbedding
+        from emperor.embedding.hierarchical.encoder._component import (
+            HierarchicalByteEmbedding,
+        )
 
         return HierarchicalByteEmbedding

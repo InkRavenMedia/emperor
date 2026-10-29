@@ -1,23 +1,14 @@
-"""Package-owned HAT v2 adaptation; not the paper's Llama experimental stack.
-
-The backbone stays owned by this GPT package. Byte blocks use the supplied
-linear backend, learned absolute positions and native pre-norm. FeedForward
-mirrors depth=2 into four projections with ReLU hidden activations. Standalone
-single-layer projections have no activation. See
-docs/hierarchical-implementation-review.md.
-"""
+"""Package-owned HAT v2 byte components around this package's native backbone."""
 
 import copy
 
 import torch
 
 from emperor.attention import SelfAttentionConfig, SelfAttentionProjectionStrategy
-from emperor.decoding.hierarchical import (
+from emperor.embedding.hierarchical import (
     HierarchicalByteDecoderConfig,
-    HierarchicalLanguageModelConfig,
+    HierarchicalByteEmbeddingConfig,
 )
-from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
-from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.layers import (
     ActivationOptions,
     AdditiveResidualConfig,
@@ -25,35 +16,38 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    NormalizationOptions,
 )
+from emperor.linears import LinearLayerConfig
 from emperor.transformer import (
-    FeedForwardConfig,
+    SwiGLUFeedForwardConfig,
     TransformerConfig,
     TransformerDecoderBlockLayerConfig,
     TransformerDecoderLayerConfig,
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from emperor.transformer.hierarchical import HierarchicalLanguageModelConfig
 
 
-def build_hierarchical_config(model_config, options, linear_model_config):
+def build_hierarchical_config(model_config, options):
     dimension = options.byte_embedding_dim
     maximum = options.byte_limit
     maximum_batch = model_config.batch_size * model_config.sequence_length
 
-    def linear_stack(input_dim, output_dim, *, depth=1):
+    def linear_stack(input_dim, output_dim):
         return LayerStackConfig(
             input_dim=input_dim,
             output_dim=output_dim,
             hidden_dim=options.byte_feed_forward_dim,
-            num_layers=depth,
-            last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
+            num_layers=1,
+            last_layer_bias_option=LastLayerBiasOptions.DISABLED,
             apply_output_postprocessing_flag=False,
             layer_config=LayerConfig(
-                activation=ActivationOptions.RELU,
+                activation=ActivationOptions.DISABLED,
                 dropout_probability=0.0,
                 layer_norm_position=LayerNormPositionOptions.DISABLED,
-                layer_model_config=copy.deepcopy(linear_model_config),
+                layer_model_config=LinearLayerConfig(bias_flag=False),
             ),
         )
 
@@ -76,16 +70,18 @@ def build_hierarchical_config(model_config, options, linear_model_config):
             batch_first_flag=True,
             projection_model_config=linear_stack(dimension, dimension),
             projection_strategy=SelfAttentionProjectionStrategy.FUSED,
+            rotary_base=10000.0,
         )
         arguments = dict(
             embedding_dim=dimension,
             layer_norm_position=LayerNormPositionOptions.BEFORE,
             dropout_probability=0.0,
             residual_config=AdditiveResidualConfig(),
-            feed_forward_config=FeedForwardConfig(
+            normalization=NormalizationOptions.RMS_NORM,
+            feed_forward_config=SwiGLUFeedForwardConfig(
                 input_dim=dimension,
                 output_dim=dimension,
-                stack_config=linear_stack(dimension, dimension, depth=2),
+                hidden_dim=options.byte_feed_forward_dim,
             ),
         )
         if causal:
@@ -113,12 +109,8 @@ def build_hierarchical_config(model_config, options, linear_model_config):
             ),
         )
         return TransformerConfig(
-            **{"decoder_stack_config" if causal else "encoder_stack_config": stack}
-        )
-
-    def positions():
-        return TextLearnedPositionalEmbeddingConfig(
-            num_embeddings=maximum + 1, embedding_dim=dimension
+            final_normalization=NormalizationOptions.RMS_NORM,
+            **{"decoder_stack_config" if causal else "encoder_stack_config": stack},
         )
 
     experiment = model_config.experiment_config
@@ -128,7 +120,7 @@ def build_hierarchical_config(model_config, options, linear_model_config):
             byte_embedding_dim=dimension,
             output_dim=model_config.hidden_dim,
             max_token_bytes=maximum,
-            byte_position_config=positions(),
+            byte_position_config=None,
             encoder_config=transformer(False, options.byte_encoder_num_layers),
             projection_config=linear_stack(dimension, model_config.hidden_dim),
         ),
@@ -136,12 +128,12 @@ def build_hierarchical_config(model_config, options, linear_model_config):
             conditioning_dim=model_config.hidden_dim,
             byte_embedding_dim=dimension,
             max_token_bytes=maximum,
-            byte_position_config=positions(),
+            byte_position_config=None,
             decoder_config=transformer(True, options.byte_decoder_num_layers),
             conditioning_projection_config=linear_stack(
                 model_config.hidden_dim, dimension
             ),
-            output_projection_config=linear_stack(dimension, 258),
+            output_projection_config=linear_stack(dimension, 256),
         ),
         # Preserve this package's selected attention, experts and adaptive layers.
         backbone_config=copy.deepcopy(experiment.decoder_config),

@@ -1,7 +1,7 @@
 """Small native decoder compositions for behavioral tests."""
 
-from emperor.decoding.hierarchical import HierarchicalByteDecoderConfig
 from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteDecoderConfig
 from emperor.layers import (
     ActivationOptions,
     LastLayerBiasOptions,
@@ -36,7 +36,7 @@ def decoder_config(*, dim=8, conditioning_dim=6, max_bytes=8, max_batch=16):
             num_embeddings=max_bytes + 1, embedding_dim=dim
         ),
         conditioning_projection_config=linear_stack(conditioning_dim, dim),
-        output_projection_config=linear_stack(dim, 258),
+        output_projection_config=linear_stack(dim, 256),
         decoder_config=TransformerConfig(
             decoder_stack_config=LayerStackConfig(
                 input_dim=dim,

@@ -974,7 +974,7 @@ class RelativeEmbeddingBehaviorTests(unittest.TestCase):
 
 
 class EmbeddingInterfaceBehaviorTests(unittest.TestCase):
-    def test_interfaces_export_only_configuration_without_dynamic_shortcuts(
+    def test_interfaces_expose_lightweight_exports_without_dynamic_shortcuts(
         self,
     ) -> None:
         import emperor.embedding as embedding
@@ -1016,13 +1016,47 @@ class EmbeddingInterfaceBehaviorTests(unittest.TestCase):
                 "DynamicPositionalBiasConfig",
             ),
         )
-        self.assertEqual(hierarchical.__all__, ("HierarchicalByteEmbeddingConfig",))
+        self.assertEqual(
+            hierarchical.__all__,
+            (
+                "HierarchicalByteEmbeddingConfig",
+                "HierarchicalByteDecoderConfig",
+                "BYTE_VALUES",
+                "OUTPUT_SYMBOLS",
+                "END_OF_TOKEN",
+                "END_OF_DOCUMENT",
+                "HAT_PROTOCOL_VERSION",
+            ),
+        )
         for module in (embedding, absolute, contextual, hierarchical, relative):
             with self.subTest(module=module.__name__):
                 self.assertFalse(hasattr(module, "__getattr__"))
                 self.assertFalse(hasattr(module, "_LAZY_EXPORTS"))
 
-    def test_explicit_interfaces_eagerly_load_only_configuration(
+    def test_hierarchical_components_build_without_each_other_or_composition(self):
+        for owner, fixture, factory, other in (
+            ("encoder", "hierarchical_embedding", "embedding_config", "decoder"),
+            ("decoder", "hierarchical_decoding", "decoder_config", "encoder"),
+        ):
+            with self.subTest(owner=owner):
+                script = f"""
+import sys
+from tests.support.{fixture} import {factory}
+
+component = {factory}().build()
+assert type(component).__module__ == "emperor.embedding.hierarchical.{owner}._component"
+assert "emperor.embedding.hierarchical.{other}._component" not in sys.modules
+assert "emperor.transformer.hierarchical" not in sys.modules
+"""
+                completed = subprocess.run(
+                    [sys.executable, "-c", script],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_explicit_interfaces_eagerly_load_only_lightweight_modules(
         self,
     ) -> None:
         script = """\
@@ -1068,8 +1102,12 @@ print(json.dumps({
             "emperor.embedding.contextual._encoding",
             "emperor.embedding.contextual._kernel",
             "emperor.embedding.contextual._validation",
-            "emperor.embedding.hierarchical._component",
-            "emperor.embedding.hierarchical._validation",
+            "emperor.embedding.hierarchical.decoder._component",
+            "emperor.embedding.hierarchical.decoder._generation",
+            "emperor.embedding.hierarchical.decoder._validation",
+            "emperor.transformer.hierarchical",
+            "emperor.embedding.hierarchical.encoder._component",
+            "emperor.embedding.hierarchical.encoder._validation",
             "emperor.embedding.relative._variants.bias",
             "emperor.embedding.relative._validation",
         )
@@ -1138,7 +1176,12 @@ print(json.dumps({
                     "emperor.embedding.contextual._config",
                     "emperor.embedding.contextual._state",
                     "emperor.embedding.hierarchical",
-                    "emperor.embedding.hierarchical._config",
+                    "emperor.embedding.hierarchical._symbols",
+                    "emperor.embedding.hierarchical.decoder",
+                    "emperor.embedding.hierarchical.decoder._config",
+                    "emperor.embedding.hierarchical.decoder._records",
+                    "emperor.embedding.hierarchical.encoder",
+                    "emperor.embedding.hierarchical.encoder._config",
                     "emperor.embedding.relative",
                     "emperor.embedding.relative._config",
                 ],
@@ -1160,7 +1203,15 @@ print(json.dumps({
                     "CausalPrefixKernelConfig",
                     "ByteContextualEmbeddingState",
                 ],
-                "hierarchical_all": ["HierarchicalByteEmbeddingConfig"],
+                "hierarchical_all": [
+                    "HierarchicalByteEmbeddingConfig",
+                    "HierarchicalByteDecoderConfig",
+                    "BYTE_VALUES",
+                    "OUTPUT_SYMBOLS",
+                    "END_OF_TOKEN",
+                    "END_OF_DOCUMENT",
+                    "HAT_PROTOCOL_VERSION",
+                ],
                 "relative_all": [
                     "RelativePositionalEmbeddingConfig",
                     "DynamicPositionalBiasConfig",
@@ -1172,7 +1223,12 @@ print(json.dumps({
                     "emperor.embedding.contextual._config",
                     "emperor.embedding.contextual._state",
                     "emperor.embedding.hierarchical",
-                    "emperor.embedding.hierarchical._config",
+                    "emperor.embedding.hierarchical._symbols",
+                    "emperor.embedding.hierarchical.decoder",
+                    "emperor.embedding.hierarchical.decoder._config",
+                    "emperor.embedding.hierarchical.decoder._records",
+                    "emperor.embedding.hierarchical.encoder",
+                    "emperor.embedding.hierarchical.encoder._config",
                     "emperor.embedding.relative",
                     "emperor.embedding.relative._config",
                 ],
@@ -1185,8 +1241,12 @@ print(json.dumps({
                     "emperor.embedding.contextual._encoding": False,
                     "emperor.embedding.contextual._kernel": False,
                     "emperor.embedding.contextual._validation": False,
-                    "emperor.embedding.hierarchical._component": False,
-                    "emperor.embedding.hierarchical._validation": False,
+                    "emperor.embedding.hierarchical.decoder._component": False,
+                    "emperor.embedding.hierarchical.decoder._generation": False,
+                    "emperor.embedding.hierarchical.decoder._validation": False,
+                    "emperor.transformer.hierarchical": False,
+                    "emperor.embedding.hierarchical.encoder._component": False,
+                    "emperor.embedding.hierarchical.encoder._validation": False,
                     "emperor.embedding.relative._variants.bias": False,
                     "emperor.embedding.relative._validation": False,
                 },

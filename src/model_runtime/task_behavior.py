@@ -137,7 +137,7 @@ def _token_inputs(_dataset: type, configuration: Any) -> tuple[Any, ...]:
         None,
     )
     if hierarchical is not None:
-        from emperor.decoding.hierarchical import HierarchicalLanguageModelBatch
+        from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
 
         return (
             HierarchicalLanguageModelBatch.collate(

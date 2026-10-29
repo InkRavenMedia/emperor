@@ -247,9 +247,6 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
                 build_hierarchical_config(
                     model_config,
                     options,
-                    self.__adaptive_linear_layer_config_factory(
-                        self.adaptive_augmentation_config
-                    ).build_backend_linear_layer_config(bias_flag=True),
                 )
             )
         return model_config
