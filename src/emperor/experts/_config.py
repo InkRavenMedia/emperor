@@ -10,9 +10,33 @@ from emperor.experts._options import (
 from emperor.layers import LayerConfig
 
 if TYPE_CHECKING:
+    from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
     from emperor.experts._layers.mixture import MixtureOfExperts
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
     from emperor.sampler import SamplerConfig
+
+
+@dataclass
+class SoftMoEConfig(ConfigBase):
+    input_dim: int | None = optional_field(
+        "Routing feature dimension; supplied by the mixture owner."
+    )
+    num_experts: int | None = optional_field(
+        "Expert count; supplied by the mixture owner."
+    )
+    slots_per_expert: int | None = optional_field(
+        "Positive, fixed number of slots processed by each expert."
+    )
+    model_config: "DepthMappingHandlerConfig | None" = optional_field(
+        "Required depth-mapped scoring stack; input/output dimensions are "
+        "supplied by the router along with the expert count. "
+        "Its inner stack's final layer must produce raw logits."
+    )
+
+    def _registry_owner(self) -> type:
+        from emperor.experts._routing.soft import SoftMoERouter
+
+        return SoftMoERouter
 
 
 @dataclass
@@ -79,6 +103,11 @@ class MixtureOfExpertsConfig(ConfigBase):
     )
     expert_model_config: "LayerStackConfig | RecurrentCompositionConfig | None" = (
         optional_field("Expert stack configuration used to build each expert.")
+    )
+    soft_moe_config: SoftMoEConfig | None = optional_field(
+        "Optional noncausal Soft MoE execution on [batch, tokens, features]. "
+        "Requires LAYER routing, all experts, no sampler or capacity dropping, "
+        "and weighted, reduced outputs. None preserves token routing."
     )
 
     def _registry_owner(self) -> type:

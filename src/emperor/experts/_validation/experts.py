@@ -28,6 +28,8 @@ class ExpertsValidator:
 
     @staticmethod
     def __requires_one_output_row_per_sample(experts: "Experts") -> bool:
+        if experts.cfg.soft_moe_config is not None:
+            return True
         grouping_paths = _adaptive_grouping_paths(
             experts.expert_model_config,
             root="MixtureOfExpertsConfig.expert_model_config",
@@ -45,4 +47,6 @@ class ExpertsValidator:
 
     @staticmethod
     def __resolve_expert_owner(experts: "Experts") -> str:
+        if experts.cfg.soft_moe_config is not None:
+            return "Soft MoE"
         return "Grouped"

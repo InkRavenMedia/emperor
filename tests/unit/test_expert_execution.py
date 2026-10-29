@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 
+import pytest
 import torch
 from torch import nn
 
@@ -233,3 +234,60 @@ def test_batch_forward_runs_every_expert_for_dense_inputs():
     assert routing_positions is None
     assert returned_probabilities is probabilities
     assert loss.item() == 0
+
+
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_soft_tokens_are_pooled_and_executed_inside_experts(dtype):
+    cfg = expert_config()
+    experts = Experts(cfg)
+    for expert_index in range(3):
+        expert_scale = float(expert_index + 1)
+        return_loss = expert_index != 1
+        replacement = ScalingExpert(expert_scale, return_loss=return_loss)
+        experts[expert_index] = replacement
+    experts.to(dtype=dtype)
+    features = torch.randn(2, 3, 4, dtype=dtype)
+    token_features = features.transpose(1, 2)
+    token_features.requires_grad_()
+    assert not token_features.is_contiguous()
+    dispatch_scores = torch.arange(1, 49, dtype=dtype)
+    dispatch_scores = dispatch_scores.reshape(2, 4, 3, 2)
+    token_score_totals = dispatch_scores.sum(dim=1, keepdim=True)
+    dispatch_weights = dispatch_scores / token_score_totals
+    dispatch_weights.requires_grad_()
+
+    output_slots, total_loss = experts.forward_soft_tokens(
+        token_features, dispatch_weights
+    )
+    expected_expert_outputs = []
+    for expert_index in range(3):
+        expected_slot_outputs = []
+        for slot_index in range(2):
+            token_weights = dispatch_weights[:, :, expert_index, slot_index]
+            feature_weights = token_weights.unsqueeze(-1)
+            weighted_tokens = token_features * feature_weights
+            pooled_slot = weighted_tokens.sum(dim=1)
+            expected_output = pooled_slot * (expert_index + 1) + 1
+            expected_slot_outputs.append(expected_output)
+        expert_outputs = torch.stack(expected_slot_outputs, dim=1)
+        expected_expert_outputs.append(expert_outputs)
+    expected_slots = torch.stack(expected_expert_outputs, dim=1)
+    first_squared_outputs = expected_expert_outputs[0].square()
+    last_squared_outputs = expected_expert_outputs[2].square()
+    first_loss = first_squared_outputs.mean()
+    last_loss = last_squared_outputs.mean()
+    expected_loss = first_loss + last_loss
+    torch.testing.assert_close(output_slots, expected_slots)
+    torch.testing.assert_close(total_loss, expected_loss)
+
+    output_sum = output_slots.sum()
+    objective = output_sum + total_loss
+    objective.backward()
+    assert token_features.grad is not None
+    assert dispatch_weights.grad is not None
+    finite_input_gradients = torch.isfinite(token_features.grad)
+    assert finite_input_gradients.all()
+    finite_dispatch_gradients = torch.isfinite(dispatch_weights.grad)
+    assert finite_dispatch_gradients.all()
+    expert_parameters = experts.parameters()
+    assert all(parameter.grad is not None for parameter in expert_parameters)

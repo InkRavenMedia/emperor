@@ -2,6 +2,7 @@ from copy import deepcopy
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, cast
 
+import torch
 from torch import Tensor
 
 from emperor.config import ConfigBase, optional_field
@@ -12,10 +13,16 @@ from emperor.layers import (
     RecurrentCompositionConfig,
 )
 from emperor.nn import Module
-from emperor.transformer._validation import FeedForwardValidator
+from emperor.transformer._validation import (
+    FeedForwardValidator,
+)
 
 if TYPE_CHECKING:
     from emperor.experts import MixtureOfExpertsModelConfig
+
+
+
+
 
 
 @dataclass
@@ -50,6 +57,7 @@ class FeedForward(Module):
         self.stack_config: ConfigBase = self.cfg.stack_config
 
         self.VALIDATOR.validate(self)
+        self.uses_soft_moe = self.VALIDATOR.uses_soft_moe(self.stack_config)
 
         self.model = self.__build_stack_model()
 
@@ -108,8 +116,13 @@ class FeedForward(Module):
     def forward(
         self,
         input_batch: Tensor,
+        *,
+        padding_mask: Tensor | None = None,
+        batch_first: bool = True,
     ) -> tuple[Tensor, Tensor]:
         self.VALIDATOR.validate_forward_inputs(self, input_batch)
+        if self.uses_soft_moe:
+            return self.__forward_soft_moe(input_batch, padding_mask, batch_first)
         original_shape = input_batch.shape
         flattened_input = input_batch.reshape(-1, self.input_dim)
         feed_forward_state = Layer.run_model_from_hidden(
@@ -122,4 +135,29 @@ class FeedForward(Module):
             if feed_forward_state.loss is not None
             else input_batch.new_zeros(())
         )
+        return output, loss
+
+    def __forward_soft_moe(
+        self, inputs: Tensor, padding_mask: Tensor | None, batch_first: bool
+    ) -> tuple[Tensor, Tensor]:
+        from emperor.experts import MixtureOfExpertsLayerState
+
+        self.VALIDATOR.validate_soft_layout(inputs, padding_mask, batch_first)
+        tokens = inputs if batch_first else inputs.transpose(0, 1)
+        active = None
+        if padding_mask is not None:
+            excluded = (
+                padding_mask
+                if padding_mask.dtype == torch.bool
+                else padding_mask.isneginf()
+            )
+            active = ~excluded.unsqueeze(-1)
+            tokens = tokens.masked_fill(~active, 0)
+        state = self.model(MixtureOfExpertsLayerState(hidden=tokens, skip_mask=active))
+        output = (
+            state.hidden if active is None else state.hidden.masked_fill(~active, 0)
+        )
+        if not batch_first:
+            output = output.transpose(0, 1)
+        loss = state.loss if state.loss is not None else inputs.new_zeros(())
         return output, loss

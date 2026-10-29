@@ -48,6 +48,7 @@ EXPECTED_EXPORTS = (
     "ExpertWeightingPositionOptions",
     "RoutingInitializationMode",
     "MixtureOfExpertsLayerState",
+    "SoftMoEConfig",
 )
 
 EXPECTED_OWNERS = {
@@ -58,6 +59,7 @@ EXPECTED_OWNERS = {
     "ExpertWeightingPositionOptions": "emperor.experts._options",
     "RoutingInitializationMode": "emperor.experts._options",
     "MixtureOfExpertsLayerState": "emperor.experts._state",
+    "SoftMoEConfig": "emperor.experts._config",
 }
 
 MIXTURE_CONFIG_FIELDS = (
@@ -73,6 +75,7 @@ MIXTURE_CONFIG_FIELDS = (
     "routing_initialization_mode",
     "sampler_config",
     "expert_model_config",
+    "soft_moe_config",
 )
 
 MODEL_CONFIG_FIELDS = (
