@@ -64,3 +64,15 @@ def test_swiglu_is_three_bias_free_projections_from_the_same_input():
     )
     actual.square().sum().backward()
     assert all(parameter.grad is not None for parameter in model.parameters())
+
+
+def test_transformer_can_select_final_rms_normalization():
+    from emperor.layers import NormalizationOptions
+    from tests.support.hierarchical_embedding import embedding_config
+
+    cfg = replace(
+        embedding_config().encoder_config,
+        final_normalization=NormalizationOptions.RMS_NORM,
+    )
+    model = cfg.build()
+    assert isinstance(model.encoder_layer_norm, torch.nn.RMSNorm)
