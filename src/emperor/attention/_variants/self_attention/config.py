@@ -18,6 +18,9 @@ class SelfAttentionConfig(MultiHeadAttentionConfig):
         "Whether Q/K/V use one fused model, a Q model plus a fused K/V model, "
         "or three separate models."
     )
+    rotary_base: float | None = optional_field(
+        "Optional RoPE frequency base for full-sequence self-attention; no KV cache offsets."
+    )
 
     def _registry_owner(self) -> type:
         from emperor.attention._variants.self_attention.layer import SelfAttention
