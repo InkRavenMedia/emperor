@@ -28,6 +28,7 @@ AGENTS.md
 .scratch/
 .claude/
 .codex/
+/skills/
 skills-lock.json
 .pytest_cache/
 .ruff_cache/
@@ -38,6 +39,6 @@ mutants/
 /apps/workbench/web/node_modules/
 /apps/workbench/web/tsconfig.tsbuildinfo
 /.runtime/
-/docs/agents/
+/docs/
 /proposed_components/
 /learning/
