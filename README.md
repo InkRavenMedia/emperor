@@ -329,6 +329,43 @@ preset with `wiki-text103-hierarchical`: a vocabulary-free byte
 encoder, GPT backbone, and byte decoder with `generate_text`. See the
 [explicit reference configuration](src/emperor/transformer/hierarchical/_reference.py).
 
+All four BERT packages accept `hierarchical_embedding_config` and
+`soft_moe_config` independently or together through `config_overrides`.
+Supply a `HierarchicalByteEmbeddingConfig` whose output dimension matches BERT's
+hidden dimension, and a `SoftMoEConfig` with its depth-mapped scoring stack:
+
+```python
+from models.catalog import model_package
+
+package = model_package("bert/expert_linear_adaptive")
+configuration = package.build_configuration(
+    config_overrides={
+        "hierarchical_embedding_config": byte_embedding_config,
+        "soft_moe_config": soft_moe_config,
+        "mlm_decoder_weight_tying_flag": False,
+    }
+)
+model = package.build_model(configuration)
+model.set_token_vocabulary(token_spellings_in_id_order)
+```
+
+Trainer setup binds the prepared BERT tokenizer automatically. Vocabulary binding
+is saved in checkpoints and preserves exact spellings, including `[MASK]`,
+`[CLS]`, `[SEP]`, and WordPiece prefixes. This embedding mode retains BERT's
+vocabulary-based masked-token and next-sentence heads, sentence positions, and
+segment embeddings. Its MLM head must be untied from the input embedding.
+Soft MoE replaces the feed-forward routing; attention retains the package's
+configured implementation. It requires bidirectional attention and pointwise
+experts without shared adaptive grouping, recurrent expert stacks, or context
+controllers. Existing lookup embeddings and routing remain the defaults.
+
+`contextual_embedding_config` accepts the same `ByteContextualEmbeddingConfig`
+used by GPT, including its byte experts, prefix kernel, contextual experts, and
+residual scale. Contextual and hierarchical embeddings are mutually exclusive.
+Contextual embeddings supply sentence positions internally; BERT still adds
+segment embeddings and keeps its bidirectional encoder. This mode also requires
+an untied MLM head and vocabulary binding.
+
 Each training run writes a Lightning/TensorBoard run directory under:
 
 ```text
