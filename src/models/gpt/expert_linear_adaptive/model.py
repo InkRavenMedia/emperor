@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from emperor.embedding._token_text import TokenTextAdapter
 from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.embedding.hierarchical.decoder import (
@@ -19,7 +20,6 @@ from emperor.transformer.hierarchical import (
     HierarchicalTextGenerationOutput,
 )
 from models.gpt.expert_linear_adaptive._boundary_config_factory import GptBoundaryConfig
-from models.gpt.expert_linear_adaptive._token_text import TokenTextAdapter
 from models.gpt.expert_linear_adaptive.experiment_config import ExperimentConfig
 
 if TYPE_CHECKING:

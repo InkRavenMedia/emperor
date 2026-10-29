@@ -1,4 +1,4 @@
-"""Vocabulary-bound token spellings for the contextual embedding boundary."""
+"""Vocabulary-bound token spellings for text-based embedding boundaries."""
 
 from collections.abc import Sequence
 
@@ -24,12 +24,12 @@ class TokenTextAdapter(nn.Module):
             )
         if any(type(token) is not str for token in token_texts):
             raise TypeError("Every token vocabulary entry must be an exact str.")
-        tokens = tuple(token_texts)
-        if self.token_texts is not None and self.token_texts != tokens:
+        bound_token_texts = tuple(token_texts)
+        if self.token_texts is not None and self.token_texts != bound_token_texts:
             raise ValueError(
                 "Token vocabulary differs from the bound/checkpoint vocabulary."
             )
-        self.token_texts = tokens
+        self.token_texts = bound_token_texts
 
     def bind_datamodule(self, datamodule) -> None:
         vocabulary = getattr(datamodule, "vocab", None)
@@ -59,8 +59,8 @@ class TokenTextAdapter(nn.Module):
                 "Trainer setup binds the datamodule vocabulary automatically."
             )
         return [
-            [self.token_texts[index] for index in row]
-            for row in input_ids.detach().cpu().tolist()
+            [self.token_texts[token_id] for token_id in token_id_row]
+            for token_id_row in input_ids.detach().cpu().tolist()
         ]
 
     def get_extra_state(self):
