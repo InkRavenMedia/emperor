@@ -525,8 +525,98 @@ def test_outer_normalization_excludes_padding_before_arithmetic():
     assert all(torch.isfinite(parameter.grad).all() for parameter in model.parameters())
 
 
+@pytest.mark.parametrize("padding_value", [float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("normalization_name", ["RMS_NORM", "LAYER_NORM"])
+def test_standalone_layer_masks_padding_before_normalization_and_backward(
+    padding_value, normalization_name
+):
+    from emperor.layers import NormalizationOptions
+
+    torch.manual_seed(17)
+    mixture_config = expert_config()
+    normalization_option = NormalizationOptions[normalization_name]
+    standalone_config = MixtureOfExpertsLayerConfig(
+        input_dim=3,
+        output_dim=3,
+        activation=ActivationOptions.DISABLED,
+        dropout_probability=0.0,
+        layer_norm_position=LayerNormPositionOptions.BEFORE,
+        normalization=normalization_option,
+        layer_model_config=mixture_config,
+    )
+    layer = standalone_config.build().double().eval()
+    reference_layer = copy.deepcopy(layer)
+    active_tokens = torch.tensor([[[True], [False], [True], [False]], [[False]] * 4])
+    original_tokens = torch.randn(2, 4, 3, dtype=torch.float64)
+    padded_tokens = original_tokens.masked_fill(~active_tokens, padding_value)
+    padded_tokens.requires_grad_()
+    clean_tokens = original_tokens.masked_fill(~active_tokens, 0)
+    clean_tokens.requires_grad_()
+    padded_state = MixtureOfExpertsLayerState(
+        hidden=padded_tokens, skip_mask=active_tokens
+    )
+    clean_state = MixtureOfExpertsLayerState(
+        hidden=clean_tokens, skip_mask=active_tokens
+    )
+
+    actual_state = layer(padded_state)
+    reference_state = reference_layer(clean_state)
+    actual_outputs = actual_state.hidden
+    reference_outputs = reference_state.hidden
+    torch.testing.assert_close(actual_outputs, reference_outputs)
+    assert actual_state.skip_mask is active_tokens
+    finite_outputs = torch.isfinite(actual_outputs)
+    assert finite_outputs.all()
+
+    loss_coefficients = torch.randn_like(actual_outputs)
+    weighted_actual_outputs = actual_outputs * loss_coefficients
+    actual_objective = weighted_actual_outputs.sum()
+    actual_objective.backward()
+    weighted_reference_outputs = reference_outputs * loss_coefficients
+    reference_objective = weighted_reference_outputs.sum()
+    reference_objective.backward()
+
+    finite_input_gradients = torch.isfinite(padded_tokens.grad)
+    assert finite_input_gradients.all()
+    torch.testing.assert_close(padded_tokens.grad, clean_tokens.grad)
+    masked_input_gradients = padded_tokens.grad.masked_select(~active_tokens)
+    assert masked_input_gradients.count_nonzero() == 0
+    for actual_parameter, reference_parameter in zip(
+        layer.parameters(), reference_layer.parameters(), strict=True
+    ):
+        assert actual_parameter.grad is not None
+        finite_parameter_gradients = torch.isfinite(actual_parameter.grad)
+        assert finite_parameter_gradients.all()
+        torch.testing.assert_close(actual_parameter.grad, reference_parameter.grad)
+    preserved_padding = padded_tokens.detach().masked_select(~active_tokens)
+    expected_padding = torch.full_like(preserved_padding, padding_value)
+    torch.testing.assert_close(preserved_padding, expected_padding, equal_nan=True)
 
 
+@pytest.mark.parametrize("invalid_mask_kind", ["floating", "wrong_shape"])
+def test_standalone_layer_validates_mask_before_clearing_padding(invalid_mask_kind):
+    outer_config = model_config(layers=1)
+    standalone_config = replace(
+        outer_config.stack_config.layer_config,
+        input_dim=3,
+        output_dim=3,
+        layer_norm_position=LayerNormPositionOptions.BEFORE,
+    )
+    layer = standalone_config.build()
+    token_features = torch.ones(1, 3, 3)
+    if invalid_mask_kind == "floating":
+        invalid_mask = torch.ones(1, 3, 1)
+        expected_error = TypeError
+        expected_message = "Boolean"
+    else:
+        invalid_mask = torch.ones(1, 3, dtype=torch.bool)
+        expected_error = ValueError
+        expected_message = "shape"
+    input_state = MixtureOfExpertsLayerState(
+        hidden=token_features, skip_mask=invalid_mask
+    )
+    with pytest.raises(expected_error, match=expected_message):
+        layer(input_state)
 
 
 def test_per_row_adaptive_experts_work_but_grouped_experts_are_rejected():
