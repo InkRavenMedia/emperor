@@ -2,7 +2,6 @@
 
 from emperor.augmentations.adaptive_parameters import (
     DiagonallyModulatedLowRankDynamicWeightConfig,
-    DynamicDepthOptions,
     WeightDecayScheduleOptions,
     WeightNormalizationOptions,
 )
@@ -85,7 +84,7 @@ def modulated_config(**overrides):
     values = dict(
         input_dim=3,
         output_dim=2,
-        generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth=2,
         normalization_option=WeightNormalizationOptions.DISABLED,
         decay_schedule=WeightDecayScheduleOptions.DISABLED,
         decay_rate=0.0,

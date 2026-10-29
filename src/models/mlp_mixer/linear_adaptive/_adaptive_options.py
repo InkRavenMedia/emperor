@@ -6,7 +6,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     MaskDimensionOptions,
@@ -99,7 +98,7 @@ class GeneratorStackSource:
 class WeightOptions:
     enabled: bool
     implementation: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     decay_schedule: WeightDecayScheduleOptions
     decay_rate: float
     decay_warmup_batches: int

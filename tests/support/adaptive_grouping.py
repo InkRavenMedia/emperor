@@ -8,7 +8,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdditiveDynamicBiasConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     MaskDimensionOptions,
     PerAxisScoreMaskConfig,
     StandardDynamicDiagonalConfig,
@@ -108,7 +107,7 @@ def combined_linear():
                 weight_config=DualModelDynamicWeightConfig(
                     input_dim=2,
                     output_dim=3,
-                    generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+                    generator_depth=1,
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,

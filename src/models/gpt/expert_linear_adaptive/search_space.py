@@ -39,12 +39,12 @@ SEARCH_SPACE_WEIGHT_OPTION: list = [
 ]
 
 SEARCH_SPACE_GENERATOR_DEPTH: list = [
-    DynamicDepthOptions.DEPTH_OF_ONE,
-    DynamicDepthOptions.DEPTH_OF_TWO,
-    DynamicDepthOptions.DEPTH_OF_FOUR,
-    DynamicDepthOptions.DEPTH_OF_SIX,
-    DynamicDepthOptions.DEPTH_OF_EIGHT,
-    DynamicDepthOptions.DEPTH_OF_TEN,
+    1,
+    2,
+    4,
+    6,
+    8,
+    10,
 ]
 
 SEARCH_SPACE_WEIGHT_DECAY_SCHEDULE: list = [

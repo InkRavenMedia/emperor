@@ -19,7 +19,6 @@ from emperor.augmentations.adaptive_parameters import (
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -523,7 +522,7 @@ class GroupedAdaptiveLinearTests(unittest.TestCase):
         common = dict(
             input_dim=2,
             output_dim=3,
-            generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+            generator_depth=1,
             decay_schedule=WeightDecayScheduleOptions.DISABLED,
             decay_rate=0.0,
             decay_warmup_batches=0,

@@ -18,7 +18,6 @@ from emperor.augmentations.adaptive_parameters import (
     DecayPolicy,
     DualModelDynamicWeightConfig,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -93,7 +92,7 @@ def single_weight_config(
     return SingleModelDynamicWeightConfig(
         input_dim=2,
         output_dim=2,
-        generator_depth=DynamicDepthOptions.DEPTH_OF_ONE,
+        generator_depth=1,
         decay_schedule=schedule,
         decay_rate=rate,
         decay_warmup_batches=warmup_batches,
@@ -107,7 +106,7 @@ def weight_configs() -> tuple:
     common = {
         "input_dim": 2,
         "output_dim": 3,
-        "generator_depth": DynamicDepthOptions.DEPTH_OF_ONE,
+        "generator_depth": 1,
         "decay_schedule": WeightDecayScheduleOptions.MULTIPLICATIVE,
         "decay_rate": 0.25,
         "decay_warmup_batches": 1,

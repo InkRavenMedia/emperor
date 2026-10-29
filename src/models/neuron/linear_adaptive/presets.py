@@ -7,7 +7,6 @@ from emperor.augmentations.adaptive_parameters import (
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -563,7 +562,7 @@ _PRESET_DEFINITIONS = {
         preset_values=_with_adaptive_option_flags(
             {
                 "weight_option": DualModelDynamicWeightConfig,
-                "generator_depth": DynamicDepthOptions.DEPTH_OF_EIGHT,
+                "generator_depth": 8,
             }
         ),
         description="Default adaptive config with dual-model dynamic weights produced by a "

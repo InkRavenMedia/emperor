@@ -51,7 +51,6 @@ from emperor.augmentations.adaptive_parameters._options import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     LowRankFactorSourceOptions,
     MaskDimensionOptions,
     WeightNormalizationOptions,
@@ -68,6 +67,10 @@ from emperor.augmentations.adaptive_parameters._weights.config import (
     SingleModelDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
 )
+from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
+    DepthMappingHandlerConfig,
+    DepthMappingLayerStack,
+)
 from emperor.augmentations.adaptive_parameters._weights.normalization import (
     WeightNormalizationPolicy,
 )
@@ -80,6 +83,8 @@ from emperor.augmentations.adaptive_parameters.monitoring import (
 )
 
 __all__ = (
+    "DepthMappingHandlerConfig",
+    "DepthMappingLayerStack",
     "DecayPolicy",
     "WeightNormalizationPolicy",
     "MatrixWeightsMixtureConfig",
@@ -124,7 +129,6 @@ __all__ = (
     "OuterProductMaskConfig",
     "DiagonalAxisMaskConfig",
     "BankExpansionFactorOptions",
-    "DynamicDepthOptions",
     "MaskDimensionOptions",
     "WeightDecayScheduleOptions",
     "WeightNormalizationOptions",

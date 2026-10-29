@@ -6,7 +6,6 @@ from emperor.augmentations.adaptive_parameters._decay.options import (
 )
 from emperor.augmentations.adaptive_parameters._options import (
     BankExpansionFactorOptions,
-    DynamicDepthOptions,
     LowRankFactorSourceOptions,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
@@ -22,8 +21,8 @@ if TYPE_CHECKING:
 class DynamicWeightConfig(ConfigBase):
     input_dim: int | None = optional_field("Input feature dimension.")
     output_dim: int | None = optional_field("Output feature dimension.")
-    generator_depth: DynamicDepthOptions | None = optional_field(
-        "Generator depth for dynamic weights."
+    generator_depth: int | None = optional_field(
+        "Positive integer generator depth for dynamic weights."
     )
     decay_schedule: WeightDecayScheduleOptions | None = optional_field(
         "Base weight decay schedule."

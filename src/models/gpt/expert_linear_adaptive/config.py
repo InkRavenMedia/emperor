@@ -12,7 +12,6 @@ from emperor.augmentations.adaptive_parameters import (
     DiagonallyModulatedLowRankDynamicWeightConfig,  # noqa: F401
     DualModelDynamicWeightConfig,  # noqa: F401
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GeneratorDynamicBiasConfig,  # noqa: F401
@@ -1072,7 +1071,7 @@ ADAPTIVE_GENERATOR_STACK_BIAS_FLAG: bool = True
 # If `WEIGHT_OPTION_FLAG` is False, the expert weight parameters below are ignored.
 WEIGHT_OPTION_FLAG: bool = False
 WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-GENERATOR_DEPTH: DynamicDepthOptions = DynamicDepthOptions.DEPTH_OF_THREE
+GENERATOR_DEPTH: int = 3
 WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
 WEIGHT_DECAY_RATE: float = 0.0
 WEIGHT_DECAY_WARMUP_BATCHES: int = 0
@@ -1188,7 +1187,7 @@ MASK_GENERATOR_STACK_BIAS_FLAG: bool | None = None
 # If `ROUTER_WEIGHT_OPTION_FLAG` is False, router weight parameters are ignored.
 ROUTER_WEIGHT_OPTION_FLAG: bool = False
 ROUTER_WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-ROUTER_GENERATOR_DEPTH: DynamicDepthOptions = GENERATOR_DEPTH
+ROUTER_GENERATOR_DEPTH: int = GENERATOR_DEPTH
 ROUTER_WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WEIGHT_DECAY_SCHEDULE
 ROUTER_WEIGHT_DECAY_RATE: float = WEIGHT_DECAY_RATE
 ROUTER_WEIGHT_DECAY_WARMUP_BATCHES: int = WEIGHT_DECAY_WARMUP_BATCHES

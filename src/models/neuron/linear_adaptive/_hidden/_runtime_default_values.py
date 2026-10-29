@@ -11,7 +11,6 @@ from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
     DynamicBiasConfig,
-    DynamicDepthOptions,
     DynamicDiagonalConfig,
     DynamicWeightConfig,
     GroupingConfig,
@@ -495,7 +494,7 @@ class ControlFields:
 class WeightValues:
     enabled: bool
     option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     decay_schedule: WeightDecayScheduleOptions
     decay_rate: float
     decay_warmup_batches: int
@@ -508,7 +507,7 @@ class WeightValues:
 class WeightFields:
     enabled: RuntimeField[bool]
     option: RuntimeField[type[DynamicWeightConfig] | None]
-    generator_depth: RuntimeField[DynamicDepthOptions]
+    generator_depth: RuntimeField[int]
     decay_schedule: RuntimeField[WeightDecayScheduleOptions]
     decay_rate: RuntimeField[float]
     decay_warmup_batches: RuntimeField[int]
@@ -574,7 +573,7 @@ class MaskFields:
 @dataclass(frozen=True, slots=True)
 class ProjectionValues:
     weight_option: type[DynamicWeightConfig] | None
-    generator_depth: DynamicDepthOptions
+    generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int
@@ -598,7 +597,7 @@ class ProjectionValues:
 @dataclass(frozen=True, slots=True)
 class ProjectionFields:
     weight_option: RuntimeField[type[DynamicWeightConfig] | None]
-    generator_depth: RuntimeField[DynamicDepthOptions]
+    generator_depth: RuntimeField[int]
     weight_decay_schedule: RuntimeField[WeightDecayScheduleOptions]
     weight_decay_rate: RuntimeField[float]
     weight_decay_warmup_batches: RuntimeField[int]
@@ -1548,9 +1547,7 @@ _WEIGHT_FIELDS = WeightFields(
     option=_optional_implementation_field(
         "weight_option", config.WEIGHT_OPTION, DynamicWeightConfig
     ),
-    generator_depth=_enum_field(
-        "generator_depth", config.GENERATOR_DEPTH, DynamicDepthOptions
-    ),
+    generator_depth=_integer_field("generator_depth", config.GENERATOR_DEPTH),
     decay_schedule=_enum_field(
         "weight_decay_schedule",
         config.WEIGHT_DECAY_SCHEDULE,
@@ -1623,10 +1620,8 @@ _INPUT_PROJECTION_FIELDS = ProjectionFields(
         config.INPUT_LAYER_WEIGHT_OPTION,
         DynamicWeightConfig,
     ),
-    generator_depth=_enum_field(
-        "input_layer_generator_depth",
-        config.INPUT_LAYER_GENERATOR_DEPTH,
-        DynamicDepthOptions,
+    generator_depth=_integer_field(
+        "input_layer_generator_depth", config.INPUT_LAYER_GENERATOR_DEPTH
     ),
     weight_decay_schedule=_enum_field(
         "input_layer_weight_decay_schedule",
@@ -1710,10 +1705,8 @@ _OUTPUT_PROJECTION_FIELDS = ProjectionFields(
         config.OUTPUT_LAYER_WEIGHT_OPTION,
         DynamicWeightConfig,
     ),
-    generator_depth=_enum_field(
-        "output_layer_generator_depth",
-        config.OUTPUT_LAYER_GENERATOR_DEPTH,
-        DynamicDepthOptions,
+    generator_depth=_integer_field(
+        "output_layer_generator_depth", config.OUTPUT_LAYER_GENERATOR_DEPTH
     ),
     weight_decay_schedule=_enum_field(
         "output_layer_weight_decay_schedule",

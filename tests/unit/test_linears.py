@@ -11,7 +11,6 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     DualModelDynamicWeightConfig,
-    DynamicDepthOptions,
     GeneratorDynamicBiasConfig,
     MaskDimensionOptions,
     StandardDynamicDiagonalConfig,
@@ -75,7 +74,7 @@ def make_layer_stack_config(
 
 def make_weight_config(input_dim: int, output_dim: int) -> DualModelDynamicWeightConfig:
     return DualModelDynamicWeightConfig(
-        generator_depth=DynamicDepthOptions.DEPTH_OF_TWO,
+        generator_depth=2,
         normalization_option=WeightNormalizationOptions.L2_SCALE,
         normalization_position_option=WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
         decay_schedule=WeightDecayScheduleOptions.DISABLED,
