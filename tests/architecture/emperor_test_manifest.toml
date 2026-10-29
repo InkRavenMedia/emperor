@@ -94,6 +94,7 @@ modules = [
 [families.embedding]
 status = "partial"
 focused_tests = [
+  "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_absolute_positional_embedding_validator.py",
   "tests/unit/test_byte_contextual_embedding.py",
@@ -686,6 +687,7 @@ focused_tests = [
   "tests/unit/test_transformer_validator_adapter.py",
 ]
 integration_tests = [
+  "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hierarchical_language_model.py",
   "tests/model_packages/test_gpt_hierarchical_language_model.py",
   "tests/model_packages/transformer/test_variable_chunking_configuration.py",
@@ -918,6 +920,7 @@ modules = [
 [families.experiments]
 status = "pending"
 focused_tests = [
+  "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/model_packages/test_gpt_hierarchical_language_model.py",
   "tests/unit/test_*experiment*.py",
@@ -944,6 +947,7 @@ modules = [
   "src/emperor/experiments/_tasks.py",
   "src/emperor/experiments/bert_pretraining/__init__.py",
   "src/emperor/experiments/bert_pretraining/_experiment.py",
+  "src/emperor/experiments/bert_pretraining/_embedding.py",
   "src/emperor/experiments/bert_pretraining/_metrics.py",
   "src/emperor/experiments/bert_pretraining/_records.py",
   "src/emperor/experiments/classifier/__init__.py",

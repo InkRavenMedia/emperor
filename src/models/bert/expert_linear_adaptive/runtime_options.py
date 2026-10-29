@@ -15,6 +15,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightNormalizationPositionOptions,
 )
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.experts import (
     DroppedTokenOptions,
     ExpertWeightingPositionOptions,
@@ -563,6 +564,9 @@ class TransformerFeedForwardOptions:
 
 @dataclass(frozen=True, slots=True)
 class BertEmbeddingOptions:
+    hierarchical_embedding_config: HierarchicalByteEmbeddingConfig | None = field(
+        default=None, kw_only=True
+    )
     token_type_vocab_size: int
     layer_norm_flag: bool
     normalization: NormalizationOptions = field(

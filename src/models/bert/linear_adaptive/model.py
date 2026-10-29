@@ -51,7 +51,7 @@ class Model(BertPretrainingExperiment):
         self.experiment_config: ExperimentConfig = experiment_config
         self.boundary_config: BertBoundaryConfig = boundary_config
         self.__validate_pretraining_dimensions()
-        self.token_embedding = self.__build_token_embedding()
+        self.token_embedding = self._build_token_embedding()
         self.token_type_embedding = self.__build_token_type_embedding()
         self.positional_embedding = self.__build_positional_embedding()
         self.embedding_layer_norm = self.__build_embedding_layer_norm()
@@ -98,9 +98,6 @@ class Model(BertPretrainingExperiment):
                 "BERT MLM decoder weight tying requires config.input_dim to equal "
                 "config.output_dim."
             )
-
-    def __build_token_embedding(self) -> nn.Embedding:
-        return nn.Embedding(self.cfg.input_dim, self.cfg.hidden_dim)
 
     def __build_token_type_embedding(self) -> nn.Embedding:
         return nn.Embedding(
@@ -206,23 +203,29 @@ class Model(BertPretrainingExperiment):
             token_type_ids,
             token_type_vocab_size=self.token_type_embedding.num_embeddings,
         )
-        hidden = self.__build_input_embeddings(input_ids, token_type_ids)
+        hidden, embedding_loss = self.__build_input_embeddings(
+            input_ids, token_type_ids, attention_mask
+        )
         sequence_output, auxiliary_loss = self.__run_encoder(hidden, attention_mask)
         mlm_logits = self.__build_mlm_logits(sequence_output)
         nsp_logits = self.__build_nsp_logits(sequence_output)
-        return mlm_logits, nsp_logits, auxiliary_loss
+        total_auxiliary_loss = auxiliary_loss + embedding_loss
+        return mlm_logits, nsp_logits, total_auxiliary_loss
 
     def __build_input_embeddings(
         self,
         input_ids: Tensor,
         token_type_ids: Tensor,
-    ) -> Tensor:
-        token_embedding = self.token_embedding(input_ids)
+        attention_mask: Tensor,
+    ) -> tuple[Tensor, Tensor]:
+        embedding_state = self._build_token_embedding_state(input_ids, attention_mask)
+        token_embedding = embedding_state.hidden
         positional_embedding = self.positional_embedding(input_ids)
         segment_embedding = self.token_type_embedding(token_type_ids)
         hidden = token_embedding + positional_embedding + segment_embedding
         hidden = self.embedding_layer_norm(hidden)
-        return self.embedding_dropout(hidden)
+        processed_embeddings = self.embedding_dropout(hidden)
+        return processed_embeddings, embedding_state.loss
 
     def __run_encoder(
         self,

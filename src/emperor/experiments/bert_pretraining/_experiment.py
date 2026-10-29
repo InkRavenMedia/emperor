@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import torch
@@ -7,7 +8,9 @@ from torch import Tensor
 
 from emperor.experiments._auxiliary_loss import AuxiliaryLoss
 from emperor.experiments._config_validation import _ExperimentConfigValidator
+from emperor.layers import LayerState
 
+from ._embedding import BertTextTokenEmbedding
 from ._metrics import BertPretrainingMetricsLogger
 from ._records import BertPretrainingBatch, BertPretrainingStepOutput
 
@@ -34,6 +37,45 @@ class BertPretrainingExperiment(LightningModule):
         self.nsp_loss_fn = nn.CrossEntropyLoss()
         self.metrics = BertPretrainingMetricsLogger()
         self._auxiliary_loss = AuxiliaryLoss("BERT-pretraining")
+
+    def _build_token_embedding(self) -> nn.Module:
+        boundary_config = self.cfg.experiment_config.boundary_config
+        embedding_config = (
+            boundary_config.embedding_options.hierarchical_embedding_config
+        )
+        if embedding_config is None:
+            return nn.Embedding(self.cfg.input_dim, self.cfg.hidden_dim)
+        if boundary_config.mlm_head_options.decoder_weight_tying_flag:
+            raise ValueError(
+                "BERT text-based embedding requires MLM decoder weight tying to be disabled."
+            )
+        return BertTextTokenEmbedding(
+            embedding_config, self.cfg.input_dim, self.cfg.hidden_dim
+        )
+
+    def set_token_vocabulary(self, token_texts: Sequence[str]) -> None:
+        """Bind exact token spellings, including BERT special tokens, in ID order."""
+        token_embedding = getattr(self, "token_embedding", None)
+        if not isinstance(token_embedding, BertTextTokenEmbedding):
+            raise ValueError(
+                "Token vocabulary binding requires text-based BERT embeddings."
+            )
+        token_embedding.token_vocabulary.bind(token_texts)
+
+    def setup(self, stage: str) -> None:
+        token_embedding = getattr(self, "token_embedding", None)
+        if isinstance(token_embedding, BertTextTokenEmbedding):
+            datamodule = self.trainer.datamodule
+            token_embedding.token_vocabulary.bind_datamodule(datamodule)
+
+    def _build_token_embedding_state(
+        self, input_ids: Tensor, attention_mask: Tensor
+    ) -> LayerState:
+        if isinstance(self.token_embedding, BertTextTokenEmbedding):
+            return self.token_embedding(input_ids, attention_mask)
+        token_embeddings = self.token_embedding(input_ids)
+        auxiliary_loss = token_embeddings.new_zeros(())
+        return LayerState(hidden=token_embeddings, loss=auxiliary_loss)
 
     def training_step(self, batch: BertPretrainingBatch, batch_idx: int) -> Tensor:
         step_output = self._model_step_outputs(batch)
