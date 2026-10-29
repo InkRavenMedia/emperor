@@ -534,7 +534,7 @@ def _bert_boundary_builder_kwargs(
             kwargs, consumed, "attention_options", attention_keys
         )
 
-    feed_forward_keys = {"ff_num_layers", "ff_bias_flag"}
+    feed_forward_keys = {"ff_num_layers", "ff_bias_flag", "soft_moe_config"}
     if _option_requested(kwargs, "feed_forward_options", feed_forward_keys):
         provided = cast(
             TransformerFeedForwardOptions | None,
@@ -1459,7 +1459,11 @@ def _feed_forward_options_from_kwargs(
         options,
         **_updates(
             kwargs,
-            {"ff_num_layers": "num_layers", "ff_bias_flag": "bias_flag"},
+            {
+                "soft_moe_config": "soft_moe_config",
+                "ff_num_layers": "num_layers",
+                "ff_bias_flag": "bias_flag",
+            },
         ),
     )
 

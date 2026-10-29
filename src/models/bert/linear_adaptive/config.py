@@ -52,6 +52,7 @@ from emperor.embedding.absolute import (
     TextLearnedPositionalEmbeddingConfig,
 )
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
+from emperor.experts import SoftMoEConfig
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -817,6 +818,7 @@ ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 #########################################################################
 # Feed-Forward Stack Options
 FF_NUM_LAYERS: int = 1
+SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 FF_BIAS_FLAG: bool = True
 FF_STACK_HIDDEN_DIM: int = HIDDEN_DIM
 FF_STACK_ACTIVATION: ActivationOptions = STACK_ACTIVATION

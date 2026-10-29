@@ -9,8 +9,10 @@ from tokenizers import Tokenizer
 from tokenizers.models import WordPiece
 from torch import nn
 
+from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
+from emperor.experts import SoftMoEConfig
 from models.catalog import model_package
-from tests.support.hierarchical_embedding import embedding_config
+from tests.support.hierarchical_embedding import embedding_config, linear_stack
 
 BERT_PACKAGES = (
     "bert/linear",
@@ -34,10 +36,19 @@ TOKEN_TEXTS = (
 )
 
 
-def configuration(package_name, *, hierarchical=True, soft=False, **overrides):
+def configuration(package_name, *, hierarchical=True, soft=True, **overrides):
     hierarchical_config = None
     if hierarchical:
         hierarchical_config = embedding_config(output_dim=8, max_bytes=12)
+    slot_logit_config = None
+    if soft:
+        scoring_stack_config = linear_stack(None, None, hidden_dim=8, num_layers=2)
+        depth_mapping_config = DepthMappingHandlerConfig(
+            model_config=scoring_stack_config
+        )
+        slot_logit_config = SoftMoEConfig(
+            num_experts=2, slots_per_expert=2, model_config=depth_mapping_config
+        )
     values = dict(
         batch_size=2,
         input_dim=len(TOKEN_TEXTS),
@@ -50,6 +61,7 @@ def configuration(package_name, *, hierarchical=True, soft=False, **overrides):
         stack_dropout_probability=0.0,
         embedding_dropout_probability=0.0,
         hierarchical_embedding_config=hierarchical_config,
+        soft_moe_config=slot_logit_config,
         mlm_decoder_weight_tying_flag=not hierarchical,
     )
     if "expert" in package_name:
@@ -84,7 +96,9 @@ def inputs():
 
 
 @pytest.mark.parametrize("package_name", BERT_PACKAGES)
-@pytest.mark.parametrize("hierarchical,soft", [(False, False), (True, False)])
+@pytest.mark.parametrize(
+    "hierarchical,soft", [(False, False), (True, False), (False, True), (True, True)]
+)
 def test_features_compose_and_receive_task_gradients(package_name, hierarchical, soft):
     torch.manual_seed(31)
     model = build_model(package_name, hierarchical=hierarchical, soft=soft)
@@ -207,6 +221,33 @@ def test_combined_features_keep_bidirectional_context_and_segment_embeddings(
     assert not torch.allclose(original_mlm, segment_mlm)
 
 
+@pytest.mark.parametrize(
+    "package_name", ["bert/linear_adaptive", "bert/expert_linear_adaptive"]
+)
+def test_soft_moe_preserves_the_selected_adaptive_expert_layers(package_name):
+    from emperor.augmentations.adaptive_parameters import AdditiveDynamicBiasConfig
+
+    model = build_model(
+        package_name, bias_option_flag=True, bias_option=AdditiveDynamicBiasConfig
+    )
+    adaptive_parameters = [
+        parameter
+        for name, parameter in model.named_parameters()
+        if "bias_model" in name
+    ]
+    assert adaptive_parameters
+    mlm_logits, nsp_logits, auxiliary_loss = model(*inputs())
+    task_loss = mlm_logits.square().mean() + nsp_logits.square().mean()
+    total_loss = task_loss + auxiliary_loss.sum()
+    total_loss.backward()
+    assert any(parameter.grad is not None for parameter in adaptive_parameters)
+    assert all(
+        torch.isfinite(parameter.grad).all()
+        for parameter in adaptive_parameters
+        if parameter.grad is not None
+    )
+
+
 def test_hierarchical_auxiliary_loss_reaches_the_bert_output():
     from tests.support.hierarchical_embedding import moe_config
 
@@ -227,12 +268,27 @@ def test_hierarchical_auxiliary_loss_reaches_the_bert_output():
 
 
 @pytest.mark.parametrize("package_name", BERT_PACKAGES)
-def test_runtime_metadata_accepts_hierarchical_module_configuration(package_name):
+def test_runtime_metadata_accepts_both_native_module_configurations(package_name):
     model_config = configuration(package_name)
     hierarchical_config = model_config.experiment_config.boundary_config.embedding_options.hierarchical_embedding_config
+    scoring_stack_config = linear_stack(None, None)
+    depth_mapping_config = DepthMappingHandlerConfig(model_config=scoring_stack_config)
+    soft_moe_config = SoftMoEConfig(
+        num_experts=2, slots_per_expert=2, model_config=depth_mapping_config
+    )
     runtime_values = {
         "hierarchical_embedding_config": hierarchical_config,
+        "soft_moe_config": soft_moe_config,
         "mlm_decoder_weight_tying_flag": False,
     }
     package = model_package(package_name)
     assert package.bind_runtime_defaults(runtime_values) is not None
+
+
+@pytest.mark.parametrize("package_name", BERT_PACKAGES)
+def test_soft_moe_rejects_context_controllers_without_silently_removing_them(
+    package_name,
+):
+    model_config = configuration(package_name, ff_stack_gate_flag=True)
+    with pytest.raises(ValueError, match="context controllers"):
+        model_package(package_name).build_model(model_config)
