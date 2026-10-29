@@ -1,9 +1,9 @@
 from typing import TYPE_CHECKING
 
-import torch.nn as nn
 from torch import Tensor
 
 from emperor.attention import AttentionLayerState
+from emperor.layers import LayerConfig, LayerNormPositionOptions, NormalizationOptions
 from emperor.nn import Module
 from emperor.transformer._state import TransformerDecoderLayerState
 from emperor.transformer._validation import TransformerValidator
@@ -42,11 +42,16 @@ class Transformer(Module):
             return None
         return stack_config.build()
 
-    @staticmethod
-    def __build_final_norm(stack_config: "ConfigBase | None"):
+    def __build_final_norm(self, stack_config: "ConfigBase | None"):
         if stack_config is None:
             return None
-        return nn.LayerNorm(stack_config.output_dim)
+        return LayerConfig(
+            input_dim=stack_config.output_dim,
+            output_dim=stack_config.output_dim,
+            layer_norm_position=LayerNormPositionOptions.BEFORE,
+            normalization=self.cfg.final_normalization
+            or NormalizationOptions.LAYER_NORM,
+        ).build_normalization()
 
     def forward(
         self,
