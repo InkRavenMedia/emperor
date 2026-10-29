@@ -51,14 +51,6 @@ class Experts(nn.ModuleList):
             expert_model = self.expert_model_config.build(expert_dimension_overrides)
             self.append(expert_model)
 
-    def __getitem__(self, index: int | slice) -> nn.Module:
-        # ModuleList slicing must select existing modules without constructing experts.
-        if isinstance(index, slice):
-            expert_models = list(self)
-            selected_experts = expert_models[index]
-            return nn.ModuleList(selected_experts)
-        return super().__getitem__(index)
-
     def forward(
         self,
         input_batch: Tensor,
@@ -70,64 +62,6 @@ class Experts(nn.ModuleList):
             input_batch, probabilities, indices
         )
         return self.__compute_expert_batches(expert_input_batches, probabilities)
-
-    def forward_assignments(
-        self,
-        input_batch: Tensor,
-        probabilities: Tensor | None = None,
-        indices: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor | None, Tensor | None, Tensor]:
-        """Execute inputs that already contain one row per routing assignment."""
-        expert_input_batches = self.__build_assignment_expert_inputs(
-            input_batch, probabilities, indices
-        )
-        return self.__compute_expert_batches(expert_input_batches, probabilities)
-
-    def forward_soft_tokens(
-        self,
-        input_batch: Tensor,
-        dispatch_weights: Tensor,
-        skip_mask: Tensor | None = None,
-    ) -> tuple[Tensor, Tensor]:
-        """Pool a token batch into expert slots and execute every expert's slots."""
-        input_slots = self.__dispatch_tokens_to_slots(
-            input_batch, dispatch_weights, skip_mask
-        )
-        return self.__compute_slot_experts(input_slots)
-
-    def __run_expert(
-        self, expert_index: int, expert_samples: Tensor
-    ) -> tuple[Tensor, Tensor]:
-        expert_model = self[expert_index]
-        expert_state = Layer.run_model_from_hidden(expert_model, expert_samples)
-        self.VALIDATOR.validate_output_rows(self, expert_samples, expert_state.hidden)
-        expert_loss = self.__resolve_expert_loss(expert_state.loss, expert_samples)
-        return expert_state.hidden, expert_loss
-
-    def __compute_slot_experts(self, input_slots: Tensor) -> tuple[Tensor, Tensor]:
-        batch_size, _, slots_per_expert, _ = input_slots.shape
-        expert_slot_outputs = []
-        total_expert_loss = input_slots.new_zeros(())
-        for expert_index in range(self.num_experts):
-            expert_samples = self.__flatten_expert_slots(input_slots, expert_index)
-            expert_output, expert_loss = self.__run_expert(expert_index, expert_samples)
-            expert_slot_output_shape = (batch_size, slots_per_expert, self.output_dim)
-            expert_slot_output = expert_output.reshape(expert_slot_output_shape)
-            expert_slot_outputs.append(expert_slot_output)
-            total_expert_loss = total_expert_loss + expert_loss
-        output_slots = torch.stack(expert_slot_outputs, dim=1)
-        return output_slots, total_expert_loss
-
-    def __flatten_expert_slots(self, input_slots: Tensor, expert_index: int) -> Tensor:
-        selected_expert_slots = input_slots[:, expert_index]
-        return selected_expert_slots.reshape(-1, self.input_dim)
-
-    def __resolve_expert_loss(
-        self, expert_loss: Tensor | None, expert_samples: Tensor
-    ) -> Tensor:
-        if expert_loss is None:
-            return expert_samples.new_zeros(())
-        return expert_loss
 
     def __split_tokens_per_expert(
         self,
@@ -288,14 +222,6 @@ class Experts(nn.ModuleList):
             total_loss,
         )
 
-    def __restore_dense_sample_order(self, expert_outputs: Tensor) -> Tensor:
-        if self.top_k != self.num_experts:
-            return expert_outputs
-        output_dim = expert_outputs.size(-1)
-        expert_major_outputs = expert_outputs.reshape(self.num_experts, -1, output_dim)
-        sample_major_outputs = expert_major_outputs.transpose(0, 1)
-        return sample_major_outputs.reshape(-1, output_dim)
-
     def __compute_expert_output(
         self,
         expert_input: ExpertInputData,
@@ -305,6 +231,30 @@ class Experts(nn.ModuleList):
         )
 
         return self.__run_expert(expert_input.expert_index, expert_samples)
+
+    def __run_expert(
+        self, expert_index: int, expert_samples: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        expert_model = self[expert_index]
+        expert_state = Layer.run_model_from_hidden(expert_model, expert_samples)
+        self.VALIDATOR.validate_output_rows(self, expert_samples, expert_state.hidden)
+        expert_loss = self.__resolve_expert_loss(expert_state.loss, expert_samples)
+        return expert_state.hidden, expert_loss
+
+    def __getitem__(self, index: int | slice) -> nn.Module:
+        # ModuleList slicing must select existing modules without constructing experts.
+        if isinstance(index, slice):
+            expert_models = list(self)
+            selected_experts = expert_models[index]
+            return nn.ModuleList(selected_experts)
+        return super().__getitem__(index)
+
+    def __resolve_expert_loss(
+        self, expert_loss: Tensor | None, expert_samples: Tensor
+    ) -> Tensor:
+        if expert_loss is None:
+            return expert_samples.new_zeros(())
+        return expert_loss
 
     def __append_expert_output(
         self,
@@ -351,6 +301,14 @@ class Experts(nn.ModuleList):
             )
             routing_positions_by_expert.append(routing_positions_for_expert)
 
+    def __restore_dense_sample_order(self, expert_outputs: Tensor) -> Tensor:
+        if self.top_k != self.num_experts:
+            return expert_outputs
+        output_dim = expert_outputs.size(-1)
+        expert_major_outputs = expert_outputs.reshape(self.num_experts, -1, output_dim)
+        sample_major_outputs = expert_major_outputs.transpose(0, 1)
+        return sample_major_outputs.reshape(-1, output_dim)
+
     def __collect_routing_positions(
         self,
         routing_positions_by_expert: list[Tensor],
@@ -360,6 +318,18 @@ class Experts(nn.ModuleList):
             return None, full_probabilities
         routing_positions = torch.cat(routing_positions_by_expert)
         return routing_positions, full_probabilities
+
+    def forward_assignments(
+        self,
+        input_batch: Tensor,
+        probabilities: Tensor | None = None,
+        indices: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor | None, Tensor | None, Tensor]:
+        """Execute inputs that already contain one row per routing assignment."""
+        expert_input_batches = self.__build_assignment_expert_inputs(
+            input_batch, probabilities, indices
+        )
+        return self.__compute_expert_batches(expert_input_batches, probabilities)
 
     def __build_assignment_expert_inputs(
         self,
@@ -409,15 +379,6 @@ class Experts(nn.ModuleList):
             )
         return self.__get_expert_routing_positions(indices, expert_index)
 
-    def __should_skip_expert_without_routed_samples(
-        self,
-        expert_routing_positions: Tensor | None,
-    ) -> bool:
-        return (
-            expert_routing_positions is not None
-            and expert_routing_positions.numel() == 0
-        )
-
     def __get_dense_expert_routing_positions(
         self,
         input_batch: Tensor,
@@ -434,12 +395,33 @@ class Experts(nn.ModuleList):
         dropped_routing_positions = torch.empty(0, dtype=torch.long, device=device)
         return expert_routing_positions, dropped_routing_positions
 
+    def __should_skip_expert_without_routed_samples(
+        self,
+        expert_routing_positions: Tensor | None,
+    ) -> bool:
+        return (
+            expert_routing_positions is not None
+            and expert_routing_positions.numel() == 0
+        )
+
     def __select_expert_samples(
         self,
         input_batch: Tensor,
         expert_routing_positions: Tensor,
     ) -> Tensor:
         return input_batch[expert_routing_positions]
+
+    def forward_soft_tokens(
+        self,
+        input_batch: Tensor,
+        dispatch_weights: Tensor,
+        skip_mask: Tensor | None = None,
+    ) -> tuple[Tensor, Tensor]:
+        """Pool a token batch into expert slots and execute every expert's slots."""
+        input_slots = self.__dispatch_tokens_to_slots(
+            input_batch, dispatch_weights, skip_mask
+        )
+        return self.__compute_slot_experts(input_slots)
 
     def __dispatch_tokens_to_slots(
         self, inputs: Tensor, dispatch_weights: Tensor, skip_mask: Tensor | None
@@ -458,3 +440,21 @@ class Experts(nn.ModuleList):
         if skip_mask is None:
             return token_features
         return token_features.masked_fill(~skip_mask, 0)
+
+    def __compute_slot_experts(self, input_slots: Tensor) -> tuple[Tensor, Tensor]:
+        batch_size, _, slots_per_expert, _ = input_slots.shape
+        expert_slot_outputs = []
+        total_expert_loss = input_slots.new_zeros(())
+        for expert_index in range(self.num_experts):
+            expert_samples = self.__flatten_expert_slots(input_slots, expert_index)
+            expert_output, expert_loss = self.__run_expert(expert_index, expert_samples)
+            expert_slot_output_shape = (batch_size, slots_per_expert, self.output_dim)
+            expert_slot_output = expert_output.reshape(expert_slot_output_shape)
+            expert_slot_outputs.append(expert_slot_output)
+            total_expert_loss = total_expert_loss + expert_loss
+        output_slots = torch.stack(expert_slot_outputs, dim=1)
+        return output_slots, total_expert_loss
+
+    def __flatten_expert_slots(self, input_slots: Tensor, expert_index: int) -> Tensor:
+        selected_expert_slots = input_slots[:, expert_index]
+        return selected_expert_slots.reshape(-1, self.input_dim)
