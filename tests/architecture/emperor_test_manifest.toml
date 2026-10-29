@@ -704,6 +704,7 @@ modules = [
   "src/emperor/transformer/__init__.py",
   "src/emperor/transformer/_config.py",
   "src/emperor/transformer/_feed_forward.py",
+  "src/emperor/transformer/_soft_moe_config.py",
   "src/emperor/transformer/_layers.py",
   "src/emperor/transformer/_model.py",
   "src/emperor/transformer/_state.py",

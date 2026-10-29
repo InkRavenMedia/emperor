@@ -4,6 +4,7 @@ from typing import Literal, Protocol
 
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
+from emperor.experts import SoftMoEConfig
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
 from emperor.layers import (
     ActivationOptions,
@@ -62,6 +63,7 @@ class _ConfigDefaults(Protocol):
     ATTN_BIAS_FLAG: bool
     ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool
     FF_NUM_LAYERS: int
+    SOFT_MOE_CONFIG: SoftMoEConfig | None
     FF_BIAS_FLAG: bool
     FF_STACK_HIDDEN_DIM: int
     STACK_BIAS_FLAG: bool
@@ -140,6 +142,7 @@ def bert_feed_forward_options(
 ) -> TransformerFeedForwardOptions:
     return TransformerFeedForwardOptions(
         num_layers=config.FF_NUM_LAYERS,
+        soft_moe_config=config.SOFT_MOE_CONFIG,
         bias_flag=config.FF_BIAS_FLAG,
     )
 

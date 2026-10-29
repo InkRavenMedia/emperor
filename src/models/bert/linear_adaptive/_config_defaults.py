@@ -141,6 +141,7 @@ def bert_attention_options(config: ModuleType) -> TransformerAttentionOptions:
 def bert_feed_forward_options(config: ModuleType) -> TransformerFeedForwardOptions:
     return TransformerFeedForwardOptions(
         num_layers=config.FF_NUM_LAYERS,
+        soft_moe_config=config.SOFT_MOE_CONFIG,
         bias_flag=config.FF_BIAS_FLAG,
     )
 

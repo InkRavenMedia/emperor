@@ -724,10 +724,17 @@ def _feed_forward_options_from_kwargs(
     provided: TransformerFeedForwardOptions | None,
 ) -> TransformerFeedForwardOptions:
     options = provided or TransformerFeedForwardOptions(
-        num_layers=config_module.FF_NUM_LAYERS, bias_flag=config_module.FF_BIAS_FLAG
+        num_layers=config_module.FF_NUM_LAYERS,
+        bias_flag=config_module.FF_BIAS_FLAG,
+        soft_moe_config=config_module.SOFT_MOE_CONFIG,
     )
     updates = _pop_updates(
-        kwargs, {"ff_num_layers": "num_layers", "ff_bias_flag": "bias_flag"}
+        kwargs,
+        {
+            "soft_moe_config": "soft_moe_config",
+            "ff_num_layers": "num_layers",
+            "ff_bias_flag": "bias_flag",
+        },
     )
     return replace(options, **updates) if updates else options
 

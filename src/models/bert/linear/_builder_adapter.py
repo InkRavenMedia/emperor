@@ -419,6 +419,7 @@ def _modern_feed_forward_options(
         **_modern_option_updates(
             kwargs,
             {
+                "soft_moe_config": "soft_moe_config",
                 "ff_num_layers": "num_layers",
                 "ff_bias_flag": "bias_flag",
             },
@@ -783,6 +784,7 @@ def _modern_supported_flat_keys() -> set[str]:
         "attn_bias_flag",
         "attn_add_key_value_bias_flag",
         "ff_num_layers",
+        "soft_moe_config",
         "ff_bias_flag",
         "mlm_activation",
         "mlm_dense_bias_flag",

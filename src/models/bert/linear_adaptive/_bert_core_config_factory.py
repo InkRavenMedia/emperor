@@ -18,6 +18,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.bert.linear_adaptive._control_factory_dependencies import (
     BertControlFactoryDependencies,
 )
@@ -215,10 +216,14 @@ class BertCoreConfigFactory:
         )
 
     def _build_feed_forward_config(self) -> FeedForwardConfig:
+        stack_config = self._build_feed_forward_stack_config()
+        configured_stack = build_soft_moe_stack(
+            stack_config, self.feed_forward_options.soft_moe_config, self.hidden_dim
+        )
         return FeedForwardConfig(
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
-            stack_config=self._build_feed_forward_stack_config(),
+            stack_config=configured_stack,
         )
 
     def _build_attention_projection_stack_config(self):
