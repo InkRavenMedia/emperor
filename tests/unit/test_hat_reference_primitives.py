@@ -46,3 +46,21 @@ def test_rotary_attention_matches_explicit_pair_rotations(causal):
     expected = (probabilities @ heads).transpose(1, 2).reshape(1, 3, 8)
     torch.testing.assert_close(actual, expected)
     torch.testing.assert_close(weights, probabilities)
+
+
+def test_swiglu_is_three_bias_free_projections_from_the_same_input():
+    from emperor.transformer import SwiGLUFeedForwardConfig
+
+    model = SwiGLUFeedForwardConfig(input_dim=6, output_dim=6, hidden_dim=10).build()
+    source = torch.randn(2, 3, 6, requires_grad=True)
+    actual, loss = model(source)
+    gate = source @ model.gate.weight_params
+    up = source @ model.up.weight_params
+    expected = ((gate * gate.sigmoid()) * up) @ model.down.weight_params
+    torch.testing.assert_close(actual, expected)
+    assert loss.item() == 0
+    assert all(
+        layer.bias_params is None for layer in (model.gate, model.up, model.down)
+    )
+    actual.square().sum().backward()
+    assert all(parameter.grad is not None for parameter in model.parameters())

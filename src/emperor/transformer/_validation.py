@@ -589,6 +589,29 @@ class TransformerValidator(ValidatorBase):
             )
 
 
+class SwiGLUFeedForwardValidator:
+    @staticmethod
+    def validate_config(cfg):
+        from emperor.transformer._feed_forward import SwiGLUFeedForwardConfig
+
+        if not isinstance(cfg, SwiGLUFeedForwardConfig):
+            raise TypeError("cfg must be SwiGLUFeedForwardConfig")
+        for name in ("input_dim", "output_dim", "hidden_dim"):
+            value = getattr(cfg, name)
+            if type(value) is not int or value <= 0:
+                raise ValueError(f"{name} must be a positive integer")
+
+    @staticmethod
+    def validate_input(features, input_dim):
+        if (
+            not isinstance(features, torch.Tensor)
+            or features.ndim < 2
+            or not features.is_floating_point()
+            or features.shape[-1] != input_dim
+        ):
+            raise ValueError(
+                "SwiGLU requires floating features with the configured input width"
+            )
 
 
 class FeedForwardValidator(ValidatorBase):

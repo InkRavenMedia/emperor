@@ -3,6 +3,7 @@ from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, cast
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 
 from emperor.config import ConfigBase, optional_field
@@ -15,14 +16,59 @@ from emperor.layers import (
 from emperor.nn import Module
 from emperor.transformer._validation import (
     FeedForwardValidator,
+    SwiGLUFeedForwardValidator,
 )
 
 if TYPE_CHECKING:
     from emperor.experts import MixtureOfExpertsModelConfig
 
 
+@dataclass
+class SwiGLUFeedForwardConfig(ConfigBase):
+    input_dim: int | None = optional_field("Input feature width.")
+    output_dim: int | None = optional_field("Output feature width.")
+    hidden_dim: int | None = optional_field(
+        "Width of the two gated intermediate branches."
+    )
+
+    def _registry_owner(self) -> type:
+        return SwiGLUFeedForward
 
 
+class SwiGLUFeedForward(Module):
+    """Three native dense, bias-free projections implementing SwiGLU."""
+
+    VALIDATOR = SwiGLUFeedForwardValidator
+
+    def __init__(self, cfg, overrides=None):
+        from emperor.linears import LinearLayerConfig
+
+        super().__init__()
+        self.cfg = self._override_config(cfg, overrides)
+        self.VALIDATOR.validate_config(self.cfg)
+        self.gate = LinearLayerConfig(
+            input_dim=self.cfg.input_dim,
+            output_dim=self.cfg.hidden_dim,
+            bias_flag=False,
+        ).build()
+        self.up = LinearLayerConfig(
+            input_dim=self.cfg.input_dim,
+            output_dim=self.cfg.hidden_dim,
+            bias_flag=False,
+        ).build()
+        self.down = LinearLayerConfig(
+            input_dim=self.cfg.hidden_dim,
+            output_dim=self.cfg.output_dim,
+            bias_flag=False,
+        ).build()
+
+    def forward(self, features: Tensor) -> tuple[Tensor, Tensor]:
+        self.VALIDATOR.validate_input(features, self.cfg.input_dim)
+        leading_shape = features.shape[:-1]
+        flat_features = features.reshape(-1, self.cfg.input_dim)
+        hidden = F.silu(self.gate(flat_features)) * self.up(flat_features)
+        output = self.down(hidden).reshape(*leading_shape, self.cfg.output_dim)
+        return output, output.new_zeros(())
 
 
 @dataclass
