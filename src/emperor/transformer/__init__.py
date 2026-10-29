@@ -7,7 +7,12 @@ from emperor.transformer._config import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
-from emperor.transformer._feed_forward import FeedForward, FeedForwardConfig
+from emperor.transformer._feed_forward import (
+    FeedForward,
+    FeedForwardConfig,
+    SwiGLUFeedForward,
+    SwiGLUFeedForwardConfig,
+)
 from emperor.transformer._layers import (
     TransformerDecoderBlockLayer,
     TransformerDecoderLayer,
@@ -31,4 +36,6 @@ __all__ = (
     "TransformerDecoderLayerConfig",
     "FeedForward",
     "FeedForwardConfig",
+    "SwiGLUFeedForward",
+    "SwiGLUFeedForwardConfig",
 )

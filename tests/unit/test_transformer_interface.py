@@ -20,6 +20,8 @@ TRANSFORMER_EXPORTS = (
     "TransformerDecoderLayerConfig",
     "FeedForward",
     "FeedForwardConfig",
+    "SwiGLUFeedForward",
+    "SwiGLUFeedForwardConfig",
 )
 
 REMOVED_EXPORTS = (
@@ -66,6 +68,7 @@ class TestTransformerInterface(unittest.TestCase):
             "TransformerDecoderBlockLayerConfig": "emperor.transformer._config",
             "TransformerDecoderLayerConfig": "emperor.transformer._config",
             "FeedForwardConfig": "emperor.transformer._feed_forward",
+            "SwiGLUFeedForwardConfig": "emperor.transformer._feed_forward",
         }
         for name, module_name in expected_modules.items():
             with self.subTest(name=name):
