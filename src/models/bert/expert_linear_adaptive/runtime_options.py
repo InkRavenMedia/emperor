@@ -292,6 +292,8 @@ class ExpertsRecurrentControllerOptions:
     recurrent_gate_option: LayerGateOptions | None
     recurrent_gate_activation: ActivationOptions | None
     recurrent_gate_stack_source: ExpertsSubmoduleStackSource
+    recurrent_min_steps: int = field(default=1, kw_only=True)
+    recurrent_ponder_cost_weight: float = field(default=1.0, kw_only=True)
     recurrent_stack_halting_flag: bool
     recurrent_halting_threshold: float
     recurrent_halting_dropout: float

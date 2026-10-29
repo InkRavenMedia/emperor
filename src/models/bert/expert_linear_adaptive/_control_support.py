@@ -1,4 +1,6 @@
+import math
 from dataclasses import replace
+from numbers import Real
 
 from emperor.config import ConfigBase
 from emperor.halting import HaltingConfig
@@ -121,8 +123,8 @@ class ExpertsHaltingConfigFactory:
         )
         return controller.recurrent_halting_option(
             threshold=controller.recurrent_halting_threshold,
-            min_steps=1,
-            ponder_cost_weight=1.0,
+            min_steps=controller.recurrent_min_steps,
+            ponder_cost_weight=controller.recurrent_ponder_cost_weight,
             dropout_probability=controller.recurrent_halting_dropout,
             hidden_state_mode=controller.recurrent_halting_hidden_state_mode,
             halting_gate_config=self.__build_halting_gate_stack(options),
@@ -202,6 +204,7 @@ class ExpertsRecurrentConfigFactory:
     def build_config(
         self, block_config: ConfigBase
     ) -> ConfigBase | RecurrentLayerConfig:
+        self.__validate_recurrent_halting_configuration()
         if not self.recurrent_controller_options.recurrent_flag:
             return block_config
         return RecurrentLayerConfig(
@@ -237,3 +240,53 @@ class ExpertsRecurrentConfigFactory:
             ),
             halting_config=self.halting_config_factory.build_recurrent_halting_config(),
         )
+
+    def __validate_recurrent_halting_configuration(self) -> None:
+        self.__validate_minimum_steps()
+        self.__validate_ponder_cost_weight()
+        controller = self.recurrent_controller_options
+        if (
+            controller.recurrent_min_steps == 1
+            and controller.recurrent_ponder_cost_weight == 1.0
+        ):
+            return
+        configured_field = self.__configured_halting_field_name()
+        if not controller.recurrent_flag:
+            raise ValueError(
+                f"{configured_field} requires recurrent_flag=True when configured away from its default."
+            )
+        if not controller.recurrent_stack_halting_flag:
+            raise ValueError(
+                f"{configured_field} requires recurrent_stack_halting_flag=True when configured away from its default."
+            )
+
+    def __validate_minimum_steps(self) -> None:
+        controller = self.recurrent_controller_options
+        minimum_steps = controller.recurrent_min_steps
+        if isinstance(minimum_steps, bool) or not isinstance(minimum_steps, int):
+            raise TypeError("recurrent_min_steps must be an integer.")
+        if minimum_steps < 1:
+            raise ValueError("recurrent_min_steps must be greater than or equal to 1.")
+        maximum_steps = controller.recurrent_max_steps
+        if type(maximum_steps) is int and minimum_steps > maximum_steps:
+            raise ValueError(
+                "recurrent_min_steps must be less than or equal to recurrent_max_steps."
+            )
+
+    def __validate_ponder_cost_weight(self) -> None:
+        ponder_cost_weight = (
+            self.recurrent_controller_options.recurrent_ponder_cost_weight
+        )
+        if isinstance(ponder_cost_weight, bool) or not isinstance(
+            ponder_cost_weight, Real
+        ):
+            raise TypeError("recurrent_ponder_cost_weight must be a number.")
+        if not math.isfinite(float(ponder_cost_weight)) or ponder_cost_weight < 0:
+            raise ValueError(
+                "recurrent_ponder_cost_weight must be finite and greater than or equal to 0."
+            )
+
+    def __configured_halting_field_name(self) -> str:
+        if self.recurrent_controller_options.recurrent_min_steps != 1:
+            return "recurrent_min_steps"
+        return "recurrent_ponder_cost_weight"

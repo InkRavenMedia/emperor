@@ -508,9 +508,12 @@ class TestRecurrentRuntimeControlScope(unittest.TestCase):
                 for catalog_key in recurrent_packages
                 if MINIMUM_AND_PONDER_CONTROL_KEYS <= supported_keys[catalog_key]
             },
-            {"gpt/expert_linear_adaptive"},
+            {"gpt/expert_linear_adaptive", "bert/expert_linear_adaptive"},
         )
-        for catalog_key in recurrent_packages - {"gpt/expert_linear_adaptive"}:
+        for catalog_key in recurrent_packages - {
+            "gpt/expert_linear_adaptive",
+            "bert/expert_linear_adaptive",
+        }:
             with self.subTest(catalog_key=catalog_key):
                 self.assertTrue(
                     MINIMUM_AND_PONDER_CONTROL_KEYS.isdisjoint(
