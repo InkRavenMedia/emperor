@@ -13,8 +13,9 @@ from emperor.experts import (
     MixtureOfExpertsModelConfig,
     RoutingInitializationMode,
 )
+from emperor.experts._layers.experts import ExpertInputData, Experts
 from emperor.experts._layers.map import MixtureOfExpertsMap
-from emperor.experts._layers.mixture import ExpertInputData, MixtureOfExperts
+from emperor.experts._layers.mixture import MixtureOfExperts
 from emperor.experts._layers.reduce import MixtureOfExpertsReduce
 from emperor.experts._model import MixtureOfExpertsModel
 from emperor.experts._routing.capacity import ExpertCapacityHandler
@@ -551,13 +552,12 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
         self.assertIsNone(skip_mask)
         self.assertEqual(loss.item(), 0.0)
 
-    def test__create_experts(self):
-        c = self.preset()
-
-        m = MixtureOfExperts(c)
-        expert_models = m._MixtureOfExperts__create_experts()
-        self.assertEqual(len(m.expert_modules), m.num_experts)
-        for expert in expert_models:
+    def test_expert_container_constructs_layer_stacks(self):
+        config = self.preset()
+        mixture = MixtureOfExperts(config)
+        self.assertIsInstance(mixture.expert_modules, Experts)
+        self.assertEqual(len(mixture.expert_modules), mixture.num_experts)
+        for expert in mixture.expert_modules:
             self.assertIsInstance(expert, LayerStack)
             for layer in expert:
                 self.assertIsInstance(layer, Layer)
@@ -714,8 +714,10 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                             rows.append(row)
                         indices = torch.stack(rows)
 
-                        sample_indices, dropped_indices = m._get_expert_token_indices(
-                            indices, expert_index
+                        sample_indices, dropped_indices = (
+                            m.expert_modules._Experts__get_expert_token_indices(
+                                indices, expert_index
+                            )
                         )
 
                         self.assertIsInstance(sample_indices, torch.Tensor)
@@ -765,9 +767,13 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                         if top_k == 1:
                             indices = indices.squeeze(-1)
 
-                        m._get_expert_token_indices(indices, expert_index)
+                        m.expert_modules._Experts__get_expert_token_indices(
+                            indices, expert_index
+                        )
                         sample_positions, dropped_positions = (
-                            m._get_expert_routing_positions(indices, expert_index)
+                            m.expert_modules._Experts__get_expert_routing_positions(
+                                indices, expert_index
+                            )
                         )
 
                         self.assertIsInstance(sample_positions, torch.Tensor)
@@ -924,7 +930,7 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                         probabilities = torch.rand(batch_size, top_k)
                         input_batch = torch.randn(batch_size, input_dim)
 
-                        result = m._MixtureOfExperts__build_routed_expert_inputs(
+                        result = m.expert_modules._Experts__build_routed_expert_inputs(
                             input_batch, probabilities, indices
                         )
 
@@ -980,7 +986,7 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
         probabilities = torch.rand(indices.size(0), 1)
         input_batch = torch.randn(indices.size(0), input_dim)
 
-        result = m._MixtureOfExperts__build_routed_expert_inputs(
+        result = m.expert_modules._Experts__build_routed_expert_inputs(
             input_batch, probabilities, indices
         )
 
@@ -1011,7 +1017,7 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                 input_batch = torch.randn(batch_size, input_dim)
                 probabilities = torch.rand(batch_size, num_experts)
 
-                result = m._MixtureOfExperts__build_dense_expert_inputs(
+                result = m.expert_modules._Experts__build_dense_expert_inputs(
                     input_batch, probabilities
                 )
 
@@ -1074,7 +1080,9 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                     if top_k == 1:
                         indices = indices.squeeze(-1)
 
-                result = m._split_tokens_per_expert(input_batch, probabilities, indices)
+                result = m.expert_modules._Experts__split_tokens_per_expert(
+                    input_batch, probabilities, indices
+                )
 
                 self.assertIsInstance(result, list)
 
@@ -1130,7 +1138,7 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                             probabilities=probabilities,
                         )
 
-                        output, loss = m._MixtureOfExperts__compute_expert_output(  # type: ignore[operator]
+                        output, loss = m.expert_modules._Experts__compute_expert_output(  # type: ignore[operator]
                             expert_input_slice
                         )
 
@@ -1152,8 +1160,10 @@ class TestMixtureOfExperts(MixtureOfExpertsPresetMixin, unittest.TestCase):
                                 dropped_routing_positions=None,
                                 probabilities=torch.zeros(num_samples),
                             )
-                            zero_output, _ = m._MixtureOfExperts__compute_expert_output(  # type: ignore[operator]
-                                zero_probs_slice
+                            zero_output, _ = (
+                                m.expert_modules._Experts__compute_expert_output(  # type: ignore[operator]
+                                    zero_probs_slice
+                                )
                             )
                             expert_model: torch.nn.Module = m.expert_modules[0]  # type: ignore[assignment]
                             expected_state = Layer.run_model_from_hidden(

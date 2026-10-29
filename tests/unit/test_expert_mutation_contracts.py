@@ -620,7 +620,7 @@ class ExpertMutationContractTests(unittest.TestCase):
 
     def test_private_split_records_preserve_dtype_and_device_metadata(self) -> None:
         dense = MixtureOfExperts(_mixture_config())
-        dense_records = dense._split_tokens_per_expert(
+        dense_records = dense.expert_modules._Experts__split_tokens_per_expert(
             torch.ones(2, 2, dtype=torch.float64),
             torch.ones(2, 2, dtype=torch.float64),
             None,
@@ -629,7 +629,7 @@ class ExpertMutationContractTests(unittest.TestCase):
             self.assertEqual(record.dropped_samples.dtype, torch.float64)
             self.assertEqual(record.dropped_samples.device.type, "cpu")
 
-        dense_meta_records = dense._split_tokens_per_expert(
+        dense_meta_records = dense.expert_modules._Experts__split_tokens_per_expert(
             torch.empty(2, 2, device="meta"),
             torch.empty(2, 2, device="meta"),
             None,
@@ -638,10 +638,12 @@ class ExpertMutationContractTests(unittest.TestCase):
             self.assertEqual(record.dropped_samples.device.type, "meta")
 
         reduced = MixtureOfExpertsReduce(_mixture_config())
-        reduce_records = reduced._split_tokens_per_expert(
-            torch.ones(4, 2, dtype=torch.float64),
-            torch.ones(2, 2, dtype=torch.float64),
-            None,
+        reduce_records = (
+            reduced.expert_modules._Experts__build_assignment_expert_inputs(
+                torch.ones(4, 2, dtype=torch.float64),
+                torch.ones(2, 2, dtype=torch.float64),
+                None,
+            )
         )
         for expert_index, record in enumerate(reduce_records):
             self.assertEqual(record.dropped_samples.dtype, torch.float64)
@@ -652,10 +654,12 @@ class ExpertMutationContractTests(unittest.TestCase):
             self.assertEqual(record.dropped_routing_positions.dtype, torch.long)
             self.assertEqual(record.dropped_routing_positions.numel(), 0)
 
-        reduce_meta_records = reduced._split_tokens_per_expert(
-            torch.empty(4, 2, device="meta"),
-            torch.empty(2, 2, device="meta"),
-            None,
+        reduce_meta_records = (
+            reduced.expert_modules._Experts__build_assignment_expert_inputs(
+                torch.empty(4, 2, device="meta"),
+                torch.empty(2, 2, device="meta"),
+                None,
+            )
         )
         for record in reduce_meta_records:
             self.assertEqual(record.dropped_samples.device.type, "meta")
