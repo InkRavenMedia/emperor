@@ -707,6 +707,13 @@ ATTN_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 #########################################################################
 ### Attention Projection Memory Options
+# Temporary memory tokens appended to attention keys and values.
+ATTN_SOURCE_MEMORY_FLAG: bool = False
+ATTN_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
+ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS: int = 4
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
+
 ATTN_MEMORY_FLAG: bool = False
 ATTN_MEMORY_OPTION: type[DynamicMemoryConfig] = MEMORY_OPTION
 ATTN_MEMORY_POSITION_OPTION: MemoryPositionOptions = MEMORY_POSITION_OPTION
@@ -1550,6 +1557,7 @@ _PUBLIC_CONFIG_KEYS = {
 
 RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
 _PUBLIC_CONFIG_PREFIXES = (
+    "ATTN_SOURCE_MEMORY_",
     "HIERARCHICAL_",
     "ADAPTIVE_GENERATOR_STACK_",
     "WEIGHT_",

@@ -19,6 +19,11 @@ from emperor.layers import (
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
+from emperor.memory import (
+    AttentionDynamicMemoryConfig,
+    DynamicMemoryConfig,
+    MemoryPositionOptions,
+)
 from emperor.patch import LinearPatchEmbeddingConfig
 from emperor.sampler import RouterConfig, SamplerConfig
 from emperor.transformer import (
@@ -517,11 +522,11 @@ def _channel_mixing_model(runtime: RuntimeOptions):
 def _controller_stack_config(
     runtime: RuntimeOptions,
     *,
-    source: ControllerStackSource,
+    source: ControllerStackSource | None = None,
     defaults: StackOptions,
     output_dim: int | None = None,
 ) -> LayerStackConfig:
-    options = source.resolve(defaults)
+    options = defaults if source is None else source.resolve(defaults)
     return _affine_stack(
         runtime,
         input_dim=None,
@@ -699,6 +704,26 @@ def _configure_controls(
     )
 
 
+def _source_memory_config(runtime: RuntimeOptions) -> DynamicMemoryConfig | None:
+    if not runtime.token_mixer_source_memory_flag:
+        return None
+    memory = runtime.token_mixer_source_memory_option(
+        memory_position_option=MemoryPositionOptions.AFTER_AFFINE,
+        model_config=_controller_stack_config(
+            runtime, defaults=submodule_stack_options(runtime)
+        ),
+        test_time_training_learning_rate=(
+            runtime.token_mixer_source_memory_test_time_training_learning_rate
+        ),
+        test_time_training_num_inner_steps=(
+            runtime.token_mixer_source_memory_test_time_training_num_inner_steps
+        ),
+    )
+    if isinstance(memory, AttentionDynamicMemoryConfig):
+        memory.num_memory_slots = runtime.token_mixer_source_memory_num_memory_slots
+    return memory
+
+
 def encoder_config(runtime: RuntimeOptions, tokens: int):
     mixer_layer = TransformerEncoderLayerConfig(
         embedding_dim=runtime.hidden_dim,
@@ -717,6 +742,7 @@ def encoder_config(runtime: RuntimeOptions, tokens: int):
             sequence_length=tokens,
             batch_first_flag=True,
             mixing_model_config=_token_mixing_model(runtime, tokens),
+            source_memory_config=_source_memory_config(runtime),
         ),
         feed_forward_config=FeedForwardConfig(
             input_dim=runtime.hidden_dim,

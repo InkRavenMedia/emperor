@@ -52,6 +52,13 @@ ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 ATTN_ZERO_ATTENTION_FLAG: bool = False
 
+# Temporary sources for encoder and decoder self-attention.
+ATTN_SOURCE_MEMORY_FLAG: bool = False
+ATTN_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
+ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS: int = 4
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
+
 ## Attention Projection Stack Options
 ATTN_NUM_LAYERS: int = 1
 ATTN_BIAS_FLAG: bool = True
@@ -489,7 +496,9 @@ def _copy_path_runtime_defaults(source_prefix: str, target_prefix: str) -> None:
         if not name.isupper() or not name.startswith(source_prefix):
             continue
         target = f"{target_prefix}{name.removeprefix(source_prefix)}"
-        globals()[target] = value
+        globals()[target] = (
+            False if target == "DECODER_CROSS_ATTN_SOURCE_MEMORY_FLAG" else value
+        )
         _CONFIG_FIELD_METADATA_ALIASES[target] = name
         if name in annotations:
             annotations[target] = annotations[name]

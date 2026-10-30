@@ -710,6 +710,11 @@ def _attention_options_from_kwargs(
                 "attn_num_layers": "num_layers",
                 "attn_bias_flag": "bias_flag",
                 "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
+                "attn_source_memory_flag": "source_memory_flag",
+                "attn_source_memory_option": "source_memory_option",
+                "attn_source_memory_num_memory_slots": "source_memory_num_memory_slots",
+                "attn_source_memory_test_time_training_learning_rate": "source_memory_test_time_training_learning_rate",
+                "attn_source_memory_test_time_training_num_inner_steps": "source_memory_test_time_training_num_inner_steps",
             },
         ),
     )
@@ -931,6 +936,11 @@ _ATTENTION_FLAT_KEYS = frozenset(
         "attn_num_layers",
         "attn_bias_flag",
         "attn_add_key_value_bias_flag",
+        "attn_source_memory_flag",
+        "attn_source_memory_option",
+        "attn_source_memory_num_memory_slots",
+        "attn_source_memory_test_time_training_learning_rate",
+        "attn_source_memory_test_time_training_num_inner_steps",
     }
 )
 _FEED_FORWARD_FLAT_KEYS = frozenset({"ff_num_layers", "ff_bias_flag"})

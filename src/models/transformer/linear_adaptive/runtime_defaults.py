@@ -170,6 +170,17 @@ def attention_options_from_config(
             f"{prefix}_ADD_KEY_VALUE_BIAS_FLAG",
         ),
         zero_attention_flag=getattr(config_module, f"{prefix}_ZERO_ATTENTION_FLAG"),
+        source_memory_flag=getattr(config_module, f"{prefix}_SOURCE_MEMORY_FLAG"),
+        source_memory_option=getattr(config_module, f"{prefix}_SOURCE_MEMORY_OPTION"),
+        source_memory_num_memory_slots=getattr(
+            config_module, f"{prefix}_SOURCE_MEMORY_NUM_MEMORY_SLOTS"
+        ),
+        source_memory_test_time_training_learning_rate=getattr(
+            config_module, f"{prefix}_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE"
+        ),
+        source_memory_test_time_training_num_inner_steps=getattr(
+            config_module, f"{prefix}_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS"
+        ),
         stack_options=SubmoduleStackOptions(
             hidden_dim=getattr(config_module, f"{prefix}_STACK_HIDDEN_DIM"),
             num_layers=getattr(config_module, f"{prefix}_NUM_LAYERS"),
@@ -587,6 +598,20 @@ def _path_field_map(*, attention: bool) -> dict[str, tuple[str, str]]:
                     "add_key_value_bias_flag",
                 ),
                 "zero_attention_flag": ("path", "zero_attention_flag"),
+                "source_memory_flag": ("path", "source_memory_flag"),
+                "source_memory_option": ("path", "source_memory_option"),
+                "source_memory_num_memory_slots": (
+                    "path",
+                    "source_memory_num_memory_slots",
+                ),
+                "source_memory_test_time_training_learning_rate": (
+                    "path",
+                    "source_memory_test_time_training_learning_rate",
+                ),
+                "source_memory_test_time_training_num_inner_steps": (
+                    "path",
+                    "source_memory_test_time_training_num_inner_steps",
+                ),
             }
         )
     for field_name in _STACK_OPTION_FIELDS:
@@ -896,7 +921,13 @@ def resolve_transformer_path_options(
         decoder_self_attention, attention_updates, attention=True
     )
     decoder_cross_attention = _apply_path_updates(
-        decoder_cross_attention, attention_updates, attention=True
+        decoder_cross_attention,
+        {
+            key: value
+            for key, value in attention_updates.items()
+            if not key.startswith("source_memory_")
+        },
+        attention=True,
     )
     encoder_feed_forward = _apply_path_updates(
         encoder_feed_forward, feed_forward_updates, attention=False

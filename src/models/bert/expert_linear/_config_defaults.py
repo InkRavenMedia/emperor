@@ -78,6 +78,11 @@ def bert_attention_options(config: ModuleType) -> TransformerAttentionOptions:
         num_layers=config.ATTN_NUM_LAYERS,
         bias_flag=config.ATTN_BIAS_FLAG,
         add_key_value_bias_flag=config.ATTN_ADD_KEY_VALUE_BIAS_FLAG,
+        source_memory_flag=config.ATTN_SOURCE_MEMORY_FLAG,
+        source_memory_option=config.ATTN_SOURCE_MEMORY_OPTION,
+        source_memory_num_memory_slots=config.ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS,
+        source_memory_test_time_training_learning_rate=config.ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+        source_memory_test_time_training_num_inner_steps=config.ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
     )
 
 

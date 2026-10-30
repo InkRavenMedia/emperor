@@ -7,6 +7,11 @@ from emperor.layers import (
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
+from emperor.memory import (
+    AttentionDynamicMemoryConfig,
+    DynamicMemoryConfig,
+    MemoryPositionOptions,
+)
 
 from ._residual import ResidualStackOptions, build_residual_config
 from .runtime_options import (
@@ -157,6 +162,32 @@ def _memory_config(
             residual_stack_options,
         ),
     )
+
+
+def build_source_memory_config(
+    options: TransformerAttentionOptions,
+    residual_stack_options: ResidualStackOptions,
+    *,
+    self_attention: bool = True,
+) -> DynamicMemoryConfig | None:
+    """Generate independent temporary sources using the local controller stack."""
+    if not options.source_memory_flag:
+        return None
+    if not self_attention:
+        raise ValueError(
+            "Source memory is supported only for self-attention, not decoder cross-attention."
+        )
+    config = options.source_memory_option(
+        memory_position_option=MemoryPositionOptions.AFTER_AFFINE,
+        model_config=_controller_stack(
+            ControllerStackOptions(), options.stack_options, residual_stack_options
+        ),
+        test_time_training_learning_rate=options.source_memory_test_time_training_learning_rate,
+        test_time_training_num_inner_steps=options.source_memory_test_time_training_num_inner_steps,
+    )
+    if isinstance(config, AttentionDynamicMemoryConfig):
+        config.num_memory_slots = options.source_memory_num_memory_slots
+    return config
 
 
 def configure_transformer_submodule(
