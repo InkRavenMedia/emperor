@@ -181,8 +181,8 @@ _ORDERING_DIGEST_BY_PACKAGE = {
         8,
     ),
     "vit/expert_linear_adaptive": (
-        "5853cb3d121453311868fd58a649750764dde151a1ae4f88509b59ac3e641fef",
-        921,
+        "6eb2670e80b803791efc5d4854e9814edaa371c2f9b0a1027f6ca118488c390d",
+        925,
         38,
     ),
 }
@@ -340,8 +340,8 @@ _ORDERING_WITH_ATTENTION_SETTINGS_BY_PACKAGE = {
         8,
     ),
     "vit/expert_linear_adaptive": (
-        "82860779ed32f4bfbdbaa805178c434f87110b7f0a5d13ba18ff86e98d52f0cb",
-        1023,
+        "e4c67b365177e662a6809256b6f846de65e95615c2914e53c17853e24f0c0650",
+        1029,
         38,
     ),
 }

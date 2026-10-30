@@ -76,8 +76,8 @@ class HaltingConfigFactory:
         )
         return self.recurrent_controller_options.recurrent_halting_option(
             threshold=self.recurrent_controller_options.recurrent_halting_threshold,
-            min_steps=1,
-            ponder_cost_weight=1.0,
+            min_steps=self.recurrent_controller_options.recurrent_min_steps,
+            ponder_cost_weight=self.recurrent_controller_options.recurrent_ponder_cost_weight,
             dropout_probability=self.recurrent_controller_options.recurrent_halting_dropout,
             hidden_state_mode=(
                 self.recurrent_controller_options.recurrent_halting_hidden_state_mode
