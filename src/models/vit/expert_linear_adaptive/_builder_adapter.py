@@ -1524,6 +1524,7 @@ def _attention_options_from_kwargs(
         **_updates(
             kwargs,
             {
+                "attention_soft_moe_config": "attention_soft_moe_config",
                 "attn_num_heads": "num_heads",
                 "attn_num_layers": "num_layers",
                 "attn_bias_flag": "bias_flag",
@@ -1544,7 +1545,12 @@ def _feed_forward_options_from_kwargs(
     return replace(
         options,
         **_updates(
-            kwargs, {"ff_num_layers": "num_layers", "ff_bias_flag": "bias_flag"}
+            kwargs,
+            {
+                "ff_num_layers": "num_layers",
+                "ff_bias_flag": "bias_flag",
+                "soft_moe_config": "soft_moe_config",
+            },
         ),
     )
 
@@ -1751,6 +1757,7 @@ _POSITIONAL_EMBEDDING_FLAT_KEYS = frozenset(
 )
 _ATTENTION_FLAT_KEYS = frozenset(
     {
+        "attention_soft_moe_config",
         "attn_num_heads",
         "attn_num_layers",
         "attn_bias_flag",
@@ -1762,7 +1769,9 @@ _ATTENTION_FLAT_KEYS = frozenset(
         "attn_source_memory_test_time_training_num_inner_steps",
     }
 )
-_FEED_FORWARD_FLAT_KEYS = frozenset({"ff_num_layers", "ff_bias_flag"})
+_FEED_FORWARD_FLAT_KEYS = frozenset(
+    {"ff_num_layers", "ff_bias_flag", "soft_moe_config"}
+)
 _OUTPUT_FLAT_KEYS = frozenset({"output_bias_flag"})
 _MAIN_STACK_FLAT_KEYS = frozenset(
     {

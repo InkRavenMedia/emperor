@@ -7,6 +7,7 @@ from emperor.attention import (
 )
 from emperor.experts import MixtureOfExpertsConfig, MixtureOfExpertsModelConfig
 from emperor.layers import LastLayerBiasOptions, LayerStackConfig, RecurrentLayerConfig
+from emperor.transformer._soft_moe_config import build_soft_moe_attention_experts
 from models.vit.expert_linear._expert_control_config_factory import (
     ControlConfigDependencies as ExpertLinearControlConfigDependencies,
 )
@@ -87,7 +88,10 @@ class _VitExpertConfigFactoryBase:
             return_attention_weights_flag=False,
             batch_first_flag=True,
             projection_model_config=projection_model_config,
-            experts_config=self._build_attention_experts_config(),
+            experts_config=build_soft_moe_attention_experts(
+                self._build_attention_experts_config(),
+                attention_options.attention_soft_moe_config,
+            ),
             use_kv_expert_models_flag=(
                 dependencies.expert_attention_use_kv_expert_models_flag
             ),

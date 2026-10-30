@@ -1560,6 +1560,7 @@ ATTN_GROUPING_RMS_NORM_EPSILON: float | None = None
 # Construction defaults remain available to flat CLI adapters and presets. The
 # grouped builder interface exposes residual and adaptive parameter settings.
 _PUBLIC_CONFIG_KEYS = {
+    "SOFT_MOE_CONFIG",
     "GENERATOR_DEPTH",
     "ROW_MASK_OPTION",
     "GROUP_COUNT",

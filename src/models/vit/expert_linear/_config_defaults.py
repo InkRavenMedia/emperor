@@ -131,6 +131,7 @@ def vit_encoder_options(config: ModuleType) -> TransformerEncoderOptions:
 
 def vit_attention_options(config: ModuleType) -> TransformerAttentionOptions:
     return TransformerAttentionOptions(
+        attention_soft_moe_config=config.ATTENTION_SOFT_MOE_CONFIG,
         num_heads=config.ATTN_NUM_HEADS,
         num_layers=config.ATTN_NUM_LAYERS,
         bias_flag=config.ATTN_BIAS_FLAG,
@@ -145,6 +146,7 @@ def vit_attention_options(config: ModuleType) -> TransformerAttentionOptions:
 
 def vit_feed_forward_options(config: ModuleType) -> TransformerFeedForwardOptions:
     return TransformerFeedForwardOptions(
+        soft_moe_config=config.SOFT_MOE_CONFIG,
         num_layers=config.FF_NUM_LAYERS,
         bias_flag=config.FF_BIAS_FLAG,
     )

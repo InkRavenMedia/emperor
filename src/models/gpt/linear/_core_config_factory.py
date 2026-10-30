@@ -20,6 +20,7 @@ from emperor.transformer import (
     TransformerDecoderBlockLayerConfig,
     TransformerDecoderLayerConfig,
 )
+from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.gpt.linear import _config_defaults as config_defaults
 from models.gpt.linear._controller_stack_config import build_source_memory_config
 from models.gpt.linear._decoder_control_config_factory import (
@@ -236,7 +237,11 @@ class CoreConfigFactory:
         return FeedForwardConfig(
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
-            stack_config=self.__build_feed_forward_stack_config(),
+            stack_config=build_soft_moe_stack(
+                self.__build_feed_forward_stack_config(),
+                self.feed_forward_options.soft_moe_config,
+                self.hidden_dim,
+            ),
         )
 
     def __build_attention_projection_stack_config(self):

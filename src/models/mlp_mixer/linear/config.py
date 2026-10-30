@@ -1,3 +1,4 @@
+from emperor.experts import SoftMoEConfig
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -325,6 +326,7 @@ PATCH_BIAS_FLAG: bool = True
 ## Token Mixer Stack Options
 # - STACK_ACTIVATION and STACK_BIAS_FLAG supply inherited branch defaults.
 # Temporary memory tokens mixed alongside the original token positions.
+TOKEN_MIXER_SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 TOKEN_MIXER_SOURCE_MEMORY_FLAG: bool = False
 TOKEN_MIXER_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = (
     GatedResidualDynamicMemoryConfig
@@ -353,6 +355,7 @@ TOKEN_MIXER_BIAS_FLAG: bool = STACK_BIAS_FLAG
 
 ## Channel Mixer Stack Options
 # - STACK_ACTIVATION and STACK_BIAS_FLAG supply inherited branch defaults.
+SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 CHANNEL_MIXER_STACK_HIDDEN_DIM: int = 128
 CHANNEL_MIXER_NUM_LAYERS: int = 2
 CHANNEL_MIXER_STACK_ACTIVATION: ActivationOptions = STACK_ACTIVATION

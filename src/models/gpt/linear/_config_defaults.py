@@ -134,6 +134,7 @@ def gpt_feed_forward_options(
     config: _ConfigDefaults,
 ) -> TransformerFeedForwardOptions:
     return TransformerFeedForwardOptions(
+        soft_moe_config=config.SOFT_MOE_CONFIG,
         num_layers=config.FF_NUM_LAYERS,
         bias_flag=config.FF_BIAS_FLAG,
     )

@@ -560,6 +560,7 @@ class TransformerPositionalEmbeddingOptions:
 
 @dataclass(frozen=True, slots=True)
 class TransformerAttentionOptions:
+    attention_soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_heads: int
     num_layers: int
     bias_flag: bool

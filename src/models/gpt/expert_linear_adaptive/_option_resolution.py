@@ -689,6 +689,7 @@ def _attention_options_from_kwargs(
     provided: TransformerAttentionOptions | None,
 ) -> TransformerAttentionOptions:
     options = provided or TransformerAttentionOptions(
+        attention_soft_moe_config=config_module.ATTENTION_SOFT_MOE_CONFIG,
         num_heads=config_module.ATTN_NUM_HEADS,
         num_layers=config_module.ATTN_NUM_LAYERS,
         bias_flag=config_module.ATTN_BIAS_FLAG,
@@ -703,6 +704,7 @@ def _attention_options_from_kwargs(
         kwargs,
         {
             "attn_num_heads": "num_heads",
+            "attention_soft_moe_config": "attention_soft_moe_config",
             "attn_num_layers": "num_layers",
             "attn_bias_flag": "bias_flag",
             "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
@@ -723,10 +725,17 @@ def _feed_forward_options_from_kwargs(
     provided: TransformerFeedForwardOptions | None,
 ) -> TransformerFeedForwardOptions:
     options = provided or TransformerFeedForwardOptions(
-        num_layers=config_module.FF_NUM_LAYERS, bias_flag=config_module.FF_BIAS_FLAG
+        soft_moe_config=config_module.SOFT_MOE_CONFIG,
+        num_layers=config_module.FF_NUM_LAYERS,
+        bias_flag=config_module.FF_BIAS_FLAG,
     )
     updates = _pop_updates(
-        kwargs, {"ff_num_layers": "num_layers", "ff_bias_flag": "bias_flag"}
+        kwargs,
+        {
+            "ff_num_layers": "num_layers",
+            "ff_bias_flag": "bias_flag",
+            "soft_moe_config": "soft_moe_config",
+        },
     )
     return replace(options, **updates) if updates else options
 

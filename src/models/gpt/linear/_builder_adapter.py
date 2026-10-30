@@ -421,6 +421,7 @@ def _modern_feed_forward_options(
         **_modern_option_updates(
             kwargs,
             {
+                "soft_moe_config": "soft_moe_config",
                 "ff_num_layers": "num_layers",
                 "ff_bias_flag": "bias_flag",
             },
@@ -769,6 +770,7 @@ def _modern_supported_flat_keys() -> set[str]:
         "attn_source_memory_num_memory_slots",
         "attn_source_memory_test_time_training_learning_rate",
         "attn_source_memory_test_time_training_num_inner_steps",
+        "soft_moe_config",
         "ff_num_layers",
         "ff_bias_flag",
         "lm_head_weight_tying_flag",

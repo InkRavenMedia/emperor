@@ -547,7 +547,12 @@ def _feed_forward_options_from_kwargs(
     return replace(
         options,
         **_updates(
-            kwargs, {"ff_num_layers": "num_layers", "ff_bias_flag": "bias_flag"}
+            kwargs,
+            {
+                "ff_num_layers": "num_layers",
+                "ff_bias_flag": "bias_flag",
+                "soft_moe_config": "soft_moe_config",
+            },
         ),
     )
 
@@ -765,7 +770,9 @@ _ATTENTION_FLAT_KEYS = frozenset(
         "attn_source_memory_test_time_training_num_inner_steps",
     }
 )
-_FEED_FORWARD_FLAT_KEYS = frozenset({"ff_num_layers", "ff_bias_flag"})
+_FEED_FORWARD_FLAT_KEYS = frozenset(
+    {"ff_num_layers", "ff_bias_flag", "soft_moe_config"}
+)
 _OUTPUT_FLAT_KEYS = frozenset({"output_bias_flag"})
 _MAIN_STACK_FLAT_KEYS = frozenset(
     {

@@ -363,6 +363,7 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 #########################################################################
 # Attention Options
+ATTENTION_SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
