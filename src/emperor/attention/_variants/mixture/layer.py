@@ -54,9 +54,25 @@ class MixtureOfAttentionHeads(MultiHeadAttentionAbstract):
         return self._run_attention(attention_inputs)
 
     def _build_attention_components(self) -> None:
+        if self.cfg.experts_config.soft_moe_config is not None:
+            self.__build_soft_attention_components()
+            return
         self.projector = MixtureOfAttentionHeadsProjector(self.cfg)
         self.reshaper = MixtureOfAttentionHeadsReshaper(self.cfg)
         self.processor = MixtureOfAttentionHeadsProcessor(
+            self.cfg, self.projector, self.reshaper
+        )
+        self.masks = MixtureOfAttentionHeadsMask(self.cfg)
+
+    def __build_soft_attention_components(self) -> None:
+        from emperor.attention._variants.mixture.soft import (
+            SoftMixtureOfAttentionHeadsProcessor,
+            SoftMixtureOfAttentionHeadsProjector,
+        )
+
+        self.projector = SoftMixtureOfAttentionHeadsProjector(self.cfg)
+        self.reshaper = MixtureOfAttentionHeadsReshaper(self.cfg)
+        self.processor = SoftMixtureOfAttentionHeadsProcessor(
             self.cfg, self.projector, self.reshaper
         )
         self.masks = MixtureOfAttentionHeadsMask(self.cfg)

@@ -84,6 +84,15 @@ def _configure_soft_routing(
     mixture_config: MixtureOfExpertsConfig,
     soft_moe_config: SoftMoEConfig,
 ) -> None:
+    _configure_soft_expert_routing(mixture_config, soft_moe_config)
+    model_config.top_k = mixture_config.num_experts
+    model_config.routing_initialization_mode = RoutingInitializationMode.LAYER
+    model_config.sampler_config = None
+
+
+def _configure_soft_expert_routing(
+    mixture_config: MixtureOfExpertsConfig, soft_moe_config: SoftMoEConfig
+) -> None:
     if soft_moe_config.num_experts is not None:
         mixture_config.num_experts = soft_moe_config.num_experts
     expert_count = mixture_config.num_experts
@@ -100,6 +109,17 @@ def _configure_soft_routing(
     mixture_config.routing_initialization_mode = RoutingInitializationMode.LAYER
     mixture_config.sampler_config = None
     mixture_config.soft_moe_config = deepcopy(soft_moe_config)
-    model_config.top_k = expert_count
-    model_config.routing_initialization_mode = RoutingInitializationMode.LAYER
-    model_config.sampler_config = None
+
+
+def build_soft_moe_attention_experts(
+    experts_config: MixtureOfExpertsConfig,
+    attention_soft_moe_config: SoftMoEConfig | None,
+) -> MixtureOfExpertsConfig:
+    """Select independent attention routing without changing feed-forward experts."""
+    if attention_soft_moe_config is None:
+        return experts_config
+    if not isinstance(attention_soft_moe_config, SoftMoEConfig):
+        raise TypeError("attention_soft_moe_config must be a SoftMoEConfig.")
+    soft_experts_config = deepcopy(experts_config)
+    _configure_soft_expert_routing(soft_experts_config, attention_soft_moe_config)
+    return soft_experts_config

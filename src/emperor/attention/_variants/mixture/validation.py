@@ -5,6 +5,9 @@ from typing import TYPE_CHECKING
 from torch import Tensor
 
 from emperor.attention._validation import MultiHeadAttentionValidator
+from emperor.attention._variants.mixture.soft_validation import (
+    SoftMixtureOfAttentionHeadsValidator,
+)
 
 if TYPE_CHECKING:
     from emperor.attention._base import MultiHeadAttentionAbstract
@@ -148,6 +151,10 @@ class MixtureOfAttentionHeadsValidator(MultiHeadAttentionValidator):
                 f"{type(use_kv_expert_models_flag).__name__}."
             )
 
+        if experts_config.soft_moe_config is not None:
+            SoftMixtureOfAttentionHeadsValidator.validate_configuration(model)
+            return
+
         sampler_config = experts_config.sampler_config
         if not isinstance(sampler_config, SamplerConfig):
             raise TypeError(
@@ -207,6 +214,8 @@ class MixtureOfAttentionHeadsValidator(MultiHeadAttentionValidator):
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> None:
         super().validate_forward_inputs(model, attention_inputs)
+        if model.cfg.experts_config.soft_moe_config is not None:
+            SoftMixtureOfAttentionHeadsValidator.validate_inputs(attention_inputs)
         cls.validate_expert_key_value_inputs(
             model,
             attention_inputs.query,
