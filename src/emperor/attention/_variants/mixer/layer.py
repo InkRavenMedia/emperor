@@ -3,8 +3,10 @@
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
+import torch
 from torch import Tensor
 
+from emperor.attention._validation import AttentionSourceMemoryValidator
 from emperor.attention._variants.mixer.validation import (
     MixerAttentionValidator,
 )
@@ -40,16 +42,28 @@ class MixerAttention(Module):
         ) = self.cfg.mixing_model_config
 
         self.VALIDATOR.validate(self)
+        self.mixing_sequence_length = self.sequence_length * (
+            2 if self.cfg.source_memory_config is not None else 1
+        )
         exact_mixing_config = self.__exact_mixing_model_config(self.mixing_model_config)
         self.mixing_model = exact_mixing_config.build()
+        self.source_memory = (
+            self._build_from_config(
+                self.cfg.source_memory_config,
+                input_dim=self.embedding_dim,
+                output_dim=self.embedding_dim,
+            )
+            if self.cfg.source_memory_config is not None
+            else None
+        )
 
     def __exact_mixing_model_config(self, config):
         from emperor.experts import MixtureOfExpertsModelConfig
         from emperor.layers import RecurrentCompositionConfig
 
         exact_config = deepcopy(config)
-        exact_config.input_dim = self.sequence_length
-        exact_config.output_dim = self.sequence_length
+        exact_config.input_dim = self.mixing_sequence_length
+        exact_config.output_dim = self.mixing_sequence_length
         if isinstance(exact_config, MixtureOfExpertsModelConfig):
             exact_config.stack_config = self.__exact_mixing_model_config(
                 exact_config.stack_config
@@ -73,21 +87,26 @@ class MixerAttention(Module):
         )
 
         sequence_axis = 1 if self.batch_first_flag else 0
+        if self.source_memory is not None:
+            # Per-token rows keep optional adaptation independent across tokens.
+            token_rows = q.reshape(-1, self.embedding_dim)
+            memory = self.source_memory(token_rows)
+            AttentionSourceMemoryValidator.validate_output(memory, token_rows)
+            q = torch.cat((q, memory.reshape_as(q)), dim=sequence_axis)
         token_vectors = q.movedim(sequence_axis, -1)
         leading_shape = token_vectors.shape[:-1]
-        flattened_input = token_vectors.reshape(-1, self.sequence_length)
-        mixing_state = Layer.run_model_from_hidden(
-            self.mixing_model,
-            flattened_input,
-        )
+        mixing_input = token_vectors.reshape(-1, self.mixing_sequence_length)
+        mixing_state = Layer.run_model_from_hidden(self.mixing_model, mixing_input)
         mixing_state = self.VALIDATOR.validate_mixing_state(
             mixing_state,
-            flattened_input,
+            mixing_input,
         )
 
         mixed_vectors = mixing_state.hidden.reshape(
             *leading_shape,
-            self.sequence_length,
+            self.mixing_sequence_length,
         )
         mixed = mixed_vectors.movedim(-1, sequence_axis)
+        if self.source_memory is not None:
+            mixed = mixed.narrow(sequence_axis, 0, self.sequence_length)
         return mixed, None, mixing_state.loss
