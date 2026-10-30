@@ -1,4 +1,4 @@
-from emperor.memory import DynamicMemoryConfig
+from emperor.memory import AttentionDynamicMemoryConfig, DynamicMemoryConfig
 from models.gpt.expert_linear.runtime_options import (
     DynamicMemoryOptions,
     MainLayerStackOptions,
@@ -35,7 +35,7 @@ class MemoryConfigFactory:
         model_config = build_controller_stack_config(
             resolved_memory_stack_options,
         )
-        return self.dynamic_memory_options.memory_option(
+        memory_config = self.dynamic_memory_options.memory_option(
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
             memory_position_option=self.dynamic_memory_options.memory_position_option,
@@ -47,3 +47,8 @@ class MemoryConfigFactory:
             ),
             model_config=model_config,
         )
+        if isinstance(memory_config, AttentionDynamicMemoryConfig):
+            memory_config.num_memory_slots = (
+                self.dynamic_memory_options.memory_num_memory_slots
+            )
+        return memory_config

@@ -101,6 +101,9 @@ def _memory_from_config(
     return DynamicMemoryOptions(
         memory_flag=getattr(config_module, f"{prefix}_MEMORY_FLAG"),
         memory_option=getattr(config_module, f"{prefix}_MEMORY_OPTION"),
+        memory_num_memory_slots=getattr(
+            config_module, f"{prefix}_MEMORY_NUM_MEMORY_SLOTS"
+        ),
         memory_position_option=getattr(
             config_module, f"{prefix}_MEMORY_POSITION_OPTION"
         ),
@@ -641,6 +644,7 @@ def _path_field_map(*, attention: bool) -> dict[str, tuple[str, str]]:
             ),
             "memory_flag": ("memory", "memory_flag"),
             "memory_option": ("memory", "memory_option"),
+            "memory_num_memory_slots": ("memory", "memory_num_memory_slots"),
             "memory_position_option": (
                 "memory",
                 "memory_position_option",

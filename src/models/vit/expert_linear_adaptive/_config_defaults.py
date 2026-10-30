@@ -516,6 +516,7 @@ def linears_dynamic_memory_options(
             memory_test_time_training_learning_rate=(
                 config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
             ),
+            memory_num_memory_slots=config.MEMORY_NUM_MEMORY_SLOTS,
             memory_test_time_training_num_inner_steps=(
                 config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
             ),
@@ -531,6 +532,7 @@ def linears_dynamic_memory_options(
             memory_test_time_training_learning_rate=(
                 config.ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
             ),
+            memory_num_memory_slots=config.ATTN_MEMORY_NUM_MEMORY_SLOTS,
             memory_test_time_training_num_inner_steps=(
                 config.ATTN_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
             ),
@@ -545,6 +547,7 @@ def linears_dynamic_memory_options(
         memory_test_time_training_learning_rate=(
             config.FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
         ),
+        memory_num_memory_slots=config.FF_MEMORY_NUM_MEMORY_SLOTS,
         memory_test_time_training_num_inner_steps=(
             config.FF_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
         ),

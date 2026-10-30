@@ -130,6 +130,7 @@ class MemoryOptions:
     test_time_training_learning_rate: float | None
     test_time_training_num_inner_steps: int | None
     stack: ControllerStackSource
+    num_memory_slots: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,6 +190,7 @@ def main_control_options(runtime: RuntimeOptions) -> ControlOptions:
         test_time_training_learning_rate=(
             runtime.memory_test_time_training_learning_rate
         ),
+        num_memory_slots=runtime.memory_num_memory_slots,
         test_time_training_num_inner_steps=(
             runtime.memory_test_time_training_num_inner_steps
         ),
@@ -250,6 +252,7 @@ def main_control_options(runtime: RuntimeOptions) -> ControlOptions:
                 test_time_training_learning_rate=(
                     memory.test_time_training_learning_rate
                 ),
+                num_memory_slots=memory.num_memory_slots,
                 test_time_training_num_inner_steps=(
                     memory.test_time_training_num_inner_steps
                 ),
@@ -332,6 +335,7 @@ def expert_control_options(runtime: RuntimeOptions) -> ControlOptions:
             test_time_training_learning_rate=(
                 runtime.expert_memory_test_time_training_learning_rate
             ),
+            num_memory_slots=runtime.expert_memory_num_memory_slots,
             test_time_training_num_inner_steps=(
                 runtime.expert_memory_test_time_training_num_inner_steps
             ),
@@ -533,6 +537,7 @@ def _token_mixer_control_options(runtime: RuntimeOptions) -> ControlOptions:
             test_time_training_learning_rate=(
                 runtime.token_mixer_memory_test_time_training_learning_rate
             ),
+            num_memory_slots=runtime.token_mixer_memory_num_memory_slots,
             test_time_training_num_inner_steps=(
                 runtime.token_mixer_memory_test_time_training_num_inner_steps
             ),
@@ -744,6 +749,7 @@ def _channel_mixer_control_options(runtime: RuntimeOptions) -> ControlOptions:
             test_time_training_learning_rate=(
                 runtime.channel_mixer_memory_test_time_training_learning_rate
             ),
+            num_memory_slots=runtime.channel_mixer_memory_num_memory_slots,
             test_time_training_num_inner_steps=(
                 runtime.channel_mixer_memory_test_time_training_num_inner_steps
             ),

@@ -721,6 +721,7 @@ def _modern_dynamic_memory_options(
             f"{flat_lead}memory_test_time_training_learning_rate": (
                 "memory_test_time_training_learning_rate"
             ),
+            f"{flat_lead}memory_num_memory_slots": "memory_num_memory_slots",
             f"{flat_lead}memory_test_time_training_num_inner_steps": (
                 "memory_test_time_training_num_inner_steps"
             ),
@@ -900,6 +901,7 @@ def _modern_role_control_flat_keys(prefix: str) -> set[str]:
         f"{lead}memory_option",
         f"{lead}memory_position_option",
         f"{lead}memory_test_time_training_learning_rate",
+        f"{lead}memory_num_memory_slots",
         f"{lead}memory_test_time_training_num_inner_steps",
     }
     if not prefix:

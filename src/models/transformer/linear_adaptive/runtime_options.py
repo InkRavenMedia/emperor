@@ -190,6 +190,7 @@ class DynamicMemoryOptions:
     memory_test_time_training_learning_rate: float | None = None
     memory_test_time_training_num_inner_steps: int | None = None
     memory_stack_options: ControllerStackOptions = ControllerStackOptions()
+    memory_num_memory_slots: int = 4
 
 
 @dataclass(frozen=True)

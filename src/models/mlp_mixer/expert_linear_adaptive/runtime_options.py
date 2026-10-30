@@ -343,6 +343,7 @@ class RuntimeOptions:
     memory_option: type[DynamicMemoryConfig]
     memory_position_option: MemoryPositionOptions
     memory_test_time_training_learning_rate: float | None
+    memory_num_memory_slots: int = field(default=4, kw_only=True)
     memory_test_time_training_num_inner_steps: int | None
     recurrent_flag: bool
     recurrent_max_steps: int
@@ -531,6 +532,7 @@ class RuntimeOptions:
     token_mixer_memory_option: type[DynamicMemoryConfig]
     token_mixer_memory_position_option: MemoryPositionOptions
     token_mixer_memory_test_time_training_learning_rate: float | None
+    token_mixer_memory_num_memory_slots: int = field(default=4, kw_only=True)
     token_mixer_memory_test_time_training_num_inner_steps: int | None
     token_mixer_memory_stack_independent_flag: bool
     token_mixer_memory_stack_hidden_dim: int | None
@@ -686,6 +688,7 @@ class RuntimeOptions:
     channel_mixer_memory_option: type[DynamicMemoryConfig]
     channel_mixer_memory_position_option: MemoryPositionOptions
     channel_mixer_memory_test_time_training_learning_rate: float | None
+    channel_mixer_memory_num_memory_slots: int = field(default=4, kw_only=True)
     channel_mixer_memory_test_time_training_num_inner_steps: int | None
     channel_mixer_memory_stack_independent_flag: bool
     channel_mixer_memory_stack_hidden_dim: int | None
@@ -1022,6 +1025,7 @@ class RuntimeOptions:
     expert_memory_option: type[DynamicMemoryConfig]
     expert_memory_position_option: MemoryPositionOptions
     expert_memory_test_time_training_learning_rate: float | None
+    expert_memory_num_memory_slots: int = field(default=4, kw_only=True)
     expert_memory_test_time_training_num_inner_steps: int | None
     expert_memory_stack_independent_flag: bool
     expert_memory_stack_hidden_dim: int | None
