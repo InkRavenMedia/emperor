@@ -8,7 +8,7 @@ from emperor.layers import (
     LayerStackConfig,
     RecurrentLayerConfig,
 )
-from emperor.memory import DynamicMemoryConfig
+from emperor.memory import AttentionDynamicMemoryConfig, DynamicMemoryConfig
 from models.vit.expert_linear.runtime_options import (
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
@@ -172,7 +172,7 @@ class ExpertsMemoryConfigFactory:
             self.dynamic_memory_options.memory_stack_source,
             self.submodule_stack_options,
         )
-        return self.dynamic_memory_options.memory_option(
+        memory_config = self.dynamic_memory_options.memory_option(
             input_dim=self.stack_options.hidden_dim,
             output_dim=self.stack_options.hidden_dim,
             memory_position_option=self.dynamic_memory_options.memory_position_option,
@@ -184,6 +184,11 @@ class ExpertsMemoryConfigFactory:
             ),
             model_config=build_controller_stack_config(options),
         )
+        if isinstance(memory_config, AttentionDynamicMemoryConfig):
+            memory_config.num_memory_slots = (
+                self.dynamic_memory_options.memory_num_memory_slots
+            )
+        return memory_config
 
 
 class ExpertsRecurrentConfigFactory:

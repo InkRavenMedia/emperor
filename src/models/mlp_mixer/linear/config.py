@@ -201,6 +201,7 @@ MEMORY_FLAG: bool = False
 MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
 MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
 MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+MEMORY_NUM_MEMORY_SLOTS: int = 4
 MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
 ## Memory Stack Options
 # - If False, memory model stack options inherit the layer stack submodule options.
@@ -433,6 +434,7 @@ TOKEN_MIXER_MEMORY_POSITION_OPTION: MemoryPositionOptions = (
     MemoryPositionOptions.AFTER_AFFINE
 )
 TOKEN_MIXER_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+TOKEN_MIXER_MEMORY_NUM_MEMORY_SLOTS: int = 4
 TOKEN_MIXER_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
 ## Token Mixer Memory Stack Options
 # - If False, memory stack options inherit the token mixer stack options.
@@ -592,6 +594,7 @@ CHANNEL_MIXER_MEMORY_POSITION_OPTION: MemoryPositionOptions = (
     MemoryPositionOptions.AFTER_AFFINE
 )
 CHANNEL_MIXER_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+CHANNEL_MIXER_MEMORY_NUM_MEMORY_SLOTS: int = 4
 CHANNEL_MIXER_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
 ## Channel Mixer Memory Stack Options
 # - If False, memory stack options inherit the channel mixer stack options.

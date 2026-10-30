@@ -714,18 +714,21 @@ def linears_dynamic_memory_options(
         memory_option: type[DynamicMemoryConfig] = config.MEMORY_OPTION
         memory_position_option: MemoryPositionOptions = config.MEMORY_POSITION_OPTION
         learning_rate = config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
     elif role == "attention":
         memory_flag = config.ATTN_MEMORY_FLAG
         memory_option = config.ATTN_MEMORY_OPTION
         memory_position_option = config.ATTN_MEMORY_POSITION_OPTION
         learning_rate = config.ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.ATTN_MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.ATTN_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
     else:
         memory_flag = config.FF_MEMORY_FLAG
         memory_option = config.FF_MEMORY_OPTION
         memory_position_option = config.FF_MEMORY_POSITION_OPTION
         learning_rate = config.FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.FF_MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.FF_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
 
     return DynamicMemoryOptions(
@@ -733,6 +736,7 @@ def linears_dynamic_memory_options(
         memory_option=memory_option,
         memory_position_option=memory_position_option,
         memory_test_time_training_learning_rate=learning_rate,
+        memory_num_memory_slots=num_memory_slots,
         memory_test_time_training_num_inner_steps=num_inner_steps,
         memory_stack_source=_controller_stack_source(config, role, "memory"),
     )
@@ -1303,18 +1307,21 @@ def experts_dynamic_memory_options(
         memory_option = config.MEMORY_OPTION
         memory_position_option = config.MEMORY_POSITION_OPTION
         learning_rate = config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
     elif role == "expert":
         memory_flag = config.EXPERT_MEMORY_FLAG
         memory_option = config.EXPERT_MEMORY_OPTION
         memory_position_option = config.EXPERT_MEMORY_POSITION_OPTION
         learning_rate = config.EXPERT_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.EXPERT_MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.EXPERT_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
     else:
         memory_flag = config.ROUTER_MEMORY_FLAG
         memory_option = config.ROUTER_MEMORY_OPTION
         memory_position_option = config.ROUTER_MEMORY_POSITION_OPTION
         learning_rate = config.ROUTER_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        num_memory_slots = config.ROUTER_MEMORY_NUM_MEMORY_SLOTS
         num_inner_steps = config.ROUTER_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
 
     return ExpertsDynamicMemoryOptions(
@@ -1322,6 +1329,7 @@ def experts_dynamic_memory_options(
         memory_option=memory_option,
         memory_position_option=memory_position_option,
         memory_test_time_training_learning_rate=learning_rate,
+        memory_num_memory_slots=num_memory_slots,
         memory_test_time_training_num_inner_steps=num_inner_steps,
         memory_stack_source=_experts_controller_stack_source(config, role, "memory"),
     )

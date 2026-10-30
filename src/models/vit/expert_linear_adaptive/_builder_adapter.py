@@ -1652,6 +1652,7 @@ def _dynamic_memory_options_from_kwargs(
             f"{prefix}memory_option": "memory_option",
             f"{prefix}memory_position_option": "memory_position_option",
             f"{prefix}memory_test_time_training_learning_rate": "memory_test_time_training_learning_rate",
+            f"{prefix}memory_num_memory_slots": "memory_num_memory_slots",
             f"{prefix}memory_test_time_training_num_inner_steps": "memory_test_time_training_num_inner_steps",
         },
     )
@@ -2119,6 +2120,7 @@ def _dynamic_memory_relevant_keys(
         f"{prefix}memory_option",
         f"{prefix}memory_position_option",
         f"{prefix}memory_test_time_training_learning_rate",
+        f"{prefix}memory_num_memory_slots",
         f"{prefix}memory_test_time_training_num_inner_steps",
     } | _controller_stack_keys(memory_stack_prefix)
 

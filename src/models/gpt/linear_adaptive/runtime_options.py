@@ -203,6 +203,7 @@ class DynamicMemoryOptions:
     memory_option: type[DynamicMemoryConfig]
     memory_position_option: MemoryPositionOptions
     memory_test_time_training_learning_rate: float | None
+    memory_num_memory_slots: int = field(default=4, kw_only=True)
     memory_test_time_training_num_inner_steps: int | None
     memory_stack_source: SubmoduleStackSource
 

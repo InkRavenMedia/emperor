@@ -128,6 +128,7 @@ ATTN_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 ### Attention Projection Memory Options
 ATTN_MEMORY_FLAG: bool = False
+ATTN_MEMORY_NUM_MEMORY_SLOTS: int = 4
 ATTN_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
 ATTN_MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
 ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
@@ -285,6 +286,7 @@ FF_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 ## Feed-Forward Memory Options
 FF_MEMORY_FLAG: bool = False
+FF_MEMORY_NUM_MEMORY_SLOTS: int = 4
 FF_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
 FF_MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
 FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None

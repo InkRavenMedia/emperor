@@ -213,6 +213,42 @@ class TestTransformerModelPackages(unittest.TestCase):
                             )
                         )
 
+    def test_attention_memory_slots_reach_attention_and_feed_forward_paths(self):
+        for builder, model_type, _, _, _, adaptive, _ in self.package_cases():
+            for role in ("attn", "ff"):
+                with self.subTest(package=self.package_key(builder), role=role):
+                    config = self.preset(
+                        builder,
+                        adaptive=adaptive,
+                        vocab_size=16,
+                        **{
+                            "ff_stack_hidden_dim": 16,
+                            f"{role}_memory_flag": True,
+                            f"{role}_memory_option": AttentionDynamicMemoryConfig,
+                            f"{role}_memory_num_memory_slots": 3,
+                        },
+                    )
+                    model = model_type(config).eval()
+                    memories = [
+                        m
+                        for m in model.modules()
+                        if isinstance(m, DynamicMemoryAbstract)
+                    ]
+                    self.assertTrue(memories)
+                    self.assertTrue(all(m.cfg.num_memory_slots == 3 for m in memories))
+                    logits, _ = model(
+                        torch.tensor([[1, 2, 3, 0]]), torch.tensor([[1, 2, 3]])
+                    )
+                    logits.square().mean().backward()
+                    self.assertTrue(
+                        any(
+                            p.grad is not None
+                            and torch.isfinite(p.grad).all()
+                            and p.grad.abs().sum() > 0
+                            for memory in memories
+                            for p in memory.parameters()
+                        )
+                    )
 
     def test_explicit_cross_attention_source_memory_fails_clearly(self):
         for builder, _, _, _, _, adaptive, _ in self.package_cases():

@@ -196,6 +196,7 @@ def _dynamic_memory_options_from_kwargs(
             "memory_option": "memory_option",
             "memory_position_option": "memory_position_option",
             "memory_test_time_training_learning_rate": "memory_test_time_training_learning_rate",
+            "memory_num_memory_slots": "memory_num_memory_slots",
             "memory_test_time_training_num_inner_steps": "memory_test_time_training_num_inner_steps",
         },
     )
@@ -301,6 +302,7 @@ def _expert_dynamic_memory_options_from_kwargs(
             "expert_memory_option": "memory_option",
             "expert_memory_position_option": "memory_position_option",
             "expert_memory_test_time_training_learning_rate": "memory_test_time_training_learning_rate",
+            "expert_memory_num_memory_slots": "memory_num_memory_slots",
             "expert_memory_test_time_training_num_inner_steps": "memory_test_time_training_num_inner_steps",
         },
     )
@@ -401,6 +403,7 @@ def _router_dynamic_memory_options_from_kwargs(
             "router_memory_option": "memory_option",
             "router_memory_position_option": "memory_position_option",
             "router_memory_test_time_training_learning_rate": "memory_test_time_training_learning_rate",
+            "router_memory_num_memory_slots": "memory_num_memory_slots",
             "router_memory_test_time_training_num_inner_steps": "memory_test_time_training_num_inner_steps",
         },
     )
