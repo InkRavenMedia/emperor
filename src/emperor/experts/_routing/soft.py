@@ -40,8 +40,17 @@ class SoftMoERouter(Module):
         return self.cfg.model_config.build(slot_logit_overrides)
 
     def forward(
-        self, X: Tensor, skip_mask: Tensor | None = None
+        self,
+        X: Tensor,
+        skip_mask: Tensor | None = None,
+        *,
+        causal_prefix_flag: bool = False,
     ) -> tuple[Tensor, Tensor]:
+        """Return dispatch/combine weights, or prefix-update/combine weights.
+
+        In causal mode, each update weight inserts the current token into the
+        running slot average; its complement retains the previous prefix.
+        """
         token_features = X
         self.VALIDATOR.validate_inputs(token_features, self.input_dim, skip_mask)
         self.VALIDATOR.validate_parameter_device(token_features, self.scale)
@@ -52,7 +61,9 @@ class SoftMoERouter(Module):
         token_slot_logits = self.__compute_token_slot_logits(
             token_features, normalized_token_features, routing_dtype
         )
-        return self.__compute_dispatch_and_combine_weights(token_slot_logits, skip_mask)
+        return self.__compute_dispatch_and_combine_weights(
+            token_slot_logits, skip_mask, causal_prefix_flag
+        )
 
     def __resolve_routing_dtype(self, token_features: Tensor) -> torch.dtype:
         if token_features.dtype == torch.float64:
@@ -128,19 +139,15 @@ class SoftMoERouter(Module):
         return buffer
 
     def __compute_dispatch_and_combine_weights(
-        self, token_slot_logits: Tensor, skip_mask: Tensor | None
+        self,
+        token_slot_logits: Tensor,
+        skip_mask: Tensor | None,
+        causal_prefix_flag: bool,
     ) -> tuple[Tensor, Tensor]:
-        dispatch_logits = token_slot_logits
         active_token_mask = self.__expand_token_mask_for_slots(skip_mask)
-        if active_token_mask is not None:
-            dispatch_logits = token_slot_logits.masked_fill(
-                ~active_token_mask, -torch.inf
-            )
-            sequence_has_active_tokens = active_token_mask.any(dim=1, keepdim=True)
-            dispatch_logits = torch.where(
-                sequence_has_active_tokens, dispatch_logits, 0
-            )
-        dispatch_weights = dispatch_logits.softmax(dim=1)
+        dispatch_weights = self.__compute_dispatch_weights(
+            token_slot_logits, active_token_mask, causal_prefix_flag
+        )
         flattened_slot_logits = token_slot_logits.flatten(2)
         flattened_combine_weights = flattened_slot_logits.softmax(dim=-1)
         combine_weights = flattened_combine_weights.reshape_as(token_slot_logits)
@@ -153,3 +160,38 @@ class SoftMoERouter(Module):
         if skip_mask is None:
             return None
         return skip_mask.unsqueeze(-1)
+
+    def __compute_dispatch_weights(
+        self,
+        token_slot_logits: Tensor,
+        active_token_mask: Tensor | None,
+        causal_prefix_flag: bool,
+    ) -> Tensor:
+        if causal_prefix_flag:
+            return self.__compute_prefix_update_weights(
+                token_slot_logits, active_token_mask
+            )
+        dispatch_logits = token_slot_logits
+        if active_token_mask is not None:
+            dispatch_logits = token_slot_logits.masked_fill(
+                ~active_token_mask, -torch.inf
+            )
+            sequence_has_active_tokens = active_token_mask.any(dim=1, keepdim=True)
+            dispatch_logits = torch.where(
+                sequence_has_active_tokens, dispatch_logits, 0
+            )
+        return dispatch_logits.softmax(dim=1)
+
+    def __compute_prefix_update_weights(
+        self, token_slot_logits: Tensor, active_token_mask: Tensor | None
+    ) -> Tensor:
+        prefix_logits = token_slot_logits
+        if active_token_mask is not None:
+            # Finite sentinels keep logcumsumexp gradients defined for empty prefixes.
+            inactive_logit = torch.finfo(token_slot_logits.dtype).min
+            prefix_logits = token_slot_logits.masked_fill(
+                ~active_token_mask, inactive_logit
+            )
+        prefix_log_normalizers = torch.logcumsumexp(prefix_logits, dim=1)
+        normalized_prefix_logits = prefix_logits - prefix_log_normalizers
+        return normalized_prefix_logits.exp()

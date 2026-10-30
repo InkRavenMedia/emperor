@@ -326,10 +326,6 @@ class TransformerValidator(ValidatorBase):
         for config in attention_configs:
             if config is None:
                 continue
-            if getattr(config, "causal_attention_mask_flag", False):
-                raise ValueError(
-                    "Soft MoE is noncausal and cannot follow causal attention."
-                )
             if not isinstance(getattr(config, "batch_first_flag", None), bool):
                 raise ValueError(
                     "Soft MoE requires explicit batch_first_flag on attention."
@@ -341,20 +337,9 @@ class TransformerValidator(ValidatorBase):
             getattr(model, "feed_forward_model", None), "uses_soft_moe", False
         ):
             return
-        attention_models = (
-            model.self_attention_model,
-            getattr(model, "cross_attention_model", None),
-        )
-        if (
-            attention_mask is not None
-            or cross_attention_mask is not None
-            or any(
-                getattr(attention, "causal_attention_mask_flag", False)
-                for attention in attention_models
-            )
-        ):
+        if attention_mask is not None or cross_attention_mask is not None:
             raise ValueError(
-                "Soft MoE is noncausal; causal or explicitly masked attention is unsupported."
+                "Soft MoE does not support explicit pairwise attention masks."
             )
 
     @staticmethod

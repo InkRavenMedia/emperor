@@ -165,10 +165,13 @@ class FeedForward(Module):
         *,
         padding_mask: Tensor | None = None,
         batch_first: bool = True,
+        causal_prefix_flag: bool = False,
     ) -> tuple[Tensor, Tensor]:
         self.VALIDATOR.validate_forward_inputs(self, input_batch)
         if self.uses_soft_moe:
-            return self.__forward_soft_moe(input_batch, padding_mask, batch_first)
+            return self.__forward_soft_moe(
+                input_batch, padding_mask, batch_first, causal_prefix_flag
+            )
         original_shape = input_batch.shape
         flattened_input = input_batch.reshape(-1, self.input_dim)
         feed_forward_state = Layer.run_model_from_hidden(
@@ -184,7 +187,11 @@ class FeedForward(Module):
         return output, loss
 
     def __forward_soft_moe(
-        self, inputs: Tensor, padding_mask: Tensor | None, batch_first: bool
+        self,
+        inputs: Tensor,
+        padding_mask: Tensor | None,
+        batch_first: bool,
+        causal_prefix_flag: bool,
     ) -> tuple[Tensor, Tensor]:
         from emperor.experts import MixtureOfExpertsLayerState
 
@@ -199,7 +206,11 @@ class FeedForward(Module):
             )
             active = ~excluded.unsqueeze(-1)
             tokens = tokens.masked_fill(~active, 0)
-        state = self.model(MixtureOfExpertsLayerState(hidden=tokens, skip_mask=active))
+        state = self.model(
+            MixtureOfExpertsLayerState(
+                hidden=tokens, skip_mask=active, causal_prefix_flag=causal_prefix_flag
+            )
+        )
         output = (
             state.hidden if active is None else state.hidden.masked_fill(~active, 0)
         )
