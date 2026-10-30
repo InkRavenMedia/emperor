@@ -28,6 +28,9 @@ from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.bert.expert_linear._control_factory_dependencies import (
     BertControlFactoryDependencies,
 )
+from models.bert.expert_linear._controller_stack_config import (
+    build_source_memory_config,
+)
 from models.bert.expert_linear._encoder_control_config_factory import (
     BertGateConfigFactory,
     BertHaltingConfigFactory,
@@ -231,6 +234,9 @@ class BertCoreConfigFactory:
     ) -> SelfAttentionConfig | MixtureOfAttentionHeadsConfig:
         encoder_options = self.encoder_options
         attention_options = self.attention_options
+        source_memory_config = build_source_memory_config(
+            attention_options, self.encoder_submodule_stack_options
+        )
         projection_model_config = self._build_attention_projection_stack_config()
         if self.expert_config_factory is not None:
             attention_config = self.expert_config_factory.build_attention_config(
@@ -240,6 +246,7 @@ class BertCoreConfigFactory:
                 projection_model_config=projection_model_config,
             )
             if attention_config is not None:
+                attention_config.source_memory_config = source_memory_config
                 return attention_config
         return SelfAttentionConfig(
             batch_size=self.batch_size,
@@ -254,6 +261,7 @@ class BertCoreConfigFactory:
             zero_attention_flag=False,
             causal_attention_mask_flag=encoder_options.causal_attention_mask_flag,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
+            source_memory_config=source_memory_config,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

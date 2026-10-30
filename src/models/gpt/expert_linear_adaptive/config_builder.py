@@ -46,6 +46,9 @@ from emperor.transformer import (
 from models.gpt.expert_linear_adaptive._base_config_builder import (
     GptBackendConfigBuilder,
 )
+from models.gpt.expert_linear_adaptive._controller_stack_config import (
+    build_source_memory_config,
+)
 from models.gpt.expert_linear_adaptive._expert_control_config_factory import (
     ControlConfigDependencies,
     ControlConfigFactory,
@@ -402,6 +405,9 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
     def _build_attention_config(self):
         decoder_options = self.decoder_options
         attention_options = self.attention_options
+        source_memory_config = build_source_memory_config(
+            attention_options, self.submodule_stack_options
+        )
         return MixtureOfAttentionHeadsConfig(
             batch_size=self.batch_size,
             num_heads=attention_options.num_heads,
@@ -415,6 +421,7 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
             zero_attention_flag=False,
             causal_attention_mask_flag=True,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
+            source_memory_config=source_memory_config,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

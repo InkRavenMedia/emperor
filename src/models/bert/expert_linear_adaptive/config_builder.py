@@ -12,6 +12,9 @@ from emperor.experts import MixtureOfExpertsModelConfig
 from models.bert.expert_linear_adaptive._base_config_builder import (
     BertBackendConfigBuilder,
 )
+from models.bert.expert_linear_adaptive._controller_stack_config import (
+    build_source_memory_config,
+)
 from models.bert.expert_linear_adaptive._expert_control_config_factory import (
     ControlConfigDependencies,
     ControlConfigFactory,
@@ -192,6 +195,9 @@ class _BertExpertLinearAdaptiveConfigBuilderImplementation(BertBackendConfigBuil
     def _build_attention_config(self):
         encoder_options = self.encoder_options
         attention_options = self.attention_options
+        source_memory_config = build_source_memory_config(
+            attention_options, self.submodule_stack_options
+        )
         return MixtureOfAttentionHeadsConfig(
             batch_size=self.batch_size,
             num_heads=attention_options.num_heads,
@@ -205,6 +211,7 @@ class _BertExpertLinearAdaptiveConfigBuilderImplementation(BertBackendConfigBuil
             zero_attention_flag=False,
             causal_attention_mask_flag=encoder_options.causal_attention_mask_flag,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
+            source_memory_config=source_memory_config,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

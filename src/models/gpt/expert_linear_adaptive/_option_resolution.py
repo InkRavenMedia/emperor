@@ -693,6 +693,11 @@ def _attention_options_from_kwargs(
         num_layers=config_module.ATTN_NUM_LAYERS,
         bias_flag=config_module.ATTN_BIAS_FLAG,
         add_key_value_bias_flag=config_module.ATTN_ADD_KEY_VALUE_BIAS_FLAG,
+        source_memory_flag=config_module.ATTN_SOURCE_MEMORY_FLAG,
+        source_memory_option=config_module.ATTN_SOURCE_MEMORY_OPTION,
+        source_memory_num_memory_slots=config_module.ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS,
+        source_memory_test_time_training_learning_rate=config_module.ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+        source_memory_test_time_training_num_inner_steps=config_module.ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
     )
     updates = _pop_updates(
         kwargs,
@@ -701,6 +706,11 @@ def _attention_options_from_kwargs(
             "attn_num_layers": "num_layers",
             "attn_bias_flag": "bias_flag",
             "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
+            "attn_source_memory_flag": "source_memory_flag",
+            "attn_source_memory_option": "source_memory_option",
+            "attn_source_memory_num_memory_slots": "source_memory_num_memory_slots",
+            "attn_source_memory_test_time_training_learning_rate": "source_memory_test_time_training_learning_rate",
+            "attn_source_memory_test_time_training_num_inner_steps": "source_memory_test_time_training_num_inner_steps",
         },
     )
     return replace(options, **updates) if updates else options

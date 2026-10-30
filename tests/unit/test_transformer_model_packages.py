@@ -9,6 +9,7 @@ from unittest.mock import patch
 import torch
 import torch.nn as nn
 
+from emperor.attention._ops.source_memory import AttentionSourceMemory
 from emperor.attention._variants.independent.layer import IndependentAttention
 from emperor.attention._variants.mixture.layer import MixtureOfAttentionHeads
 from emperor.attention._variants.self_attention.layer import SelfAttention
@@ -30,6 +31,13 @@ from emperor.layers import (
 )
 from emperor.layers._composition.gate import LayerGate
 from emperor.linears import LinearLayer
+from emperor.memory import (
+    AttentionDynamicMemoryConfig,
+    ElementWiseWeightedDynamicMemoryConfig,
+    GatedResidualDynamicMemoryConfig,
+    WeightedDynamicMemoryConfig,
+)
+from emperor.memory._base import DynamicMemoryAbstract
 from emperor.memory._variants.gated_residual import GatedResidualDynamicMemory
 from emperor.transformer import (
     TransformerDecoderLayer,
@@ -150,6 +158,74 @@ class TestTransformerModelPackages(unittest.TestCase):
         runtime = self.runtime(builder_type, **builder_options)
         return builder_type(runtime=runtime).build()
 
+    def test_source_memory_is_temporary_causal_and_differentiable_in_all_packages(self):
+        for builder, model_type, _, _, _, adaptive, _ in self.package_cases():
+            for memory_type in (
+                GatedResidualDynamicMemoryConfig,
+                WeightedDynamicMemoryConfig,
+                ElementWiseWeightedDynamicMemoryConfig,
+                AttentionDynamicMemoryConfig,
+            ):
+                with self.subTest(
+                    package=self.package_key(builder), memory=memory_type.__name__
+                ):
+                    torch.manual_seed(41)
+                    config = self.preset(
+                        builder,
+                        adaptive=adaptive,
+                        vocab_size=16,
+                        attn_source_memory_flag=True,
+                        attn_source_memory_option=memory_type,
+                        attn_source_memory_num_memory_slots=3,
+                    )
+                    model = model_type(config).eval()
+                    memories = [
+                        m
+                        for m in model.modules()
+                        if isinstance(m, AttentionSourceMemory)
+                    ]
+                    self.assertEqual(len(memories), 2)
+                    if memory_type is AttentionDynamicMemoryConfig:
+                        self.assertTrue(
+                            all(m.model.cfg.num_memory_slots == 3 for m in memories)
+                        )
+                    source = torch.tensor([[1, 2, 3, 0], [3, 2, 1, 4]])
+                    target = torch.tensor([[1, 2, 3], [3, 2, 1]])
+                    logits, _ = model(source, target)
+                    self.assertEqual(logits.shape, (2, 3, 16))
+                    self.assertTrue(torch.isfinite(logits).all())
+                    changed_future = target.clone()
+                    changed_future[:, 2] = 5
+                    torch.testing.assert_close(
+                        model(source, changed_future)[0][:, :2], logits[:, :2]
+                    )
+                    torch.testing.assert_close(
+                        model(source, target[:, :2])[0], logits[:, :2]
+                    )
+                    logits.square().mean().backward()
+                    for memory in memories:
+                        self.assertTrue(
+                            any(
+                                p.grad is not None
+                                and torch.isfinite(p.grad).all()
+                                and p.grad.abs().sum() > 0
+                                for p in memory.parameters()
+                            )
+                        )
+
+
+    def test_explicit_cross_attention_source_memory_fails_clearly(self):
+        for builder, _, _, _, _, adaptive, _ in self.package_cases():
+            with self.subTest(package=self.package_key(builder)):
+                with self.assertRaisesRegex(
+                    ValueError, "self-attention.*cross-attention"
+                ):
+                    self.preset(
+                        builder,
+                        adaptive=adaptive,
+                        decoder_cross_attn_source_memory_flag=True,
+                    )
+
     def controller_options(self):
         options = dict(
             attn_num_layers=2,
@@ -268,6 +344,11 @@ class TestTransformerModelPackages(unittest.TestCase):
                         "num_heads",
                         "add_key_value_bias_flag",
                         "zero_attention_flag",
+                        "source_memory_flag",
+                        "source_memory_option",
+                        "source_memory_num_memory_slots",
+                        "source_memory_test_time_training_learning_rate",
+                        "source_memory_test_time_training_num_inner_steps",
                         "stack_options",
                         "layer_controller_options",
                         "dynamic_memory_options",

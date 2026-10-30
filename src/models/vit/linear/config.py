@@ -290,6 +290,13 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
+# Temporary memory sources, independently selectable from projection memory.
+ATTN_SOURCE_MEMORY_FLAG: bool = False
+ATTN_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
+ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS: int = 4
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
+
 ## Attention Projection Stack Options
 ATTN_NUM_LAYERS: int = 1
 ATTN_BIAS_FLAG: bool = True
@@ -612,6 +619,7 @@ _PUBLIC_CONFIG_KEYS = {
     "NUM_EPOCHS",
 }
 _PUBLIC_CONFIG_PREFIXES = (
+    "ATTN_SOURCE_MEMORY_",
     "TRAINER_",
     "CALLBACK_",
     "DATA_",

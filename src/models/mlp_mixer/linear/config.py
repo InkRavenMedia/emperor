@@ -16,9 +16,12 @@ from emperor.layers import (
     WeightedResidualConfig,  # noqa: F401
 )
 from emperor.memory import (
+    AttentionDynamicMemoryConfig,  # noqa: F401
     DynamicMemoryConfig,
+    ElementWiseWeightedDynamicMemoryConfig,  # noqa: F401
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
+    WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
 
@@ -320,6 +323,15 @@ PATCH_BIAS_FLAG: bool = True
 
 ## Token Mixer Stack Options
 # - STACK_ACTIVATION and STACK_BIAS_FLAG supply inherited branch defaults.
+# Temporary memory tokens mixed alongside the original token positions.
+TOKEN_MIXER_SOURCE_MEMORY_FLAG: bool = False
+TOKEN_MIXER_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = (
+    GatedResidualDynamicMemoryConfig
+)
+TOKEN_MIXER_SOURCE_MEMORY_NUM_MEMORY_SLOTS: int = 4
+TOKEN_MIXER_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
+TOKEN_MIXER_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
+
 TOKEN_MIXER_STACK_HIDDEN_DIM: int = 64
 TOKEN_MIXER_NUM_LAYERS: int = 2
 TOKEN_MIXER_STACK_ACTIVATION: ActivationOptions = STACK_ACTIVATION
