@@ -4,7 +4,11 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from emperor._validation import ValidatorBase, _first_adaptive_grouping_path
+from emperor._validation import (
+    ValidatorBase,
+    _first_adaptive_grouping_path,
+)
+from emperor.attention._validation import AttentionSourceMemoryValidator
 from emperor.layers import LayerState
 
 if TYPE_CHECKING:
@@ -14,6 +18,8 @@ if TYPE_CHECKING:
 
 
 class MixerAttentionValidator(ValidatorBase):
+    OPTIONAL_FIELDS = {"source_memory_config"}
+
     @classmethod
     def validate(cls, model: "MixerAttention") -> None:
         cls.validate_required_fields(model.cfg)
@@ -22,6 +28,10 @@ class MixerAttentionValidator(ValidatorBase):
             embedding_dim=model.embedding_dim,
             sequence_length=model.sequence_length,
         )
+        if model.cfg.source_memory_config is not None:
+            AttentionSourceMemoryValidator.validate_memory_config(
+                model.cfg.source_memory_config
+            )
         cls._validate_mixing_model_config(model.mixing_model_config)
 
     @classmethod

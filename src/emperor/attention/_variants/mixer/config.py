@@ -8,6 +8,7 @@ from emperor.config import ConfigBase, optional_field
 if TYPE_CHECKING:
     from emperor.experts import MixtureOfExpertsModelConfig
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
+    from emperor.memory import DynamicMemoryConfig
 
 
 @dataclass
@@ -25,8 +26,12 @@ class MixerAttentionConfig(ConfigBase):
     mixing_model_config: "LayerStackConfig | MixtureOfExpertsModelConfig | RecurrentCompositionConfig | None" = (  # noqa: E501
         optional_field(
             "Model configuration built with sequence_length as both its input and "
-            "output dimensions."
+            "output dimensions, doubled when source memory is enabled."
         )
+    )
+    source_memory_config: "DynamicMemoryConfig | None" = optional_field(
+        "Optional memory module generating one extra token per input token. "
+        "All positions are mixed, then memory output positions are discarded."
     )
 
     def _registry_owner(self) -> type:

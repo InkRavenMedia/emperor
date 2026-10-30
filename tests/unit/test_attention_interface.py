@@ -68,6 +68,7 @@ BASE_CONFIG_FIELDS = (
     "batch_first_flag",
     "projection_model_config",
     "relative_positional_embedding_config",
+    "source_memory_config",
 )
 
 
@@ -505,6 +506,7 @@ print(json.dumps({
                 "sequence_length",
                 "batch_first_flag",
                 "mixing_model_config",
+                "source_memory_config",
             ),
         )
         self.assertEqual(
