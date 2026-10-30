@@ -29,6 +29,48 @@ def memory_config(variant=GatedResidualDynamicMemoryConfig, **options):
     )
 
 
+@pytest.mark.parametrize("batch_first", [True, False])
+@pytest.mark.parametrize("with_memory", [True, False])
+def test_soft_mixer_routes_channel_vectors_then_restores_token_layout(
+    batch_first, with_memory
+):
+    from emperor.experts import MixtureOfExpertsLayerState, SoftMoEConfig
+    from emperor.transformer._soft_moe_config import build_soft_moe_stack
+    from tests.unit.test_expert_soft_moe import scoring_config
+
+    config = _mixer_config(batch_first_flag=batch_first)
+    config.mixing_model_config = build_soft_moe_stack(
+        config.mixing_model_config,
+        SoftMoEConfig(num_experts=2, slots_per_expert=2, model_config=scoring_config()),
+        3,
+    )
+    config.source_memory_config = memory_config() if with_memory else None
+    model = config.build().double().eval()
+    inputs = torch.randn(2, 3, 4, dtype=torch.double)
+    if not batch_first:
+        inputs = inputs.transpose(0, 1)
+    sequence_axis = 1 if batch_first else 0
+    extended = inputs
+    if with_memory:
+        memory = model.source_memory(inputs.reshape(-1, 4)).reshape_as(inputs)
+        extended = torch.cat((inputs, memory), dim=sequence_axis)
+    vectors = extended.movedim(sequence_axis, -1)
+    assert vectors.shape == (2, 4, 6 if with_memory else 3)
+    expected = model.mixing_model(MixtureOfExpertsLayerState(hidden=vectors)).hidden
+    expected = expected[..., :3].movedim(-1, sequence_axis)
+    actual, weights, _ = model(inputs, inputs, inputs)
+    torch.testing.assert_close(actual, expected)
+    assert weights is None and actual.shape == inputs.shape
+    actual.square().sum().backward()
+    assert any(
+        p.grad is not None and p.grad.abs().sum() > 0
+        for p in model.mixing_model.parameters()
+    )
+    if with_memory:
+        assert any(
+            p.grad is not None and p.grad.abs().sum() > 0
+            for p in model.source_memory.parameters()
+        )
 
 
 @pytest.mark.parametrize("batch_first", [True, False])

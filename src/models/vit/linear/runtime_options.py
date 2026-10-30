@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.experts import SoftMoEConfig
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -239,6 +240,7 @@ class TransformerAttentionOptions:
 
 @dataclass(frozen=True)
 class TransformerFeedForwardOptions:
+    soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_layers: int
     bias_flag: bool
 

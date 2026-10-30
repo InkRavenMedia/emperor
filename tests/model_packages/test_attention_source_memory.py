@@ -180,3 +180,56 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
         for m in disabled.modules()
         if isinstance(m, MultiHeadAttentionAbstract)
     )
+
+
+@pytest.mark.parametrize(
+    "package_name", [name for name in PACKAGES if "expert" in name]
+)
+@pytest.mark.parametrize("adaptation_steps", [None, 1])
+def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
+    package_name, adaptation_steps
+):
+    from emperor.experts import SoftMoEConfig
+    from tests.unit.test_expert_soft_moe import scoring_config
+
+    config = configuration(
+        package_name,
+        attention_soft_moe_config=SoftMoEConfig(
+            num_experts=2, slots_per_expert=2, model_config=scoring_config()
+        ),
+        attn_source_memory_test_time_training_learning_rate=0.01
+        if adaptation_steps
+        else None,
+        attn_source_memory_test_time_training_num_inner_steps=adaptation_steps,
+    )
+    package = model_package(package_name)
+    model = package.build_model(config).eval()
+    ids = (
+        torch.randn(2, 1, 8, 8)
+        if package_name.startswith("vit")
+        else torch.tensor([[1, 2, 3, 4], [4, 3, 2, 1]])
+    )
+
+    def run(module, tokens):
+        return run_model(module, package_name, tokens)[0]
+
+    expected = run(model, ids)
+    changed = ids.clone()
+    changed[1] = 5
+    torch.testing.assert_close(run(model, changed)[0], expected[0])
+    if package_name.startswith("gpt"):
+        changed = ids.clone()
+        changed[:, 2:] = 6
+        torch.testing.assert_close(run(model, changed)[:, :2], expected[:, :2])
+    restored = package.build_model(config).eval()
+    restored.load_state_dict(model.state_dict(), strict=True)
+    torch.testing.assert_close(run(restored, ids), expected)
+    # Exercise gradients through the same source branch in training mode (no optimizer step).
+    model.train()
+    run(model, ids).square().mean().backward()
+    for module in model.modules():
+        if isinstance(module, MultiHeadAttentionAbstract):
+            assert any(
+                p.grad is not None and p.grad.abs().sum() > 0
+                for p in module.source_memory.parameters()
+            )

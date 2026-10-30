@@ -24,6 +24,7 @@ from emperor.transformer import (
     TransformerDecoderBlockLayerConfig,
     TransformerDecoderLayerConfig,
 )
+from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.gpt.expert_linear._control_factory_dependencies import (
     GptControlFactoryDependencies,
 )
@@ -268,7 +269,11 @@ class GptCoreConfigFactory:
         )
 
     def _build_feed_forward_config(self) -> FeedForwardConfig:
-        stack_config = self._build_feed_forward_stack_config()
+        stack_config = build_soft_moe_stack(
+            self._build_feed_forward_stack_config(),
+            self.feed_forward_options.soft_moe_config,
+            self.hidden_dim,
+        )
         return FeedForwardConfig(
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,

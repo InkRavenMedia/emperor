@@ -2,6 +2,7 @@ from emperor.embedding.absolute import (
     AbsolutePositionalEmbeddingConfig,
     ImageLearnedPositionalEmbeddingConfig,
 )
+from emperor.experts import SoftMoEConfig
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -456,6 +457,7 @@ ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 #########################################################################
 # Feed-Forward Stack Options
+SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 FF_NUM_LAYERS: int = 2
 FF_BIAS_FLAG: bool = True
 FF_STACK_HIDDEN_DIM: int = HIDDEN_DIM * 4
@@ -615,6 +617,7 @@ OUTPUT_BIAS_FLAG: bool = True
 # Construction defaults remain available to flat CLI adapters and presets. The
 # grouped builder interface also exposes its supported residual settings.
 _PUBLIC_CONFIG_KEYS = {
+    "SOFT_MOE_CONFIG",
     "INPUT_DIM",
     "OUTPUT_DIM",
     "BATCH_SIZE",

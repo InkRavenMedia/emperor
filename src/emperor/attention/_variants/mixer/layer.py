@@ -47,6 +47,7 @@ class MixerAttention(Module):
         )
         exact_mixing_config = self.__exact_mixing_model_config(self.mixing_model_config)
         self.mixing_model = exact_mixing_config.build()
+        self.uses_soft_moe = getattr(self.mixing_model, "uses_soft_moe", False)
         self.source_memory = (
             self._build_from_config(
                 self.cfg.source_memory_config,
@@ -95,8 +96,17 @@ class MixerAttention(Module):
             q = torch.cat((q, memory.reshape_as(q)), dim=sequence_axis)
         token_vectors = q.movedim(sequence_axis, -1)
         leading_shape = token_vectors.shape[:-1]
-        mixing_input = token_vectors.reshape(-1, self.mixing_sequence_length)
-        mixing_state = Layer.run_model_from_hidden(self.mixing_model, mixing_input)
+        if self.uses_soft_moe:
+            from emperor.experts import MixtureOfExpertsLayerState
+
+            # Route channel vectors within each sample; each expert mixes tokens.
+            mixing_input = token_vectors
+            mixing_state = self.mixing_model(
+                MixtureOfExpertsLayerState(hidden=mixing_input)
+            )
+        else:
+            mixing_input = token_vectors.reshape(-1, self.mixing_sequence_length)
+            mixing_state = Layer.run_model_from_hidden(self.mixing_model, mixing_input)
         mixing_state = self.VALIDATOR.validate_mixing_state(
             mixing_state,
             mixing_input,
