@@ -333,8 +333,56 @@ class AttentionValidatorBase:
             )
 
 
+class AttentionSourceMemoryValidator:
+    @staticmethod
+    def validate_config(cfg) -> None:
+        AttentionSourceMemoryValidator.validate_memory_config(cfg.source_memory_config)
+        widths = (
+            cfg.embedding_dim,
+            cfg.query_key_projection_dim or cfg.embedding_dim,
+            cfg.value_projection_dim or cfg.embedding_dim,
+        )
+        if len(set(widths)) != 1:
+            raise ValueError(
+                "Attention source memory requires equal input, key and value widths."
+            )
+
+    @staticmethod
+    def validate_memory_config(memory_config) -> None:
+        from emperor.memory import DynamicMemoryConfig
+
+        if not isinstance(memory_config, DynamicMemoryConfig):
+            raise TypeError("source_memory_config must be a DynamicMemoryConfig.")
+        if any(_adaptive_grouping_configs(memory_config, root="source_memory_config")):
+            raise ValueError(
+                "Attention source memory requires independent token rows; grouping is unsupported."
+            )
+
+    @staticmethod
+    def validate_inputs(inputs: "MultiHeadAttentionInputs") -> None:
+        if inputs.static_key is not None or inputs.static_value is not None:
+            raise ValueError(
+                "Attention source memory does not support static key/value inputs."
+            )
+        if inputs.query is not inputs.key or inputs.key is not inputs.value:
+            raise ValueError(
+                "Attention source memory requires self-attention over the same input tensor."
+            )
+
+    @staticmethod
+    def validate_output(memory: Tensor, source: Tensor) -> None:
+        if not isinstance(memory, Tensor) or memory.shape != source.shape:
+            raise ValueError(
+                "Attention source memory must preserve the token rows and feature width."
+            )
+
+
 class MultiHeadAttentionValidator(AttentionValidatorBase, ValidatorBase):
-    OPTIONAL_FIELDS = {"relative_positional_embedding_config", "batch_first_flag"}
+    OPTIONAL_FIELDS = {
+        "relative_positional_embedding_config",
+        "batch_first_flag",
+        "source_memory_config",
+    }
 
     @classmethod
     def validate(cls, model: "MultiHeadAttentionAbstract") -> None:

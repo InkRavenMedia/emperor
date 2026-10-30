@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 
+import torch
 import torch.nn.functional as F
 from torch import Tensor
 
@@ -91,7 +92,7 @@ class ProcessorBase(Module):
             sequence_length=real_source_sequence_length,
         )
         return self.__restore_and_pad_relative_position_logits(
-            logits, restore_shape, source_sequence_length, real_source_sequence_length
+            logits, restore_shape, source_sequence_length
         )
 
     def __prepare_relative_position_query(
@@ -140,16 +141,17 @@ class ProcessorBase(Module):
         )
         return prepared_query, restore_shape
 
-    @staticmethod
     def __restore_and_pad_relative_position_logits(
+        self,
         logits: Tensor,
         restore_shape: tuple[int, ...] | None,
         source_sequence_length: int,
-        real_source_sequence_length: int,
     ) -> Tensor:
         if restore_shape is not None:
             logits = logits.contiguous().view(restore_shape)
-        synthetic_position_count = source_sequence_length - real_source_sequence_length
+        if self.cfg.source_memory_config is not None:
+            logits = torch.cat((logits, logits), dim=-1)
+        synthetic_position_count = source_sequence_length - logits.size(-1)
         synthetic_position_padding = (0, synthetic_position_count)
         return F.pad(logits, synthetic_position_padding)
 

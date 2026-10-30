@@ -57,10 +57,15 @@ class SelfAttentionProcessor(ProcessorBase):
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> Tensor:
         if self.cfg.rotary_base is not None:
+            memory_length = (
+                attention_inputs.runtime_layout.real_source_sequence_length
+                if self.cfg.source_memory_config is not None
+                else 0
+            )
             attention_inputs = replace(
                 attention_inputs,
                 query=self.__rotate_positions(attention_inputs.query),
-                key=self.__rotate_positions(attention_inputs.key),
+                key=self.__rotate_positions(attention_inputs.key, memory_length),
             )
         scaled_inputs = replace(
             attention_inputs,
@@ -78,7 +83,7 @@ class SelfAttentionProcessor(ProcessorBase):
         )
         return masked_attention_logits
 
-    def __rotate_positions(self, features: Tensor) -> Tensor:
+    def __rotate_positions(self, features: Tensor, memory_length: int = 0) -> Tensor:
         head_dim = features.shape[-1]
         frequency_dtype = (
             torch.float64 if features.dtype == torch.float64 else torch.float32
@@ -88,8 +93,12 @@ class SelfAttentionProcessor(ProcessorBase):
         )
         inverse_frequencies = self.cfg.rotary_base ** (-pair_indices / head_dim)
         positions = torch.arange(
-            features.shape[-2], device=features.device, dtype=frequency_dtype
+            features.shape[-2] - memory_length,
+            device=features.device,
+            dtype=frequency_dtype,
         )
+        if memory_length:
+            positions = torch.cat((positions, positions[:memory_length]))
         angles = positions[:, None] * inverse_frequencies
         cosine, sine = angles.cos().to(features.dtype), angles.sin().to(features.dtype)
         even, odd = features[..., 0::2], features[..., 1::2]

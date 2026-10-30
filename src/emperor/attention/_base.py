@@ -6,6 +6,7 @@ from torch import Tensor
 
 from emperor.attention._ops.batching import BatchDimensionManager
 from emperor.attention._ops.bias import KeyValueBias
+from emperor.attention._ops.source_memory import AttentionSourceMemory
 from emperor.attention._ops.zero_attention import ZeroAttention
 from emperor.attention._runtime import MultiHeadAttentionInputs
 from emperor.attention._validation import MultiHeadAttentionValidator
@@ -53,6 +54,11 @@ class MultiHeadAttentionAbstract(Module):
         self.bias = self.BIAS_HANDLER(self.cfg)
         self.zero_attention = self.ZERO_ATTENTION_HANDLER(self.cfg)
         self._build_attention_components()
+        self.source_memory = (
+            AttentionSourceMemory(self.cfg)
+            if self.cfg.source_memory_config is not None
+            else None
+        )
         self.to(dtype=self.target_dtype)
 
     def _build_attention_components(self) -> None:
@@ -82,12 +88,22 @@ class MultiHeadAttentionAbstract(Module):
         self.VALIDATOR.validate_static_key_value_inputs(self, attention_inputs)
         self.VALIDATOR.validate_runtime_layout(self, attention_inputs)
         unprepared_attention_inputs = attention_inputs
-        attention_inputs = self.masks.prepare_attention_masks(attention_inputs)
+        memory_mask = None
+        if self.source_memory is None:
+            attention_inputs = self.masks.prepare_attention_masks(attention_inputs)
+        else:
+            attention_inputs, memory_mask = self.source_memory.prepare_masks(
+                attention_inputs, self.masks
+            )
         self.VALIDATOR.validate_grouping_forward_inputs(
             self, unprepared_attention_inputs
         )
         attention_inputs = self.projector.compute_qkv_projections(attention_inputs)
         attention_inputs = self.reshaper.reshape_qkv_for_attention(attention_inputs)
+        if self.source_memory is not None:
+            attention_inputs = self.source_memory(
+                attention_inputs, unprepared_attention_inputs.key, memory_mask
+            )
         attention_inputs = self.bias.add_kv_learnable_bias_vectors(attention_inputs)
         attention_inputs = self.zero_attention.add_zero_attention(attention_inputs)
         attention_inputs = self.masks.merge_padding_and_attention_mask(attention_inputs)
