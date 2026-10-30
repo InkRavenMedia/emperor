@@ -511,11 +511,16 @@ modules = [
 [families.experts]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_attention_soft_moe.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
   "tests/unit/test_expert*.py",
   "tests/unit/test_mixture_of_experts*.py",
 ]
-integration_tests = []
+integration_tests = [
+  "tests/model_packages/test_memory_expert_parity.py",
+  "tests/model_packages/test_bert_soft_attention.py",
+  "tests/model_packages/test_gpt_soft_attention.py",
+]
 mutation_scope = ["src/emperor/experts/*"]
 environment = ["cpu", "float32", "float64", "non-contiguous"]
 coverage_evidence = "tests/architecture/emperor_behavioral/evidence/experts-coverage.toml"
@@ -582,6 +587,9 @@ modules = [
 [families.attention]
 status = "partial"
 focused_tests = [
+  "tests/model_packages/test_mlp_mixer_source_memory.py",
+  "tests/model_packages/test_attention_source_memory.py",
+  "tests/unit/test_attention_soft_moe.py",
   "tests/unit/test_hat_reference_primitives.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
   "tests/unit/test_attention*.py",
@@ -596,6 +604,11 @@ focused_tests = [
   "tests/model_packages/mlp_mixer/expert_linear_adaptive/test_model.py",
 ]
 integration_tests = [
+  "tests/model_packages/test_memory_expert_parity.py",
+  "tests/model_packages/test_mlp_mixer_source_memory.py",
+  "tests/model_packages/test_attention_source_memory.py",
+  "tests/model_packages/test_bert_soft_attention.py",
+  "tests/model_packages/test_gpt_soft_attention.py",
   "tests/integration/test_attention_monitor_lifecycle.py",
   "tests/model_packages/test_attention_layout_contract.py",
   "tests/model_packages/test_attention_real_model_integration.py",
@@ -634,6 +647,7 @@ modules = [
   "src/emperor/attention/_ops/processing.py",
   "src/emperor/attention/_ops/projection.py",
   "src/emperor/attention/_ops/reshaping.py",
+  "src/emperor/attention/_ops/source_memory.py",
   "src/emperor/attention/_ops/zero_attention.py",
   "src/emperor/attention/_runtime.py",
   "src/emperor/attention/_state.py",
@@ -654,6 +668,8 @@ modules = [
   "src/emperor/attention/_variants/mixture/processing.py",
   "src/emperor/attention/_variants/mixture/projection.py",
   "src/emperor/attention/_variants/mixture/reshaping.py",
+  "src/emperor/attention/_variants/mixture/soft.py",
+  "src/emperor/attention/_variants/mixture/soft_validation.py",
   "src/emperor/attention/_variants/mixture/validation.py",
   "src/emperor/attention/_variants/mixture/zero_attention.py",
   "src/emperor/attention/_variants/mixer/__init__.py",
@@ -671,6 +687,7 @@ modules = [
 [families.transformer]
 status = "pending"
 focused_tests = [
+  "tests/unit/test_attention_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
   "tests/unit/test_attention_model_mixer.py",
@@ -688,6 +705,9 @@ focused_tests = [
   "tests/unit/test_transformer_validator_adapter.py",
 ]
 integration_tests = [
+  "tests/model_packages/test_memory_expert_parity.py",
+  "tests/model_packages/test_bert_soft_attention.py",
+  "tests/model_packages/test_gpt_soft_attention.py",
   "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/model_packages/test_bert_adaptive_feature_parity.py",
   "tests/integration/test_hierarchical_language_model.py",

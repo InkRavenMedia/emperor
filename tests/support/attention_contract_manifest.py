@@ -79,6 +79,10 @@ ATTENTION_CONTRACT_MANIFEST = {
             ("configuration", "runtime tensor", "selected source validation"),
             "tests.unit.test_attention_correctness_regressions",
         ),
+        AttentionSourceMemoryValidator=class_contract(
+            ("memory dimensions", "token independence", "self-attention restriction"),
+            "tests.unit.test_attention_source_memory",
+        ),
     ),
     "emperor.attention._monitoring.callback": module_contract(
         (
@@ -213,6 +217,14 @@ ATTENTION_CONTRACT_MANIFEST = {
         ZeroAttention=class_contract(
             ("disabled identity", "head-layout append", "dtype and device"),
             "tests.unit.test_attention_zero_attention",
+        ),
+    ),
+    "emperor.attention._ops.source_memory": module_contract(
+        ("temporary memory sources", "source visibility inheritance"),
+        "tests.unit.test_attention_source_memory",
+        AttentionSourceMemory=class_contract(
+            ("shared key/value memory", "per-token adaptation", "expert head layout"),
+            "tests.unit.test_attention_source_memory",
         ),
     ),
     "emperor.attention._variants": module_contract(("private namespace",), EXPORT_TEST),
@@ -399,6 +411,26 @@ ATTENTION_CONTRACT_MANIFEST = {
         MixtureOfAttentionHeadsValidator=class_contract(
             ("nested types", "routing dimensions", "static expert K/V rejection"),
             "tests.unit.test_attention_validator",
+        ),
+    ),
+    "emperor.attention._variants.mixture.soft": module_contract(
+        ("soft expert routing", "causal prefix attention", "slot attention"),
+        "tests.unit.test_attention_soft_moe",
+        SoftMixtureOfAttentionHeadsProjector=class_contract(
+            ("slot pooling", "shared projections", "expert reduction"),
+            "tests.unit.test_attention_soft_moe",
+        ),
+        SoftMixtureOfAttentionHeadsProcessor=class_contract(
+            ("slot attention", "prefix visibility", "source extensions"),
+            "tests.unit.test_attention_soft_moe",
+        ),
+    ),
+    "emperor.attention._variants.mixture.soft_validation": module_contract(
+        ("soft attention configuration and runtime restrictions",),
+        "tests.unit.test_attention_soft_moe",
+        SoftMixtureOfAttentionHeadsValidator=class_contract(
+            ("routing restrictions", "input validation", "mask restrictions"),
+            "tests.unit.test_attention_soft_moe",
         ),
     ),
     "emperor.attention._variants.mixture.zero_attention": module_contract(
