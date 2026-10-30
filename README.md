@@ -355,9 +355,57 @@ is saved in checkpoints and preserves exact spellings, including `[MASK]`,
 vocabulary-based masked-token and next-sentence heads, sentence positions, and
 segment embeddings. Its MLM head must be untied from the input embedding.
 Soft MoE replaces the feed-forward routing; attention retains the package's
-configured implementation. It requires bidirectional attention and pointwise
-experts without shared adaptive grouping, recurrent expert stacks, or context
-controllers. Existing lookup embeddings and routing remain the defaults.
+configured implementation unless `attention_soft_moe_config` is also supplied.
+It requires bidirectional attention and pointwise experts without shared
+adaptive grouping, recurrent expert stacks, or context controllers. Existing
+lookup embeddings and routing remain the defaults.
+
+`bert/expert_linear`, `bert/expert_linear_adaptive`, `gpt/expert_linear`, and
+`gpt/expert_linear_adaptive` accept `attention_soft_moe_config: SoftMoEConfig`.
+In BERT, set it independently of the feed-forward `soft_moe_config`; either
+or both can be enabled, with separate scoring stacks and expert parameters.
+GPT retains its existing feed-forward routing. For attention in either family:
+
+```python
+configuration = package.build_configuration(
+    config_overrides={
+        "attention_soft_moe_config": attention_routing_config,
+        "expert_attention_use_kv_expert_models_flag": False,
+    }
+)
+```
+
+Soft attention pools tokens into query-expert slots, attends from those slots
+to shared token keys and values, applies the corresponding output experts,
+and reconstructs tokens with the combine weights from the original query
+router. Routing is computed once per attention call. Expert count, slots per
+expert, and attention head count are independent dimensions; `num_experts`
+in the attention `SoftMoEConfig` overrides the attention expert count only.
+
+GPT uses causal prefix slots: the slots for token position `t` pool only
+positions up to `t`, and their queries can attend only to those same positions.
+Stable cumulative log normalizers produce the current token's slot-update
+weights; the previous prefix supplies the remaining weight. Scoring and shared
+key/value projections still run once per attention call. The output experts
+process each prefix's slots before its token is reconstructed. BERT retains
+its bidirectional whole-sequence slots.
+
+The causal path evaluates `sequence_length * slots_per_expert` queries per
+expert, with attention weights proportional to
+`batch_size * experts * heads * slots_per_expert * sequence_length**2`.
+It uses more compute and memory than bidirectional slot attention. Prefixes
+are rebuilt on each forward pass; static key/value caches are unsupported.
+
+Both modes support Boolean or additive `0/-inf`
+padding masks, and the existing learned key/value bias and zero-attention
+source extensions. Padding is excluded from slot pooling and key/value
+attention, and padded query outputs are zero. It requires explicit input
+layout and pointwise projection stacks. Expert key/value projections,
+cross-attention, static key/value inputs, token-pair attention masks,
+relative position embeddings for slots, shared adaptive grouping, context
+controllers, and returning attention weights are rejected explicitly.
+Absolute input positions, package-supported hierarchical embeddings, and
+whole-stack reasoning growth can still be used.
 
 `contextual_embedding_config` accepts the same `ByteContextualEmbeddingConfig`
 used by GPT, including its byte experts, prefix kernel, contextual experts, and
@@ -404,6 +452,198 @@ That `version_*` folder contains TensorBoard event files such as
 `events.out.tfevents.*`, Lightning metadata such as `hparams.yaml`, and
 Emperor's `result.json` with the final parameters and metrics. Checkpoint files
 appear there only when checkpointing is enabled.
+
+### Temporary attention memory
+
+All twelve BERT/GPT/ViT packages (`linear`, `linear_adaptive`, `expert_linear`, and
+`expert_linear_adaptive` in each family) can append temporary memory to attention.
+The feature is disabled by default and applies to the backbone; GPT's hierarchical
+byte components remain independently configured.
+
+Alongside the existing Q/K/V projections, attention evaluates
+`M = memory_module(X)` once and concatenates the same result to both K and V along
+the source sequence dimension. Q is unchanged. A single softmax distributes
+weight over ordinary tokens and memory, so the weighted output retains the
+original query length. There is one outer memory position per source token.
+`AttentionDynamicMemoryConfig.num_memory_slots` controls its internal computation,
+not the number of appended positions: its public forward result is used intact.
+
+The package options are:
+
+| Option | Default |
+| --- | --- |
+| `ATTN_SOURCE_MEMORY_FLAG` | `False` |
+| `ATTN_SOURCE_MEMORY_OPTION` | `GatedResidualDynamicMemoryConfig` |
+| `ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS` | `4` |
+| `ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE` | `None` |
+| `ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS` | `None` |
+
+The generator uses the package's `SUBMODULE_STACK_*` controller-stack settings.
+Existing `ATTN_MEMORY_*` options still configure memory inside projection layers;
+the two features are independent and can coexist. For example, build BERT, GPT, and ViT
+configurations with attention-style source memory without starting training:
+
+```python
+from emperor.memory import AttentionDynamicMemoryConfig
+from models.catalog import model_package
+
+overrides = {
+    "attn_source_memory_flag": True,
+    "attn_source_memory_option": AttentionDynamicMemoryConfig,
+    "attn_source_memory_num_memory_slots": 3,
+}
+bert_configuration = model_package("bert/linear").build_configuration(
+    config_overrides=overrides,
+)
+gpt_configuration = model_package("gpt/linear").build_configuration(
+    config_overrides=overrides,
+)
+vit_configuration = model_package("vit/linear").build_configuration(
+    config_overrides=overrides,
+)
+```
+
+The low-level attention `source_memory_config` accepts any of the four concrete
+memory configs: `GatedResidualDynamicMemoryConfig`, `WeightedDynamicMemoryConfig`,
+`ElementWiseWeightedDynamicMemoryConfig`, or `AttentionDynamicMemoryConfig`.
+The package variant selector accepts those same types. Both test-time-training
+settings must be supplied together to enable adaptation. Attention flattens the
+input into independent token rows, and adaptation uses temporary parameter copies
+per token. Generated memory and adapted copies are not retained between calls;
+the memory module's ordinary learned parameters are saved in checkpoints.
+
+For `S` source tokens, ordinary attention masks with trailing shape `[Q, S]` and
+source padding masks are replicated onto the matching memory positions. An
+explicit `[Q, 2S]` attention mask can instead provide a token block followed by a
+memory block, including separate finite biases. The memory block cannot reopen
+an original token's hard exclusion, padding exclusion, or causal restriction.
+In GPT, memory derived from position `j` is visible only to queries at positions
+`i >= j`. Soft MoE attention retains its rejection of token-pair attention masks.
+
+RoPE memory keys and relative positional logits reuse the corresponding source
+token positions; appending memory does not assign later time positions. Soft MoE
+retains its existing restriction on relative positional embeddings. With source
+memory enabled, static K/V inputs, cross-attention, incompatible input/key/value
+widths, and grouped memory generators are rejected explicitly.
+
+The source length grows from `S` to `2S` before any learned-bias or zero-attention
+positions. This roughly doubles the attention-score and weighted-value work and
+adds memory-generation work, while leaving the output sequence length unchanged.
+
+### Temporary memory in MLP-Mixer
+
+`MixerAttentionConfig.source_memory_config` is optional and defaults to `None`.
+With no memory configuration, no memory module is constructed and the original
+token mixer is used. Supplying any of the four concrete memory configurations
+enables one temporary memory token per input token.
+
+For input `[B, T, D]`, memory is generated from independent `[B*T, D]` token rows
+and reshaped to `[B, T, D]`. Original and memory tokens are concatenated to
+`[B, 2T, D]`, transposed and flattened to `[B*D, 2T]`, and passed through a mixer
+with `2T` input and output positions. After restoring `[B, 2T, D]`, only the first
+`T` output positions are returned. Slicing those positions preserves gradients
+from the retained outputs into the memory generator. The public output remains
+`[B, T, D]`; sequence-first input is supported too.
+
+All four MLP-Mixer packages expose these options:
+
+| Option | Default |
+| --- | --- |
+| `TOKEN_MIXER_SOURCE_MEMORY_FLAG` | `False` |
+| `TOKEN_MIXER_SOURCE_MEMORY_OPTION` | `GatedResidualDynamicMemoryConfig` |
+| `TOKEN_MIXER_SOURCE_MEMORY_NUM_MEMORY_SLOTS` | `4` |
+| `TOKEN_MIXER_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE` | `None` |
+| `TOKEN_MIXER_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS` | `None` |
+
+For example:
+
+```python
+from emperor.memory import ElementWiseWeightedDynamicMemoryConfig
+from models.catalog import model_package
+
+configuration = model_package("mlp_mixer/linear").build_configuration(
+    config_overrides={
+        "token_mixer_source_memory_flag": True,
+        "token_mixer_source_memory_option": ElementWiseWeightedDynamicMemoryConfig,
+    },
+)
+```
+
+The source-memory generator uses `SUBMODULE_STACK_*` settings. Existing
+`TOKEN_MIXER_MEMORY_*` options continue to configure memory inside the mixing
+layers; their dimensional constraints apply to the expanded `2T` mixer.
+Attention-style memory slots remain internal and do not change the number of
+appended tokens. Optional test-time adaptation uses temporary parameter copies
+per token, with both adaptation settings required together.
+
+Generated memory is not cached between calls. Enabled checkpoints include the
+memory parameters and larger mixing layers, and must be loaded with the same
+configuration. Disabled models retain their existing parameter layout. The
+mixer's existing fixed-length, self-processing, and unsupported-mask restrictions
+still apply.
+
+### Memory and expert options across model families
+
+GPT, BERT, ViT, and MLP-Mixer each provide all four package variants. The shared
+memory and expert choices are available through their public Runtime Defaults
+and configuration schema:
+
+| Feature | GPT / BERT / ViT | MLP-Mixer |
+| --- | --- | --- |
+| Temporary memory, all four variants | `ATTN_SOURCE_MEMORY_*` | `TOKEN_MIXER_SOURCE_MEMORY_*` |
+| Layer memory, all four variants | `MEMORY_*`, `ATTN_MEMORY_*`, `FF_MEMORY_*` | `MEMORY_*`, `TOKEN_MIXER_MEMORY_*`, `CHANNEL_MIXER_MEMORY_*` |
+| Sparse experts | `expert_linear` and `expert_linear_adaptive`: attention and feed-forward experts | Same expert variants: token and channel mixing experts |
+| Soft feed-forward experts, all four variants | `SOFT_MOE_CONFIG` | `SOFT_MOE_CONFIG` for channel mixing |
+| Soft attention / token mixing | `ATTENTION_SOFT_MOE_CONFIG` in both expert variants | `TOKEN_MIXER_SOFT_MOE_CONFIG` in all four variants |
+| Memory inside sparse experts | `EXPERT_MEMORY_*` | `EXPERT_MEMORY_*` |
+| Memory inside adaptive expert routers | `ROUTER_MEMORY_*` in `expert_linear_adaptive` | Uses the existing plain router architecture |
+
+Memory flags default to `False`. Omitting the low-level memory configuration
+constructs no memory module. All four concrete memory variants are selectable in
+every existing memory location. Each legacy memory prefix now has a
+`NUM_MEMORY_SLOTS` setting, defaulting to `4`: for example,
+`ATTN_MEMORY_NUM_MEMORY_SLOTS`, `EXPERT_MEMORY_NUM_MEMORY_SLOTS`, and
+`CHANNEL_MIXER_MEMORY_NUM_MEMORY_SLOTS`. Only `AttentionDynamicMemoryConfig` uses
+this setting. The other memory variants ignore it. MLP-Mixer recurrent memory
+inherits the main `MEMORY_NUM_MEMORY_SLOTS` setting.
+
+Each soft expert option takes a `SoftMoEConfig` instance and defaults to `None`,
+preserving the package's existing dense or sparse behavior. Attention and
+feed-forward routing can be selected independently. GPT feed-forward soft experts
+pool a separate set of slots for each causal prefix; future tokens never enter an
+earlier prefix. BERT and ViT use bidirectional pooling. The scoring stack and
+expert/slot counts retain the same `SoftMoEConfig` interface in all families.
+
+For soft token mixing, MLP-Mixer preserves `[B, D, T]` (or `[B, D, 2T]` with
+temporary memory) rather than flattening examples together. Routing pools channel
+vectors within each example, and each expert mixes the token coordinates.
+The result is restored to the original layout and memory output positions are
+discarded. Soft channel mixing instead routes `[B, T, D]`. Both options can be
+enabled together with source memory, and gradients reach the memory generator.
+
+These are shared computational options, not identical input architectures.
+Text embedding options remain specific to GPT/BERT, image patch options to
+ViT/Mixer, and Mixer retains its own token/channel and adaptive-generator settings.
+ViT's adaptive expert variant also exposes the shared recurrent minimum-step,
+ponder-cost, and residual controls. The public option and execution matrix is
+tested in `tests/model_packages/test_memory_expert_parity.py`.
+
+The four encoder/decoder `transformer/*` packages also accept
+`ATTN_SOURCE_MEMORY_*`, with optional `ENCODER_ATTN_*` and
+`DECODER_SELF_ATTN_*` overrides. The global source-memory setting applies to both
+self-attention paths. Cross-attention source memory is explicitly rejected;
+ordinary cross-attention continues to read the encoder output. Their attention
+and feed-forward layer-memory options also expose `NUM_MEMORY_SLOTS`.
+
+Existing low-level compatibility checks still apply: soft attention uses shared
+K/V projections; soft expert stacks must satisfy their pointwise stack contract;
+inner recurrent soft expert stacks and arbitrary pairwise attention masks are
+unsupported. Outer recurrent Transformer blocks can use soft experts and source
+memory. These restrictions produce explicit errors instead of silently dropping
+an option. Temporary source memory is independent of memory inside a projection
+or expert stack, so enabling source memory does not relax those stack constraints.
+Shared layer memory requires equal input, hidden, and output widths; source memory
+does not impose that restriction on the feed-forward stack.
 
 ### Continuing from a checkpoint
 
