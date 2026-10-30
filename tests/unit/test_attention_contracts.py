@@ -67,7 +67,18 @@ class TestAttentionContractManifest(unittest.TestCase):
                         loader = unittest.TestLoader()
                         suite = loader.loadTestsFromName(test_id)
                         self.assertFalse(loader.errors, loader.errors)
-                        self.assertGreater(suite.countTestCases(), 0, test_id)
+                        test_count = suite.countTestCases()
+                        if not test_count:
+                            # Newer test modules use pytest functions rather than
+                            # unittest classes. Verify those references too.
+                            module = importlib.import_module(test_id)
+                            test_count = sum(
+                                name.startswith("test_")
+                                and inspect.isfunction(value)
+                                and value.__module__ == module.__name__
+                                for name, value in vars(module).items()
+                            )
+                        self.assertGreater(test_count, 0, test_id)
 
 
 class TestAttentionExports(unittest.TestCase):
