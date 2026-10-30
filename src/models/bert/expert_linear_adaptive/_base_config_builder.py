@@ -43,6 +43,9 @@ from models.bert.expert_linear_adaptive._control_support import (
 from models.bert.expert_linear_adaptive._control_support import (
     ExpertsRecurrentConfigFactory as BertRecurrentConfigFactory,
 )
+from models.bert.expert_linear_adaptive._controller_stack_config import (
+    build_source_memory_config,
+)
 from models.bert.expert_linear_adaptive.runtime_options import (
     BertEmbeddingOptions,
     BertMlmHeadOptions,
@@ -274,6 +277,9 @@ class BertBackendConfigBuilder:
     def _build_attention_config(self) -> SelfAttentionConfig:
         encoder_options = self.encoder_options
         attention_options = self.attention_options
+        source_memory_config = build_source_memory_config(
+            attention_options, self.submodule_stack_options
+        )
         projection_model_config = self._build_attention_projection_stack_config()
         return SelfAttentionConfig(
             batch_size=self.batch_size,
@@ -288,6 +294,7 @@ class BertBackendConfigBuilder:
             zero_attention_flag=False,
             causal_attention_mask_flag=encoder_options.causal_attention_mask_flag,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
+            source_memory_config=source_memory_config,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

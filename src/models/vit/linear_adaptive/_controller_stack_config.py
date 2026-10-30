@@ -1,6 +1,14 @@
 from emperor.layers import LayerConfig, LayerStackConfig
 from emperor.linears import LinearLayerConfig
-from models.vit.linear_adaptive.runtime_options import SubmoduleStackOptions
+from emperor.memory import (
+    AttentionDynamicMemoryConfig,
+    DynamicMemoryConfig,
+    MemoryPositionOptions,
+)
+from models.vit.linear_adaptive.runtime_options import (
+    SubmoduleStackOptions,
+    TransformerAttentionOptions,
+)
 
 from ._residual import build_residual_config
 
@@ -39,3 +47,23 @@ def build_controller_stack_config(
             ),
         ),
     )
+
+
+def build_source_memory_config(
+    options: TransformerAttentionOptions,
+    stack_options: SubmoduleStackOptions | None,
+) -> DynamicMemoryConfig | None:
+    """Build independent attention sources with the package's controller stack."""
+    if not options.source_memory_flag:
+        return None
+    if stack_options is None:
+        raise ValueError("Attention source memory requires submodule stack options.")
+    config = options.source_memory_option(
+        memory_position_option=MemoryPositionOptions.AFTER_AFFINE,
+        model_config=build_controller_stack_config(stack_options),
+        test_time_training_learning_rate=options.source_memory_test_time_training_learning_rate,
+        test_time_training_num_inner_steps=options.source_memory_test_time_training_num_inner_steps,
+    )
+    if isinstance(config, AttentionDynamicMemoryConfig):
+        config.num_memory_slots = options.source_memory_num_memory_slots
+    return config

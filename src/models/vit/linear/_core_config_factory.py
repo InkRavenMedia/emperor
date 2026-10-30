@@ -158,7 +158,14 @@ class CoreConfigFactory:
                 dependencies.feed_forward_recurrent_controller_options
             ),
             stack_options=self.stack_options,
-            submodule_stack_options=dependencies.submodule_stack_options,
+            submodule_stack_options=(
+                config_defaults.linears_submodule_stack_options(
+                    config, config_defaults.LinearRole.MAIN
+                )
+                if self.attention_options.source_memory_flag
+                and dependencies.submodule_stack_options is None
+                else dependencies.submodule_stack_options
+            ),
             layer_controller_options=dependencies.layer_controller_options,
             dynamic_memory_options=dependencies.dynamic_memory_options,
             recurrent_controller_options=dependencies.recurrent_controller_options,

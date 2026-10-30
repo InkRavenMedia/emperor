@@ -33,7 +33,11 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
-from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from emperor.memory import (
+    DynamicMemoryConfig,
+    GatedResidualDynamicMemoryConfig,
+    MemoryPositionOptions,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +284,17 @@ class RuntimeOptions:
     controller_stack_last_layer_bias_option: LastLayerBiasOptions
     controller_stack_apply_output_postprocessing_flag: bool
     controller_stack_bias_flag: bool
+    token_mixer_source_memory_flag: bool = field(default=False, kw_only=True)
+    token_mixer_source_memory_option: type[DynamicMemoryConfig] = field(
+        default=GatedResidualDynamicMemoryConfig, kw_only=True
+    )
+    token_mixer_source_memory_num_memory_slots: int = field(default=4, kw_only=True)
+    token_mixer_source_memory_test_time_training_learning_rate: float | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_test_time_training_num_inner_steps: int | None = field(
+        default=None, kw_only=True
+    )
     token_mixer_stack_hidden_dim: int
     token_mixer_num_layers: int
     token_mixer_stack_activation: ActivationOptions
