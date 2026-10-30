@@ -95,12 +95,18 @@ class MixtureOfExperts(Module):
         probabilities: Tensor | None = None,
         indices: Tensor | None = None,
         skip_mask: Tensor | None = None,
+        *,
+        causal_prefix_flag: bool = False,
     ) -> tuple[Tensor, Tensor | None, Tensor]:
         self.VALIDATOR.validate_forward_inputs(
             self, input_batch, probabilities, indices, skip_mask
         )
         if self.soft_router is not None:
+            if causal_prefix_flag:
+                return self.__compute_causal_soft_mixture(input_batch, skip_mask)
             return self.__compute_soft_mixture(input_batch, skip_mask)
+        if causal_prefix_flag:
+            raise ValueError("Causal prefix routing requires Soft MoE.")
         probabilities, indices, skip_mask, sampler_loss = (
             self._maybe_compute_expert_indices(
                 input_batch, probabilities, indices, skip_mask
@@ -137,6 +143,31 @@ class MixtureOfExperts(Module):
                 "btes,besd->btd", combine_weights, combination_slot_features
             )
         return token_outputs.to(output_slots.dtype)
+
+    def __compute_causal_soft_mixture(
+        self, inputs: Tensor, skip_mask: Tensor | None
+    ) -> tuple[Tensor, Tensor | None, Tensor]:
+        updates, combine_weights = self.soft_router(
+            inputs, skip_mask, causal_prefix_flag=True
+        )
+        output_slots, expert_loss = self.expert_modules.forward_causal_soft_tokens(
+            inputs, updates, skip_mask
+        )
+        batch_size, sequence_length = inputs.shape[:2]
+        prefix_outputs = output_slots.reshape(
+            batch_size,
+            self.num_experts,
+            sequence_length,
+            self.soft_router.slots_per_expert,
+            self.output_dim,
+        )
+        with torch.autocast(device_type=inputs.device.type, enabled=False):
+            output = torch.einsum(
+                "btes,betsd->btd",
+                combine_weights,
+                prefix_outputs.to(combine_weights.dtype),
+            )
+        return output.to(output_slots.dtype), skip_mask, expert_loss
 
     def _maybe_compute_expert_indices(
         self,

@@ -75,6 +75,7 @@ class MixtureOfExpertsModel(Module):
             probabilities=probabilities,
             indices=indices,
             skip_mask=skip_mask,
+            causal_prefix_flag=getattr(state, "causal_prefix_flag", False),
             loss=state.loss,
             halting_state=state.halting_state,
         )

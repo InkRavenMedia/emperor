@@ -141,6 +141,17 @@ def test_experts_preserve_indexing_slicing_replacement_and_registered_state():
     assert all(expert.training for expert in experts)
 
 
+@pytest.mark.parametrize(
+    "slot_shape", [(2, 3, 3), (0, 3, 2, 3), (2, 2, 2, 3), (2, 3, 0, 3), (2, 3, 2, 4)]
+)
+def test_preallocated_slots_require_configured_experts_and_features(slot_shape):
+    configuration = expert_config()
+    experts = Experts(configuration)
+    invalid_slots = torch.randn(slot_shape)
+    with pytest.raises(ValueError, match="Expert slots require"):
+        experts.forward_slots(invalid_slots)
+
+
 def test_batch_forward_dispatches_samples_and_preserves_selected_gradients():
     cfg = expert_config()
     cfg.top_k = 1

@@ -14,3 +14,4 @@ class MixtureOfExpertsLayerState(LayerState):
     probabilities: Tensor | None = None
     indices: Tensor | None = None
     skip_mask: Tensor | None = None
+    causal_prefix_flag: bool = False

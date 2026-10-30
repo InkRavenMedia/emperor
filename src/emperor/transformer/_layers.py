@@ -100,9 +100,16 @@ class _DecoderCrossAttentionLayer(_TransformerSubLayer):
 
 
 class _FeedForwardLayer(_TransformerSubLayer):
-    def __init__(self, cfg: LayerConfig, *, batch_first: bool = True):
+    def __init__(
+        self,
+        cfg: LayerConfig,
+        *,
+        batch_first: bool = True,
+        causal_prefix_flag: bool = False,
+    ):
         super().__init__(cfg)
         self.batch_first = batch_first
+        self.causal_prefix_flag = causal_prefix_flag
 
     def _handle_model_processing(
         self,
@@ -115,7 +122,10 @@ class _FeedForwardLayer(_TransformerSubLayer):
                 getattr(state, "key_padding_mask", None),
             )
             output, loss = self.model(
-                state.hidden, padding_mask=padding_mask, batch_first=self.batch_first
+                state.hidden,
+                padding_mask=padding_mask,
+                batch_first=self.batch_first,
+                causal_prefix_flag=self.causal_prefix_flag,
             )
         else:
             output, loss = self.model(state.hidden)
@@ -178,6 +188,9 @@ class TransformerEncoderLayer(Module):
                 model_config=self.cfg.feed_forward_config,
             ),
             batch_first=self.cfg.attention_config.batch_first_flag,
+            causal_prefix_flag=getattr(
+                self.cfg.attention_config, "causal_attention_mask_flag", False
+            ),
         )
 
     @property
@@ -299,6 +312,13 @@ class TransformerDecoderLayer(Module):
                 model_config=self.cfg.feed_forward_config,
             ),
             batch_first=self.cfg.self_attention_config.batch_first_flag,
+            causal_prefix_flag=any(
+                getattr(attention, "causal_attention_mask_flag", False)
+                for attention in (
+                    self.cfg.self_attention_config,
+                    self.cfg.cross_attention_config,
+                )
+            ),
         )
 
     def __build_cross_attention_layer(self):

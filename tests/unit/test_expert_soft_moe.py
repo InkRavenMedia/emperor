@@ -447,14 +447,62 @@ def test_transformer_integration_padding_layout_and_causality(decoder):
         tokens.transpose(0, 1), **{mask_name: padding}
     )
     torch.testing.assert_close(output, transposed_output.transpose(0, 1))
-    with pytest.raises(ValueError, match="Soft MoE.*noncausal"):
+    with pytest.raises(ValueError, match="Soft MoE.*explicit"):
         model(tokens, attention_mask=torch.zeros(4, 4))
     attention.causal_attention_mask_flag = True
-    with pytest.raises(ValueError, match="Soft MoE.*noncausal"):
-        cfg.build()
-    model.self_attention_model.causal_attention_mask_flag = True
-    with pytest.raises(ValueError, match="Soft MoE.*noncausal"):
-        model(tokens)
+    causal_model = cfg.build().eval()
+    causal_input = tokens.transpose(0, 1).clone().requires_grad_()
+    causal_output, _ = causal_model(causal_input, **{mask_name: padding})
+    changed = causal_input.detach().clone()
+    changed[3] += 100
+    torch.testing.assert_close(
+        causal_output[:3], causal_model(changed, **{mask_name: padding})[0][:3]
+    )
+    causal_output[:3].square().sum().backward()
+    assert torch.count_nonzero(causal_input.grad[3]) == 0
+
+
+def test_causal_soft_mixture_matches_independent_prefix_evaluation():
+    torch.manual_seed(53)
+    model = expert_config().build().double().eval()
+    tokens = torch.randn(2, 5, 3, dtype=torch.double, requires_grad=True)
+    padding = torch.tensor([[True, False, True, False, False], [True] * 5])
+    expected = torch.cat(
+        [
+            model(tokens[:, :end], skip_mask=~padding[:, :end, None])[0][:, -1:]
+            for end in range(1, tokens.size(1) + 1)
+        ],
+        dim=1,
+    )
+    actual, _, loss = model(
+        tokens, skip_mask=~padding[..., None], causal_prefix_flag=True
+    )
+    torch.testing.assert_close(actual, expected)
+    assert torch.count_nonzero(actual[padding]) == 0
+    assert torch.isfinite(actual).all() and torch.isfinite(loss)
+    actual[:, :4].square().sum().backward()
+    assert torch.count_nonzero(tokens.grad[:, 4]) == 0
+    assert all(
+        p.grad is not None and torch.isfinite(p.grad).all() for p in model.parameters()
+    )
+    # Causality is carried by this call; it must not change subsequent bidirectional calls.
+    torch.testing.assert_close(
+        model(tokens, skip_mask=~padding[..., None])[0][:, -1:], expected[:, -1:]
+    )
+
+
+@pytest.mark.parametrize("batch_first", [True, False])
+def test_causal_soft_feed_forward_preserves_prefixes_through_all_layers(batch_first):
+    model = feed_forward_config().build().eval()
+    tokens = torch.randn(2, 5, 3, requires_grad=True)
+    inputs = tokens if batch_first else tokens.transpose(0, 1)
+    output, _ = model(inputs, batch_first=batch_first, causal_prefix_flag=True)
+    prefix = inputs[:, :3] if batch_first else inputs[:3]
+    prefix_output, _ = model(prefix, batch_first=batch_first, causal_prefix_flag=True)
+    expected = output[:, :3] if batch_first else output[:3]
+    torch.testing.assert_close(prefix_output, expected)
+    expected.square().sum().backward()
+    assert torch.count_nonzero(tokens.grad[:, 3:]) == 0
 
 
 def test_expert_auxiliary_loss_and_row_validation_use_existing_execution():

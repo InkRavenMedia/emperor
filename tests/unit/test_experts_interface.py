@@ -272,7 +272,7 @@ SHARED_EXPERT_KEYS = tuple(
 
 
 class TestExpertsPublicInterface(unittest.TestCase):
-    def test_expert_forward_keeps_routing_arguments_and_appends_skip_mask(self):
+    def test_expert_forward_preserves_routing_and_adds_optional_causal_mode(self):
         for model_type in (
             MixtureOfExperts,
             MixtureOfExpertsMap,
@@ -280,9 +280,23 @@ class TestExpertsPublicInterface(unittest.TestCase):
         ):
             with self.subTest(model_type=model_type.__name__):
                 parameters = inspect.signature(model_type.forward).parameters
+                expected = (
+                    "self",
+                    "input_batch",
+                    "probabilities",
+                    "indices",
+                    "skip_mask",
+                )
+                if model_type is not MixtureOfExpertsReduce:
+                    expected += ("causal_prefix_flag",)
+                    self.assertIs(parameters["causal_prefix_flag"].default, False)
+                    self.assertEqual(
+                        parameters["causal_prefix_flag"].kind,
+                        inspect.Parameter.KEYWORD_ONLY,
+                    )
                 self.assertEqual(
                     tuple(parameters),
-                    ("self", "input_batch", "probabilities", "indices", "skip_mask"),
+                    expected,
                 )
                 self.assertIsNone(parameters["probabilities"].default)
                 self.assertIsNone(parameters["indices"].default)
@@ -558,4 +572,5 @@ STATE_FIELDS = (
     "probabilities",
     "indices",
     "skip_mask",
+    "causal_prefix_flag",
 )
