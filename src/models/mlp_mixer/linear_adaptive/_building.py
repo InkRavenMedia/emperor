@@ -46,6 +46,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.mlp_mixer.linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -838,13 +839,21 @@ def encoder_config(runtime: RuntimeOptions, tokens: int):
             embedding_dim=runtime.hidden_dim,
             sequence_length=tokens,
             batch_first_flag=True,
-            mixing_model_config=_token_mixing_model(runtime, tokens),
+            mixing_model_config=build_soft_moe_stack(
+                _token_mixing_model(runtime, tokens),
+                runtime.token_mixer_soft_moe_config,
+                tokens,
+            ),
             source_memory_config=_source_memory_config(runtime),
         ),
         feed_forward_config=FeedForwardConfig(
             input_dim=runtime.hidden_dim,
             output_dim=runtime.hidden_dim,
-            stack_config=_channel_mixing_model(runtime),
+            stack_config=build_soft_moe_stack(
+                _channel_mixing_model(runtime),
+                runtime.soft_moe_config,
+                runtime.hidden_dim,
+            ),
         ),
     )
     block_layer = TransformerEncoderBlockLayerConfig(

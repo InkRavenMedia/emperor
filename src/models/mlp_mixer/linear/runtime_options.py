@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from emperor.experts import SoftMoEConfig
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
 from emperor.layers import (
     ActivationOptions,
@@ -20,6 +21,10 @@ from emperor.memory import (
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions:
+    token_mixer_soft_moe_config: SoftMoEConfig | None = field(
+        default=None, kw_only=True
+    )
+    soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     encoder_output_normalization: NormalizationOptions = field(
         default=NormalizationOptions.LAYER_NORM, kw_only=True
     )

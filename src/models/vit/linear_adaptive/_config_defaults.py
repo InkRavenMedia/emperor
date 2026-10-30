@@ -99,6 +99,7 @@ def vit_attention_options(config: ModuleType) -> TransformerAttentionOptions:
 
 def vit_feed_forward_options(config: ModuleType) -> TransformerFeedForwardOptions:
     return TransformerFeedForwardOptions(
+        soft_moe_config=config.SOFT_MOE_CONFIG,
         num_layers=config.FF_NUM_LAYERS,
         bias_flag=config.FF_BIAS_FLAG,
     )

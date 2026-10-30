@@ -1109,9 +1109,9 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     )),
     RuntimeDefaultsSection(('Workbench Config Schema Boundary',), (
         ('_PUBLIC_CONFIG_KEYS', 1562, (1562,)),
-        ('_PUBLIC_CONFIG_PREFIXES', 1573, (1573,)),
-        ('_PUBLIC_CONFIG_SUFFIXES', 1605, (1605,)),
-        ('CONFIG_SCHEMA_SKIP_KEYS', 1616, (1616,)),
+        ('_PUBLIC_CONFIG_PREFIXES', 1574, (1574,)),
+        ('_PUBLIC_CONFIG_SUFFIXES', 1606, (1606,)),
+        ('CONFIG_SCHEMA_SKIP_KEYS', 1617, (1617,)),
     )),
 )
 

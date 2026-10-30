@@ -323,6 +323,7 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 #########################################################################
 # Attention Options
+ATTENTION_SOFT_MOE_CONFIG: SoftMoEConfig | None = None
 ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
@@ -874,6 +875,8 @@ ROUTER_BIAS_FLAG: bool = True
 # Construction defaults remain available to flat CLI adapters and presets. The
 # grouped builder interface also exposes its supported residual settings.
 _PUBLIC_CONFIG_KEYS = {
+    "ATTENTION_SOFT_MOE_CONFIG",
+    "SOFT_MOE_CONFIG",
     "INPUT_DIM",
     "OUTPUT_DIM",
     "BATCH_SIZE",

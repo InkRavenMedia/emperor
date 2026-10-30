@@ -6,6 +6,7 @@ import torch
 
 from emperor._validation import (
     ValidatorBase,
+    _configuration_visits,
     _first_adaptive_grouping_path,
 )
 from emperor.attention._validation import AttentionSourceMemoryValidator
@@ -36,7 +37,7 @@ class MixerAttentionValidator(ValidatorBase):
 
     @classmethod
     def _validate_mixing_model_config(cls, mixing_model_config: object) -> None:
-        from emperor.experts import MixtureOfExpertsModelConfig
+        from emperor.experts import MixtureOfExpertsModelConfig, SoftMoEConfig
         from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
 
         if not isinstance(
@@ -64,6 +65,16 @@ class MixerAttentionValidator(ValidatorBase):
                 f"sequence rows. Found grouping at {grouping_path}."
             )
         cls._validate_required_nested_mixing_configs(mixing_model_config)
+        uses_soft_moe = any(
+            isinstance(visit.config, SoftMoEConfig)
+            for visit in _configuration_visits(mixing_model_config, "MixerAttention")
+        )
+        if uses_soft_moe and not isinstance(
+            mixing_model_config, MixtureOfExpertsModelConfig
+        ):
+            raise ValueError(
+                "Soft MoE token mixing requires a direct MixtureOfExpertsModelConfig."
+            )
 
     @classmethod
     def _validate_required_nested_mixing_configs(cls, config: object) -> None:

@@ -43,6 +43,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from emperor.transformer._soft_moe_config import build_soft_moe_attention_experts
 from models.gpt.expert_linear_adaptive._base_config_builder import (
     GptBackendConfigBuilder,
 )
@@ -408,6 +409,11 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
         source_memory_config = build_source_memory_config(
             attention_options, self.submodule_stack_options
         )
+        experts_config = self._build_attention_experts_config()
+        attention_experts_config = build_soft_moe_attention_experts(
+            experts_config, attention_options.attention_soft_moe_config
+        )
+        projection_model_config = self._build_attention_projection_stack_config()
         return MixtureOfAttentionHeadsConfig(
             batch_size=self.batch_size,
             num_heads=attention_options.num_heads,
@@ -425,8 +431,8 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,
-            projection_model_config=self._build_attention_projection_stack_config(),
-            experts_config=self._build_attention_experts_config(),
+            projection_model_config=projection_model_config,
+            experts_config=attention_experts_config,
             use_kv_expert_models_flag=(self.expert_attention_use_kv_expert_models_flag),
         )
 

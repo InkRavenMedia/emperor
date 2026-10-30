@@ -702,6 +702,7 @@ def _attention_options_from_kwargs(
     provided: TransformerAttentionOptions | None,
 ) -> TransformerAttentionOptions:
     options = provided or TransformerAttentionOptions(
+        attention_soft_moe_config=config_module.ATTENTION_SOFT_MOE_CONFIG,
         num_heads=config_module.ATTN_NUM_HEADS,
         num_layers=config_module.ATTN_NUM_LAYERS,
         bias_flag=config_module.ATTN_BIAS_FLAG,
@@ -715,6 +716,7 @@ def _attention_options_from_kwargs(
     updates = _pop_updates(
         kwargs,
         {
+            "attention_soft_moe_config": "attention_soft_moe_config",
             "attn_num_heads": "num_heads",
             "attn_num_layers": "num_layers",
             "attn_bias_flag": "bias_flag",

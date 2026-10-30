@@ -74,6 +74,7 @@ def bert_encoder_options(config: ModuleType) -> TransformerEncoderOptions:
 
 def bert_attention_options(config: ModuleType) -> TransformerAttentionOptions:
     return TransformerAttentionOptions(
+        attention_soft_moe_config=config.ATTENTION_SOFT_MOE_CONFIG,
         num_heads=config.ATTN_NUM_HEADS,
         num_layers=config.ATTN_NUM_LAYERS,
         bias_flag=config.ATTN_BIAS_FLAG,

@@ -19,6 +19,7 @@ from emperor.experts import (
     DroppedTokenOptions,
     ExpertWeightingPositionOptions,
     RoutingInitializationMode,
+    SoftMoEConfig,
 )
 from emperor.halting import (
     HaltingConfig,
@@ -556,6 +557,7 @@ class TransformerPositionalEmbeddingOptions:
 
 @dataclass(frozen=True, slots=True)
 class TransformerAttentionOptions:
+    attention_soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_heads: int
     num_layers: int
     bias_flag: bool
@@ -569,6 +571,7 @@ class TransformerAttentionOptions:
 
 @dataclass(frozen=True, slots=True)
 class TransformerFeedForwardOptions:
+    soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_layers: int
     bias_flag: bool
 
