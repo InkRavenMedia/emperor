@@ -20,6 +20,12 @@ The main goal is repeatable model experimentation: build small models, compare
 variants, watch what happens during training, and use the results to decide
 which ideas are worth exploring next.
 
+## About the author
+
+Emperor is a personal research project by the developer behind
+[InkRaven](https://inkraven.de/). Visit the website to learn more
+about my work in web development and AI.
+
 ## Environment Setup
 
 **System requirements:** Git and [mise](https://mise.jdx.dev/). Mise provisions
