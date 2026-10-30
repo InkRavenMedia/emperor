@@ -389,6 +389,7 @@ def _dynamic_memory_options_from_kwargs(
         memory_option=config_module.MEMORY_OPTION,
         memory_position_option=config_module.MEMORY_POSITION_OPTION,
         memory_test_time_training_learning_rate=config_module.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+        memory_num_memory_slots=config_module.MEMORY_NUM_MEMORY_SLOTS,
         memory_test_time_training_num_inner_steps=config_module.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
         memory_stack_source=_memory_stack_source(config_module),
     )
@@ -399,6 +400,7 @@ def _dynamic_memory_options_from_kwargs(
             "memory_option": "memory_option",
             "memory_position_option": "memory_position_option",
             "memory_test_time_training_learning_rate": "memory_test_time_training_learning_rate",
+            "memory_num_memory_slots": "memory_num_memory_slots",
             "memory_test_time_training_num_inner_steps": "memory_test_time_training_num_inner_steps",
         },
     )
@@ -512,6 +514,7 @@ class _DynamicMemoryDefaults:
     learning_rate: float | None
     num_inner_steps: int | None
     stack_source: expert_options.ExpertsSubmoduleStackSource
+    num_memory_slots: int = 4
 
 
 @dataclass(frozen=True, slots=True)
@@ -559,6 +562,7 @@ def _dynamic_memory_options(
         memory_option=defaults.memory_option,
         memory_position_option=defaults.memory_position_option,
         memory_test_time_training_learning_rate=defaults.learning_rate,
+        memory_num_memory_slots=defaults.num_memory_slots,
         memory_test_time_training_num_inner_steps=defaults.num_inner_steps,
         memory_stack_source=defaults.stack_source,
     )
@@ -638,6 +642,7 @@ def _role_dynamic_memory_options_from_kwargs(
             f"{role_prefix}_memory_test_time_training_learning_rate": (
                 "memory_test_time_training_learning_rate"
             ),
+            f"{role_prefix}_memory_num_memory_slots": "memory_num_memory_slots",
             f"{role_prefix}_memory_test_time_training_num_inner_steps": (
                 "memory_test_time_training_num_inner_steps"
             ),
@@ -1038,6 +1043,7 @@ def _expert_dynamic_memory_options_from_kwargs(
                 learning_rate=(
                     config_module.EXPERT_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
                 ),
+                num_memory_slots=config_module.EXPERT_MEMORY_NUM_MEMORY_SLOTS,
                 num_inner_steps=(
                     config_module.EXPERT_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
                 ),
@@ -1148,6 +1154,7 @@ def _router_dynamic_memory_options_from_kwargs(
                 learning_rate=(
                     config_module.ROUTER_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
                 ),
+                num_memory_slots=config_module.ROUTER_MEMORY_NUM_MEMORY_SLOTS,
                 num_inner_steps=(
                     config_module.ROUTER_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
                 ),

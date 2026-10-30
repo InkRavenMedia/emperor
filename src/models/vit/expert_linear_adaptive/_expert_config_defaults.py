@@ -522,6 +522,7 @@ _DYNAMIC_MEMORY_FACTORIES: Mapping[ExpertControlRole, _DynamicMemoryFactory] = (
                 memory_option=config.MEMORY_OPTION,
                 memory_position_option=config.MEMORY_POSITION_OPTION,
                 memory_test_time_training_learning_rate=config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+                memory_num_memory_slots=config.MEMORY_NUM_MEMORY_SLOTS,
                 memory_test_time_training_num_inner_steps=config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
                 memory_stack_source=experts_submodule_stack_source(
                     config, ExpertControlRole.MAIN, ControllerStackRole.MEMORY
@@ -532,6 +533,7 @@ _DYNAMIC_MEMORY_FACTORIES: Mapping[ExpertControlRole, _DynamicMemoryFactory] = (
                 memory_option=config.EXPERT_MEMORY_OPTION,
                 memory_position_option=config.EXPERT_MEMORY_POSITION_OPTION,
                 memory_test_time_training_learning_rate=config.EXPERT_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+                memory_num_memory_slots=config.EXPERT_MEMORY_NUM_MEMORY_SLOTS,
                 memory_test_time_training_num_inner_steps=config.EXPERT_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
                 memory_stack_source=experts_submodule_stack_source(
                     config, ExpertControlRole.EXPERT, ControllerStackRole.MEMORY
@@ -542,6 +544,7 @@ _DYNAMIC_MEMORY_FACTORIES: Mapping[ExpertControlRole, _DynamicMemoryFactory] = (
                 memory_option=config.ROUTER_MEMORY_OPTION,
                 memory_position_option=config.ROUTER_MEMORY_POSITION_OPTION,
                 memory_test_time_training_learning_rate=config.ROUTER_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
+                memory_num_memory_slots=config.ROUTER_MEMORY_NUM_MEMORY_SLOTS,
                 memory_test_time_training_num_inner_steps=config.ROUTER_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
                 memory_stack_source=experts_submodule_stack_source(
                     config, ExpertControlRole.ROUTER, ControllerStackRole.MEMORY

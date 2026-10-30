@@ -607,7 +607,7 @@ def _configured_memory(
 ):
     if options is None or not options.enabled:
         return None
-    return options.implementation(
+    memory_config = options.implementation(
         input_dim=model_dim,
         output_dim=model_dim,
         memory_position_option=options.position,
@@ -619,6 +619,9 @@ def _configured_memory(
             defaults=defaults,
         ),
     )
+    if isinstance(memory_config, AttentionDynamicMemoryConfig):
+        memory_config.num_memory_slots = options.num_memory_slots
+    return memory_config
 
 
 def _configure_controls(

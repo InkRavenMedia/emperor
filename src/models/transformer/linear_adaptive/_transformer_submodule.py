@@ -146,7 +146,7 @@ def _memory_config(
     options = path_options.dynamic_memory_options
     if not options.memory_flag:
         return None
-    return options.memory_option(
+    config = options.memory_option(
         input_dim=model_dim,
         output_dim=model_dim,
         memory_position_option=options.memory_position_option,
@@ -162,6 +162,10 @@ def _memory_config(
             residual_stack_options,
         ),
     )
+
+    if isinstance(config, AttentionDynamicMemoryConfig):
+        config.num_memory_slots = options.memory_num_memory_slots
+    return config
 
 
 def build_source_memory_config(

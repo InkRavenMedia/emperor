@@ -677,6 +677,7 @@ def linears_dynamic_memory_options(
             config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE,
             config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS,
             linears_controller_stack_source(config, _ControllerStackRole.MAIN_MEMORY),
+            memory_num_memory_slots=config.MEMORY_NUM_MEMORY_SLOTS,
         )
     if role is LinearRole.ATTENTION:
         return _dynamic_memory_options(
@@ -688,6 +689,7 @@ def linears_dynamic_memory_options(
             linears_controller_stack_source(
                 config, _ControllerStackRole.ATTENTION_MEMORY
             ),
+            memory_num_memory_slots=config.ATTN_MEMORY_NUM_MEMORY_SLOTS,
         )
     return _dynamic_memory_options(
         config.FF_MEMORY_FLAG,
@@ -698,6 +700,7 @@ def linears_dynamic_memory_options(
         linears_controller_stack_source(
             config, _ControllerStackRole.FEED_FORWARD_MEMORY
         ),
+        memory_num_memory_slots=config.FF_MEMORY_NUM_MEMORY_SLOTS,
     )
 
 
@@ -708,6 +711,7 @@ def _dynamic_memory_options(
     memory_test_time_training_learning_rate: float | None,
     memory_test_time_training_num_inner_steps: int | None,
     memory_stack_source: SubmoduleStackSource,
+    memory_num_memory_slots: int = 4,
 ) -> DynamicMemoryOptions:
     return DynamicMemoryOptions(
         memory_flag=memory_flag,
@@ -716,6 +720,7 @@ def _dynamic_memory_options(
         memory_test_time_training_learning_rate=(
             memory_test_time_training_learning_rate
         ),
+        memory_num_memory_slots=memory_num_memory_slots,
         memory_test_time_training_num_inner_steps=(
             memory_test_time_training_num_inner_steps
         ),
