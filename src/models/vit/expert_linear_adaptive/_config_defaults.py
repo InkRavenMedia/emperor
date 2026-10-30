@@ -567,6 +567,12 @@ def linears_recurrent_controller_options(
         return RecurrentControllerOptions(
             recurrent_flag=config.RECURRENT_FLAG,
             recurrent_max_steps=config.RECURRENT_MAX_STEPS,
+            recurrent_min_steps=config.RECURRENT_MIN_STEPS,
+            recurrent_ponder_cost_weight=config.RECURRENT_PONDER_COST_WEIGHT,
+            recurrent_residual_connection_option=config.RECURRENT_RESIDUAL_CONNECTION_OPTION,
+            recurrent_residual_model_flag=config.RECURRENT_RESIDUAL_MODEL_FLAG,
+            recurrent_residual_block_size=config.RECURRENT_RESIDUAL_BLOCK_SIZE,
+            recurrent_residual_rms_norm_epsilon=config.RECURRENT_RESIDUAL_RMS_NORM_EPSILON,
             recurrent_initial_iterations=config.RECURRENT_INITIAL_ITERATIONS,
             recurrent_gradient_transition_count=(
                 config.RECURRENT_GRADIENT_TRANSITION_COUNT

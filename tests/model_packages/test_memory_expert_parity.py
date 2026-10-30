@@ -215,8 +215,60 @@ def test_mixer_recurrent_memory_uses_selected_type_and_inherits_slot_count(varia
     )
 
 
+def test_vit_expert_adaptive_accepts_shared_recurrent_halting_and_residual_options():
+    from emperor.halting import StickBreakingConfig
+    from emperor.layers import AdditiveResidualConfig
+
+    name = "vit/expert_linear_adaptive"
+    package = model_package(name)
+    config = configuration(
+        name,
+        recurrent_flag=True,
+        recurrent_initial_iterations=2,
+        recurrent_max_steps=3,
+        recurrent_stack_halting_flag=True,
+        recurrent_min_steps=2,
+        recurrent_ponder_cost_weight=0.25,
+        recurrent_halting_option=StickBreakingConfig,
+        recurrent_residual_connection_option=AdditiveResidualConfig,
+        recurrent_residual_model_flag=False,
+        recurrent_residual_block_size=None,
+        recurrent_residual_rms_norm_epsilon=None,
+    )
+    encoder = config.experiment_config.encoder_config
+    assert encoder.halting_config.min_steps == 2
+    assert encoder.halting_config.ponder_cost_weight == 0.25
+    assert isinstance(encoder.residual_config, AdditiveResidualConfig)
+    model = package.build_model(config).eval()
+    logits = run_model(model, name, inputs_for(name))[0]
+    assert logits.shape == (2, 16) and torch.isfinite(logits).all()
+    logits.square().mean().backward()
 
 
+@pytest.mark.parametrize(
+    "updates,message",
+    [
+        ({"recurrent_min_steps": 2}, "requires recurrent_flag=True"),
+        (
+            {"recurrent_flag": True, "recurrent_min_steps": 2},
+            "requires recurrent_stack_halting_flag=True",
+        ),
+        (
+            {
+                "recurrent_flag": True,
+                "recurrent_max_steps": 2,
+                "recurrent_min_steps": 3,
+            },
+            "less than or equal to recurrent_max_steps",
+        ),
+        ({"recurrent_ponder_cost_weight": -1.0}, "must be finite"),
+    ],
+)
+def test_vit_shared_recurrent_controls_reject_inactive_or_invalid_settings(
+    updates, message
+):
+    with pytest.raises(ValueError, match=message):
+        configuration("vit/expert_linear_adaptive", **updates)
 
 
 @pytest.mark.parametrize("name", PACKAGES)
@@ -251,6 +303,26 @@ def test_memory_and_expert_options_are_exposed_in_public_configuration(name):
         assert "ATTENTION_SOFT_MOE_CONFIG" in fields
 
 
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_vit_exposes_common_text_model_computation_options(variant):
+    prefixes = (
+        "STACK_",
+        "SUBMODULE_STACK_",
+        "GATE_",
+        "HALTING_",
+        "MEMORY_",
+        "RECURRENT_",
+        "ATTN_",
+        "FF_",
+        "EXPERT_",
+        "ROUTER_",
+        "ADAPTIVE_",
+    )
+    bert = set(model_package(f"bert/{variant}").runtime_defaults_spec.supported_keys)
+    gpt = set(model_package(f"gpt/{variant}").runtime_defaults_spec.supported_keys)
+    vit = set(model_package(f"vit/{variant}").runtime_defaults_spec.supported_keys)
+    shared = {key for key in bert & gpt if key.startswith(prefixes)}
+    assert not shared - vit
 
 
 @pytest.mark.parametrize("variant", VARIANTS)
