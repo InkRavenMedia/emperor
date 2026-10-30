@@ -23,8 +23,10 @@ from emperor.attention._variants.mixture.reshaping import (
 from emperor.attention._variants.mixture.zero_attention import (
     MixtureOfAttentionHeadsZeroAttention,
 )
+from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
 from emperor.embedding.relative import DynamicPositionalBiasConfig
-from support.attention import build_attention_config
+from emperor.experts import SoftMoEConfig
+from support.attention import build_attention_config, make_projection_model_config
 
 
 class SummingRelativeEmbedding(torch.nn.Module):
@@ -1435,6 +1437,28 @@ class TestMixtureOfAttentionHeadsExpertKeyValue(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "dense routing is not supported"):
             cfg.build()
+
+    def test_soft_moe_rejects_expert_key_value_before_sparse_routing_validation(self):
+        for keep_sparse_sampler in (False, True):
+            with self.subTest(keep_sparse_sampler=keep_sparse_sampler):
+                attention_config = self.preset(use_kv_expert_models_flag=True)
+                scoring_stack_config = make_projection_model_config()
+                depth_mapping_config = DepthMappingHandlerConfig(
+                    model_config=scoring_stack_config,
+                )
+                soft_routing_config = SoftMoEConfig(
+                    slots_per_expert=2,
+                    model_config=depth_mapping_config,
+                )
+                attention_config.experts_config.soft_moe_config = soft_routing_config
+                if not keep_sparse_sampler:
+                    attention_config.experts_config.sampler_config = None
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "Soft MoE attention does not yet support expert key/value projections",
+                ):
+                    attention_config.build()
 
     def test_expert_key_value_requires_shared_query_key_value_tensor(self):
         cfg = self.preset()
