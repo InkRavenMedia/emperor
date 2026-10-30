@@ -37,11 +37,15 @@ class MixtureOfExpertsLayer(Layer):
         state: MixtureOfExpertsLayerState,
     ) -> MixtureOfExpertsLayerState:
         main_model_input = state.hidden
+        routing_options = (
+            {"causal_prefix_flag": True} if state.causal_prefix_flag else {}
+        )
         output, skip_mask, loss = self.model(
             main_model_input,
             state.probabilities,
             state.indices,
             state.skip_mask,
+            **routing_options,
         )
         state.skip_mask = skip_mask
         state.loss = loss if state.loss is None else state.loss + loss

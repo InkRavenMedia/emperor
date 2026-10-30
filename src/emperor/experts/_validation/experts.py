@@ -11,6 +11,21 @@ if TYPE_CHECKING:
 
 
 class ExpertsValidator:
+    @staticmethod
+    def validate_slot_inputs(experts: "Experts", input_slots: Tensor) -> None:
+        if not isinstance(input_slots, Tensor) or input_slots.ndim != 4:
+            raise ValueError("Expert slots require [batch, experts, slots, features].")
+        if (
+            input_slots.shape[0] == 0
+            or input_slots.shape[1] != experts.num_experts
+            or input_slots.shape[2] == 0
+            or input_slots.shape[3] != experts.input_dim
+        ):
+            raise ValueError(
+                "Expert slots require nonempty batches/slots and the configured "
+                "expert count and input dimension."
+            )
+
     @classmethod
     def validate_output_rows(
         cls, experts: "Experts", expert_samples: Tensor, expert_output: Tensor
