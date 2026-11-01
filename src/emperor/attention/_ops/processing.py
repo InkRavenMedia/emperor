@@ -49,6 +49,7 @@ class ProcessorBase(Module):
         self.return_attention_weights_flag: bool = (
             self.cfg.return_attention_weights_flag
         )
+        self.source_memory_flag: bool = self.cfg.source_memory_flag
         self.qk_head_dim, self.v_head_dim = self.__resolve_qkv_head_dim()
         self.relative_positional_embedding = (
             self.__maybe_initialize_relative_positional_embedding()
@@ -149,7 +150,7 @@ class ProcessorBase(Module):
     ) -> Tensor:
         if restore_shape is not None:
             logits = logits.contiguous().view(restore_shape)
-        if self.cfg.source_memory_config is not None:
+        if self.source_memory_flag:
             logits = torch.cat((logits, logits), dim=-1)
         synthetic_position_count = source_sequence_length - logits.size(-1)
         synthetic_position_padding = (0, synthetic_position_count)

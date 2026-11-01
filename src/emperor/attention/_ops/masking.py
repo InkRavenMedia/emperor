@@ -25,6 +25,7 @@ class Mask:
         self.target_dtype = self.cfg.target_dtype
         self.causal_attention_mask_flag = self.cfg.causal_attention_mask_flag
         self.return_attention_weights_flag = self.cfg.return_attention_weights_flag
+        self.source_memory_flag: bool = self.cfg.source_memory_flag
         self.query_dtype: torch.dtype | None = None
         self.query_device: torch.device | None = None
 
@@ -59,6 +60,53 @@ class Mask:
             key_padding_mask=key_padding_mask,
             attention_mask=attention_mask,
         )
+
+    def prepare_masks(
+        self, attention_inputs: MultiHeadAttentionInputs
+    ) -> tuple[MultiHeadAttentionInputs, Tensor | None]:
+        if not self.source_memory_flag:
+            return self.prepare_attention_masks(attention_inputs), None
+        mask = attention_inputs.attention_mask
+        source_length = attention_inputs.key.size(0)
+        if mask is None or mask.size(-1) != 2 * source_length:
+            return self.prepare_attention_masks(attention_inputs), None
+        token_mask, memory_mask = mask.split(source_length, dim=-1)
+        prepared_memory = self.prepare_attention_masks(
+            replace(attention_inputs, attention_mask=memory_mask)
+        )
+        prepared_tokens = self.prepare_attention_masks(
+            replace(attention_inputs, attention_mask=token_mask)
+        )
+        return prepared_tokens, prepared_memory.attention_mask
+
+    def extend_source_memory_masks(
+        self,
+        attention_inputs: MultiHeadAttentionInputs,
+        memory_mask: Tensor | None = None,
+    ) -> MultiHeadAttentionInputs:
+        if not self.source_memory_flag:
+            return attention_inputs
+        return replace(
+            attention_inputs,
+            attention_mask=self.__extend_source_memory_mask(
+                attention_inputs.attention_mask, memory_mask
+            ),
+            key_padding_mask=self.__extend_source_memory_mask(
+                attention_inputs.key_padding_mask
+            ),
+        )
+
+    @staticmethod
+    def __extend_source_memory_mask(
+        mask: Tensor | None, memory_mask: Tensor | None = None
+    ) -> Tensor | None:
+        if mask is None:
+            return None
+        if memory_mask is None:
+            memory_mask = mask
+        else:
+            memory_mask = memory_mask.masked_fill(mask.isneginf(), -torch.inf)
+        return torch.cat((mask, memory_mask), dim=-1)
 
     def __set_runtime_query_properties(self, query: Tensor) -> None:
         self.query_dtype = query.dtype

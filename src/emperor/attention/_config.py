@@ -10,7 +10,6 @@ if TYPE_CHECKING:
 
     from emperor.embedding.relative import RelativePositionalEmbeddingConfig
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
-    from emperor.memory import DynamicMemoryConfig
 
 
 @dataclass
@@ -74,7 +73,7 @@ class MultiHeadAttentionConfig(ConfigBase):
     relative_positional_embedding_config: "RelativePositionalEmbeddingConfig | None" = (
         optional_field("Configuration for the relative positional embedding module.")
     )
-    source_memory_config: "DynamicMemoryConfig | None" = optional_field(
-        "Optional memory branch whose output is appended to both keys and values. "
-        "Creates one temporary source per input token; None disables the branch."
+    source_memory_flag: bool | None = optional_field(
+        "Append one memory source per input token using an independent model "
+        "with the key/value projection architecture."
     )

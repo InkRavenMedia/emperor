@@ -40,7 +40,6 @@ from ._residual import (
     resolve_residual_stack_options,
 )
 from ._transformer_submodule import (
-    build_source_memory_config,
     configure_transformer_submodule,
 )
 from .experiment_config import ExperimentConfig
@@ -255,6 +254,10 @@ def _attention(
     causal: bool,
     self_attention: bool,
 ):
+    if attention_options.source_memory_flag and not (self_attention):
+        raise ValueError(
+            "Source memory is supported only for self-attention, not decoder cross-attention."
+        )
     experts = runtime.attention_expert_options
     return MixtureOfAttentionHeadsConfig(
         batch_size=runtime.batch_size,
@@ -274,9 +277,7 @@ def _attention(
         batch_first_flag=True,
         projection_model_config=_projection_stack(runtime, attention_options),
         relative_positional_embedding_config=None,
-        source_memory_config=build_source_memory_config(
-            attention_options, _residual_stack(runtime), self_attention=self_attention
-        ),
+        source_memory_flag=attention_options.source_memory_flag,
         experts_config=_experts_config(
             runtime,
             runtime.model_dim,
