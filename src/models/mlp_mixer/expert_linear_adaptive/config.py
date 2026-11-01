@@ -76,6 +76,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 #########################################################################
 # Global
@@ -1178,3 +1179,5 @@ CHANNEL_MIXER_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None
 CHANNEL_MIXER_GROUPING_MODEL_CONFIG: ConfigBase | None = None
 CHANNEL_MIXER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 CHANNEL_MIXER_GROUPING_RMS_NORM_EPSILON: float | None = None
+
+declare_soft_moe_runtime_defaults(globals())

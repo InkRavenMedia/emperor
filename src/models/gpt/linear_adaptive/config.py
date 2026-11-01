@@ -75,6 +75,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 # Global
 INPUT_DIM: int = 28782
@@ -1612,3 +1613,5 @@ CONFIG_SCHEMA_SKIP_KEYS: set[str] = {
     and not key.startswith(_PUBLIC_CONFIG_PREFIXES)
     and not key.endswith(_PUBLIC_CONFIG_SUFFIXES)
 }
+
+declare_soft_moe_runtime_defaults(globals())
