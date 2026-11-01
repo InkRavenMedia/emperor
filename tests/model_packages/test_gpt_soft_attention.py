@@ -11,6 +11,7 @@ from emperor.attention._variants.mixture.soft import (
 )
 from emperor.augmentations.adaptive_parameters import AdditiveDynamicBiasConfig
 from emperor.experts import SoftMoEConfig
+from emperor.sampler import RouterConfig
 from models.catalog import model_package
 from tests.model_packages.test_gpt_hierarchical_embedding import TOKENS
 from tests.unit.test_expert_soft_moe import scoring_config
@@ -23,7 +24,11 @@ def configuration(package_name, *, soft_attention=True, **overrides):
     if soft_attention:
         scoring_stack = scoring_config(layers=3)
         attention_routing = SoftMoEConfig(
-            num_experts=2, slots_per_expert=2, model_config=scoring_stack
+            num_experts=2,
+            slots_per_expert=2,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_stack
+            ),
         )
     values = dict(
         input_dim=len(TOKENS),
@@ -196,7 +201,9 @@ def test_gpt_runtime_defaults_accept_soft_attention_and_reject_expert_keys_value
     package = model_package(package_name)
     scoring_stack = scoring_config(layers=2)
     routing = SoftMoEConfig(
-        num_experts=2, slots_per_expert=2, model_config=scoring_stack
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(noisy_topk_flag=False, model_config=scoring_stack),
     )
     assert (
         package.bind_runtime_defaults({"attention_soft_moe_config": routing})

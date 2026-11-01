@@ -48,39 +48,56 @@ class SoftMoEValidator(ValidatorBase):
         cls.validate_scoring_stack(cfg)
 
     @classmethod
-    def validate_scoring_stack(cls, cfg: SoftMoEConfig) -> None:
-        from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
+    def validate_scoring_template(cls, cfg: SoftMoEConfig) -> None:
         from emperor.layers import LayerConfig, LayerStackConfig
+        from emperor.sampler import RouterConfig
+
+        if not isinstance(cfg.router_config, RouterConfig):
+            raise TypeError("Soft MoE requires router_config=RouterConfig(...).")
+        stack = cfg.router_config.model_config
+        if type(stack) is not LayerStackConfig:
+            raise TypeError(
+                "Soft MoE requires router_config.model_config=LayerStackConfig(...)."
+            )
+        if type(stack.layer_config) is not LayerConfig:
+            raise TypeError(
+                "Soft MoE scoring requires ordinary LayerConfig and LinearLayerConfig or AdaptiveLinearLayerConfig."
+            )
+
+    @classmethod
+    def validate_scoring_stack(cls, cfg: SoftMoEConfig) -> None:
+        from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
         from emperor.linears import LinearLayerConfig
 
-        slot_logit_config = cfg.model_config
-        if not isinstance(slot_logit_config, DepthMappingHandlerConfig):
-            raise TypeError(
-                "Soft MoE requires model_config=DepthMappingHandlerConfig(...)."
-            )
+        cls.validate_scoring_template(cfg)
+        router_config = cfg.router_config
+        num_slots = cfg.num_experts * cfg.slots_per_expert
         for name, expected in (
             ("input_dim", cfg.input_dim),
-            ("output_dim", cfg.slots_per_expert),
-            ("generator_depth", cfg.num_experts),
+            ("num_experts", cfg.num_experts),
+            ("output_dim", num_slots),
         ):
-            supplied = getattr(slot_logit_config, name)
+            supplied = getattr(router_config, name)
             if supplied is not None and (
-                type(supplied) is not int or supplied != expected
+                isinstance(supplied, bool)
+                or not isinstance(supplied, int)
+                or supplied != expected
             ):
-                raise ValueError(f"Soft MoE scoring {name} must match the router.")
-        stack = slot_logit_config.model_config
-        if type(stack) is not LayerStackConfig:
-            raise TypeError("Soft MoE scoring requires an ordinary LayerStackConfig.")
-        if (
-            type(stack.layer_config) is not LayerConfig
-            or type(stack.layer_config.layer_model_config) is not LinearLayerConfig
+                raise ValueError(f"Soft MoE router {name} must match its slot layout.")
+        if router_config.noisy_topk_flag is not False:
+            raise ValueError("Soft MoE requires router_config.noisy_topk_flag=False.")
+        stack = router_config.model_config
+        linear_config = stack.layer_config.layer_model_config
+        if type(linear_config) is not LinearLayerConfig and not isinstance(
+            linear_config, AdaptiveLinearLayerConfig
         ):
             raise TypeError(
-                "Soft MoE scoring requires ordinary LayerConfig and LinearLayerConfig."
+                "Soft MoE scoring requires ordinary LayerConfig and LinearLayerConfig "
+                "or AdaptiveLinearLayerConfig."
             )
         for name, expected in (
             ("input_dim", cfg.input_dim),
-            ("output_dim", cfg.slots_per_expert),
+            ("output_dim", num_slots),
         ):
             supplied = getattr(stack, name)
             if supplied is not None and (
@@ -93,6 +110,10 @@ class SoftMoEValidator(ValidatorBase):
             raise ValueError(
                 "Soft MoE scoring requires apply_output_postprocessing_flag=False "
                 "for raw logits."
+            )
+        if _adaptive_grouping_paths(stack, root="SoftMoE.scoring"):
+            raise ValueError(
+                "Soft MoE scoring cannot share adaptive grouping context across tokens or samples."
             )
         cls.validate_no_controllers(stack)
 
@@ -111,9 +132,10 @@ class SoftMoEValidator(ValidatorBase):
                 raise ValueError(f"Soft MoE {name} must be a positive integer.")
             if supplied is not None and supplied != getattr(model, name):
                 raise ValueError(f"Soft MoE {name} must match the mixture owner.")
+        soft_moe_config = cfg.resolve_soft_moe_config()
         cls.validate_config(
             replace(
-                cfg.soft_moe_config,
+                soft_moe_config,
                 input_dim=model.input_dim,
                 num_experts=model.num_experts,
             )
@@ -143,7 +165,6 @@ class SoftMoEValidator(ValidatorBase):
             raise ValueError(
                 "Soft MoE requires AFTER_EXPERTS; dispatch already weights expert inputs."
             )
-        cls.validate_expert_stack(cfg.expert_model_config)
 
     @classmethod
     def validate_expert_stack(cls, config: object) -> None:

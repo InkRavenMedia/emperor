@@ -81,10 +81,11 @@ class MixtureOfExperts(Module):
     def __maybe_create_soft_router(self) -> "SoftMoERouter | None":
         if self.soft_moe_config is None:
             return None
-        router_dimension_overrides = SoftMoEConfig(
+        soft_moe_dimensions = SoftMoEConfig(
             input_dim=self.input_dim, num_experts=self.num_experts
         )
-        return self.soft_moe_config.build(router_dimension_overrides)
+        soft_moe_config = self.cfg.resolve_soft_moe_config()
+        return soft_moe_config.build(soft_moe_dimensions)
 
     def get_top_k(self) -> int:
         return self.top_k
@@ -132,7 +133,14 @@ class MixtureOfExperts(Module):
         output = self.__combine_expert_slots(
             output_slots, combine_weights, inputs.device.type
         )
-        return output, skip_mask, expert_loss
+        total_loss = self.__accumulate_soft_router_loss(expert_loss)
+        return output, skip_mask, total_loss
+
+    def __accumulate_soft_router_loss(self, expert_loss: Tensor) -> Tensor:
+        router_loss = self.soft_router.get_auxiliary_loss()
+        if router_loss is None:
+            return expert_loss
+        return expert_loss + router_loss
 
     def __combine_expert_slots(
         self, output_slots: Tensor, combine_weights: Tensor, device_type: str
@@ -167,7 +175,8 @@ class MixtureOfExperts(Module):
                 combine_weights,
                 prefix_outputs.to(combine_weights.dtype),
             )
-        return output.to(output_slots.dtype), skip_mask, expert_loss
+        total_loss = self.__accumulate_soft_router_loss(expert_loss)
+        return output.to(output_slots.dtype), skip_mask, total_loss
 
     def _maybe_compute_expert_indices(
         self,

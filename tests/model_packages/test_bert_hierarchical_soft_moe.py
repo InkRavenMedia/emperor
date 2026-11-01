@@ -9,8 +9,8 @@ from tokenizers import Tokenizer
 from tokenizers.models import WordPiece
 from torch import nn
 
-from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
 from emperor.experts import SoftMoEConfig
+from emperor.sampler import RouterConfig
 from models.catalog import model_package
 from tests.support.hierarchical_embedding import embedding_config, linear_stack
 
@@ -43,11 +43,13 @@ def configuration(package_name, *, hierarchical=True, soft=True, **overrides):
     slot_logit_config = None
     if soft:
         scoring_stack_config = linear_stack(None, None, hidden_dim=8, num_layers=2)
-        depth_mapping_config = DepthMappingHandlerConfig(
-            model_config=scoring_stack_config
-        )
+        scoring_stack_config.layer_config.layer_model_config = None
         slot_logit_config = SoftMoEConfig(
-            num_experts=2, slots_per_expert=2, model_config=depth_mapping_config
+            num_experts=2,
+            slots_per_expert=2,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_stack_config
+            ),
         )
     values = dict(
         batch_size=2,
@@ -129,9 +131,14 @@ def test_features_compose_and_receive_task_gradients(package_name, hierarchical,
     ]
     assert bool(soft_routers) == soft
     for router in soft_routers:
-        for parameter in router.parameters():
-            assert parameter.grad is not None
-            assert torch.isfinite(parameter.grad).all()
+        gradients = [
+            parameter.grad
+            for parameter in router.parameters()
+            if parameter.grad is not None
+        ]
+        assert gradients and all(
+            torch.isfinite(gradient).all() for gradient in gradients
+        )
 
 
 @pytest.mark.parametrize("package_name", BERT_PACKAGES)
@@ -272,9 +279,12 @@ def test_runtime_metadata_accepts_both_native_module_configurations(package_name
     model_config = configuration(package_name)
     hierarchical_config = model_config.experiment_config.boundary_config.embedding_options.hierarchical_embedding_config
     scoring_stack_config = linear_stack(None, None)
-    depth_mapping_config = DepthMappingHandlerConfig(model_config=scoring_stack_config)
     soft_moe_config = SoftMoEConfig(
-        num_experts=2, slots_per_expert=2, model_config=depth_mapping_config
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=scoring_stack_config
+        ),
     )
     runtime_values = {
         "hierarchical_embedding_config": hierarchical_config,

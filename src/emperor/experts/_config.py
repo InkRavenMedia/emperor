@@ -1,4 +1,5 @@
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from emperor.config import ConfigBase, optional_field
@@ -10,10 +11,9 @@ from emperor.experts._options import (
 from emperor.layers import LayerConfig
 
 if TYPE_CHECKING:
-    from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
     from emperor.experts._layers.mixture import MixtureOfExperts
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
-    from emperor.sampler import SamplerConfig
+    from emperor.sampler import RouterConfig, SamplerConfig
 
 
 @dataclass
@@ -27,10 +27,12 @@ class SoftMoEConfig(ConfigBase):
     slots_per_expert: int | None = optional_field(
         "Positive, fixed number of slots processed by each expert."
     )
-    model_config: "DepthMappingHandlerConfig | None" = optional_field(
-        "Required depth-mapped scoring stack; input/output dimensions are "
-        "supplied by the router along with the expert count. "
-        "Its inner stack's final layer must produce raw logits."
+    router_config: "RouterConfig | None" = optional_field(
+        "Required shared router, producing num_experts * slots_per_expert logits. "
+        "Its model_config describes a linear or adaptive linear scoring stack. "
+        "The mixture supplies the expert's linear model configuration, retaining "
+        "the router stack's width and depth and independent parameters. "
+        "Noisy top-k is unsupported."
     )
 
     def _registry_owner(self) -> type:
@@ -109,6 +111,26 @@ class MixtureOfExpertsConfig(ConfigBase):
         "Requires LAYER routing, all experts, no sampler or capacity dropping, "
         "and weighted, reduced outputs. None preserves token routing."
     )
+
+    def resolve_soft_moe_config(self) -> SoftMoEConfig:
+        soft_config = self.soft_moe_config
+        validator = soft_config.registry_owner().VALIDATOR
+        validator.validate_scoring_template(soft_config)
+        validator.validate_expert_stack(self.expert_model_config)
+        router_config = soft_config.router_config
+        scoring_stack_config = router_config.model_config
+        expert_layer_model_config = deepcopy(
+            self.expert_model_config.layer_config.layer_model_config
+        )
+        scoring_layer_config = replace(
+            scoring_stack_config.layer_config,
+            layer_model_config=expert_layer_model_config,
+        )
+        scoring_stack_config = replace(
+            scoring_stack_config, layer_config=scoring_layer_config
+        )
+        router_config = replace(router_config, model_config=scoring_stack_config)
+        return replace(soft_config, router_config=router_config)
 
     def _registry_owner(self) -> type:
         from emperor.experts._layers.mixture import MixtureOfExperts

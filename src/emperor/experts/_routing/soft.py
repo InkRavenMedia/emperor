@@ -1,16 +1,13 @@
-"""Depth-mapped Soft MoE scores with separate token and slot distributions."""
+"""Shared Soft MoE scoring with separate token and slot distributions."""
 
 import torch
 from torch import Tensor, nn
 from torch.func import functional_call
 
-from emperor.augmentations.adaptive_parameters import (
-    DepthMappingHandlerConfig,
-    DepthMappingLayerStack,
-)
 from emperor.experts._config import SoftMoEConfig
 from emperor.experts._validation.soft import SoftMoEValidator
 from emperor.nn import Module
+from emperor.sampler import RouterConfig, RouterModel
 
 
 class SoftMoERouter(Module):
@@ -27,17 +24,23 @@ class SoftMoERouter(Module):
         self.input_dim: int = self.cfg.input_dim
         self.num_experts: int = self.cfg.num_experts
         self.slots_per_expert: int = self.cfg.slots_per_expert
-        self.slot_logit_model: DepthMappingLayerStack = self.__build_slot_logit_model()
+        self.num_slots: int = self.num_experts * self.slots_per_expert
+        self.router_config: RouterConfig = self.cfg.router_config
+        self.router: RouterModel = self.__build_router()
         initial_logit_scale = torch.ones(())
         self.scale = nn.Parameter(initial_logit_scale)
+        self.auxiliary_loss: Tensor | None = None
 
-    def __build_slot_logit_model(self) -> DepthMappingLayerStack:
-        slot_logit_overrides = DepthMappingHandlerConfig(
+    def get_auxiliary_loss(self) -> Tensor | None:
+        return self.auxiliary_loss
+
+    def __build_router(self) -> RouterModel:
+        router_overrides = RouterConfig(
             input_dim=self.input_dim,
-            output_dim=self.slots_per_expert,
-            generator_depth=self.num_experts,
+            num_experts=self.num_experts,
+            output_dim=self.num_slots,
         )
-        return self.cfg.model_config.build(slot_logit_overrides)
+        return self.router_config.build(router_overrides)
 
     def forward(
         self,
@@ -51,6 +54,7 @@ class SoftMoERouter(Module):
         In causal mode, each update weight inserts the current token into the
         running slot average; its complement retains the previous prefix.
         """
+        self.auxiliary_loss = None
         token_features = X
         self.VALIDATOR.validate_inputs(token_features, self.input_dim, skip_mask)
         self.VALIDATOR.validate_parameter_device(token_features, self.scale)
@@ -59,7 +63,7 @@ class SoftMoERouter(Module):
             token_features, skip_mask, routing_dtype
         )
         token_slot_logits = self.__compute_token_slot_logits(
-            token_features, normalized_token_features, routing_dtype
+            token_features, normalized_token_features, routing_dtype, skip_mask
         )
         return self.__compute_dispatch_and_combine_weights(
             token_slot_logits, skip_mask, causal_prefix_flag
@@ -98,17 +102,37 @@ class SoftMoERouter(Module):
         token_features: Tensor,
         normalized_token_features: Tensor,
         routing_dtype: torch.dtype,
+        skip_mask: Tensor | None,
     ) -> Tensor:
         slot_logit_parameters, slot_logit_buffers = (
             self.__cast_slot_logit_parameters_and_buffers(token_features, routing_dtype)
         )
         flattened_token_features = normalized_token_features.reshape(-1, self.input_dim)
-        token_slot_logits = functional_call(
-            self.slot_logit_model,
-            (slot_logit_parameters, slot_logit_buffers),
-            (flattened_token_features,),
-            strict=True,
-        )
+        scoring_features = flattened_token_features
+        compact_active_tokens = skip_mask is not None
+        if compact_active_tokens:
+            active_token_indices = skip_mask.reshape(-1).nonzero(as_tuple=True)[0]
+            scoring_features = flattened_token_features.index_select(
+                0, active_token_indices
+            )
+        # Keep routing scores in the promoted dtype during mixed-precision execution.
+        with torch.autocast(device_type=token_features.device.type, enabled=False):
+            slot_logit_state = functional_call(
+                self.router,
+                (slot_logit_parameters, slot_logit_buffers),
+                (scoring_features,),
+                strict=True,
+            )
+        self.__restore_slot_logit_buffers(slot_logit_buffers)
+        self.auxiliary_loss = slot_logit_state.loss
+        token_slot_logits = slot_logit_state.hidden
+        if compact_active_tokens:
+            all_token_slot_logits = token_slot_logits.new_zeros(
+                flattened_token_features.size(0), self.num_slots
+            )
+            token_slot_logits = all_token_slot_logits.index_copy(
+                0, active_token_indices, token_slot_logits
+            )
         token_slot_logits_shape = (
             *token_features.shape[:2],
             self.num_experts,
@@ -122,14 +146,23 @@ class SoftMoERouter(Module):
         self, token_features: Tensor, routing_dtype: torch.dtype
     ) -> tuple[dict[str, Tensor], dict[str, Tensor]]:
         slot_logit_parameters = {}
-        for parameter_name, parameter in self.slot_logit_model.named_parameters():
+        for parameter_name, parameter in self.router.named_parameters():
             self.VALIDATOR.validate_parameter_device(token_features, parameter)
             slot_logit_parameters[parameter_name] = parameter.to(routing_dtype)
         slot_logit_buffers = {
             buffer_name: self.__cast_floating_buffer_for_routing(buffer, routing_dtype)
-            for buffer_name, buffer in self.slot_logit_model.named_buffers()
+            for buffer_name, buffer in self.router.named_buffers()
         }
         return slot_logit_parameters, slot_logit_buffers
+
+    @torch.no_grad()
+    def __restore_slot_logit_buffers(
+        self, slot_logit_buffers: dict[str, Tensor]
+    ) -> None:
+        for buffer_name, buffer in self.router.named_buffers():
+            updated_buffer = slot_logit_buffers[buffer_name]
+            if updated_buffer is not buffer:
+                buffer.copy_(updated_buffer)
 
     def __cast_floating_buffer_for_routing(
         self, buffer: Tensor, routing_dtype: torch.dtype
