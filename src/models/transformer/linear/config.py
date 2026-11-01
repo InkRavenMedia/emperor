@@ -54,10 +54,6 @@ ATTN_ZERO_ATTENTION_FLAG: bool = False
 
 # Temporary sources for encoder and decoder self-attention.
 ATTN_SOURCE_MEMORY_FLAG: bool = False
-ATTN_SOURCE_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
-ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS: int = 4
-ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
-ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
 
 ## Attention Projection Stack Options
 ATTN_NUM_LAYERS: int = 1

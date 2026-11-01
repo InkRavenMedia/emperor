@@ -336,7 +336,6 @@ class AttentionValidatorBase:
 class AttentionSourceMemoryValidator:
     @staticmethod
     def validate_config(cfg) -> None:
-        AttentionSourceMemoryValidator.validate_memory_config(cfg.source_memory_config)
         widths = (
             cfg.embedding_dim,
             cfg.query_key_projection_dim or cfg.embedding_dim,
@@ -376,12 +375,20 @@ class AttentionSourceMemoryValidator:
                 "Attention source memory must preserve the token rows and feature width."
             )
 
+    @staticmethod
+    def validate_projected_output(memory: Tensor, key_projection: Tensor) -> None:
+        if not isinstance(memory, Tensor) or memory.shape != key_projection.shape:
+            raise ValueError(
+                "Attention source memory projection must preserve token positions "
+                "and match the key/value expert count and feature width."
+            )
+
 
 class MultiHeadAttentionValidator(AttentionValidatorBase, ValidatorBase):
     OPTIONAL_FIELDS = {
         "relative_positional_embedding_config",
         "batch_first_flag",
-        "source_memory_config",
+        "source_memory_flag",
     }
 
     @classmethod

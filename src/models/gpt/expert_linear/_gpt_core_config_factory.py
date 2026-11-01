@@ -28,7 +28,6 @@ from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models.gpt.expert_linear._control_factory_dependencies import (
     GptControlFactoryDependencies,
 )
-from models.gpt.expert_linear._controller_stack_config import build_source_memory_config
 from models.gpt.expert_linear._decoder_control_config_factory import (
     GptGateConfigFactory,
     GptHaltingConfigFactory,
@@ -233,9 +232,7 @@ class GptCoreConfigFactory:
     ) -> SelfAttentionConfig | MixtureOfAttentionHeadsConfig:
         decoder_options = self.decoder_options
         attention_options = self.attention_options
-        source_memory_config = build_source_memory_config(
-            attention_options, self.decoder_submodule_stack_options
-        )
+        source_memory_flag = attention_options.source_memory_flag
         projection_model_config = self._build_attention_projection_stack_config()
         if self.expert_config_factory is not None:
             attention_config = self.expert_config_factory.build_attention_config(
@@ -245,7 +242,7 @@ class GptCoreConfigFactory:
                 projection_model_config=projection_model_config,
             )
             if attention_config is not None:
-                attention_config.source_memory_config = source_memory_config
+                attention_config.source_memory_flag = source_memory_flag
                 return attention_config
         return SelfAttentionConfig(
             batch_size=self.batch_size,
@@ -260,7 +257,7 @@ class GptCoreConfigFactory:
             zero_attention_flag=False,
             causal_attention_mask_flag=True,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
-            source_memory_config=source_memory_config,
+            source_memory_flag=source_memory_flag,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

@@ -53,7 +53,7 @@ class SoftMixtureOfAttentionHeadsProjector(ProjectorBase):
         super()._clear_transient_state()
         self.combine_weights = None
 
-    def compute_qkv_projections(
+    def _compute_qkv_projections(
         self, attention_inputs: MultiHeadAttentionInputs
     ) -> MultiHeadAttentionInputs:
         token_features = attention_inputs.query.transpose(0, 1)

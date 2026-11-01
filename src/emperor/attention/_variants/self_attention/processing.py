@@ -59,7 +59,7 @@ class SelfAttentionProcessor(ProcessorBase):
         if self.cfg.rotary_base is not None:
             memory_length = (
                 attention_inputs.runtime_layout.real_source_sequence_length
-                if self.cfg.source_memory_config is not None
+                if self.source_memory_flag
                 else 0
             )
             attention_inputs = replace(

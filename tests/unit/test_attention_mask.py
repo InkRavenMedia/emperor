@@ -323,6 +323,66 @@ class TestMaskShapeValidation(TestMask):
 
 
 class TestPrepareAttentionMasks(TestMask):
+    def test_prepares_and_extends_memory_masks_from_its_configuration(self):
+        cases = ((None, False), (False, False), (True, False), (True, True))
+        for enabled, explicit_memory_mask in cases:
+            with self.subTest(enabled=enabled, explicit=explicit_memory_mask):
+                cfg = self.preset(
+                    target_sequence_length=3,
+                    source_sequence_length=3,
+                    causal_attention_mask_flag=True,
+                )
+                cfg.source_memory_flag = enabled
+                masks = Mask(cfg)
+                tokens = self.query_tensor(cfg)
+                token_mask = torch.zeros(3, 3, dtype=torch.bool)
+                token_mask[1, 0] = True
+                supplied_mask = token_mask
+                if explicit_memory_mask:
+                    memory_mask = torch.zeros_like(token_mask)
+                    memory_mask[2, 1] = True
+                    supplied_mask = torch.cat((token_mask, memory_mask), dim=-1)
+                padding = torch.tensor([[False, False, True], [False, True, False]])
+                inputs = self.attention_inputs(
+                    cfg,
+                    query=tokens,
+                    key=tokens,
+                    key_padding_mask=padding,
+                    attention_mask=supplied_mask,
+                )
+
+                prepared, memory_mask = masks.prepare_masks(inputs)
+                # Token projections, including Soft MoE, still need token-only padding.
+                self.assertEqual(prepared.key_padding_mask.shape, (2, 3))
+                self.assertEqual(memory_mask is not None, explicit_memory_mask)
+                extended = masks.extend_source_memory_masks(prepared, memory_mask)
+
+                expected_tokens = torch.tensor(
+                    [
+                        [0, -torch.inf, -torch.inf],
+                        [-torch.inf, 0, -torch.inf],
+                        [0, 0, 0],
+                    ]
+                )
+                expected_padding = torch.zeros(2, 3).masked_fill(padding, -torch.inf)
+                expected_attention = expected_tokens
+                if enabled:
+                    expected_memory = expected_tokens.clone()
+                    if explicit_memory_mask:
+                        expected_memory[2, 1] = -torch.inf
+                    expected_attention = torch.cat(
+                        (expected_tokens, expected_memory), dim=-1
+                    )
+                    expected_padding = torch.cat(
+                        (expected_padding, expected_padding), dim=-1
+                    )
+                else:
+                    self.assertIs(extended, prepared)
+                torch.testing.assert_close(extended.attention_mask, expected_attention)
+                torch.testing.assert_close(extended.key_padding_mask, expected_padding)
+                self.assertEqual(inputs.key_padding_mask.dtype, torch.bool)
+                self.assertEqual(inputs.attention_mask.dtype, torch.bool)
+
     def test_requires_resolved_runtime_layout(self):
         cfg = self.preset()
         model = Mask(cfg)

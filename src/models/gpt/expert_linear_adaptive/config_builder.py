@@ -47,9 +47,6 @@ from emperor.transformer._soft_moe_config import build_soft_moe_attention_expert
 from models.gpt.expert_linear_adaptive._base_config_builder import (
     GptBackendConfigBuilder,
 )
-from models.gpt.expert_linear_adaptive._controller_stack_config import (
-    build_source_memory_config,
-)
 from models.gpt.expert_linear_adaptive._expert_control_config_factory import (
     ControlConfigDependencies,
     ControlConfigFactory,
@@ -406,9 +403,7 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
     def _build_attention_config(self):
         decoder_options = self.decoder_options
         attention_options = self.attention_options
-        source_memory_config = build_source_memory_config(
-            attention_options, self.submodule_stack_options
-        )
+        source_memory_flag = attention_options.source_memory_flag
         experts_config = self._build_attention_experts_config()
         attention_experts_config = build_soft_moe_attention_experts(
             experts_config, attention_options.attention_soft_moe_config
@@ -427,7 +422,7 @@ class _GptExpertLinearAdaptiveConfigBuilderImplementation(GptBackendConfigBuilde
             zero_attention_flag=False,
             causal_attention_mask_flag=True,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
-            source_memory_config=source_memory_config,
+            source_memory_flag=source_memory_flag,
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

@@ -1,10 +1,14 @@
 """Private attention projection operations."""
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 
+from emperor.attention._ops.source_memory import AttentionSourceMemory
+from emperor.attention._validation import AttentionSourceMemoryValidator
 from emperor.layers import Layer
 from emperor.nn import Module
 
@@ -13,6 +17,7 @@ if TYPE_CHECKING:
     from emperor.attention._runtime import (
         MultiHeadAttentionInputs,
     )
+    from emperor.config import ConfigBase
     from emperor.layers import (
         LayerStackConfig,
         RecurrentCompositionConfig,
@@ -20,21 +25,37 @@ if TYPE_CHECKING:
 
 
 class ProjectorBase(Module):
+    VALIDATOR = AttentionSourceMemoryValidator
+
     def __init__(
         self,
         cfg: "MultiHeadAttentionConfig",
+        *,
+        source_memory_model_config: "ConfigBase | None" = None,
     ):
         super().__init__()
         self.cfg = cfg
         self.embedding_dim: int = self.cfg.embedding_dim
         self.query_key_projection_dim: int = self.cfg.query_key_projection_dim
         self.value_projection_dim: int = self.cfg.value_projection_dim
+        self.source_memory_flag: bool = bool(self.cfg.source_memory_flag)
         self.projection_model_config: LayerStackConfig | RecurrentCompositionConfig = (
             self.cfg.projection_model_config
         )
         self.__resolve_kv_dimensions()
         self.output_model = self._build_output_model()
+        self.source_memory = self.__maybe_initialize_source_memory(
+            source_memory_model_config
+        )
         self.auxiliary_loss: Tensor | None = None
+
+    def __maybe_initialize_source_memory(
+        self,
+        model_config: "ConfigBase | None",
+    ) -> AttentionSourceMemory | None:
+        if self.source_memory_flag:
+            return AttentionSourceMemory(self.cfg, model_config=model_config)
+        return None
 
     def __resolve_kv_dimensions(self) -> None:
         if not self.query_key_projection_dim:
@@ -51,6 +72,12 @@ class ProjectorBase(Module):
             output_dim=output_dim,
         )
         return self.projection_model_config.build(overrides)
+
+    def _compute_memory_projection(self, source: Tensor) -> Tensor:
+        memory, _, loss = self.source_memory(source)
+        if loss is not None:
+            self._accumulate_auxiliary_loss(loss)
+        return memory.reshape(source.size(0), source.size(1), -1)
 
     def _compute_projection(
         self,
@@ -87,6 +114,37 @@ class ProjectorBase(Module):
         return self._forward_accumulating_loss(self.output_model, weighted_values)
 
     def compute_qkv_projections(
+        self,
+        attention_inputs: "MultiHeadAttentionInputs",
+    ) -> "MultiHeadAttentionInputs":
+        if self.source_memory_flag:
+            self.VALIDATOR.validate_inputs(attention_inputs)
+        projections = self._compute_qkv_projections(attention_inputs)
+        return self.__maybe_append_memory_sources(projections, attention_inputs)
+
+    def __maybe_append_memory_sources(
+        self,
+        projections: "MultiHeadAttentionInputs",
+        attention_inputs: "MultiHeadAttentionInputs",
+    ) -> "MultiHeadAttentionInputs":
+        if not self.source_memory_flag:
+            return projections
+        memory_projection = self._compute_memory_projection(attention_inputs.key)
+        self.VALIDATOR.validate_projected_output(memory_projection, projections.key)
+        keys_with_memory = torch.cat((projections.key, memory_projection), dim=0)
+        values_with_memory = torch.cat((projections.value, memory_projection), dim=0)
+        memory_sequence_length = memory_projection.size(0)
+        runtime_layout_with_memory = projections.runtime_layout.with_source_extension(
+            memory_sequence_length
+        )
+        return replace(
+            projections,
+            key=keys_with_memory,
+            value=values_with_memory,
+            runtime_layout=runtime_layout_with_memory,
+        )
+
+    def _compute_qkv_projections(
         self,
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> "MultiHeadAttentionInputs":
