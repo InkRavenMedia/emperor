@@ -26,6 +26,40 @@ Emperor is a personal research project by the developer behind
 [InkRaven](https://inkraven.de/). Visit the website to learn more
 about my work in web development and AI.
 
+## Research mission
+
+Emperor investigates how far architectural improvements can take small neural
+networks. The long-term goal is to develop flexible models with capabilities
+comparable to frontier AI systems, while keeping them practical to run on a
+single GPU.
+
+### The challenge
+
+Increasing model size brings greater demands on memory and computation. This
+project explores ways to improve capability through how a model processes
+information, uses its parameters, and adapts to new inputs. The challenge is to
+find improvements whose benefits hold up when their resource costs are taken
+into account.
+
+### How Emperor supports the research
+
+The repository provides a shared foundation for testing those ideas. Reusable
+PyTorch components and configurable model packages make it possible to build
+variants and compare them with reference models. The CLI and Workbench support
+model inspection, training, and reviewing results, so architectural choices can
+be examined through repeatable experiments.
+
+### Research directions
+
+The work explores latent-space reasoning, adaptive computation, memory,
+test-time training, mixture of experts, data-dependent parameters, and dynamic
+neuron clusters. These ideas are investigated individually and in combination
+to understand what they contribute to small, flexible models.
+
+Progress toward the goal depends on evidence: what a change improves, what it
+costs, and where it falls short. Emperor provides the tools to carry out that
+investigation; developing the model remains the long-term research objective.
+
 ## Environment Setup
 
 **System requirements:** Git and [mise](https://mise.jdx.dev/). Mise provisions
