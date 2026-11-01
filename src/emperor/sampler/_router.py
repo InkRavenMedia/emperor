@@ -1,6 +1,6 @@
 from torch import Tensor
 
-from emperor.layers import Layer
+from emperor.layers import Layer, LayerState
 from emperor.nn import Module
 from emperor.sampler._config import RouterConfig
 from emperor.sampler._validation import RouterModelValidator
@@ -39,6 +39,10 @@ class RouterModel(Module):
         return self.cfg.model_dimension_overrides(self.input_dim).output_dim
 
     def compute_logit_scores(self, input_batch: Tensor) -> Tensor:
+        router_state = self(input_batch)
+        return router_state.hidden
+
+    def forward(self, input_batch: Tensor) -> LayerState:
         self.VALIDATOR.validate_forward_inputs(self, input_batch)
         router_state = Layer.run_model_from_hidden(self.model, input_batch)
-        return router_state.hidden
+        return router_state

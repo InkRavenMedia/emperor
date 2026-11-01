@@ -3,10 +3,13 @@
 import pytest
 import torch
 
+from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
 from emperor.experts import SoftMoEConfig
 from emperor.experts._routing.soft import SoftMoERouter
+from emperor.linears import LinearLayerConfig
 from emperor.memory import AttentionDynamicMemoryConfig
 from emperor.memory._base import DynamicMemoryAbstract
+from emperor.sampler import RouterConfig
 from emperor.transformer import FeedForward
 from models.catalog import model_package
 from tests.model_packages.test_attention_source_memory import (
@@ -43,7 +46,11 @@ def memory_roles(name):
 
 def soft_routing():
     return SoftMoEConfig(
-        num_experts=2, slots_per_expert=2, model_config=scoring_config()
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=scoring_config()
+        ),
     )
 
 
@@ -87,6 +94,13 @@ def test_soft_feed_forward_and_memory_work_together_in_every_family(name):
         routers = [m for m in feed_forward.modules() if isinstance(m, SoftMoERouter)]
         assert routers
         for router in routers:
+            expected_linear_config = LinearLayerConfig
+            if name.endswith("adaptive"):
+                expected_linear_config = AdaptiveLinearLayerConfig
+            assert all(
+                type(layer.model.cfg) is expected_linear_config
+                for layer in router.router.model.layers
+            )
             assert any(
                 p.grad is not None
                 and torch.isfinite(p.grad).all()
@@ -128,6 +142,13 @@ def test_mixer_soft_token_experts_keep_samples_separate_with_memory(
     routers = [m for m in model.modules() if isinstance(m, SoftMoERouter)]
     assert routers
     for router in routers:
+        expected_linear_config = LinearLayerConfig
+        if variant.endswith("adaptive"):
+            expected_linear_config = AdaptiveLinearLayerConfig
+        assert all(
+            type(layer.model.cfg) is expected_linear_config
+            for layer in router.router.model.layers
+        )
         assert any(
             p.grad is not None and p.grad.abs().sum() > 0 for p in router.parameters()
         )

@@ -44,15 +44,11 @@ def attention_config(*, scoring_layers=2, experts=3, slots=2, **overrides):
     return configuration
 
 
-def reference_stack(stack, features, *, expert_index=None):
+def reference_stack(stack, features):
     hidden = features
     for layer_index, layer in enumerate(stack.layers):
         weights = layer.model.weight_params
         bias = layer.model.bias_params
-        if expert_index is not None:
-            weights = weights[expert_index]
-            if bias is not None:
-                bias = bias[expert_index]
         hidden = hidden @ weights
         if bias is not None:
             hidden = hidden + bias
@@ -70,13 +66,9 @@ def explicit_reference(model, inputs, padding_mask):
     unit_inputs = (
         masked_inputs / (masked_inputs.square().sum(-1, keepdim=True) + 1e-6).sqrt()
     )
-    expert_logits = []
-    for expert_index in range(router.num_experts):
-        logits = reference_stack(
-            router.slot_logit_model.model, unit_inputs, expert_index=expert_index
-        )
-        expert_logits.append(logits * router.scale)
-    token_slot_logits = torch.stack(expert_logits, dim=2)
+    logits = reference_stack(router.router.model, unit_inputs)
+    slot_shape = (*inputs.shape[:2], router.num_experts, router.slots_per_expert)
+    token_slot_logits = (logits * router.scale).reshape(slot_shape)
     slot_mask = active_tokens[:, :, None, None]
     dispatch_logits = token_slot_logits.masked_fill(~slot_mask, -torch.inf)
     dispatch_logits = torch.where(slot_mask.any(1, keepdim=True), dispatch_logits, 0)
@@ -519,10 +511,10 @@ def test_causal_pooling_handles_future_logits_that_would_underflow_global_dispat
         causal_attention_mask_flag=True, experts=1, slots=1, scoring_layers=1
     )
     model = configuration.build().eval()
-    scoring_layer = model.projector.soft_router.slot_logit_model.model.layers[0].model
+    scoring_layer = model.projector.soft_router.router.model.layers[0].model
     with torch.no_grad():
         scoring_layer.weight_params.zero_()
-        scoring_layer.weight_params[:, 0, :] = 10000
+        scoring_layer.weight_params[0, :] = 10000
         scoring_layer.bias_params.zero_()
     inputs = torch.zeros(1, 3, 8, requires_grad=True)
     with torch.no_grad():

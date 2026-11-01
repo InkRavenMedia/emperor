@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from emperor.attention._base import MultiHeadAttentionAbstract
+from emperor.sampler import RouterConfig
 from models.catalog import model_package
 
 PACKAGES = tuple(
@@ -174,7 +175,11 @@ def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
     config = configuration(
         package_name,
         attention_soft_moe_config=SoftMoEConfig(
-            num_experts=2, slots_per_expert=2, model_config=scoring_config()
+            num_experts=2,
+            slots_per_expert=2,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_config()
+            ),
         ),
     )
     package = model_package(package_name)

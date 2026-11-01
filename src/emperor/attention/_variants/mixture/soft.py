@@ -44,10 +44,11 @@ class SoftMixtureOfAttentionHeadsProjector(ProjectorBase):
         return Experts(expert_config)
 
     def __build_soft_router(self) -> SoftMoERouter:
-        routing_dimensions = SoftMoEConfig(
+        soft_moe_dimensions = SoftMoEConfig(
             input_dim=self.embedding_dim, num_experts=self.top_k
         )
-        return self.cfg.experts_config.soft_moe_config.build(routing_dimensions)
+        soft_moe_config = self.cfg.experts_config.resolve_soft_moe_config()
+        return soft_moe_config.build(soft_moe_dimensions)
 
     def _clear_transient_state(self) -> None:
         super()._clear_transient_state()
@@ -104,6 +105,9 @@ class SoftMixtureOfAttentionHeadsProjector(ProjectorBase):
             active_token_mask,
             causal_prefix_flag=self.causal_attention_mask_flag,
         )
+        router_loss = self.soft_router.get_auxiliary_loss()
+        if router_loss is not None:
+            self._accumulate_auxiliary_loss(router_loss)
         query_slots, query_loss = self.__execute_query_experts(
             token_features, dispatch_weights, active_token_mask
         )

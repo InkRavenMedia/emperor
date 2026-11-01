@@ -23,9 +23,9 @@ from emperor.attention._variants.mixture.reshaping import (
 from emperor.attention._variants.mixture.zero_attention import (
     MixtureOfAttentionHeadsZeroAttention,
 )
-from emperor.augmentations.adaptive_parameters import DepthMappingHandlerConfig
 from emperor.embedding.relative import DynamicPositionalBiasConfig
 from emperor.experts import SoftMoEConfig
+from emperor.sampler import RouterConfig
 from support.attention import build_attention_config, make_projection_model_config
 
 
@@ -1443,12 +1443,11 @@ class TestMixtureOfAttentionHeadsExpertKeyValue(unittest.TestCase):
             with self.subTest(keep_sparse_sampler=keep_sparse_sampler):
                 attention_config = self.preset(use_kv_expert_models_flag=True)
                 scoring_stack_config = make_projection_model_config()
-                depth_mapping_config = DepthMappingHandlerConfig(
-                    model_config=scoring_stack_config,
-                )
                 soft_routing_config = SoftMoEConfig(
                     slots_per_expert=2,
-                    model_config=depth_mapping_config,
+                    router_config=RouterConfig(
+                        noisy_topk_flag=False, model_config=scoring_stack_config
+                    ),
                 )
                 attention_config.experts_config.soft_moe_config = soft_routing_config
                 if not keep_sparse_sampler:
