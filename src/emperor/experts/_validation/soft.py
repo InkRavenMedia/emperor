@@ -1,4 +1,4 @@
-"""Contracts for sequence-local Soft MoE and its pointwise expert stacks."""
+"""Contracts for sequence-local Soft MoE and adaptive token/slot grouping."""
 
 from dataclasses import replace
 from typing import TYPE_CHECKING
@@ -8,8 +8,10 @@ from torch import Tensor
 
 from emperor._validation import (
     ValidatorBase,
+    _adaptive_grouping_configs,
     _adaptive_grouping_paths,  # pyright: ignore[reportPrivateUsage]
     _configuration_visits,  # pyright: ignore[reportPrivateUsage]
+    _validate_adaptive_sequence_input,
 )
 from emperor.experts._config import SoftMoEConfig
 from emperor.experts._options import (
@@ -111,10 +113,7 @@ class SoftMoEValidator(ValidatorBase):
                 "Soft MoE scoring requires apply_output_postprocessing_flag=False "
                 "for raw logits."
             )
-        if _adaptive_grouping_paths(stack, root="SoftMoE.scoring"):
-            raise ValueError(
-                "Soft MoE scoring cannot share adaptive grouping context across tokens or samples."
-            )
+        cls.validate_grouping_stack(stack, input_order="BATCH_FIRST")
         cls.validate_no_controllers(stack)
 
     @classmethod
@@ -167,7 +166,9 @@ class SoftMoEValidator(ValidatorBase):
             )
 
     @classmethod
-    def validate_expert_stack(cls, config: object) -> None:
+    def validate_expert_stack(
+        cls, config: object, *, input_order: str = "BATCH_FIRST"
+    ) -> None:
         from emperor.layers import LayerConfig, LayerStackConfig
         from emperor.linears import LinearLayerConfig
 
@@ -182,11 +183,47 @@ class SoftMoEValidator(ValidatorBase):
             raise ValueError(
                 "Soft MoE expert layers must be pointwise linear networks."
             )
-        if _adaptive_grouping_paths(config, root="SoftMoE.experts"):
-            raise ValueError(
-                "Soft MoE experts cannot share adaptive grouping context across slots or samples."
-            )
+        cls.validate_grouping_stack(config, input_order=input_order)
         cls.validate_no_controllers(config)
+
+    @staticmethod
+    def has_grouping(config: object) -> bool:
+        return bool(_adaptive_grouping_paths(config, root="SoftMoE"))
+
+    @staticmethod
+    def validate_grouping_stack(config: object, *, input_order: str) -> None:
+        from emperor.augmentations.adaptive_parameters import SumGroupingConfig
+
+        for path, augmentation in _adaptive_grouping_configs(config, root="SoftMoE"):
+            augmentation.registry_owner().VALIDATOR.validate_grouping_configuration(
+                augmentation
+            )
+            grouping = augmentation.grouping_config
+            if (
+                type(grouping) is not SumGroupingConfig
+                or grouping.scope.name != "SEQUENCE"
+                or grouping.chunk_size is None
+                or grouping.input_order.name != input_order
+            ):
+                raise ValueError(
+                    "Soft MoE grouping requires SumGroupingConfig with SEQUENCE "
+                    f"scope, chunk_size and {input_order} input order at {path}."
+                )
+
+    @staticmethod
+    def validate_grouped_token_inputs(model, inputs: Tensor, causal: bool) -> None:
+        if not model.grouping_flag:
+            return
+        if causal:
+            raise ValueError(
+                "Soft MoE adaptive grouping is unsupported for causal prefixes."
+            )
+        _validate_adaptive_sequence_input(
+            model.router_config.model_config,
+            root="SoftMoE.router",
+            sequence_length=inputs.size(1),
+            input_order="BATCH_FIRST",
+        )
 
     @staticmethod
     def validate_no_controllers(config: object) -> None:

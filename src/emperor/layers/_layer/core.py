@@ -13,7 +13,7 @@ from emperor.layers._layer.pipeline import (
     LayerResidualDelegate,
 )
 from emperor.layers._layer.validation import LayerValidator
-from emperor.layers._state import LayerState
+from emperor.layers._state import LayerState, _MaskedInputLayerState
 from emperor.layers._support import LayerModuleBase
 
 if TYPE_CHECKING:
@@ -61,8 +61,13 @@ class Layer(LayerModuleBase):
     def run_model_from_hidden(
         model: Module,
         hidden: Tensor,
+        *,
+        input_mask: Tensor | None = None,
     ) -> LayerState:
         input_state = LayerState(hidden=hidden)
+        if input_mask is not None:
+            Layer.VALIDATOR.validate_input_mask(hidden, input_mask)
+            input_state = _MaskedInputLayerState(hidden=hidden, input_mask=input_mask)
         return model(input_state)
 
     def forward(
@@ -95,7 +100,11 @@ class Layer(LayerModuleBase):
         self,
         state: LayerState,
     ) -> LayerState:
-        state.hidden = self.model(state.hidden)
+        model_input = state.hidden
+        if isinstance(state, _MaskedInputLayerState):
+            self.VALIDATOR.validate_input_mask(model_input, state.input_mask)
+            model_input = model_input.masked_fill(~state.input_mask, 0)
+        state.hidden = self.model(model_input)
         get_auxiliary_loss = getattr(self.model, "get_auxiliary_loss", None)
         if callable(get_auxiliary_loss):
             auxiliary_loss = get_auxiliary_loss()

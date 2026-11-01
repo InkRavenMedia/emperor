@@ -34,3 +34,10 @@ class LayerState:
             yield
         finally:
             self.residual_state = enclosing_residual_state
+
+
+@dataclass(kw_only=True)
+class _MaskedInputLayerState(LayerState):
+    """Zero inactive inputs before each model, including after normalization."""
+
+    input_mask: Tensor

@@ -30,6 +30,8 @@ class MixtureOfExpertsModelValidator(ValidatorBase):
         if not _adaptive_grouping_paths(model.cfg, root="MixtureOfExpertsModelConfig"):
             return
         leaf = model.stack_config.layer_config.layer_model_config
+        if leaf.soft_moe_config is not None:
+            return
         validator = leaf.registry_owner().VALIDATOR
         validator.validate_skip_mask(hidden, skip_mask, hidden.size(0))
         validator.validate_grouping_skip_mask(model, skip_mask)

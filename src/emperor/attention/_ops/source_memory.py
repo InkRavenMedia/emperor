@@ -43,5 +43,7 @@ class AttentionSourceMemory(Module):
         token_rows = source.reshape(-1, source.size(-1))
         if isinstance(self.model, MixtureOfExperts):
             return self.model(token_rows, probabilities, indices, skip_mask)
-        state = Layer.run_model_from_hidden(self.model, token_rows)
+        state = Layer.run_model_from_hidden(
+            self.model, token_rows, input_mask=skip_mask
+        )
         return state.hidden, skip_mask, state.loss
