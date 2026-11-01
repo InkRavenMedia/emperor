@@ -869,9 +869,7 @@ class TestMergePaddingAndAttentionMask(TestMask):
         )
 
         prepared = model.prepare_attention_masks(attention_inputs)
-        output = model.merge_padding_and_attention_mask(
-            prepared
-        ).merged_attention_mask
+        output = model.merge_padding_and_attention_mask(prepared).merged_attention_mask
 
         causal_attention_mask = attention_mask.masked_fill(
             self.expected_causal_mask(cfg).isneginf(),
