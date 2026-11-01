@@ -1,10 +1,20 @@
-"""Native CLI controls compose optional adaptive BERT components."""
+"""The documented adaptive BERT experiment uses the standard experiment CLI."""
+
+import shlex
+from pathlib import Path
 
 import pytest
 import torch
 from torch import nn
 
+from emperor.augmentations.adaptive_parameters import (
+    AdaptiveLinearLayerConfig,
+    SumGroupingConfig,
+)
 from models.catalog import model_package
+from models.cli_selection import resolve_cli_selection
+from models.experiment_cli_parser import get_experiment_parser
+from models.project_cli.main import run_experiment
 from tests.model_packages.test_bert_hierarchical_soft_moe import (
     TOKEN_TEXTS,
     configuration,
@@ -12,6 +22,75 @@ from tests.model_packages.test_bert_hierarchical_soft_moe import (
 from tests.model_packages.test_bert_soft_attention import attention_routing_config
 
 PACKAGE_NAME = "bert/expert_linear_adaptive"
+
+
+def readme_arguments():
+    readme = (Path(__file__).resolve().parents[2] / "README.md").read_text()
+    section = readme.split("## Example model: adaptive BERT", 1)[1]
+    command = section.split("```bash\n", 1)[1].split("\n```", 1)[0]
+    arguments = shlex.split(command.replace("\\\n", ""))
+    assert arguments[:4] == ["mise", "run", "experiment", "--"]
+    return arguments[4:]
+
+
+def configuration_from_cli(arguments):
+    package = model_package(PACKAGE_NAME)
+    arguments = list(arguments)
+    for selector in ("--model-type", "--model"):
+        position = arguments.index(selector)
+        del arguments[position : position + 2]
+    parsed = get_experiment_parser(package).parse_args(arguments)
+    selection = resolve_cli_selection(
+        parsed, package, package.preset_type, build_monitor_callbacks=False
+    )
+    dataset = package.resolve_datasets(parsed.datasets, selection.experiment_task)[0]
+    return package.build_configuration(
+        preset=selection.preset,
+        dataset=dataset,
+        config_overrides=selection.config_overrides,
+    )
+
+
+def test_readme_command_reaches_standard_training_dispatch(monkeypatch, tmp_path):
+    observed_runs = []
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(
+        "models.package_cli.execute_runs",
+        lambda package, plan, **kwargs: observed_runs.append((package, plan)),
+    )
+    assert run_experiment(readme_arguments()) == 0
+    assert len(observed_runs) == 1
+    package, plan = observed_runs[0]
+    assert package.catalog_key == PACKAGE_NAME
+    assert len(plan.runs) == 1
+
+
+def test_readme_flags_build_the_tested_adaptive_architecture():
+    configuration = configuration_from_cli(readme_arguments())
+    model = model_package(PACKAGE_NAME).build_model(configuration)
+    assert sum(parameter.numel() for parameter in model.parameters()) == 4_962_897
+    adaptive_layers = [
+        module
+        for module in model.modules()
+        if isinstance(getattr(module, "cfg", None), AdaptiveLinearLayerConfig)
+    ]
+    assert len(adaptive_layers) == 137
+    for layer in adaptive_layers:
+        assert (layer.input_dim, layer.output_dim) == (32, 32)
+        grouping = layer.cfg.adaptive_augmentation_config.grouping_config
+        assert isinstance(grouping, SumGroupingConfig)
+        assert grouping.chunk_size == 5
+    assert not isinstance(model.token_embedding, nn.Embedding)
+    assert (
+        sum(type(module).__name__ == "SoftMoERouter" for module in model.modules()) == 3
+    )
+    assert (
+        sum(
+            type(module).__name__ == "AttentionSourceMemory"
+            for module in model.modules()
+        )
+        == 1
+    )
 
 
 @pytest.mark.parametrize(
