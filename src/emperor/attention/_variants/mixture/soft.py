@@ -66,7 +66,7 @@ class SoftMixtureOfAttentionHeadsProjector(ProjectorBase):
             masked_token_features, active_token_mask
         )
         keys, values = self.__compute_shared_key_value_projections(
-            masked_token_features
+            masked_token_features, active_token_mask
         )
         slot_runtime_layout = replace(
             attention_inputs.runtime_layout,
@@ -129,11 +129,18 @@ class SoftMixtureOfAttentionHeadsProjector(ProjectorBase):
         )
 
     def __compute_shared_key_value_projections(
-        self, token_features: Tensor
+        self, token_features: Tensor, active_token_mask: Tensor | None
     ) -> tuple[Tensor, Tensor]:
         sequence_token_features = token_features.transpose(0, 1)
-        keys = self._compute_projection(sequence_token_features, self.key_model)
-        values = self._compute_projection(sequence_token_features, self.value_model)
+        active_rows = None
+        if active_token_mask is not None:
+            active_rows = active_token_mask.transpose(0, 1).reshape(-1, 1)
+        keys = self._compute_projection(
+            sequence_token_features, self.key_model, active_rows
+        )
+        values = self._compute_projection(
+            sequence_token_features, self.value_model, active_rows
+        )
         return keys, values
 
     def __expand_attention_mask_for_slots(

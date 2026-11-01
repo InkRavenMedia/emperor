@@ -383,6 +383,9 @@ class TransformerValidator(ValidatorBase):
     ) -> None:
         cls._validate_soft_moe_masks(model, attention_mask, cross_attention_mask)
         consumers = (model.cfg.feed_forward_config, model.cfg.residual_config)
+        if getattr(model.feed_forward_model, "uses_soft_moe", False):
+            # Soft MoE validates its token and slot layouts and masks its inputs.
+            consumers = (model.cfg.residual_config,)
         root = type(model.cfg).__name__
         if not tuple(_adaptive_grouping_configs(consumers, root=root)):
             return

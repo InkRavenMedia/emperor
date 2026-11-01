@@ -696,7 +696,7 @@ def test_standalone_layer_validates_mask_before_clearing_padding(invalid_mask_ki
         layer(input_state)
 
 
-def test_per_row_adaptive_experts_work_but_grouped_experts_are_rejected():
+def test_per_row_adaptive_experts_work_but_cross_sample_grouping_is_rejected():
     from emperor.augmentations.adaptive_parameters import (
         AdaptiveParameterGroupingScopeOptions,
     )
@@ -712,7 +712,7 @@ def test_per_row_adaptive_experts_work_but_grouped_experts_are_rejected():
     cfg.expert_model_config.layer_config.layer_model_config.adaptive_augmentation_config.grouping_config = grouping_value(
         AdaptiveParameterGroupingScopeOptions.ROWS, 1
     )
-    with pytest.raises(ValueError, match="grouping context"):
+    with pytest.raises(ValueError, match="grouping requires"):
         cfg.build()
 
 
@@ -1072,6 +1072,29 @@ def test_adaptive_router_preserves_decay_counters_and_checkpoint_under_autocast(
     for actual, expected in zip(restored(inputs), router(inputs), strict=True):
         torch.testing.assert_close(actual, expected)
     assert all(value.item() == 2 for value in decay)
+
+
+@pytest.mark.parametrize("scope", ["ROWS", "SEQUENCE"])
+def test_adaptive_router_rejects_row_and_fixed_count_grouping(scope):
+    from emperor.augmentations.adaptive_parameters import (
+        AdaptiveParameterGroupingScopeOptions,
+    )
+    from support.adaptive_grouping import grouping_value
+
+    cfg = SoftMoEConfig(
+        input_dim=3,
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=adaptive_scoring_config()
+        ),
+    )
+    augmentation = cfg.router_config.model_config.layer_config.layer_model_config.adaptive_augmentation_config
+    augmentation.grouping_config = grouping_value(
+        AdaptiveParameterGroupingScopeOptions[scope], 2
+    )
+    with pytest.raises(ValueError, match="grouping requires"):
+        cfg.build()
 
 
 @pytest.mark.parametrize("attention", [False, True])

@@ -35,8 +35,15 @@ class SoftMixtureOfAttentionHeadsValidator:
             input_dim=model.embedding_dim,
             output_dim=model.embedding_dim,
         )
-        # Shared key/value projections must also preserve independent token rows.
-        SoftMoEValidator.validate_expert_stack(model.cfg.projection_model_config)
+        SoftMoEValidator.validate_expert_stack(
+            model.cfg.projection_model_config, input_order="SEQUENCE_FIRST"
+        )
+        if model.causal_attention_mask_flag and SoftMoEValidator.has_grouping(
+            model.cfg
+        ):
+            raise ValueError(
+                "Soft MoE adaptive grouping is unsupported for causal attention."
+            )
 
     @staticmethod
     def validate_inputs(

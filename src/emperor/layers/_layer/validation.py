@@ -3,6 +3,8 @@ from __future__ import annotations
 from math import isfinite
 from typing import TYPE_CHECKING, TypeGuard
 
+import torch
+
 from emperor._validation import ValidatorBase, _validate_grouped_row_preservation
 from emperor.config import ConfigBase
 from emperor.layers._composition.gate.validation import LayerGateValidator
@@ -236,6 +238,14 @@ class LayerResidualDelegateValidator(ValidatorBase):
 
 
 class LayerValidator(ValidatorBase):
+    @staticmethod
+    def validate_input_mask(hidden: Tensor, input_mask: Tensor) -> None:
+        if not isinstance(input_mask, torch.Tensor) or input_mask.dtype != torch.bool:
+            raise TypeError("Layer input_mask must be a Boolean Tensor.")
+        expected_shape = (*hidden.shape[:-1], 1)
+        if input_mask.shape != expected_shape or input_mask.device != hidden.device:
+            raise ValueError("Layer input_mask must match the input rows and device.")
+
     GATE_VALIDATOR = LayerGateValidator
     RESIDUAL_VALIDATOR = ResidualConnectionValidator
     NORMALIZATION_VALIDATOR = LayerNormalizationDelegateValidator

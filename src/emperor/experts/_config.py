@@ -32,6 +32,8 @@ class SoftMoEConfig(ConfigBase):
         "Its model_config describes a linear or adaptive linear scoring stack. "
         "The mixture supplies the expert's linear model configuration, retaining "
         "the router stack's width and depth and independent parameters. "
+        "SEQUENCE sum grouping with chunk_size groups router tokens and each "
+        "expert's slots independently; expert sequence lengths are bound to slots. "
         "Noisy top-k is unsupported."
     )
 

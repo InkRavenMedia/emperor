@@ -1,10 +1,12 @@
 """Construction, input dispatch, and execution of independent expert networks."""
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, replace
 
 import torch
 from torch import Tensor, nn
 
+from emperor._validation import _adaptive_grouping_configs
 from emperor.experts._config import MixtureOfExpertsConfig
 from emperor.experts._routing.capacity import ExpertCapacityHandler
 from emperor.experts._routing.weighting import ExpertWeightingHandler
@@ -43,13 +45,28 @@ class Experts(nn.ModuleList):
         self.__initialize_experts()
 
     def __initialize_experts(self) -> None:
+        expert_model_config = self.__resolve_slot_grouping()
+        self.expert_model_config = expert_model_config
         for _ in range(self.num_experts):
             expert_dimension_overrides = LayerStackConfig(
                 input_dim=self.input_dim,
                 output_dim=self.output_dim,
             )
-            expert_model = self.expert_model_config.build(expert_dimension_overrides)
+            expert_model = expert_model_config.build(expert_dimension_overrides)
             self.append(expert_model)
+
+    def __resolve_slot_grouping(self) -> LayerStackConfig | RecurrentCompositionConfig:
+        if self.cfg.soft_moe_config is None:
+            return self.expert_model_config
+        model_config = deepcopy(self.expert_model_config)
+        slot_count = self.cfg.soft_moe_config.slots_per_expert
+        for _path, augmentation in _adaptive_grouping_configs(
+            model_config, root="SoftMoE.expert_slots"
+        ):
+            augmentation.grouping_config = replace(
+                augmentation.grouping_config, sequence_length=slot_count
+            )
+        return model_config
 
     def forward(
         self,
@@ -448,6 +465,7 @@ class Experts(nn.ModuleList):
         skip_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
         """Execute each prefix's slots in token-major, then slot-major order."""
+        self.VALIDATOR.validate_causal_slot_grouping(self)
         masked_token_features = self.__mask_inactive_token_features(
             input_batch, skip_mask
         )

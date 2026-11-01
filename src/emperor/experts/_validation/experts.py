@@ -4,13 +4,25 @@ from typing import TYPE_CHECKING
 
 from torch import Tensor
 
-from emperor._validation import _adaptive_grouping_paths
+from emperor._validation import (
+    _adaptive_grouping_paths,
+    _validate_adaptive_sequence_input,
+)
 
 if TYPE_CHECKING:
     from emperor.experts._layers.experts import Experts
 
 
 class ExpertsValidator:
+    @staticmethod
+    def validate_causal_slot_grouping(experts: "Experts") -> None:
+        if _adaptive_grouping_paths(
+            experts.expert_model_config, root="SoftMoE.experts"
+        ):
+            raise ValueError(
+                "Soft MoE adaptive grouping is unsupported for causal prefixes."
+            )
+
     @staticmethod
     def validate_slot_inputs(experts: "Experts", input_slots: Tensor) -> None:
         if not isinstance(input_slots, Tensor) or input_slots.ndim != 4:
@@ -25,6 +37,12 @@ class ExpertsValidator:
                 "Expert slots require nonempty batches/slots and the configured "
                 "expert count and input dimension."
             )
+        _validate_adaptive_sequence_input(
+            experts.expert_model_config,
+            root="SoftMoE.expert_slots",
+            sequence_length=input_slots.shape[2],
+            input_order="BATCH_FIRST",
+        )
 
     @classmethod
     def validate_output_rows(
