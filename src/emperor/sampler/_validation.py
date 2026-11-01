@@ -97,6 +97,13 @@ class SamplerModelValidator(ValidatorBase):
                 "and "
                 f"sampler_config.noisy_topk_flag={model.sampler_config.noisy_topk_flag!r}."
             )
+        if (
+            router_config.output_dim is not None
+            and router_config.output_dim != model.sampler_config.required_logit_width()
+        ):
+            raise ValueError(
+                "router_config.output_dim must match the sampler's required logit width."
+            )
 
     @staticmethod
     def validate_forward_inputs(input_matrix) -> None:
@@ -114,7 +121,7 @@ class SamplerModelValidator(ValidatorBase):
 
 
 class RouterModelValidator(ValidatorBase):
-    OPTIONAL_FIELDS = {"input_dim"}
+    OPTIONAL_FIELDS = {"input_dim", "output_dim"}
 
     @classmethod
     def validate(cls, model: "RouterModel") -> None:
@@ -123,6 +130,8 @@ class RouterModelValidator(ValidatorBase):
         cls._validate_input_dimension(model.input_dim)
         cls._validate_positive_integer("input_dim", model.input_dim)
         cls._validate_positive_integer("num_experts", model.num_experts)
+        if model.cfg.output_dim is not None:
+            cls._validate_positive_integer("output_dim", model.cfg.output_dim)
         cls._validate_model_config(model.cfg.model_config)
 
     @classmethod

@@ -42,6 +42,7 @@ ROUTER_FIELDS = (
     "num_experts",
     "noisy_topk_flag",
     "model_config",
+    "output_dim",
 )
 
 SAMPLER_FIELDS = (

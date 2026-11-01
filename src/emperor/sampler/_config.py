@@ -12,12 +12,17 @@ if TYPE_CHECKING:
 @dataclass
 class RouterConfig(ConfigBase):
     input_dim: int | None = optional_field("Router input feature dimension.")
-    num_experts: int | None = optional_field("Router output dimension.")
+    num_experts: int | None = optional_field(
+        "Number of experts; default logit width before noise expansion."
+    )
     noisy_topk_flag: bool | None = optional_field(
         "When True, the router emits an additional noise scale per expert."
     )
     model_config: "ConfigBase | None" = optional_field(
         "Internal router network config."
+    )
+    output_dim: int | None = optional_field(
+        "Explicit logit width; defaults to num_experts, doubled for noisy top-k."
     )
 
     def _registry_owner(self) -> type:
@@ -31,9 +36,12 @@ class RouterConfig(ConfigBase):
         """Resolve the same effective network dimensions for preflight and build."""
         from emperor.layers import LayerStackConfig
 
+        output_dim = self.output_dim
+        if output_dim is None:
+            output_dim = self.num_experts * (2 if self.noisy_topk_flag else 1)
         return LayerStackConfig(
             input_dim=self.input_dim if input_dim is None else input_dim,
-            output_dim=self.num_experts * (2 if self.noisy_topk_flag else 1),
+            output_dim=output_dim,
         )
 
 

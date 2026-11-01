@@ -89,6 +89,28 @@ class TestSamplerModelValidator(unittest.TestCase):
 
         self.assertIsNotNone(model.router)
 
+    def test_explicit_router_width_must_match_sampler_logits(self):
+        for noisy in (False, True):
+            with self.subTest(noisy_topk_flag=noisy):
+                router_config = self.router_config(noisy_topk_flag=noisy)
+                cfg = self.sampler_config(
+                    noisy_topk_flag=noisy, router_config=router_config
+                )
+                router_config.output_dim = cfg.required_logit_width()
+                cfg.validate_for_router_input_dim()
+                model = cfg.build()
+                probabilities, indices, _, _ = model.sample_probabilities_and_indices(
+                    torch.randn(3, 8)
+                )
+                self.assertEqual(probabilities.shape, (3, 2))
+                self.assertEqual(indices.shape, (3, 2))
+
+                router_config.output_dim += 1
+                with self.assertRaisesRegex(ValueError, "required logit width"):
+                    cfg.validate_for_router_input_dim()
+                with self.assertRaisesRegex(ValueError, "required logit width"):
+                    cfg.build()
+
     def test_router_preserves_exact_state_keys_and_strict_roundtrip(self):
         cfg = self.sampler_config(router_config=self.router_config())
         source = SamplerModel(cfg)
