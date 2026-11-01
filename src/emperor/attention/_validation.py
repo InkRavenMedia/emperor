@@ -474,6 +474,7 @@ class MultiHeadAttentionValidator(AttentionValidatorBase, ValidatorBase):
         if (
             mask is not None
             and (mask if mask.dtype == torch.bool else mask.isneginf()).any()
+            and not cls.supports_grouped_padding(model)
         ):
             raise ValueError(
                 "Adaptive grouping requires all-valid inputs; key_padding_mask excludes positions."
@@ -485,6 +486,10 @@ class MultiHeadAttentionValidator(AttentionValidatorBase, ValidatorBase):
                 sequence_length=attention_inputs.runtime_layout.target_sequence_length,
                 input_order="SEQUENCE_FIRST",
             )
+
+    @staticmethod
+    def supports_grouped_padding(model) -> bool:
+        return False
 
     @staticmethod
     def validate_batch_first_flag(batch_first_flag: bool | None) -> None:

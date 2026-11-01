@@ -115,6 +115,11 @@ class MixtureOfAttentionHeadsValidator(MultiHeadAttentionValidator):
 
     @staticmethod
     def grouping_configuration_roots(model):
+        if (
+            model.cfg.experts_config is not None
+            and model.cfg.experts_config.soft_moe_config is not None
+        ):
+            return MultiHeadAttentionValidator.grouping_configuration_roots(model)
         return (
             (
                 "MixtureOfAttentionHeadsConfig.projection_model_config",
@@ -122,6 +127,10 @@ class MixtureOfAttentionHeadsValidator(MultiHeadAttentionValidator):
             ),
             ("MixtureOfAttentionHeadsConfig.experts_config", model.cfg.experts_config),
         )
+
+    @staticmethod
+    def supports_grouped_padding(model) -> bool:
+        return model.cfg.experts_config.soft_moe_config is not None
 
     @staticmethod
     def validate_experts_configuration(

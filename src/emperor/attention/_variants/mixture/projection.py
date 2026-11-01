@@ -78,7 +78,9 @@ class MixtureOfAttentionHeadsProjector(ProjectorBase):
             return _MixtureOfExpertsMapConfig(self.cfg.experts_config).build(overrides)
         return self._create_model(input_dim, output_dim)
 
-    def _compute_memory_projection(self, source: Tensor) -> Tensor:
+    def _compute_memory_projection(
+        self, source: Tensor, key_padding_mask: Tensor | None = None
+    ) -> Tensor:
         memory, self.skip_mask, loss = self.source_memory(
             source,
             probabilities=self.probabilities,

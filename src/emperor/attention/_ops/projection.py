@@ -73,8 +73,13 @@ class ProjectorBase(Module):
         )
         return self.projection_model_config.build(overrides)
 
-    def _compute_memory_projection(self, source: Tensor) -> Tensor:
-        memory, _, loss = self.source_memory(source)
+    def _compute_memory_projection(
+        self, source: Tensor, key_padding_mask: Tensor | None = None
+    ) -> Tensor:
+        active_rows = None
+        if key_padding_mask is not None:
+            active_rows = (~key_padding_mask.isneginf()).transpose(0, 1).reshape(-1, 1)
+        memory, _, loss = self.source_memory(source, skip_mask=active_rows)
         if loss is not None:
             self._accumulate_auxiliary_loss(loss)
         return memory.reshape(source.size(0), source.size(1), -1)
@@ -83,22 +88,25 @@ class ProjectorBase(Module):
         self,
         tensor: Tensor,
         model: nn.Module,
+        input_mask: Tensor | None = None,
     ) -> Tensor:
         sequence_length, batch_size, embedding_dim = tensor.shape
         if not tensor.is_contiguous():
             tensor = tensor.contiguous()
         tensor_reshaped = tensor.view(-1, embedding_dim)
-        projection = self._forward_accumulating_loss(model, tensor_reshaped)
+        projection = self._forward_accumulating_loss(model, tensor_reshaped, input_mask)
         return projection.view(sequence_length, batch_size, -1)
 
     def _forward_accumulating_loss(
         self,
         model: nn.Module,
         tensor: Tensor,
+        input_mask: Tensor | None = None,
     ) -> Tensor:
         projection_state = Layer.run_model_from_hidden(
             model,
             tensor,
+            input_mask=input_mask,
         )
         if projection_state.loss is not None:
             self._accumulate_auxiliary_loss(projection_state.loss)
@@ -129,7 +137,9 @@ class ProjectorBase(Module):
     ) -> "MultiHeadAttentionInputs":
         if not self.source_memory_flag:
             return projections
-        memory_projection = self._compute_memory_projection(attention_inputs.key)
+        memory_projection = self._compute_memory_projection(
+            attention_inputs.key, attention_inputs.key_padding_mask
+        )
         self.VALIDATOR.validate_projected_output(memory_projection, projections.key)
         keys_with_memory = torch.cat((projections.key, memory_projection), dim=0)
         values_with_memory = torch.cat((projections.value, memory_projection), dim=0)

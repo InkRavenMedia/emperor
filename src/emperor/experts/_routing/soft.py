@@ -26,6 +26,9 @@ class SoftMoERouter(Module):
         self.slots_per_expert: int = self.cfg.slots_per_expert
         self.num_slots: int = self.num_experts * self.slots_per_expert
         self.router_config: RouterConfig = self.cfg.router_config
+        self.grouping_flag: bool = self.VALIDATOR.has_grouping(
+            self.router_config.model_config
+        )
         self.router: RouterModel = self.__build_router()
         initial_logit_scale = torch.ones(())
         self.scale = nn.Parameter(initial_logit_scale)
@@ -57,6 +60,9 @@ class SoftMoERouter(Module):
         self.auxiliary_loss = None
         token_features = X
         self.VALIDATOR.validate_inputs(token_features, self.input_dim, skip_mask)
+        self.VALIDATOR.validate_grouped_token_inputs(
+            self, token_features, causal_prefix_flag
+        )
         self.VALIDATOR.validate_parameter_device(token_features, self.scale)
         routing_dtype = self.__resolve_routing_dtype(token_features)
         normalized_token_features = self.__normalize_active_token_features(
@@ -109,7 +115,10 @@ class SoftMoERouter(Module):
         )
         flattened_token_features = normalized_token_features.reshape(-1, self.input_dim)
         scoring_features = flattened_token_features
-        compact_active_tokens = skip_mask is not None
+        compact_active_tokens = skip_mask is not None and not self.grouping_flag
+        scoring_input_mask = None
+        if skip_mask is not None and self.grouping_flag:
+            scoring_input_mask = skip_mask.reshape(-1, 1)
         if compact_active_tokens:
             active_token_indices = skip_mask.reshape(-1).nonzero(as_tuple=True)[0]
             scoring_features = flattened_token_features.index_select(
@@ -121,6 +130,7 @@ class SoftMoERouter(Module):
                 self.router,
                 (slot_logit_parameters, slot_logit_buffers),
                 (scoring_features,),
+                {"input_mask": scoring_input_mask},
                 strict=True,
             )
         self.__restore_slot_logit_buffers(slot_logit_buffers)
