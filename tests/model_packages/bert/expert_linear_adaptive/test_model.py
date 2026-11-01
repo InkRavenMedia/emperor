@@ -1,9 +1,12 @@
 import importlib
 import inspect
+import tempfile
 import unittest
+from pathlib import Path
 
 import pytest
 import torch
+from lightning import Trainer
 from torch import nn
 
 import models.bert.expert_linear_adaptive.config as config
@@ -51,6 +54,41 @@ _SELF_ATTENTION_TYPE = SelfAttentionConfig().registry_owner()
 
 
 class TestBertExpertLinearAdaptiveModel(unittest.TestCase):
+    @pytest.mark.training
+    def test_default_checkpoint_monitor_saves_after_bert_validation(self):
+        package = model_package("bert/expert_linear_adaptive")
+        experiment = Experiment(ExperimentPreset.BASELINE, model_package=package)
+        trainer_config = experiment._load_trainer_config(
+            {"callback_checkpoint_flag": True}
+        )
+        checkpoint = trainer_config["terminal_checkpoint_callback"]
+        cfg = self._config(
+            ExperimentPreset.BASELINE,
+            {"input_dim": 32, "output_dim": 32, "stack_num_layers": 1},
+        )
+        model = Model(cfg)
+
+        with tempfile.TemporaryDirectory() as checkpoint_directory:
+            trainer = Trainer(
+                default_root_dir=checkpoint_directory,
+                max_epochs=1,
+                accelerator="cpu",
+                devices=1,
+                limit_train_batches=1,
+                limit_val_batches=1,
+                num_sanity_val_steps=0,
+                logger=False,
+                callbacks=[checkpoint],
+                enable_progress_bar=False,
+                enable_model_summary=False,
+            )
+            trainer.fit(model, datamodule=RandomBertPretrainingDataModule(cfg))
+
+            self.assertIn(checkpoint.monitor, trainer.callback_metrics)
+            self.assertEqual(checkpoint.mode, "min")
+            self.assertTrue(Path(checkpoint.best_model_path).is_file())
+            self.assertTrue(Path(checkpoint.last_model_path).is_file())
+
     def test_embedding_mlm_and_nsp_runtime_options_reach_the_model(self):
         cfg = self._config(
             ExperimentPreset.BASELINE,
