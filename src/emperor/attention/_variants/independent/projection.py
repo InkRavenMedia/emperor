@@ -20,7 +20,7 @@ class IndependentProjector(ProjectorBase):
         self.key_model = self._create_model(*qk_dims)
         self.value_model = self._create_model(*v_dims)
 
-    def compute_qkv_projections(
+    def _compute_qkv_projections(
         self,
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> "MultiHeadAttentionInputs":

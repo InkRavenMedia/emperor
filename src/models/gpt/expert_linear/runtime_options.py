@@ -27,7 +27,6 @@ from emperor.layers import (
 )
 from emperor.memory import (
     DynamicMemoryConfig,
-    GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
@@ -240,10 +239,6 @@ class TransformerAttentionOptions:
     bias_flag: bool
     add_key_value_bias_flag: bool
     source_memory_flag: bool = False
-    source_memory_option: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
-    source_memory_num_memory_slots: int = 4
-    source_memory_test_time_training_learning_rate: float | None = None
-    source_memory_test_time_training_num_inner_steps: int | None = None
 
 
 @dataclass(frozen=True)

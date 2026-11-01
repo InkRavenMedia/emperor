@@ -172,10 +172,22 @@ ATTENTION_CONTRACT_MANIFEST = {
         ),
     ),
     "emperor.attention._ops.masking": module_contract(
-        ("validation", "canonicalization", "causal generation", "mask merge"),
+        (
+            "validation",
+            "canonicalization",
+            "causal generation",
+            "mask merge",
+            "memory visibility",
+        ),
         "tests.unit.test_attention_mask",
         Mask=class_contract(
-            ("bool masks", "additive masks", "rectangular masks", "no mutation"),
+            (
+                "bool masks",
+                "additive masks",
+                "rectangular masks",
+                "no mutation",
+                "inherited and explicit memory masks",
+            ),
             "tests.unit.test_attention_mask",
         ),
     ),
@@ -188,13 +200,19 @@ ATTENTION_CONTRACT_MANIFEST = {
         ),
     ),
     "emperor.attention._ops.projection": module_contract(
-        ("projection construction", "state loss accumulation", "abstract dispatch"),
+        (
+            "projection construction",
+            "state loss accumulation",
+            "abstract dispatch",
+            "temporary memory sources",
+        ),
         "tests.unit.test_attention_projector",
         ProjectorBase=class_contract(
             (
                 "query/key/value dimensions",
                 "output projection",
                 "auxiliary loss lifecycle",
+                "source memory composition and shared K/V sources",
             ),
             "tests.unit.test_attention_projector",
         ),
@@ -220,10 +238,14 @@ ATTENTION_CONTRACT_MANIFEST = {
         ),
     ),
     "emperor.attention._ops.source_memory": module_contract(
-        ("temporary memory sources", "source visibility inheritance"),
+        ("memory model construction", "independent per-token projection"),
         "tests.unit.test_attention_source_memory",
         AttentionSourceMemory=class_contract(
-            ("shared key/value memory", "per-token adaptation", "expert head layout"),
+            (
+                "key/value architecture",
+                "adaptive and expert execution",
+                "routing and auxiliary loss",
+            ),
             "tests.unit.test_attention_source_memory",
         ),
     ),

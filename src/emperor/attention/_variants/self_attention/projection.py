@@ -61,7 +61,7 @@ class SelfAttentionProjector(ProjectorBase):
         self.key_model = self._create_model(self.embedding_dim, self.embedding_dim)
         self.value_model = self._create_model(self.embedding_dim, self.embedding_dim)
 
-    def compute_qkv_projections(
+    def _compute_qkv_projections(
         self,
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> "MultiHeadAttentionInputs":

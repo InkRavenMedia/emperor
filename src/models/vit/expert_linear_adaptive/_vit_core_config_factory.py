@@ -48,7 +48,6 @@ from models.vit.expert_linear_adaptive.runtime_options import (
     TransformerFeedForwardOptions,
 )
 
-from ._controller_stack_config import build_source_memory_config
 from ._residual import build_residual_config
 
 
@@ -228,9 +227,7 @@ class VitCoreConfigFactory:
     ) -> SelfAttentionConfig | MixtureOfAttentionHeadsConfig:
         encoder_options = self.encoder_options
         attention_options = self.attention_options
-        source_memory_config = build_source_memory_config(
-            attention_options, self.encoder_submodule_stack_options
-        )
+        source_memory_flag = attention_options.source_memory_flag
         projection_model_config = self._build_attention_projection_stack_config()
         if self.expert_config_factory is not None:
             attention_config = self.expert_config_factory.build_attention_config(
@@ -240,7 +237,7 @@ class VitCoreConfigFactory:
                 projection_model_config=projection_model_config,
             )
             if attention_config is not None:
-                attention_config.source_memory_config = source_memory_config
+                attention_config.source_memory_flag = source_memory_flag
                 return attention_config
         return SelfAttentionConfig(
             batch_size=self.batch_size,
@@ -260,7 +257,7 @@ class VitCoreConfigFactory:
             batch_first_flag=True,
             projection_model_config=projection_model_config,
             projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
-            source_memory_config=source_memory_config,
+            source_memory_flag=source_memory_flag,
         )
 
     def _build_feed_forward_config(self) -> FeedForwardConfig:

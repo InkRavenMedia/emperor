@@ -4,7 +4,6 @@ import pytest
 import torch
 
 from emperor.attention._base import MultiHeadAttentionAbstract
-from emperor.memory import AttentionDynamicMemoryConfig
 from models.catalog import model_package
 
 PACKAGES = tuple(
@@ -33,8 +32,6 @@ def configuration(package_name, *, default_source_stack=False, **overrides):
         submodule_stack_hidden_dim=8,
         submodule_stack_num_layers=1,
         attn_source_memory_flag=True,
-        attn_source_memory_option=AttentionDynamicMemoryConfig,
-        attn_source_memory_num_memory_slots=3,
     )
     if "expert" in package_name:
         values.update(
@@ -78,7 +75,7 @@ def run_model(model, package_name, inputs=None):
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
-def test_source_memory_can_use_default_controller_stack(package_name):
+def test_source_memory_does_not_require_a_separate_controller_stack(package_name):
     package = model_package(package_name)
     model = package.build_model(
         configuration(package_name, default_source_stack=True)
@@ -86,7 +83,7 @@ def test_source_memory_can_use_default_controller_stack(package_name):
     attentions = [
         m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
     ]
-    assert attentions and all(m.source_memory is not None for m in attentions)
+    assert attentions and all(m.projector.source_memory is not None for m in attentions)
     assert torch.isfinite(run_model(model, package_name)[0]).all()
 
 
@@ -102,9 +99,14 @@ def test_public_options_build_and_execute_memory_in_every_package(package_name):
     calls = []
     handles = []
     for attention in attentions:
-        memory = attention.source_memory.model
-        assert isinstance(memory.cfg, AttentionDynamicMemoryConfig)
-        assert memory.num_memory_slots == 3
+        memory = attention.projector.source_memory.model
+        assert type(memory) is type(attention.projector.key_model)
+        key_parameters = dict(attention.projector.key_model.named_parameters())
+        memory_parameters = dict(memory.named_parameters())
+        assert memory_parameters.keys() == key_parameters.keys()
+        for name, parameter in memory_parameters.items():
+            assert parameter.shape == key_parameters[name].shape
+            assert parameter.data_ptr() != key_parameters[name].data_ptr()
         handles.append(
             memory.register_forward_hook(lambda _m, _a, out: calls.append(out))
         )
@@ -116,7 +118,7 @@ def test_public_options_build_and_execute_memory_in_every_package(package_name):
     for attention in attentions:
         assert any(
             p.grad is not None and p.grad.abs().sum() > 0
-            for p in attention.source_memory.parameters()
+            for p in attention.projector.source_memory.model.parameters()
         )
     for handle in handles:
         handle.remove()
@@ -124,51 +126,29 @@ def test_public_options_build_and_execute_memory_in_every_package(package_name):
 
 @pytest.mark.parametrize("package_name", PACKAGES)
 def test_source_memory_options_are_visible_parseable_and_independent(package_name):
-    from emperor.memory import (
-        ElementWiseWeightedDynamicMemoryConfig,
-        GatedResidualDynamicMemoryConfig,
-        WeightedDynamicMemoryConfig,
-    )
     from model_runtime.inspection.schema import configuration_schema
 
     package = model_package(package_name)
     spec = package.runtime_defaults_spec
     raw = {
         "ATTN_SOURCE_MEMORY_FLAG": "true",
-        "ATTN_SOURCE_MEMORY_NUM_MEMORY_SLOTS": "3",
-        "ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE": "0.02",
-        "ATTN_SOURCE_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS": "2",
     }
     fields = {field.key for field in configuration_schema(package).fields}
     assert fields.issuperset(raw)
-    assert "ATTN_SOURCE_MEMORY_OPTION" in fields
-    for variant in (
-        AttentionDynamicMemoryConfig,
-        GatedResidualDynamicMemoryConfig,
-        WeightedDynamicMemoryConfig,
-        ElementWiseWeightedDynamicMemoryConfig,
-    ):
-        values = {
-            key.lower(): spec.parse_value(key, value) for key, value in raw.items()
-        }
-        values["attn_source_memory_option"] = spec.parse_value(
-            "ATTN_SOURCE_MEMORY_OPTION", variant.__name__
+    assert {field for field in fields if field.startswith("ATTN_SOURCE_MEMORY_")} == {
+        "ATTN_SOURCE_MEMORY_FLAG"
+    }
+    values = {key.lower(): spec.parse_value(key, value) for key, value in raw.items()}
+    config = configuration(package_name, attn_memory_flag=True, **values)
+    model = package.build_model(config)
+    attentions = [
+        m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
+    ]
+    for attention in attentions:
+        assert type(attention.projector.source_memory.model) is type(
+            attention.projector.key_model
         )
-        config = configuration(package_name, attn_memory_flag=True, **values)
-        model = package.build_model(config)
-        attentions = [
-            m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
-        ]
-        for attention in attentions:
-            memory = attention.source_memory.model
-            assert type(memory.cfg) is variant
-            assert memory.test_time_training_learning_rate == 0.02
-            assert memory.test_time_training_num_inner_steps == 2
-            assert (
-                attention.cfg.projection_model_config.shared_memory_config is not None
-            )
-            if variant is AttentionDynamicMemoryConfig:
-                assert memory.num_memory_slots == 3
+        assert attention.cfg.projection_model_config.shared_memory_config is not None
     model.eval()
     outputs = run_model(model, package_name)
     assert torch.isfinite(outputs[0]).all()
@@ -176,7 +156,7 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
         configuration(package_name, attn_source_memory_flag=False)
     )
     assert all(
-        m.source_memory is None
+        m.projector.source_memory is None
         for m in disabled.modules()
         if isinstance(m, MultiHeadAttentionAbstract)
     )
@@ -185,9 +165,8 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
 @pytest.mark.parametrize(
     "package_name", [name for name in PACKAGES if "expert" in name]
 )
-@pytest.mark.parametrize("adaptation_steps", [None, 1])
 def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
-    package_name, adaptation_steps
+    package_name,
 ):
     from emperor.experts import SoftMoEConfig
     from tests.unit.test_expert_soft_moe import scoring_config
@@ -197,10 +176,6 @@ def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
         attention_soft_moe_config=SoftMoEConfig(
             num_experts=2, slots_per_expert=2, model_config=scoring_config()
         ),
-        attn_source_memory_test_time_training_learning_rate=0.01
-        if adaptation_steps
-        else None,
-        attn_source_memory_test_time_training_num_inner_steps=adaptation_steps,
     )
     package = model_package(package_name)
     model = package.build_model(config).eval()
@@ -231,5 +206,5 @@ def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
         if isinstance(module, MultiHeadAttentionAbstract):
             assert any(
                 p.grad is not None and p.grad.abs().sum() > 0
-                for p in module.source_memory.parameters()
+                for p in module.projector.source_memory.model.parameters()
             )

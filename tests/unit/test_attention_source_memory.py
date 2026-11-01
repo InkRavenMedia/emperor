@@ -11,24 +11,72 @@ from emperor.attention import (
     SelfAttentionConfig,
     SelfAttentionProjectionStrategy,
 )
+from emperor.attention._ops.source_memory import AttentionSourceMemory
+from emperor.attention._runtime import AttentionRuntimeLayout, MultiHeadAttentionInputs
 from emperor.embedding.relative import DynamicPositionalBiasConfig
-from emperor.memory import (
-    AttentionDynamicMemoryConfig,
-    ElementWiseWeightedDynamicMemoryConfig,
-    GatedResidualDynamicMemoryConfig,
-    MemoryPositionOptions,
-    WeightedDynamicMemoryConfig,
-)
+from emperor.layers import Layer
 from emperor.memory._base import DynamicMemoryAbstract
-from support.attention import build_attention_config, make_projection_model_config
+from support.attention import build_attention_config
 
 
-def memory_config(config_class=GatedResidualDynamicMemoryConfig, **overrides):
-    return config_class(
-        memory_position_option=MemoryPositionOptions.AFTER_AFFINE,
-        model_config=make_projection_model_config(hidden_dim=4),
-        **overrides,
+def test_source_memory_builds_and_runs_without_a_projector():
+    memory = AttentionSourceMemory(attention_config()).double().eval()
+    inputs = torch.randn(3, 2, 4, dtype=torch.float64, requires_grad=True)
+    projected, skip_mask, loss = memory(inputs)
+    assert projected.shape == (6, 4)
+    assert skip_mask is None
+    assert loss is None
+    projected.square().sum().backward()
+    assert torch.isfinite(inputs.grad).all()
+    assert any(
+        parameter.grad is not None and parameter.grad.abs().sum() > 0
+        for parameter in memory.parameters()
     )
+
+
+def test_memory_is_an_independent_kv_projection_without_input_blending():
+    config = build_attention_config(
+        SelfAttentionConfig,
+        batch_size=2,
+        num_heads=2,
+        embedding_dim=4,
+        return_attention_weights_flag=True,
+        self_attention_projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
+    )
+    config = replace(config, batch_first_flag=True, source_memory_flag=True)
+    model = config.build().double().eval()
+    memory = model.projector.source_memory.model
+    assert type(memory) is type(model.projector.key_model)
+    key_parameters = dict(model.projector.key_model.named_parameters())
+    memory_parameters = dict(memory.named_parameters())
+    assert memory_parameters.keys() == key_parameters.keys()
+    for name, parameter in memory_parameters.items():
+        assert parameter.shape == key_parameters[name].shape
+        assert parameter.data_ptr() != key_parameters[name].data_ptr()
+    assert not any(
+        isinstance(module, DynamicMemoryAbstract) for module in memory.modules()
+    )
+    with torch.no_grad():
+        for projection in (
+            model.projector.query_model,
+            model.projector.key_model,
+            model.projector.value_model,
+            model.projector.output_model,
+        ):
+            projection.layers[0].model.weight_params.copy_(torch.eye(4))
+            projection.layers[0].model.bias_params.zero_()
+        for parameter in memory.parameters():
+            parameter.zero_()
+
+    inputs = torch.randn(2, 3, 4, dtype=torch.float64)
+    actual, weights, _ = model(inputs, inputs, inputs)
+    queries = inputs.reshape(2, 3, 2, 2).transpose(1, 2)
+    sources = torch.cat((inputs, torch.zeros_like(inputs)), dim=1)
+    sources = sources.reshape(2, 6, 2, 2).transpose(1, 2)
+    expected_weights = (queries @ sources.transpose(-1, -2) / 2**0.5).softmax(-1)
+    expected = (expected_weights @ sources).transpose(1, 2).reshape_as(inputs)
+    torch.testing.assert_close(weights, expected_weights)
+    torch.testing.assert_close(actual, expected)
 
 
 def attention_config(**overrides):
@@ -44,8 +92,82 @@ def attention_config(**overrides):
     )
     return replace(
         config,
-        **dict(batch_first_flag=True, source_memory_config=memory_config()) | overrides,
+        **dict(batch_first_flag=True, source_memory_flag=True) | overrides,
     )
+
+
+@pytest.mark.parametrize(
+    "mode",
+    ["fused", "fused_kv", "separate", "independent", "shared_kv", "expert_kv", "soft"],
+)
+def test_projector_returns_memory_in_keys_and_values_before_head_reshaping(mode):
+    config_class = (
+        IndependentAttentionConfig
+        if mode == "independent"
+        else MixtureOfAttentionHeadsConfig
+        if mode in {"shared_kv", "expert_kv", "soft"}
+        else SelfAttentionConfig
+    )
+    config = build_attention_config(
+        config_class,
+        batch_size=2,
+        num_heads=2,
+        embedding_dim=4,
+        target_sequence_length=3,
+        source_sequence_length=3,
+        use_kv_expert_models_flag=mode == "expert_kv",
+        experts_top_k=2,
+        experts_num_experts=3,
+        self_attention_projection_strategy={
+            "fused": SelfAttentionProjectionStrategy.FUSED,
+            "fused_kv": SelfAttentionProjectionStrategy.FUSED_KEY_VALUE,
+        }.get(mode, SelfAttentionProjectionStrategy.SEPARATE),
+    )
+    if mode == "soft":
+        from tests.unit.test_expert_soft_moe import expert_config
+
+        config.experts_config = expert_config(
+            dimension=4, output_dim=4, experts=2, slots=2
+        )
+    config = replace(config, batch_first_flag=False)
+    projector = replace(config, source_memory_flag=True).build().eval().projector
+    plain = replace(config, source_memory_flag=False).build().eval().projector
+    assert isinstance(projector.source_memory, AttentionSourceMemory)
+    assert plain.source_memory is None
+    plain.load_state_dict(
+        {
+            name: value
+            for name, value in projector.state_dict().items()
+            if not name.startswith("source_memory.")
+        }
+    )
+    source = torch.randn(3, 2, 4)
+    inputs = MultiHeadAttentionInputs(
+        query=source,
+        key=source,
+        value=source,
+        runtime_layout=AttentionRuntimeLayout(
+            batch_size=2, target_sequence_length=3, source_sequence_length=3
+        ),
+    )
+    generated = []
+    handle = projector.source_memory.model.register_forward_hook(
+        lambda _module, _args, output: generated.append(
+            output.hidden if hasattr(output, "hidden") else output[0]
+        )
+    )
+    expected = plain.compute_qkv_projections(inputs)
+    actual = projector.compute_qkv_projections(inputs)
+    handle.remove()
+    assert len(generated) == 1
+    memory = generated[0].reshape_as(expected.key)
+    torch.testing.assert_close(actual.query, expected.query)
+    torch.testing.assert_close(actual.key, torch.cat((expected.key, memory), dim=0))
+    torch.testing.assert_close(actual.value, torch.cat((expected.value, memory), dim=0))
+    assert actual.runtime_layout.source_sequence_length == 6
+    assert actual.runtime_layout.real_source_sequence_length == 3
+    assert actual.runtime_layout.target_sequence_length == expected.query.size(0)
+    assert inputs.key.shape == source.shape
 
 
 @pytest.mark.parametrize("mask_kind", ["none", "bool", "float", "heads"])
@@ -64,9 +186,9 @@ def test_memory_is_one_additional_source_for_both_keys_and_values(mask_kind):
             linear.bias_params.zero_()
 
     memories = []
-    memory = next(m for m in model.modules() if isinstance(m, DynamicMemoryAbstract))
+    memory = model.projector.source_memory.model
     handle = memory.register_forward_hook(
-        lambda _module, _args, output: memories.append(output)
+        lambda _module, _args, output: memories.append(output.hidden)
     )
     inputs = torch.randn(2, 3, 4, dtype=torch.float64)
     mask = None
@@ -108,17 +230,10 @@ def test_memory_is_one_additional_source_for_both_keys_and_values(mask_kind):
     assert loss is None
 
 
-@pytest.mark.parametrize("adaptation_steps", [None, 2])
-def test_memory_respects_causal_and_padding_masks_without_adaptation_leakage(
-    adaptation_steps,
-):
+def test_memory_respects_causal_and_padding_masks():
     torch.manual_seed(41)
     config = attention_config(
         causal_attention_mask_flag=True,
-        source_memory_config=memory_config(
-            test_time_training_num_inner_steps=adaptation_steps,
-            test_time_training_learning_rate=0.01 if adaptation_steps else None,
-        ),
     )
     model = config.build().eval()
     inputs = torch.randn(2, 4, 4)
@@ -152,7 +267,7 @@ def test_memory_branch_runs_and_differentiates_in_each_attention_path(mode):
         experts_num_experts=3,
     )
     config.batch_first_flag = True
-    config.source_memory_config = memory_config()
+    config.source_memory_flag = True
     if mode == "soft":
         from tests.unit.test_expert_soft_moe import expert_config
 
@@ -167,7 +282,8 @@ def test_memory_branch_runs_and_differentiates_in_each_attention_path(mode):
     if auxiliary_loss is not None:
         loss = loss + auxiliary_loss
     loss.backward()
-    memory = next(m for m in model.modules() if isinstance(m, DynamicMemoryAbstract))
+    memory = model.projector.source_memory.model
+    assert type(memory) is type(model.projector.key_model)
     assert any(
         p.grad is not None and p.grad.abs().sum() > 0 for p in memory.parameters()
     )
@@ -186,12 +302,12 @@ def test_explicit_memory_mask_recovers_memory_free_attention(bias, zero):
         zero_attention_flag=zero,
     )
     model = config.build().eval()
-    plain = replace(config, source_memory_config=None).build().eval()
+    plain = replace(config, source_memory_flag=False).build().eval()
     plain.load_state_dict(
         {
             k: v
             for k, v in model.state_dict().items()
-            if not k.startswith("source_memory.")
+            if not k.startswith("projector.source_memory.model.")
         },
         strict=True,
     )
@@ -217,7 +333,7 @@ def test_source_memory_rejects_incompatible_projection_widths_at_construction():
         query_key_projection_dim=2,
         value_projection_dim=4,
     )
-    config.source_memory_config = memory_config()
+    config.source_memory_flag = True
     with pytest.raises(ValueError, match="source memory.*width"):
         config.build()
 
@@ -252,18 +368,16 @@ def test_memory_uses_its_source_token_position(positions):
             model.projector.key_model,
             model.projector.value_model,
             model.projector.output_model,
+            model.projector.source_memory.model,
         ):
             projection.layers[0].model.weight_params.copy_(torch.eye(4))
             projection.layers[0].model.bias_params.zero_()
-        # Gated residual memory with zero update returns the original input.
-        for parameter in model.source_memory.parameters():
-            parameter.zero_()
-    plain = replace(config, source_memory_config=None).build().double().eval()
+    plain = replace(config, source_memory_flag=False).build().double().eval()
     plain.load_state_dict(
         {
             k: v
             for k, v in model.state_dict().items()
-            if not k.startswith("source_memory.")
+            if not k.startswith("projector.source_memory.model.")
         }
     )
     inputs = torch.randn(2, 4, 4, dtype=torch.float64)
@@ -274,42 +388,20 @@ def test_memory_uses_its_source_token_position(positions):
     torch.testing.assert_close(weights[..., 4:], expected_weights / 2)
 
 
-@pytest.mark.parametrize(
-    "variant",
-    [
-        GatedResidualDynamicMemoryConfig,
-        WeightedDynamicMemoryConfig,
-        ElementWiseWeightedDynamicMemoryConfig,
-        AttentionDynamicMemoryConfig,
-    ],
-)
-@pytest.mark.parametrize("adaptation_steps", [None, 1])
-def test_memory_variants_gradients_checkpoint_and_call_local_adaptation(
-    variant, adaptation_steps
-):
-    options = {"num_memory_slots": 3} if variant is AttentionDynamicMemoryConfig else {}
-    memory = memory_config(
-        variant,
-        test_time_training_num_inner_steps=adaptation_steps,
-        test_time_training_learning_rate=0.01 if adaptation_steps else None,
-        **options,
-    )
-    config = attention_config(source_memory_config=memory)
+def test_memory_gradients_checkpoint_and_call_local_outputs():
+    config = attention_config()
     model = config.build().train()
     before = {k: v.clone() for k, v in model.state_dict().items()}
     inputs = torch.randn(2, 3, 4, requires_grad=True)
     output, weights, _ = model(inputs, inputs, inputs)
-    assert (
-        weights.shape[-1] == 6
-    )  # Internal slot count does not extend outer memory length.
+    assert weights.shape[-1] == 6
     output.square().sum().backward()
     assert all(
         p.grad is not None and torch.isfinite(p.grad).all()
-        for p in model.source_memory.parameters()
+        for p in model.projector.source_memory.model.parameters()
     )
     for key, value in model.state_dict().items():
         torch.testing.assert_close(value, before[key])
-    assert memory.input_dim is None and memory.output_dim is None
     restored = config.build().eval()
     restored.load_state_dict(model.state_dict(), strict=True)
     model.eval()
@@ -345,15 +437,46 @@ def test_projection_strategies_and_input_layouts(strategy, layout):
     torch.testing.assert_close(actual, expected)
 
 
-def test_memory_generator_rejects_grouping_that_mixes_token_rows():
+@pytest.mark.parametrize("grouped", [False, True])
+def test_memory_inherits_key_value_adaptive_computation(grouped):
     from tests.unit.test_attention_adaptive_grouping import (
-        grouped_projection_model_config,
+        grouped_weight_projection_model_config,
     )
 
-    config = attention_config()
-    config.source_memory_config.model_config = grouped_projection_model_config()
-    with pytest.raises(ValueError, match="source memory.*independent token"):
-        config.build()
+    stack = grouped_weight_projection_model_config()
+    if not grouped:
+        stack.layer_config.layer_model_config.adaptive_augmentation_config.grouping_config = None
+    config = attention_config(
+        target_sequence_length=4,
+        source_sequence_length=4,
+        projection_model_config=stack,
+        causal_attention_mask_flag=not grouped,
+    )
+    model = config.build().eval()
+    key = model.projector.key_model
+    memory = model.projector.source_memory.model
+    assert type(memory.layers[0].model) is type(key.layers[0].model)
+    memory.load_state_dict(key.state_dict())
+    inputs = torch.randn(2, 4, 4)
+    rows = inputs.transpose(0, 1).reshape(-1, 4)
+    key_output = Layer.run_model_from_hidden(key, rows).hidden
+    memory_output = Layer.run_model_from_hidden(memory, rows).hidden
+    torch.testing.assert_close(memory_output, key_output)
+    actual = model(inputs, inputs, inputs)[0]
+    if not grouped:
+        changed_future = inputs.clone()
+        changed_future[:, 2:] += 10
+        changed_output = model(changed_future, changed_future, changed_future)[0]
+        torch.testing.assert_close(actual[:, :2], changed_output[:, :2])
+    actual.square().mean().backward()
+    weight_model = memory.layers[0].model.adaptive_behaviour.weight_model
+    for generator in (weight_model.input_model, weight_model.output_model):
+        gradients = [parameter.grad for parameter in generator.parameters()]
+        assert all(
+            gradient is not None and torch.isfinite(gradient).all()
+            for gradient in gradients
+        )
+        assert any(gradient.abs().sum() > 0 for gradient in gradients)
 
 
 def test_expert_memory_head_order_matches_explicit_per_sample_reference():
@@ -370,7 +493,7 @@ def test_expert_memory_head_order_matches_explicit_per_sample_reference():
         experts_num_experts=3,
     )
     config.batch_first_flag = True
-    config.source_memory_config = memory_config()
+    config.source_memory_flag = True
     model = config.build().double().eval()
     observed = {}
     handles = []
@@ -382,8 +505,8 @@ def test_expert_memory_head_order_matches_explicit_per_sample_reference():
             )
         )
     handles.append(
-        model.source_memory.model.register_forward_hook(
-            lambda _m, _a, out: observed.__setitem__("memory", out)
+        model.projector.source_memory.model.register_forward_hook(
+            lambda _m, _a, out: observed.__setitem__("memory", out[0])
         )
     )
     handles.append(
@@ -398,7 +521,7 @@ def test_expert_memory_head_order_matches_explicit_per_sample_reference():
     projections = {
         name: observed[name].reshape(3, 2, 2, 4) for name in ("query", "key", "value")
     }
-    memories = observed["memory"].reshape(3, 2, 4)
+    memories = observed["memory"].reshape(3, 2, 2, 4)
     expected = torch.empty(3, 2, 2, 4, dtype=torch.float64)
     for batch in range(2):
         for expert in range(2):
@@ -407,7 +530,7 @@ def test_expert_memory_head_order_matches_explicit_per_sample_reference():
                 query = projections["query"][:, batch, expert, features]
                 key = projections["key"][:, batch, expert, features]
                 value = projections["value"][:, batch, expert, features]
-                memory = memories[:, batch, features]
+                memory = memories[:, batch, expert, features]
                 keys = torch.cat((key, memory))
                 values = torch.cat((value, memory))
                 weights = (query @ keys.T / 2**0.5).softmax(-1)
@@ -441,7 +564,7 @@ def test_source_memory_cpu_autocast_preserves_finite_backward(config_class):
         source_sequence_length=3,
     )
     config.batch_first_flag = True
-    config.source_memory_config = memory_config()
+    config.source_memory_flag = True
     model = config.build()
     inputs = torch.randn(2, 3, 4, requires_grad=True)
     with torch.autocast("cpu", dtype=torch.bfloat16):
@@ -452,5 +575,5 @@ def test_source_memory_cpu_autocast_preserves_finite_backward(config_class):
     assert torch.isfinite(inputs.grad).all()
     assert any(
         p.grad is not None and torch.isfinite(p.grad).all()
-        for p in model.source_memory.parameters()
+        for p in model.projector.source_memory.model.parameters()
     )

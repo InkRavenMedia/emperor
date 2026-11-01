@@ -48,7 +48,6 @@ from ._residual import (
     resolve_residual_stack_options,
 )
 from ._transformer_submodule import (
-    build_source_memory_config,
     configure_transformer_submodule,
 )
 from .experiment_config import ExperimentConfig
@@ -408,6 +407,10 @@ def _attention_config(
     causal,
     independent=False,
 ):
+    if options.source_memory_flag and independent:
+        raise ValueError(
+            "Source memory is supported only for self-attention, not decoder cross-attention."
+        )
     config_type = IndependentAttentionConfig if independent else SelfAttentionConfig
     projection_stack = _adaptive_stack(
         stack_options=options.stack_options,
@@ -439,9 +442,7 @@ def _attention_config(
         batch_first_flag=True,
         projection_model_config=projection_config,
         relative_positional_embedding_config=None,
-        source_memory_config=build_source_memory_config(
-            options, _residual_stack(runtime), self_attention=not independent
-        ),
+        source_memory_flag=options.source_memory_flag,
     )
     if not independent:
         kwargs["projection_strategy"] = SelfAttentionProjectionStrategy.SEPARATE

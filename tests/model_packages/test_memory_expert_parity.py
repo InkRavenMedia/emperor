@@ -283,16 +283,17 @@ def test_memory_and_expert_options_are_exposed_in_public_configuration(name):
         if name.startswith("mlp_mixer")
         else "ATTN_SOURCE_MEMORY_"
     )
-    assert fields.issuperset(
-        prefix + suffix
-        for suffix in (
-            "FLAG",
+    suffixes = ("FLAG",)
+    if name.startswith("mlp_mixer"):
+        suffixes += (
             "OPTION",
             "NUM_MEMORY_SLOTS",
             "TEST_TIME_TRAINING_LEARNING_RATE",
             "TEST_TIME_TRAINING_NUM_INNER_STEPS",
         )
-    )
+    assert {field for field in fields if field.startswith(prefix)} == {
+        prefix + suffix for suffix in suffixes
+    }
     for role in memory_roles(name):
         key = f"{role}_num_memory_slots".upper()
         assert key in fields
