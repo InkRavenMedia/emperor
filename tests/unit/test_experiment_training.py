@@ -4,13 +4,14 @@ import tempfile
 import unittest
 from enum import Enum
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import cast
 from unittest.mock import patch
 
 from lightning.pytorch.callbacks import Callback
 
 import model_runtime.runs.experiment as experiments_base
+from emperor.datasets.text.bert_pretraining import WikiText2BertPretraining
 from emperor.experiments import ExperimentTask
 from emperor.monitoring import MonitorOption
 from model_runtime.packages import (
@@ -1108,6 +1109,21 @@ class TestExperimentTraining(unittest.TestCase):
                 model_package=self.model_package,
                 run_artifacts=FilesystemRunArtifacts(namespace="../escape"),
             )
+
+    def test_bert_dataset_uses_configured_sequence_length(self):
+        experiment = FakeExperiment(
+            FakeOption.BASELINE, model_package=self.model_package
+        )
+        training_run = SimpleNamespace(
+            experiment_task=ExperimentTask.BERT_PRETRAINING,
+            dataset_type=WikiText2BertPretraining,
+            config=SimpleNamespace(batch_size=16, sequence_length=100),
+        )
+
+        dataset = experiment._build_dataset(training_run)
+
+        self.assertEqual(dataset.batch_size, 16)
+        self.assertEqual(dataset.sequence_length, 100)
 
     def test_causal_language_model_dataset_receives_configured_sequence_length(self):
         experiment = FakeExperiment(
