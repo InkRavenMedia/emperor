@@ -6,6 +6,7 @@ from typing import Any, Final
 
 import models.gpt.linear.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_value_types
+from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
 from models.gpt.linear._builder_adapter import linear_builder_kwargs_from_flat
 from models.gpt.linear.runtime_options import RuntimeOptions
 
@@ -65,6 +66,7 @@ def runtime_from_flat(
         package="models.gpt.linear",
         config_module=config_module,
     )
+    values = resolve_soft_moe_runtime_defaults(values, config_module)
     return _runtime_with_fields(
         runtime_from_config(config_module),
         linear_builder_kwargs_from_flat(values, config_module),

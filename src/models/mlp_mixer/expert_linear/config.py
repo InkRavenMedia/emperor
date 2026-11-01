@@ -30,6 +30,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 #########################################################################
 # Global
@@ -876,3 +877,5 @@ EXPERT_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | No
 )
 EXPERT_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
 EXPERT_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
+
+declare_soft_moe_runtime_defaults(globals())
