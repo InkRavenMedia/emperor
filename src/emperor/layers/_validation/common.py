@@ -152,6 +152,6 @@ def _validate_no_grouping_with_context_controllers(
     controller_list = ", ".join(active_controller_names)
     raise ValueError(
         f"{owner_name} cannot combine enabled adaptive parameter grouping with "
-        f"{controller_list}: context sharing is restricted inside halting or "
+        f"{controller_list}: context sharing is restricted inside "
         f"memory owners. Found grouping at {grouping_paths[0]}."
     )

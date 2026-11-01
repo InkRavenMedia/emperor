@@ -387,10 +387,7 @@ class _RecurrentCompositionValidator(ValidatorBase):
         _validate_no_grouping_with_context_controllers(
             config,
             owner_name=owner_name,
-            controllers=(
-                ("halting_config", halting_config),
-                ("memory_config", memory_config),
-            ),
+            controllers=(("memory_config", memory_config),),
         )
 
     @staticmethod
