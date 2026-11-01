@@ -55,7 +55,7 @@ class ExperimentTaskBehaviorTests(unittest.TestCase):
             experiment_task_behavior(
                 ExperimentTask.BERT_PRETRAINING
             ).dataset_constructor_kwargs(token_configuration),
-            {"batch_size": 7},
+            {"batch_size": 7, "sequence_length": 19},
         )
         self.assertEqual(
             experiment_task_behavior(
