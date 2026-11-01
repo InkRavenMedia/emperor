@@ -5,7 +5,18 @@ from importlib import import_module
 
 import pytest
 import torch
+import torch.nn.functional as F
 
+from emperor.attention._base import MultiHeadAttentionAbstract
+from emperor.augmentations.adaptive_parameters import (
+    AdaptiveParameterGroupingScopeOptions,
+    AdaptiveParameterInputOrderOptions,
+    CombinedDynamicDiagonalConfig,
+    DualModelDynamicWeightConfig,
+    GeneratorDynamicBiasConfig,
+    SumGroupingConfig,
+)
+from emperor.halting import HaltingHiddenStateModeOptions, StickBreakingConfig
 from emperor.layers import RecurrentLayerConfig
 from models.catalog import model_package
 from models.cli_selection import resolve_cli_selection
@@ -24,6 +35,119 @@ TASK_SPECIFIC_GPT_PREFIXES = (
     "LM_HEAD_",
     "DECODER_OUTPUT_",
 )
+
+
+@pytest.mark.training
+def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_memory():
+    torch.manual_seed(25)
+    package = model_package("bert/expert_linear_adaptive")
+    model_config = configuration(
+        "bert/expert_linear_adaptive",
+        hierarchical=False,
+        soft=True,
+        sequence_length=100,
+        recurrent_flag=True,
+        recurrent_initial_iterations=2,
+        recurrent_max_steps=3,
+        recurrent_forward_calls_before_iteration_increment=20_000,
+        recurrent_no_gradient_transition_count=0,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_option=StickBreakingConfig,
+        recurrent_halting_hidden_state_mode=HaltingHiddenStateModeOptions.RAW,
+        recurrent_min_steps=2,
+        recurrent_ponder_cost_weight=0.01,
+        expert_attention_use_kv_expert_models_flag=False,
+        attn_source_memory_flag=True,
+        attn_grouping_scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
+        attn_chunk_size=5,
+        attn_grouping_sequence_length=100,
+        attn_grouping_input_order=AdaptiveParameterInputOrderOptions.SEQUENCE_FIRST,
+        attn_grouping_method=SumGroupingConfig,
+        weight_option_flag=True,
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option_flag=True,
+        bias_option=GeneratorDynamicBiasConfig,
+        diagonal_option_flag=True,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+        mask_option_flag=False,
+    )
+    model = package.build_model(model_config).train()
+    attention = next(
+        module
+        for module in model.transformer.modules()
+        if isinstance(module, MultiHeadAttentionAbstract)
+    )
+    projections = (
+        attention.projector.key_model,
+        attention.projector.value_model,
+        attention.projector.source_memory.model,
+    )
+    generated_weight_shapes = []
+
+    def record_weights(_module, arguments, output):
+        assert arguments[1].shape == (40, 8)
+        generated_weight_shapes.append(tuple(output.shape))
+
+    handles = [
+        layer.model.adaptive_behaviour.weight_model.register_forward_hook(
+            record_weights
+        )
+        for projection in projections
+        for layer in projection
+    ]
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    initial_parameters = {
+        name: parameter.detach().clone() for name, parameter in model.named_parameters()
+    }
+    try:
+        for _ in range(2):
+            optimizer.zero_grad(set_to_none=True)
+            token_ids = torch.randint(5, len(TOKEN_TEXTS), (2, 100))
+            mlm_labels = torch.full_like(token_ids, -100)
+            mlm_labels[:, ::5] = token_ids[:, ::5]
+            token_ids[:, ::5] = 4
+            attention_mask = torch.ones_like(token_ids)
+            token_type_ids = torch.zeros_like(token_ids)
+            token_type_ids[:, 50:] = 1
+            mlm_logits, nsp_logits, auxiliary_loss = model(
+                token_ids, attention_mask, token_type_ids
+            )
+            assert mlm_logits.shape == (2, 100, len(TOKEN_TEXTS))
+            assert nsp_logits.shape == (2, 2)
+            mlm_loss = F.cross_entropy(mlm_logits.transpose(1, 2), mlm_labels)
+            nsp_loss = F.cross_entropy(nsp_logits, torch.tensor([0, 1]))
+            loss = mlm_loss + nsp_loss + auxiliary_loss.sum()
+            assert torch.isfinite(loss)
+            loss.backward()
+            gradients = [
+                parameter.grad
+                for parameter in model.parameters()
+                if parameter.grad is not None
+            ]
+            assert gradients and all(
+                torch.isfinite(gradient).all() for gradient in gradients
+            )
+            for component in (
+                attention.projector.source_memory,
+                model.transformer.halting_model,
+            ):
+                assert any(
+                    parameter.grad is not None and torch.count_nonzero(parameter.grad)
+                    for parameter in component.parameters()
+                )
+            optimizer.step()
+            assert all(
+                torch.isfinite(parameter).all() for parameter in model.parameters()
+            )
+    finally:
+        for handle in handles:
+            handle.remove()
+    assert len(generated_weight_shapes) == 4 * len(handles)
+    assert set(generated_weight_shapes) == {(40, 8, 8)}
+    assert any(
+        not torch.equal(parameter, initial_parameters[name])
+        for name, parameter in model.named_parameters()
+    )
 
 
 def gpt_configuration(variant, **overrides):

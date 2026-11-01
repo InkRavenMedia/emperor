@@ -555,12 +555,12 @@ class TestLayerValidationMutationContracts(unittest.TestCase):
             _validate_no_grouping_with_context_controllers(
                 root,
                 owner_name="Owner",
-                controllers=(("halting_config", object()),),
+                controllers=(("memory_config", object()),),
             )
         self.assertEqual(
             str(error.exception),
             "Owner cannot combine enabled adaptive parameter grouping with "
-            "halting_config: context sharing is restricted inside halting or "
+            "memory_config: context sharing is restricted inside "
             "memory owners. Found grouping at Owner.nested[2].",
         )
 

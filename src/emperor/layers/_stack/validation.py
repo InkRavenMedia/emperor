@@ -70,9 +70,7 @@ class LayerStackValidator(ValidatorBase):
             cfg,
             owner_name="LayerStackConfig",
             controllers=(
-                ("shared_halting_config", cfg.shared_halting_config),
                 ("shared_memory_config", cfg.shared_memory_config),
-                ("layer_config.halting_config", cfg.layer_config.halting_config),
                 ("layer_config.memory_config", cfg.layer_config.memory_config),
             ),
         )
