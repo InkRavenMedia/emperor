@@ -85,6 +85,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -364,6 +365,7 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 #########################################################################
 # Attention Options
 ATTENTION_SOFT_MOE_CONFIG: SoftMoEConfig | None = None
+ATTENTION_SOFT_MOE_FLAG: bool = False
 ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
@@ -530,6 +532,12 @@ ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 # Feed-Forward Stack Options
 FF_NUM_LAYERS: int = 1
 SOFT_MOE_CONFIG: SoftMoEConfig | None = None
+SOFT_MOE_FLAG: bool = False
+# Shared defaults for the attention and feedforward Soft MoE configurations.
+# Explicit SoftMoEConfig instances retain their own router and slot settings.
+SOFT_MOE_SLOTS_PER_EXPERT: int = 2
+SOFT_MOE_SCORING_HIDDEN_DIM: int = 32
+SOFT_MOE_SCORING_NUM_LAYERS: int = 2
 FF_BIAS_FLAG: bool = True
 FF_STACK_HIDDEN_DIM: int = HIDDEN_DIM
 FF_STACK_ACTIVATION: ActivationOptions = STACK_ACTIVATION
@@ -1328,7 +1336,12 @@ ROUTER_MASK_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None 
 ROUTER_MASK_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
 ROUTER_MASK_GENERATOR_STACK_BIAS_FLAG: bool | None = None
 
-RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
+RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields(
+    "HIDDEN_DIM",
+    "SOFT_MOE_SLOTS_PER_EXPERT",
+    "SOFT_MOE_SCORING_HIDDEN_DIM",
+    "SOFT_MOE_SCORING_NUM_LAYERS",
+)
 
 
 # ==============================================================================
@@ -1637,3 +1650,5 @@ FF_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None = None
 FF_GROUPING_MODEL_CONFIG: ConfigBase | None = None
 FF_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 FF_GROUPING_RMS_NORM_EPSILON: float | None = None
+
+declare_soft_moe_runtime_defaults(globals())

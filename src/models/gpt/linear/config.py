@@ -29,6 +29,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 # Global
 INPUT_DIM: int = 28782
@@ -616,3 +617,5 @@ HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
 
 
 RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
+
+declare_soft_moe_runtime_defaults(globals())

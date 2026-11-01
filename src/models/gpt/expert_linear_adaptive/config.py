@@ -80,6 +80,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -1637,3 +1638,5 @@ HIERARCHICAL_BYTE_DECODER_NUM_LAYERS: int = 1
 HIERARCHICAL_BYTE_NUM_HEADS: int = 4
 HIERARCHICAL_BYTE_FEED_FORWARD_DIM: int = 64
 HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
+
+declare_soft_moe_runtime_defaults(globals())

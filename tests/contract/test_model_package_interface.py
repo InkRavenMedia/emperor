@@ -31,23 +31,23 @@ from models.catalog import (
 
 _ORDERING_DIGEST_BY_PACKAGE = {
     "bert/linear": (
-        "f85fb99a232cfe8f04a21e81b9d92158943a75b83d2062d26038c2a85fd79798",
-        384,
+        "655c02799a5a8be562a9962f2b77376073e21054dadd805f4ed4c242c2b5329e",
+        391,
         9,
     ),
     "bert/linear_adaptive": (
-        "d867cf2362ac210630ed503ef1937e74a0974250d14f95bdeb49aa69e73379dd",
-        845,
+        "e32e2249062f14b8fdb93865a05abb36eba82170cd3c6156e36a1b34f31576ca",
+        852,
         124,
     ),
     "bert/expert_linear": (
-        "00203bd4f03407f867704278ab3c199640dfe1452a8f2af9b9a03aa7d431b3e0",
-        513,
+        "04f1a9b02c680032a5b5bdfae4aae2a57c613aa01d395666bc7deb94b5b916f7",
+        531,
         10,
     ),
     "bert/expert_linear_adaptive": (
-        "050f8acefb838cbf85b2c4828dbf2317bb4ec3a9483f393def5331e3ee8fb11c",
-        931,
+        "19ba5431d901f0967e6267520722823f3d665a5f1b3f43799fb5f8f91d625d11",
+        949,
         40,
     ),
     "experts/linear": (
@@ -61,23 +61,23 @@ _ORDERING_DIGEST_BY_PACKAGE = {
         37,
     ),
     "gpt/linear": (
-        "c7c10258f24a3b6965f69d1b13216db1e8601f7ccbc23d87e2255a59f4a2f262",
-        380,
+        "3ee162519034f20b9c71b5cb0367ce3372ab81a9c0a052a8cc977767a8f30eaa",
+        387,
         8,
     ),
     "gpt/linear_adaptive": (
-        "855978b439b8fcaa6711ec71d35809cd0534c746ba1790746dc7baf01c177707",
-        841,
+        "855b425dcc4f9c638dff0ea455c4a8d5eed24d57e62f40283830bca2a5b0953c",
+        848,
         123,
     ),
     "gpt/expert_linear": (
-        "56d1dbb2fc2398095ceda3227257e4b916e587a991801058908bb1a40a2ed1f6",
-        509,
+        "c69ee0bf4d59a4643c2164c5f05f06c5c42d4ef8c83b2800d53aa937284ede0c",
+        527,
         9,
     ),
     "gpt/expert_linear_adaptive": (
-        "7856ba487f714b69103f5309473505f7d66ee8b40fef549be76dd90d4baf0f38",
-        934,
+        "dc8bd440d888c3e410b84cb112b017e8940a85c28c9bfa0e8e8ecd2b4bbe5d08",
+        952,
         39,
     ),
     "linears/linear": (
@@ -91,23 +91,23 @@ _ORDERING_DIGEST_BY_PACKAGE = {
         33,
     ),
     "mlp_mixer/linear": (
-        "7b694e54277f2b7908d0c7176e54250fc8eb2b54d0451528c16f633d5b269d76",
-        389,
+        "e7e7ff889887b2678f3b12c09efdb0613433213d10ad74ca1c0b3e50e64d39a0",
+        411,
         9,
     ),
     "mlp_mixer/linear_adaptive": (
-        "0b6100841572514a308c67df56bcb7eaaa2810ea51f7f21d8d61d2e0b330782c",
-        560,
+        "c16cc0a4eedc4e8f03245afd60bad575f722b5cdd458b4fc0766a48d5a7f89aa",
+        582,
         10,
     ),
     "mlp_mixer/expert_linear": (
-        "e11b175ad01088738af00d4cdd86f87536d61d474932cef811eba430c9c017fa",
-        515,
+        "e716b060b706ce42ff425f8e197a5e780bdf00160f2a9f45f61f0cceae444ba0",
+        537,
         11,
     ),
     "mlp_mixer/expert_linear_adaptive": (
-        "afde0a8527ea3664f9b780f22a6c1877e0ed96dd1a38b1b3c8bc1b3f7c5008da",
-        686,
+        "235efc69eb8f68106de7cf9089fbb4f12e0e283834fb6e5cdd65dda221f48c92",
+        708,
         12,
     ),
     "neuron/linear": (
@@ -166,23 +166,23 @@ _ORDERING_DIGEST_BY_PACKAGE = {
         30,
     ),
     "vit/linear": (
-        "572752bb12c49aaf3a9b07483b68f6ca8bda31ea7d6560ca7f1248913482f611",
-        373,
+        "a948bb5470c490aa5b1d90fea5f3c3a823a18335c0f366f97782c4ecc8fd67ec",
+        380,
         8,
     ),
     "vit/linear_adaptive": (
-        "f75db396630656080e397e465c7119b38e7e7e114381c67043300614b7049f50",
-        834,
+        "0b56e961af320d459917c5d1b5050ffe0074489140edd8b05656c6015b358dcb",
+        841,
         122,
     ),
     "vit/expert_linear": (
-        "e1b505313c2a8fb885b5d5e23af5408150db049b19d1fae8628fc174a83e6037",
-        502,
+        "f9fa829e495b4fcce3de73245903c7a1f85f1c7be3c72b074315da2f3e11aa97",
+        520,
         8,
     ),
     "vit/expert_linear_adaptive": (
-        "6eb2670e80b803791efc5d4854e9814edaa371c2f9b0a1027f6ca118488c390d",
-        925,
+        "18b32e3d232cdd4956ca8ecdf3b90fbe06c5b325100ff09aa62e51159a900fba",
+        943,
         38,
     ),
 }
@@ -190,23 +190,23 @@ _ORDERING_DIGEST_BY_PACKAGE = {
 
 _ORDERING_WITH_ATTENTION_SETTINGS_BY_PACKAGE = {
     "bert/linear": (
-        "b2ae23648e0b6df0126eb575e611e5856c9265dcb5b74302ae4b0f095f1f9466",
-        424,
+        "13babeab0263dd42e5eb9e9e29c88f522ce532e66480811dca203e6d25a791a4",
+        431,
         9,
     ),
     "bert/linear_adaptive": (
-        "e5ac869f2f8b173aeb3bed0d5f63a8585890f796be54347e174d69c0b723e59c",
-        941,
+        "d4901da81f712bf94ee2e5feb4036a9139963bb37170300d24f7f7e440e2354e",
+        948,
         124,
     ),
     "bert/expert_linear": (
-        "d43078beb7afb97307d243c9b9c5670bc9ced17b765cfec213322a95863316b5",
-        567,
+        "8ab75f3f0176a2701049a552af1190b67707309664654fe2218331d822a6b66a",
+        585,
         10,
     ),
     "bert/expert_linear_adaptive": (
-        "69ee23ee828c6ffa269705a06a88a84dc736249cb986b99f79960088405c82ac",
-        1033,
+        "762213fd6c1ea05b961710c91a441a6ae9a53ac452a94c5b96f4c93749af4643",
+        1051,
         40,
     ),
     "experts/linear": (
@@ -220,23 +220,23 @@ _ORDERING_WITH_ATTENTION_SETTINGS_BY_PACKAGE = {
         37,
     ),
     "gpt/linear": (
-        "c0cf9679b25e13b17b682ca256e9ee5bae005554c031b055cb03d110b432d6bd",
-        420,
+        "f8b248f9d6a0fbc267c6fd8da9d2b77760d1954124305b14a0e806c3ea6efc4e",
+        427,
         8,
     ),
     "gpt/linear_adaptive": (
-        "fb55c66d1c097a158e24722a26934d105bc833570c1459b12fbc9998b25f43ea",
-        937,
+        "2e89117b99690c6d4abe0428740b45c87183c6c0b5cb24255f6fa5ed678d94c5",
+        944,
         123,
     ),
     "gpt/expert_linear": (
-        "ca85270c979e4d890e866a652b5a5d6c147135c827a4eadee0ed4f51cd752aec",
-        563,
+        "a833b0489f5c33b4435750c12a0b4fea25044c43ea63ccb1eb1dfa0937ad242b",
+        581,
         9,
     ),
     "gpt/expert_linear_adaptive": (
-        "a116ed4ed8edc02e3cea34a439884c28d146145f43079be2fb44ee6da9744b2b",
-        1036,
+        "09d163539a333373e25b7c8025a9922ecb52558c378f66d664686b26c71598d7",
+        1054,
         39,
     ),
     "linears/linear": (
@@ -250,23 +250,23 @@ _ORDERING_WITH_ATTENTION_SETTINGS_BY_PACKAGE = {
         33,
     ),
     "mlp_mixer/linear": (
-        "e2a4c98231376659cc0f7e3ed27ee69d58a7cac0c47f1ed294d77324c865ce8a",
-        439,
+        "41f2af887d9de28d133bbb126dbd0f173c57294678da282478fafe4491c0c621",
+        461,
         9,
     ),
     "mlp_mixer/linear_adaptive": (
-        "29b5c8a6ddcafc525f86f83020e55177bf31f8444adfe58725b3fce5a5c0694c",
-        630,
+        "1694fbc3777e64e04ffb81cc8e5c4e49a04623d04229fb6cf2d19407e557cdbc",
+        652,
         10,
     ),
     "mlp_mixer/expert_linear": (
-        "271484e56b02b158a1dfb5e924277d12e39c491600de74b943ab1687fa71a227",
-        581,
+        "7b8647ca676c79e41cc21da3b55c40e04d8af2baa23393fdbf61bd58d647f186",
+        603,
         11,
     ),
     "mlp_mixer/expert_linear_adaptive": (
-        "3053ed17b667e3e4ce98d0824b932da00b9ff6ef24f40f9d277a8012b4a499c8",
-        772,
+        "f748eaffe59128931975389756e955a8830f20d630f9e93770ad33ca514eba4d",
+        794,
         12,
     ),
     "neuron/linear": (
@@ -325,23 +325,23 @@ _ORDERING_WITH_ATTENTION_SETTINGS_BY_PACKAGE = {
         30,
     ),
     "vit/linear": (
-        "0bea5dcf5e4dbee64cb93db3fa1dc6568813b4de63a75a94da2bede994330d6c",
-        413,
+        "c0ff9ed8dedf17cbb239f37522c73f26476185dc5b4f3dd235ac8d407fcdbee3",
+        420,
         8,
     ),
     "vit/linear_adaptive": (
-        "df5a4965c1256670b85af37527687f484b19969494eba38e53f298a97d125cbb",
-        930,
+        "9467fcda0afeab300fd28e5cd24fa4accd2c12af7d0ec98b2d59d9b32c62d9bb",
+        937,
         122,
     ),
     "vit/expert_linear": (
-        "fd8525aaf23cfa395db0539773bd1bd511da9268d8cc6b1bc815b963f73d85d3",
-        556,
+        "28b1ca9bf5d8831e1b071e53ebfefa61c6f9d56eee407669a6dbcd64177c5a14",
+        574,
         8,
     ),
     "vit/expert_linear_adaptive": (
-        "e4c67b365177e662a6809256b6f846de65e95615c2914e53c17853e24f0c0650",
-        1029,
+        "46ae873ba2733c9351802d9a8f8d8149972b9aaeb12af51f77d9acbfa0d87c96",
+        1047,
         38,
     ),
 }
