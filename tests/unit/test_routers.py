@@ -115,6 +115,26 @@ class TestRouterModel(unittest.TestCase):
         self.assertEqual(model.num_experts, 4)
         self.assertEqual(model.router_output_dim, 8)
 
+    def test_explicit_output_dimension_preserves_expert_count_and_logits(self):
+        cfg = self.preset(input_dim=3, num_experts=2)
+        cfg.output_dim = 6
+        cfg.registry_owner().VALIDATOR.validate_config(cfg)
+        model = cfg.build()
+        inputs = torch.randn(4, 3, requires_grad=True)
+
+        output = model.compute_logit_scores(inputs)
+
+        self.assertEqual(model.num_experts, 2)
+        self.assertEqual(model.router_output_dim, 6)
+        self.assertEqual(output.shape, (4, 6))
+        torch.testing.assert_close(
+            output, model.model(LayerState(hidden=inputs)).hidden
+        )
+        output.square().sum().backward()
+        self.assertTrue(torch.isfinite(inputs.grad).all())
+        self.assertGreater(inputs.grad.abs().sum(), 0)
+        self.assertEqual(cfg.model_config.output_dim, 2)
+
     def test_preserves_exact_state_keys_and_strict_roundtrip(self):
         cfg = self.preset(input_dim=8, hidden_dim=12, num_experts=4, num_layers=2)
         source = RouterModel(cfg)
@@ -161,6 +181,10 @@ class TestRouterModel(unittest.TestCase):
             ("num_experts", -1, ValueError),
             ("num_experts", True, TypeError),
             ("num_experts", 1.5, TypeError),
+            ("output_dim", 0, ValueError),
+            ("output_dim", -1, ValueError),
+            ("output_dim", True, TypeError),
+            ("output_dim", 1.5, TypeError),
             ("noisy_topk_flag", None, ValueError),
             ("noisy_topk_flag", 1, TypeError),
             ("model_config", None, ValueError),
