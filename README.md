@@ -60,6 +60,160 @@ Progress toward the goal depends on evidence: what a change improves, what it
 costs, and where it falls short. Emperor provides the tools to carry out that
 investigation; developing the model remains the long-term research objective.
 
+## Example model: adaptive BERT with Soft MoE and attention memory
+
+Emperor can combine these research ideas in a single model. One example is a
+small BERT pretraining configuration built from the
+[`bert/expert_linear_adaptive`](src/models/bert/expert_linear_adaptive/) package.
+
+**All 137 adaptive linear layers use 32 × 32 main weight matrices:** each maps
+32 input features to 32 output features. This describes the adaptive core;
+embeddings, prediction heads, and parts of the byte encoder use other matrix
+shapes. The complete configuration has approximately 4.96 million trainable
+parameters.
+
+After [GPU environment setup](#environment-setup), run the following Bash
+command from the repository root with the WikiText-2 text files available in
+`data/wikitext-2/wikitext-2/`. The flags enable the hierarchical input encoder,
+Soft MoE in attention and feedforward layers, and attention memory.
+
+```bash
+mise run experiment -- \
+  --model-type bert \
+  --model expert_linear_adaptive \
+  --experiment-task bert-pretraining \
+  --preset baseline \
+  --datasets wiki-text2-bert-pretraining \
+  --logdir bert-025-soft-moe-memory-chunk5-wiki-text2 \
+  --monitors attention recurrent-layer layer-controller adaptive \
+  --config \
+  --adaptive-generator-stack-hidden-dim 32 \
+  --adaptive-generator-stack-num-layers 2 \
+  --attn-num-heads 4 \
+  --batch-size 16 \
+  --bias-option GeneratorDynamicBiasConfig \
+  --bias-option-flag true \
+  --callback-checkpoint-flag true \
+  --callback-early-stopping-patience 0 \
+  --data-num-workers 4 \
+  --diagonal-option CombinedDynamicDiagonalConfig \
+  --diagonal-option-flag true \
+  --expert-attention-use-kv-expert-models-flag false \
+  --expert-bias-flag true \
+  --ff-stack-hidden-dim 32 \
+  --generator-depth 5 \
+  --hidden-dim 32 \
+  --hierarchical-embedding-flag true \
+  --hierarchical-byte-embedding-dim 32 \
+  --hierarchical-byte-encoder-num-layers 1 \
+  --hierarchical-byte-feed-forward-dim 64 \
+  --hierarchical-byte-num-heads 4 \
+  --hierarchical-max-token-bytes 64 \
+  --learning-rate 0.0001 \
+  --mask-option-flag false \
+  --monitor-log-every-n-steps 500 \
+  --num-epochs 100 \
+  --num-experts 16 \
+  --recurrent-flag true \
+  --recurrent-forward-calls-before-iteration-increment 20000 \
+  --recurrent-gradient-transition-count None \
+  --recurrent-halting-hidden-state-mode RAW \
+  --recurrent-halting-option StickBreakingConfig \
+  --recurrent-halting-threshold 0.999 \
+  --recurrent-initial-iterations 2 \
+  --recurrent-iteration-increment 1 \
+  --recurrent-max-steps 10 \
+  --recurrent-min-steps 2 \
+  --recurrent-no-gradient-transition-count 0 \
+  --recurrent-ponder-cost-weight 0.01 \
+  --recurrent-residual-block-size 1 \
+  --recurrent-residual-connection-option AttentionResidualConfig \
+  --recurrent-residual-rms-norm-epsilon 1e-06 \
+  --recurrent-smooth-iteration-growth-flag true \
+  --recurrent-stack-halting-flag true \
+  --run-test-after-fit false \
+  --sampler-switch-loss-weight 0.0 \
+  --sampler-zero-centred-loss-weight 0.0 \
+  --sequence-length 100 \
+  --stack-dropout-probability 0.1 \
+  --stack-num-layers 1 \
+  --trainer-accelerator gpu \
+  --trainer-benchmark false \
+  --trainer-deterministic false \
+  --trainer-devices 1 \
+  --trainer-enable-checkpointing true \
+  --trainer-enable-model-summary false \
+  --trainer-enable-progress-bar false \
+  --trainer-gradient-clip-algorithm norm \
+  --trainer-gradient-clip-val 1.0 \
+  --trainer-max-time 00:11:00:00 \
+  --trainer-num-sanity-val-steps 0 \
+  --trainer-precision 32-true \
+  --weight-decay-rate 0.0001 \
+  --weight-decay-schedule EXPONENTIAL \
+  --weight-decay-warmup-batches 5000 \
+  --weight-normalization-option SOFT_CLAMP \
+  --weight-normalization-position-option BEFORE_OUTER_PRODUCT \
+  --weight-option DualModelDynamicWeightConfig \
+  --weight-option-flag true \
+  --attn-source-memory-flag true \
+  --mlm-decoder-weight-tying-flag false \
+  --contextual-embedding-config None \
+  --attention-soft-moe-flag true \
+  --soft-moe-flag true \
+  --soft-moe-slots-per-expert 2 \
+  --soft-moe-scoring-hidden-dim 32 \
+  --soft-moe-scoring-num-layers 2 \
+  --grouping-scope SEQUENCE \
+  --chunk-size 5 \
+  --grouping-sequence-length 100 \
+  --grouping-input-order BATCH_FIRST \
+  --grouping-method SumGroupingConfig \
+  --attn-grouping-input-order SEQUENCE_FIRST
+```
+
+This configuration includes:
+
+- **Data-dependent parameters:** adaptive linear layers generate weights, biases,
+  and diagonal coefficients from their inputs. This applies to the experts,
+  routers, key/value projections, and attention memory projection.
+- **Grouped parameter generation:** token-level adaptive layers sum groups of
+  five tokens to generate 20 parameter sets for each 100-token sequence. Each
+  set is shared by its five tokens, while the output retains all 100 positions.
+  The same grouping setting applies inside experts, where their two Soft MoE
+  slots form one partial group per expert and sequence.
+- **Soft mixture of experts:** both attention and feedforward computation use
+  learned soft assignments to pool token information into expert slots and
+  combine expert outputs back into token representations.
+- **Adaptive routing:** each Soft MoE module has one router that scores all of
+  its experts and slots. The router uses the same adaptive linear model family
+  as its experts, with its own parameters.
+- **Latent-space reasoning research:** a recurrent transformer block repeatedly
+  updates the sequence's hidden representations, providing a way to investigate
+  iterative computation within the model's latent space.
+- **Adaptive halting:** a learned stick-breaking controller determines when
+  individual token positions halt. A ponder-cost penalty accounts for additional
+  computation during training.
+- **Gradual depth growth:** the recurrent computation starts at two iterations
+  and can grow smoothly toward a maximum of ten as training progresses.
+- **Attention memory:** an independent adaptive projection generates additional
+  key/value sources from the current sequence. These memory sources are used
+  within attention, and its output returns to the original sequence length.
+- **Attention residual connections:** learned attention weights combine states
+  from earlier recurrent computation steps.
+- **Hierarchical byte embeddings:** a byte-level transformer builds token
+  representations from their UTF-8 bytes, with learned byte positions and a
+  limit of 64 bytes per token.
+- **Training regularization:** dropout, gradient clipping, soft-clamp adaptive
+  weight normalization, and scheduled adaptive weight decay are enabled.
+- **Inspection and checkpointing:** attention, recurrent computation, layer
+  controllers, and adaptive parameters can be monitored during training, and
+  checkpoints preserve the model and optimizer state.
+
+This configuration completed a five-minute local GPU training test with finite
+losses and gradients and a successful checkpoint reload. Longer training and
+evaluations of language and reasoning quality remain research work.
+
 ## Environment Setup
 
 **System requirements:** Git and [mise](https://mise.jdx.dev/). Mise provisions
