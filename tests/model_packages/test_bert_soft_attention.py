@@ -9,8 +9,16 @@ from emperor.attention._variants.mixture.layer import MixtureOfAttentionHeads
 from emperor.attention._variants.mixture.soft import (
     SoftMixtureOfAttentionHeadsProjector,
 )
+from emperor.augmentations.adaptive_parameters import (
+    AdaptiveLinearLayerConfig,
+    CombinedDynamicDiagonalConfig,
+    DualModelDynamicWeightConfig,
+    GeneratorDynamicBiasConfig,
+)
 from emperor.experts import SoftMoEConfig
+from emperor.experts._layers.mixture import MixtureOfExperts
 from emperor.experts._routing.soft import SoftMoERouter
+from emperor.sampler import RouterConfig
 from models.catalog import model_package
 from tests.model_packages.test_bert_hierarchical_soft_moe import (
     TOKEN_TEXTS,
@@ -24,7 +32,85 @@ EXPERT_BERT_PACKAGES = ("bert/expert_linear", "bert/expert_linear_adaptive")
 
 def attention_routing_config():
     scoring_stack = scoring_config(layers=3)
-    return SoftMoEConfig(num_experts=3, slots_per_expert=2, model_config=scoring_stack)
+    scoring_stack.layer_config.layer_model_config = None
+    return SoftMoEConfig(
+        num_experts=3,
+        slots_per_expert=2,
+        router_config=RouterConfig(noisy_topk_flag=False, model_config=scoring_stack),
+    )
+
+
+def test_shared_adaptive_routers_inherit_expert_generators_with_independent_parameters():
+    routing_config = attention_routing_config()
+    original_routing_config = copy.deepcopy(routing_config)
+    model_config = configuration(
+        "bert/expert_linear_adaptive",
+        hierarchical=False,
+        attention_soft_moe_config=routing_config,
+        attn_source_memory_flag=True,
+        weight_option_flag=True,
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option_flag=True,
+        bias_option=GeneratorDynamicBiasConfig,
+        diagonal_option_flag=True,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+        generator_depth=5,
+        adaptive_generator_stack_num_layers=2,
+    )
+    model = (
+        model_package("bert/expert_linear_adaptive").build_model(model_config).eval()
+    )
+    attention = next(
+        module
+        for module in model.modules()
+        if isinstance(module, MixtureOfAttentionHeads)
+    )
+    mixture_owners = [
+        (attention.projector.soft_router, attention.projector.query_model[0]),
+        *[
+            (module.soft_router, module.expert_modules[0])
+            for module in model.modules()
+            if isinstance(module, MixtureOfExperts) and module.soft_router is not None
+        ],
+    ]
+    assert len(mixture_owners) >= 2
+    for router, expert in mixture_owners:
+        expert_linear_config = expert.cfg.layer_config.layer_model_config
+        router_linear_config = (
+            router.cfg.router_config.model_config.layer_config.layer_model_config
+        )
+        assert isinstance(router_linear_config, AdaptiveLinearLayerConfig)
+        assert router_linear_config == expert_linear_config
+        assert router_linear_config is not expert_linear_config
+        assert {id(parameter) for parameter in router.parameters()}.isdisjoint(
+            id(parameter) for parameter in expert.parameters()
+        )
+        assert router.router.model.layers[-1].model.output_dim == (
+            router.num_experts * router.slots_per_expert
+        )
+        for layer in router.router.model.layers:
+            assert isinstance(layer.model.cfg, AdaptiveLinearLayerConfig)
+            assert layer.model.adaptive_behaviour.weight_model.generator_depth == 5
+    logits, sentence_logits, loss = model(*inputs())
+    total_loss = logits.square().mean() + sentence_logits.square().mean() + loss.sum()
+    total_loss.backward()
+    for router, _expert in mixture_owners:
+        for layer in router.router.model.layers:
+            for generator in (
+                layer.model.adaptive_behaviour.weight_model,
+                layer.model.adaptive_behaviour.bias_model,
+                layer.model.adaptive_behaviour.diagonal_model,
+            ):
+                gradients = [
+                    parameter.grad
+                    for parameter in generator.parameters()
+                    if parameter.grad is not None
+                ]
+                assert gradients and all(
+                    torch.isfinite(gradient).all() for gradient in gradients
+                )
+                assert any(gradient.abs().sum() > 0 for gradient in gradients)
+    assert routing_config == original_routing_config
 
 
 @pytest.mark.parametrize("package_name", EXPERT_BERT_PACKAGES)
@@ -64,7 +150,7 @@ def test_attention_and_feed_forward_routing_are_independent(
     if soft_attention:
         attention_router = attention.projector.soft_router
         assert attention_router.num_experts == 3
-        assert attention_router.slot_logit_model.cfg.generator_depth == 3
+        assert attention_router.router.model.cfg.output_dim == 6
         attention_parameters = {
             id(parameter) for parameter in attention_router.parameters()
         }
@@ -73,8 +159,8 @@ def test_attention_and_feed_forward_routing_are_independent(
             assert attention_parameters.isdisjoint(
                 id(parameter) for parameter in router.parameters()
             )
-        assert attention_config.model_config.generator_depth is None
-        assert attention_config.model_config.model_config.input_dim is None
+        assert attention_config.router_config.model_config.output_dim is None
+        assert attention_config.router_config.model_config.input_dim is None
     logits, sentence_logits, loss = model(*inputs())
     assert logits.shape == (2, 4, len(TOKEN_TEXTS))
     assert sentence_logits.shape == (2, 2)
@@ -83,9 +169,13 @@ def test_attention_and_feed_forward_routing_are_independent(
     assert torch.isfinite(total_loss)
     for module in model.modules():
         if isinstance(module, SoftMoERouter):
-            assert all(
-                parameter.grad is not None and torch.isfinite(parameter.grad).all()
+            gradients = [
+                parameter.grad
                 for parameter in module.parameters()
+                if parameter.grad is not None
+            ]
+            assert gradients and all(
+                torch.isfinite(gradient).all() for gradient in gradients
             )
     if soft_attention:
         for projections in (

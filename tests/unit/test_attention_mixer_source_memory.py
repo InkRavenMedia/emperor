@@ -13,6 +13,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,
 )
 from emperor.memory._base import DynamicMemoryAbstract
+from emperor.sampler import RouterConfig
 from tests.unit.test_attention_model_mixer import (
     _linear_stack,
     _mixer_config,
@@ -41,7 +42,13 @@ def test_soft_mixer_routes_channel_vectors_then_restores_token_layout(
     config = _mixer_config(batch_first_flag=batch_first)
     config.mixing_model_config = build_soft_moe_stack(
         config.mixing_model_config,
-        SoftMoEConfig(num_experts=2, slots_per_expert=2, model_config=scoring_config()),
+        SoftMoEConfig(
+            num_experts=2,
+            slots_per_expert=2,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_config()
+            ),
+        ),
         3,
     )
     config.source_memory_config = memory_config() if with_memory else None

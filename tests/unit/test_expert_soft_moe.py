@@ -24,23 +24,46 @@ from emperor.layers import (
     LastLayerBiasOptions,
     LayerConfig,
     LayerNormPositionOptions,
+    LayerStack,
     LayerStackConfig,
     LayerState,
 )
 from emperor.linears import LinearLayerConfig
+from emperor.sampler import RouterConfig, RouterModel
 from emperor.transformer import FeedForwardConfig
 
 
 def scoring_config(layers=1):
-    return DepthMappingHandlerConfig(
-        model_config=LayerStackConfig(
-            hidden_dim=5,
-            num_layers=layers,
-            apply_output_postprocessing_flag=False,
-            last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-            layer_config=layer_config(),
-        )
+    return LayerStackConfig(
+        hidden_dim=5,
+        num_layers=layers,
+        apply_output_postprocessing_flag=False,
+        last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
+        layer_config=layer_config(),
     )
+
+
+def adaptive_scoring_config():
+    from emperor.augmentations.adaptive_parameters import (
+        AdaptiveLinearLayerConfig,
+        AdaptiveParameterAugmentationConfig,
+        AdditiveDynamicBiasConfig,
+        WeightDecayScheduleOptions,
+    )
+
+    config = scoring_config()
+    config.layer_config.layer_model_config = AdaptiveLinearLayerConfig(
+        bias_flag=True,
+        adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
+            bias_config=AdditiveDynamicBiasConfig(
+                model_config=scoring_config(),
+                decay_schedule=WeightDecayScheduleOptions.DISABLED,
+                decay_rate=0.0,
+                decay_warmup_batches=0,
+            ),
+        ),
+    )
+    return config
 
 
 def layer_config(**changes):
@@ -75,7 +98,10 @@ def expert_config(*, dimension=3, output_dim=3, experts=2, slots=2, scoring_laye
         routing_initialization_mode=RoutingInitializationMode.LAYER,
         expert_model_config=stack,
         soft_moe_config=SoftMoEConfig(
-            slots_per_expert=slots, model_config=scoring_config(scoring_layers)
+            slots_per_expert=slots,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_config(scoring_layers)
+            ),
         ),
     )
 
@@ -119,30 +145,31 @@ def explicit_reference(model, inputs):
     batches, tokens, _ = inputs.shape
     experts = model.num_experts
     slots = model.soft_router.slots_per_expert
-    scoring_layers = tuple(model.soft_router.slot_logit_model.model.layers)
+    scoring_layers = tuple(model.soft_router.router.model.layers)
     logits = inputs.new_empty(batches, tokens, experts, slots)
     for batch in range(batches):
         for token in range(tokens):
             value = inputs[batch, token]
             unit_value = value / (value.square().sum() + 1e-6).sqrt()
-            for expert in range(experts):
-                hidden = unit_value
-                for index, layer in enumerate(scoring_layers):
-                    weights = layer.model.weight_params[expert]
-                    hidden = torch.stack(
-                        [
-                            sum(
-                                hidden[feature] * weights[feature, output]
-                                for feature in range(weights.shape[0])
-                            )
-                            for output in range(weights.shape[1])
-                        ]
-                    )
-                    if layer.model.bias_params is not None:
-                        hidden = hidden + layer.model.bias_params[expert]
-                    if index < len(scoring_layers) - 1:
-                        hidden = F.gelu(hidden)
-                logits[batch, token, expert] = model.soft_router.scale * hidden
+            hidden = unit_value
+            for index, layer in enumerate(scoring_layers):
+                weights = layer.model.weight_params
+                hidden = torch.stack(
+                    [
+                        sum(
+                            hidden[feature] * weights[feature, output]
+                            for feature in range(weights.shape[0])
+                        )
+                        for output in range(weights.shape[1])
+                    ]
+                )
+                if layer.model.bias_params is not None:
+                    hidden = hidden + layer.model.bias_params
+                if index < len(scoring_layers) - 1:
+                    hidden = F.gelu(hidden)
+            logits[batch, token] = model.soft_router.scale * hidden.reshape(
+                experts, slots
+            )
     scores = logits.exp()
     dispatch = scores / scores.sum(dim=1, keepdim=True)
     combine = scores / scores.sum(dim=(2, 3), keepdim=True)
@@ -219,7 +246,7 @@ def test_soft_moe_matches_independent_full_mlp_oracle_and_input_slots(scoring_la
 def test_uniform_scores_pool_original_values_before_nonlinearity():
     model = expert_config(experts=1, slots=1).build().double()
     with torch.no_grad():
-        for parameter in model.soft_router.slot_logit_model.parameters():
+        for parameter in model.soft_router.router.model.parameters():
             parameter.zero_()
     inputs = torch.tensor([[[1.0, 2.0, -4.0], [8.0, -3.0, 2.0]]], dtype=torch.float64)
     pooled = inputs.mean(1)
@@ -313,17 +340,19 @@ def test_precision_masks_empty_sequences_and_large_logits(dtype):
 
 
 @pytest.mark.parametrize("scoring_bias", [False, True])
-def test_router_follows_cpu_autocast_and_propagates_gradients(scoring_bias):
+def test_router_preserves_float32_scores_under_cpu_autocast_and_propagates_gradients(
+    scoring_bias,
+):
     cfg = expert_config(scoring_layers=3)
-    slot_logit_stack_config = cfg.soft_moe_config.model_config.model_config
+    slot_logit_stack_config = cfg.soft_moe_config.router_config.model_config
     slot_logit_stack_config.layer_config.layer_model_config.bias_flag = scoring_bias
+    cfg.expert_model_config.layer_config.layer_model_config.bias_flag = scoring_bias
     model = cfg.build()
     inputs = torch.randn(2, 4, 3, requires_grad=True)
     with torch.autocast("cpu", dtype=torch.bfloat16):
         dispatch, combine = model.soft_router(inputs)
         outputs = model(inputs)[0]
-    expected_dtype = torch.float32 if scoring_bias else torch.bfloat16
-    assert dispatch.dtype == combine.dtype == expected_dtype
+    assert dispatch.dtype == combine.dtype == torch.float32
     assert outputs.dtype == torch.bfloat16
     outputs.float().sum().backward()
     assert all(torch.isfinite(parameter.grad).all() for parameter in model.parameters())
@@ -691,16 +720,22 @@ def test_router_configuration_overrides_serialization_and_validation():
     from emperor.experts._routing.soft import SoftMoERouter
 
     cfg = SoftMoEConfig(
-        input_dim=2, num_experts=3, slots_per_expert=1, model_config=scoring_config(3)
+        input_dim=2,
+        num_experts=3,
+        slots_per_expert=1,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=scoring_config(3)
+        ),
     )
     restored = pickle.loads(pickle.dumps(cfg))
     model = restored.build(SoftMoEConfig(slots_per_expert=2))
     assert cfg == restored and cfg.slots_per_expert == 1
-    assert model.slot_logit_model.model.layers[-1].model.weight_params.shape == (
-        3,
-        5,
-        2,
-    )
+    assert isinstance(model.router, RouterModel)
+    assert model.router.num_experts == 3
+    assert model.router.router_output_dim == 6
+    assert cfg.router_config.input_dim is None
+    assert cfg.router_config.output_dim is None
+    assert model.router.model.layers[-1].model.weight_params.shape == (5, 6)
     assert model.scale.item() == 1
     with pytest.raises(TypeError, match="SoftMoEConfig"):
         SoftMoERouter(object())
@@ -710,6 +745,39 @@ def test_router_configuration_overrides_serialization_and_validation():
     invalid.soft_moe_config.input_dim = True
     with pytest.raises(ValueError, match="positive integer"):
         invalid.build()
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"input_dim": 4},
+        {"input_dim": True},
+        {"num_experts": 4},
+        {"num_experts": 2.0},
+        {"output_dim": 2},
+        {"output_dim": 0},
+        {"output_dim": 4.0},
+        {"noisy_topk_flag": True},
+        {"noisy_topk_flag": None},
+    ],
+)
+def test_soft_router_rejects_incompatible_router_config_before_initialization(updates):
+    cfg = expert_config()
+    cfg.soft_moe_config.router_config = replace(
+        cfg.soft_moe_config.router_config, **updates
+    )
+    rng_before = torch.random.get_rng_state().clone()
+    with pytest.raises(ValueError, match="Soft MoE router|noisy_topk_flag"):
+        cfg.build()
+    torch.testing.assert_close(torch.random.get_rng_state(), rng_before)
+
+
+@pytest.mark.parametrize("router_config", [None, LayerStackConfig()])
+def test_soft_router_requires_an_explicit_router_config(router_config):
+    cfg = expert_config()
+    cfg.soft_moe_config.router_config = router_config
+    with pytest.raises(TypeError, match="router_config=RouterConfig"):
+        cfg.build()
 
 
 def test_feed_forward_and_outer_model_reject_ambiguous_boundaries():
@@ -740,32 +808,28 @@ def test_feed_forward_and_outer_model_reject_ambiguous_boundaries():
 
 
 @pytest.mark.parametrize("experts,slots", [(1, 1), (11, 2), (32, 1)])
-def test_depth_mapped_scoring_has_independent_expert_parameters_at_every_layer(
-    experts, slots
-):
-    from emperor.augmentations.adaptive_parameters import DepthMappingLayerStack
-
+def test_one_shared_scoring_stack_produces_logits_for_all_expert_slots(experts, slots):
     torch.manual_seed(23)
     model = expert_config(experts=experts, slots=slots, scoring_layers=3).build()
-    slot_logit_model = model.soft_router.slot_logit_model
-    assert isinstance(slot_logit_model, DepthMappingLayerStack)
-    assert len(slot_logit_model.model.layers) == 3
+    slot_logit_model = model.soft_router.router.model
+    assert isinstance(slot_logit_model, LayerStack)
+    assert len(slot_logit_model.layers) == 3
     selected_expert = experts - 1
-    weights = tuple(
-        layer.model.weight_params for layer in slot_logit_model.model.layers
-    )
+    weights = tuple(layer.model.weight_params for layer in slot_logit_model.layers)
     assert [tuple(weight.shape) for weight in weights] == [
-        (experts, 3, 5),
-        (experts, 5, 5),
-        (experts, 5, slots),
+        (3, 5),
+        (5, 5),
+        (5, experts * slots),
     ]
-    scores = slot_logit_model(torch.randn(4, 3))
-    assert scores.shape == (4, experts, slots)
-    gradients = torch.autograd.grad(scores[:, selected_expert].sum(), weights)
+    scores = slot_logit_model(LayerState(hidden=torch.randn(4, 3))).hidden
+    assert scores.shape == (4, experts * slots)
+    selected_slot_start = selected_expert * slots
+    selected_scores = scores[:, selected_slot_start : selected_slot_start + slots]
+    gradients = torch.autograd.grad(selected_scores.sum(), weights)
     for gradient in gradients:
         assert torch.isfinite(gradient).all()
-        assert gradient[selected_expert].abs().sum() > 0
-        assert torch.count_nonzero(gradient[:selected_expert]) == 0
+        assert gradient.abs().sum() > 0
+    assert torch.count_nonzero(gradients[-1][:, :selected_slot_start]) == 0
     for batch_size, tokens in ((1, 1), (2, 3), (1, 7)):
         inputs = torch.randn(batch_size, tokens, 3)
         output, _, _ = model(inputs)
@@ -812,11 +876,8 @@ def test_scoring_precision_matches_promoted_stack_without_changing_stored_parame
 
 def test_multilayer_scorer_configuration_and_checkpoint_round_trip():
     cfg = expert_config(experts=32, slots=1, scoring_layers=3)
-    cfg.soft_moe_config.model_config.input_dim = 3
-    cfg.soft_moe_config.model_config.output_dim = 1
-    cfg.soft_moe_config.model_config.generator_depth = 32
-    cfg.soft_moe_config.model_config.model_config.input_dim = 3
-    cfg.soft_moe_config.model_config.model_config.output_dim = 1
+    cfg.soft_moe_config.router_config.model_config.input_dim = 3
+    cfg.soft_moe_config.router_config.model_config.output_dim = 32
     original = copy.deepcopy(cfg)
     source = cfg.build().double().eval()
     inputs = torch.randn(2, 4, 3, dtype=torch.float64)
@@ -829,48 +890,50 @@ def test_multilayer_scorer_configuration_and_checkpoint_round_trip():
     torch.testing.assert_close(restored(inputs)[0], source(inputs)[0])
     assert cfg == restored_config == original
     assert any(
-        key.startswith("soft_router.slot_logit_model.") for key in source.state_dict()
+        key.startswith("soft_router.router.model.") for key in source.state_dict()
     )
     assert "soft_router.phi" not in source.state_dict()
     old_state = {
         key: value
         for key, value in source.state_dict().items()
-        if not key.startswith("soft_router.slot_logit_model.")
+        if not key.startswith("soft_router.router.model.")
     }
     old_state["soft_router.phi"] = torch.zeros(3, 32, 1)
     with pytest.raises(RuntimeError, match="soft_router.phi"):
         restored.load_state_dict(old_state, strict=True)
 
+    depth_mapped_state = {}
+    scoring_prefix = "soft_router.router.model."
+    for key, value in source.state_dict().items():
+        if key.startswith(scoring_prefix):
+            layer_key = key.removeprefix(scoring_prefix)
+            depth_mapped_state[f"{scoring_prefix}model.{layer_key}"] = value
+        else:
+            depth_mapped_state[key] = value
+    with pytest.raises(RuntimeError, match="soft_router.router.model.model"):
+        restored.load_state_dict(depth_mapped_state, strict=True)
+
 
 @pytest.mark.parametrize(
-    "target,changes",
+    "changes",
     [
-        ("mapping", {"input_dim": 4}),
-        ("mapping", {"input_dim": True}),
-        ("mapping", {"input_dim": 3.0}),
-        ("mapping", {"output_dim": 3}),
-        ("mapping", {"output_dim": True}),
-        ("mapping", {"output_dim": 2.0}),
-        ("mapping", {"generator_depth": 3}),
-        ("mapping", {"generator_depth": True}),
-        ("mapping", {"generator_depth": 2.0}),
-        ("stack", {"input_dim": 4}),
-        ("stack", {"output_dim": 3}),
-        ("stack", {"apply_output_postprocessing_flag": True}),
-        ("stack", {"apply_output_postprocessing_flag": None}),
-        ("stack", {"layer_config": None}),
+        {"input_dim": 4},
+        {"input_dim": True},
+        {"input_dim": 3.0},
+        {"output_dim": 3},
+        {"output_dim": 2},
+        {"output_dim": True},
+        {"output_dim": 4.0},
+        {"apply_output_postprocessing_flag": True},
+        {"apply_output_postprocessing_flag": None},
+        {"layer_config": None},
     ],
 )
-def test_conflicting_scorer_configuration_is_rejected_without_mutation(target, changes):
+def test_conflicting_scorer_configuration_is_rejected_without_mutation(changes):
     cfg = expert_config(scoring_layers=3)
-    if target == "mapping":
-        cfg.soft_moe_config.model_config = replace(
-            cfg.soft_moe_config.model_config, **changes
-        )
-    else:
-        cfg.soft_moe_config.model_config.model_config = replace(
-            cfg.soft_moe_config.model_config.model_config, **changes
-        )
+    cfg.soft_moe_config.router_config.model_config = replace(
+        cfg.soft_moe_config.router_config.model_config, **changes
+    )
     original = copy.deepcopy(cfg)
     with pytest.raises((ValueError, TypeError), match="Soft MoE"):
         cfg.build()
@@ -878,23 +941,293 @@ def test_conflicting_scorer_configuration_is_rejected_without_mutation(target, c
 
 
 def test_scorer_requires_explicit_ordinary_controller_free_stack():
-    from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
     from emperor.layers import GateConfig, RecurrentLayerConfig
 
-    for invalid in (None, RecurrentLayerConfig(), LayerStackConfig()):
+    for invalid in (
+        None,
+        RecurrentLayerConfig(),
+        DepthMappingHandlerConfig(model_config=scoring_config()),
+    ):
         cfg = expert_config()
-        cfg.soft_moe_config.model_config = invalid
-        with pytest.raises(TypeError, match="Soft MoE requires model_config"):
+        cfg.soft_moe_config.router_config.model_config = invalid
+        with pytest.raises(
+            TypeError, match="Soft MoE requires router_config.model_config"
+        ):
             cfg.build()
     cfg = expert_config()
-    cfg.soft_moe_config.model_config.model_config.layer_config.gate_config = (
+    cfg.soft_moe_config.router_config.model_config.layer_config.gate_config = (
         GateConfig()
     )
     with pytest.raises(ValueError, match="context controllers"):
         cfg.build()
     cfg = expert_config()
-    cfg.soft_moe_config.model_config.model_config.layer_config.layer_model_config = (
-        AdaptiveLinearLayerConfig()
+    cfg.soft_moe_config.router_config.model_config.layer_config.layer_model_config = (
+        LayerConfig()
     )
     with pytest.raises(TypeError, match="ordinary LayerConfig and LinearLayerConfig"):
+        cfg.soft_moe_config.build(SoftMoEConfig(input_dim=3, num_experts=2))
+    cfg.soft_moe_config.router_config.model_config = LayerStackConfig()
+    with pytest.raises(TypeError, match="ordinary LayerConfig and LinearLayerConfig"):
         cfg.build()
+
+
+def test_adaptive_router_scores_and_gradients_match_generated_bias_oracle():
+    torch.manual_seed(57)
+    cfg = SoftMoEConfig(
+        input_dim=3,
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=adaptive_scoring_config()
+        ),
+    )
+    router = cfg.build().double().eval()
+    scoring_layer = router.router.model.layers[0].model
+    bias_generator = scoring_layer.adaptive_behaviour.bias_model.model[0].model
+    inputs = torch.randn(2, 4, 3, dtype=torch.float64, requires_grad=True)
+    active = torch.tensor(
+        [[[True], [True], [False], [True]], [[False], [False], [False], [False]]]
+    )
+    masked_inputs = inputs.masked_fill(~active, 0)
+    normalized_inputs = (
+        masked_inputs / (masked_inputs.square().sum(-1, keepdim=True) + 1e-6).sqrt()
+    )
+    generated_bias = (
+        normalized_inputs @ bias_generator.weight_params + bias_generator.bias_params
+    )
+    logits = (
+        normalized_inputs @ scoring_layer.weight_params
+        + scoring_layer.bias_params
+        + generated_bias
+    ) * router.scale
+    logits = logits.reshape(2, 4, 2, 2)
+    dispatch_logits = logits.masked_fill(~active.unsqueeze(-1), -torch.inf)
+    dispatch_logits = torch.where(
+        active.unsqueeze(-1).any(1, keepdim=True), dispatch_logits, 0
+    )
+    expected_dispatch = dispatch_logits.softmax(1).masked_fill(~active.unsqueeze(-1), 0)
+    expected_combine = (
+        logits.flatten(2)
+        .softmax(-1)
+        .reshape_as(logits)
+        .masked_fill(~active.unsqueeze(-1), 0)
+    )
+    actual_dispatch, actual_combine = router(inputs, active)
+    torch.testing.assert_close(actual_dispatch, expected_dispatch)
+    torch.testing.assert_close(actual_combine, expected_combine)
+    coefficients = torch.randn_like(logits)
+    parameters = (inputs, *router.parameters())
+    actual_gradients = torch.autograd.grad(
+        ((actual_dispatch + actual_combine) * coefficients).sum(), parameters
+    )
+    expected_gradients = torch.autograd.grad(
+        ((expected_dispatch + expected_combine) * coefficients).sum(), parameters
+    )
+    for actual, expected in zip(actual_gradients, expected_gradients, strict=True):
+        torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "parameter_dtype", [torch.float16, torch.bfloat16, torch.float32]
+)
+def test_adaptive_router_preserves_decay_counters_and_checkpoint_under_autocast(
+    parameter_dtype,
+):
+    from emperor.augmentations.adaptive_parameters import WeightDecayScheduleOptions
+
+    cfg = SoftMoEConfig(
+        input_dim=3,
+        num_experts=2,
+        slots_per_expert=2,
+        router_config=RouterConfig(
+            noisy_topk_flag=False, model_config=adaptive_scoring_config()
+        ),
+    )
+    bias_config = cfg.router_config.model_config.layer_config.layer_model_config.adaptive_augmentation_config.bias_config
+    bias_config.decay_schedule = WeightDecayScheduleOptions.EXPONENTIAL
+    bias_config.decay_rate = 0.01
+    bias_config.decay_warmup_batches = 1
+    router = cfg.build().to(parameter_dtype).train()
+    inputs = torch.randn(2, 4, 3, requires_grad=True)
+    for _ in range(3):
+        with torch.autocast("cpu", dtype=torch.bfloat16):
+            dispatch, combine = router(inputs)
+        assert dispatch.dtype == combine.dtype == torch.float32
+        ((dispatch + combine) * torch.randn_like(dispatch)).sum().backward()
+    buffers = dict(router.named_buffers())
+    warmup = [value for name, value in buffers.items() if name.endswith("warmup_step")]
+    decay = [value for name, value in buffers.items() if name.endswith("decay_step")]
+    assert warmup and all(value.item() == 1 for value in warmup)
+    assert decay and all(value.item() == 2 for value in decay)
+    assert all(
+        parameter.dtype == parameter_dtype
+        and parameter.grad is not None
+        and torch.isfinite(parameter.grad).all()
+        for parameter in router.parameters()
+    )
+    restored = cfg.build().to(parameter_dtype)
+    restored.load_state_dict(router.state_dict(), strict=True)
+    router.eval()
+    restored.eval()
+    for actual, expected in zip(restored(inputs), router(inputs), strict=True):
+        torch.testing.assert_close(actual, expected)
+    assert all(value.item() == 2 for value in decay)
+
+
+@pytest.mark.parametrize("attention", [False, True])
+@pytest.mark.parametrize("causal", [False, True])
+def test_adaptive_router_auxiliary_loss_reaches_owner_once_per_forward(
+    attention, causal
+):
+    from support.adaptive_generation import bias_mixture_config, matrix_sampler_config
+    from tests.unit.test_attention_soft_moe import attention_config
+
+    if attention:
+        cfg = attention_config(
+            scoring_layers=1,
+            causal_attention_mask_flag=causal,
+            query_key_projection_dim=8,
+            value_projection_dim=8,
+        )
+        routing_config = cfg.experts_config.soft_moe_config
+        expert_stack = cfg.experts_config.expert_model_config
+        dimension = cfg.embedding_dim
+    else:
+        cfg = expert_config()
+        routing_config = cfg.soft_moe_config
+        expert_stack = cfg.expert_model_config
+        dimension = cfg.input_dim
+    scoring_stack = adaptive_scoring_config()
+    augmentation = (
+        scoring_stack.layer_config.layer_model_config.adaptive_augmentation_config
+    )
+    augmentation.bias_config = bias_mixture_config(
+        input_dim=dimension,
+        output_dim=None,
+        sampler_config=matrix_sampler_config(
+            input_dim=dimension, switch_loss_weight=0.2, zero_centred_loss_weight=0.1
+        ),
+    )
+    routing_config.router_config.model_config = scoring_stack
+    expert_stack.num_layers = 1
+    expert_stack.layer_config.layer_model_config = copy.deepcopy(
+        scoring_stack.layer_config.layer_model_config
+    )
+    model = cfg.build().train()
+    router = model.projector.soft_router if attention else model.soft_router
+    if attention:
+        experts = [*model.projector.query_model, *model.projector.output_model]
+    else:
+        experts = list(model.expert_modules)
+    for _ in range(2):
+        features = torch.randn(2, 4, dimension)
+        if attention:
+            _, _, owner_loss = model(features, features, features)
+        else:
+            _, _, owner_loss = model(features, causal_prefix_flag=causal)
+        sampler = router.router.model.layers[
+            0
+        ].model.adaptive_behaviour.bias_model.sampler
+        expected_loss = sampler.get_auxiliary_loss().mean()
+        assert expected_loss > 0
+        torch.testing.assert_close(router.get_auxiliary_loss(), expected_loss)
+        expert_loss = sum(
+            layer.model.adaptive_behaviour.bias_model.sampler.get_auxiliary_loss().mean()
+            for expert in experts
+            for layer in expert.layers
+        )
+        torch.testing.assert_close(owner_loss, expected_loss + expert_loss)
+        model.zero_grad(set_to_none=True)
+        owner_loss.backward()
+        assert any(
+            parameter.grad is not None and parameter.grad.abs().sum() > 0
+            for parameter in sampler.router.parameters()
+        )
+
+
+@pytest.mark.parametrize("attention", [False, True])
+@pytest.mark.parametrize("adaptive", [False, True])
+def test_soft_moe_router_always_uses_its_expert_linear_model_type(attention, adaptive):
+    from tests.unit.test_attention_soft_moe import attention_config
+
+    if attention:
+        cfg = attention_config(scoring_layers=2)
+        mixture_config = cfg.experts_config
+    else:
+        cfg = expert_config(scoring_layers=2)
+        mixture_config = cfg
+    adaptive_linear = adaptive_scoring_config().layer_config.layer_model_config
+    if adaptive:
+        mixture_config.expert_model_config.layer_config.layer_model_config = (
+            adaptive_linear
+        )
+    else:
+        mixture_config.soft_moe_config.router_config.model_config.layer_config.layer_model_config = adaptive_linear
+    original_config = copy.deepcopy(cfg)
+    model = cfg.build().eval()
+    if attention:
+        router = model.projector.soft_router
+        expert = model.projector.query_model[0]
+        dimension = cfg.embedding_dim
+    else:
+        router = model.soft_router
+        expert = model.expert_modules[0]
+        dimension = cfg.input_dim
+    assert (
+        router.cfg.router_config.model_config.layer_config.layer_model_config
+        == expert.cfg.layer_config.layer_model_config
+    )
+    assert all(
+        type(layer.model) is type(expert.layers[0].model)
+        for layer in router.router.model.layers
+    )
+    assert {id(parameter) for parameter in router.parameters()}.isdisjoint(
+        id(parameter) for parameter in expert.parameters()
+    )
+    features = torch.randn(2, 4, dimension)
+    outputs = model(features, features, features) if attention else model(features)
+    outputs[0].square().sum().backward()
+    assert all(
+        parameter.grad is not None and torch.isfinite(parameter.grad).all()
+        for parameter in router.parameters()
+    )
+    assert cfg == original_config
+
+
+def test_adaptive_router_padding_does_not_contribute_to_auxiliary_loss():
+    from support.adaptive_generation import bias_mixture_config, matrix_sampler_config
+
+    scoring_stack = adaptive_scoring_config()
+    augmentation = (
+        scoring_stack.layer_config.layer_model_config.adaptive_augmentation_config
+    )
+    augmentation.bias_config = bias_mixture_config(
+        input_dim=3,
+        output_dim=None,
+        sampler_config=matrix_sampler_config(input_dim=3, zero_centred_loss_weight=0.1),
+    )
+    router = (
+        SoftMoEConfig(
+            input_dim=3,
+            num_experts=2,
+            slots_per_expert=2,
+            router_config=RouterConfig(
+                noisy_topk_flag=False, model_config=scoring_stack
+            ),
+        )
+        .build()
+        .eval()
+    )
+    inputs = torch.randn(1, 2, 3)
+    expected_weights = router(inputs)
+    expected_loss = router.get_auxiliary_loss()
+    padded_inputs = torch.cat((inputs, torch.full_like(inputs, float("nan"))), dim=1)
+    active_mask = torch.tensor([[[True], [True], [False], [False]]])
+    actual_weights = router(padded_inputs, active_mask)
+    for actual, expected in zip(actual_weights, expected_weights, strict=True):
+        torch.testing.assert_close(actual[:, :2], expected)
+        assert torch.count_nonzero(actual[:, 2:]) == 0
+    torch.testing.assert_close(router.get_auxiliary_loss(), expected_loss)
+    empty_weights = router(padded_inputs, torch.zeros_like(active_mask))
+    assert all(torch.count_nonzero(weights) == 0 for weights in empty_weights)
+    assert router.get_auxiliary_loss().item() == 0
