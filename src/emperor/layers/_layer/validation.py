@@ -277,10 +277,7 @@ class LayerValidator(ValidatorBase):
         _validate_no_grouping_with_context_controllers(
             cfg,
             owner_name="LayerConfig",
-            controllers=(
-                ("halting_config", cfg.halting_config),
-                ("memory_config", cfg.memory_config),
-            ),
+            controllers=(("memory_config", cfg.memory_config),),
         )
 
     @staticmethod

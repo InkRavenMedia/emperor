@@ -14,7 +14,9 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     AdaptiveParameterGroupingScopeOptions,
+    AdaptiveParameterInputOrderOptions,
     AdditiveDynamicBiasConfig,
+    SumGroupingConfig,
     WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase
@@ -26,6 +28,7 @@ from emperor.experts import (
     RoutingInitializationMode,
 )
 from emperor.experts._layers.mixture import MixtureOfExperts
+from emperor.halting import HaltingHiddenStateModeOptions, StickBreakingConfig
 from emperor.layers import (
     ActivationOptions,
     GateConfig,
@@ -149,6 +152,156 @@ def memory_config(dimension: int) -> GatedResidualDynamicMemoryConfig:
     )
 
 
+def halting_config(
+    hidden_state_mode: HaltingHiddenStateModeOptions,
+) -> StickBreakingConfig:
+    gate_config = linear_stack(2, 2)
+    gate_config.last_layer_bias_option = LastLayerBiasOptions.DISABLED
+    return StickBreakingConfig(
+        input_dim=2,
+        threshold=0.999,
+        dropout_probability=0.0,
+        hidden_state_mode=hidden_state_mode,
+        halting_gate_config=gate_config,
+        min_steps=1,
+        ponder_cost_weight=0.01,
+    )
+
+
+@pytest.mark.parametrize("owner", ("layer", "stack", "shared_stack"))
+def test_grouped_layer_and_stack_halting_support_backward(owner):
+    stack_config = grouped_stack(2, AdaptiveParameterGroupingScopeOptions.ROWS)
+    controller_config = halting_config(HaltingHiddenStateModeOptions.RAW)
+    if owner == "shared_stack":
+        stack_config.shared_halting_config = controller_config
+    else:
+        stack_config.layer_config.halting_config = controller_config
+    if owner == "layer":
+        model = Layer(stack_config.layer_config)
+    else:
+        stack_config.num_layers = 3
+        model = LayerStack(stack_config)
+    inputs = torch.randn(4, 2, requires_grad=True)
+
+    output = model(LayerState(hidden=inputs))
+    loss = output.hidden.square().mean()
+    if output.loss is not None:
+        loss = loss + output.loss.mean()
+    loss.backward()
+
+    assert output.hidden.shape == inputs.shape
+    assert torch.isfinite(loss)
+    assert torch.isfinite(inputs.grad).all()
+    gradients = [
+        parameter.grad for parameter in model.parameters() if parameter.grad is not None
+    ]
+    assert gradients
+    assert all(torch.isfinite(gradient).all() for gradient in gradients)
+
+
+@pytest.mark.parametrize("hidden_state_mode", tuple(HaltingHiddenStateModeOptions))
+def test_sequence_grouping_preserves_individually_halted_tokens(hidden_state_mode):
+    stack_config = grouped_stack(2, AdaptiveParameterGroupingScopeOptions.SEQUENCE)
+    augmentation_config = (
+        stack_config.layer_config.layer_model_config.adaptive_augmentation_config
+    )
+    augmentation_config.grouping_config = SumGroupingConfig(
+        scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
+        chunk_size=5,
+        sequence_length=100,
+        input_order=AdaptiveParameterInputOrderOptions.BATCH_FIRST,
+    )
+    model = RecurrentLayer(
+        RecurrentLayerConfig(
+            input_dim=2,
+            output_dim=2,
+            max_steps=3,
+            initial_iterations=3,
+            iteration_increment=1,
+            forward_calls_before_iteration_increment=100,
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            block_config=stack_config,
+            gate_config=None,
+            residual_config=None,
+            halting_config=halting_config(hidden_state_mode),
+            memory_config=None,
+        )
+    ).eval()
+    adaptive_layer = model.block_model[0].model
+    bias_model = adaptive_layer.adaptive_behaviour.bias_model
+    generator = bias_model.model[0].model
+    halting_gate = model.halting_model.halting_gate_model[0].model
+    with torch.no_grad():
+        adaptive_layer.weight_params.copy_(torch.eye(2))
+        adaptive_layer.bias_params.zero_()
+        generator.weight_params.copy_(0.01 * torch.eye(2))
+        generator.bias_params.fill_(0.25)
+        halting_gate.weight_params.copy_(torch.tensor([[-5.0, 5.0], [0.0, 0.0]]))
+    inputs = torch.full((2, 100, 2), -2.0)
+    inputs[:, ::5] = 2.0
+    inputs.requires_grad_()
+    contexts = []
+    transitions = []
+    candidates = []
+
+    def record_context(_module, arguments, _output):
+        contexts.append(arguments[1].detach().clone())
+
+    def record_transition(previous_hidden, output_hidden):
+        transitions.append(
+            (previous_hidden.detach().clone(), output_hidden.detach().clone())
+        )
+
+    def record_candidate(_module, _arguments, output):
+        candidates.append(output.hidden.detach().clone())
+
+    context_hook = bias_model.register_forward_hook(record_context)
+    candidate_hook = model.block_model.register_forward_hook(record_candidate)
+    model._set_recurrent_diagnostic_observer(record_transition)
+    try:
+        output = model(LayerState(hidden=inputs.reshape(200, 2)))
+    finally:
+        context_hook.remove()
+        candidate_hook.remove()
+        model._set_recurrent_diagnostic_observer(None)
+
+    assert output.hidden.shape == (200, 2)
+    assert len(contexts) == len(transitions) == len(candidates) == 3
+    halted_positions = torch.arange(200) % 5 == 0
+    first_output = transitions[0][1]
+    for context, (previous_hidden, step_output) in zip(
+        contexts, transitions, strict=True
+    ):
+        expected_context = (
+            previous_hidden.reshape(2, 20, 5, 2).sum(dim=2).reshape(40, 2)
+        )
+        torch.testing.assert_close(context, expected_context)
+        torch.testing.assert_close(
+            step_output[halted_positions],
+            first_output[halted_positions],
+            rtol=0,
+            atol=0,
+        )
+    assert not torch.equal(contexts[0], contexts[1])
+    assert not torch.equal(
+        candidates[1][halted_positions], first_output[halted_positions]
+    )
+    assert not torch.equal(
+        transitions[1][1][~halted_positions], first_output[~halted_positions]
+    )
+    loss = output.hidden.square().mean() + output.loss.mean()
+    loss.backward()
+    assert torch.isfinite(loss)
+    assert torch.isfinite(inputs.grad).all()
+    for component in (generator, halting_gate):
+        gradients = [parameter.grad for parameter in component.parameters()]
+        assert all(
+            gradient is not None and torch.isfinite(gradient).all()
+            for gradient in gradients
+        )
+        assert any(torch.count_nonzero(gradient) for gradient in gradients)
+
+
 def grouped_encoder_block_config() -> TransformerEncoderBlockLayerConfig:
     attention_config = build_attention_config(
         config_class=SelfAttentionConfig,
@@ -256,7 +409,7 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
         self.assertEqual(
             str(layer_error.exception),
             "LayerConfig cannot combine enabled adaptive parameter grouping with "
-            "memory_config: context sharing is restricted inside halting or memory "
+            "memory_config: context sharing is restricted inside memory "
             "owners. Found grouping at "
             "LayerConfig.layer_model_config.adaptive_augmentation_config.",
         )
@@ -272,7 +425,7 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
             str(stack_error.exception),
             "LayerStackConfig cannot combine enabled adaptive parameter grouping "
             "with shared_memory_config: context sharing is restricted inside "
-            "halting or memory owners. Found grouping at LayerStackConfig."
+            "memory owners. Found grouping at LayerStackConfig."
             "layer_config.layer_model_config.adaptive_augmentation_config.",
         )
 
