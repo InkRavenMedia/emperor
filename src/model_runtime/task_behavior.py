@@ -267,7 +267,7 @@ _DECLARED_BEHAVIORS = (
     ExperimentTaskBehavior(
         task=ExperimentTask.BERT_PRETRAINING,
         synthetic_input_builder=_token_inputs,
-        dataset_arguments=(_BATCH_SIZE,),
+        dataset_arguments=(_BATCH_SIZE, _SEQUENCE_LENGTH),
         ranking_metrics=(_VALIDATION_ACCURACY,),
         core_result_metric_keys=_BERT_PRETRAINING_RESULT_METRIC_KEYS,
         missing_ranking_score=(1.0, 0.0),
