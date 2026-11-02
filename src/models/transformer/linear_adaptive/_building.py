@@ -37,6 +37,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from models import _attention_source_memory as _source_memory
 from models.transformer.linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -443,6 +444,7 @@ def _attention_config(
         projection_model_config=projection_config,
         relative_positional_embedding_config=None,
         source_memory_flag=options.source_memory_flag,
+        source_memory_config=_source_memory.build_source_memory_config(options),
     )
     if not independent:
         kwargs["projection_strategy"] = SelfAttentionProjectionStrategy.SEPARATE

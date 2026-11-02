@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING
 
-import torch
 import torch.nn.functional as F
 from torch import Tensor
 
@@ -150,8 +149,7 @@ class ProcessorBase(Module):
     ) -> Tensor:
         if restore_shape is not None:
             logits = logits.contiguous().view(restore_shape)
-        if self.source_memory_flag:
-            logits = torch.cat((logits, logits), dim=-1)
+        # Chunk memories have no individual token position; their relative bias is zero.
         synthetic_position_count = source_sequence_length - logits.size(-1)
         synthetic_position_padding = (0, synthetic_position_count)
         return F.pad(logits, synthetic_position_padding)

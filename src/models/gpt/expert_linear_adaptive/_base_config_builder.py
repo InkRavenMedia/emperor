@@ -27,6 +27,7 @@ from emperor.transformer import (
     TransformerDecoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
+from models import _attention_source_memory as _source_memory
 from models.gpt.expert_linear_adaptive._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -284,6 +285,9 @@ class GptBackendConfigBuilder:
             causal_attention_mask_flag=True,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
             source_memory_flag=source_memory_flag,
+            source_memory_config=_source_memory.build_source_memory_config(
+                attention_options
+            ),
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

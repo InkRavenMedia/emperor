@@ -1,3 +1,4 @@
+from emperor.attention import AttentionSourceMemoryConfig  # noqa: F401
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
@@ -64,18 +65,21 @@ from emperor.halting import (
     HaltingHiddenStateModeOptions,
     StickBreakingConfig,
 )
-from emperor.layers import (
+from emperor.layers import (  # noqa: F401
     ActivationOptions,
     AdditiveResidualConfig,  # noqa: F401
     AttentionResidualConfig,  # noqa: F401
     LastLayerBiasOptions,
+    LayerConfig,
     LayerGateOptions,
     LayerNormPositionOptions,
+    LayerStackConfig,
     NormalizationOptions,
     ResidualConfig,
     WeightedBlendResidualConfig,  # noqa: F401
     WeightedResidualConfig,  # noqa: F401
 )
+from emperor.linears import LinearLayerConfig  # noqa: F401
 from emperor.memory import (
     AttentionDynamicMemoryConfig,  # noqa: F401
     DynamicMemoryConfig,
@@ -86,6 +90,7 @@ from emperor.memory import (
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
+from models import _attention_source_memory as _source_memory
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -451,6 +456,15 @@ ATTN_HALTING_STACK_BIAS_FLAG: bool | None = None
 ### Attention Projection Memory Options
 # Temporary memory tokens appended to attention keys and values.
 ATTN_SOURCE_MEMORY_FLAG: bool = False
+ATTN_SOURCE_MEMORY_CONFIG: _source_memory.AttentionSourceMemoryConfig | None = None
+ATTN_SOURCE_MEMORY_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_source_memory.GroupingConfig] | None = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
+    _source_memory.SummaryNormalizationOptions | None
+) = None
+ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: float | None = None
 
 ATTN_MEMORY_FLAG: bool = False
 ATTN_MEMORY_OPTION: type[DynamicMemoryConfig] = MEMORY_OPTION

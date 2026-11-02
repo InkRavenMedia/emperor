@@ -2,13 +2,14 @@ import unittest
 
 import torch
 
-from emperor.attention import MultiHeadAttentionConfig
+from emperor.attention import AttentionSourceMemoryConfig, MultiHeadAttentionConfig
 from emperor.attention._ops.masking import Mask
 from emperor.attention._runtime import (
     AttentionRuntimeLayout,
     MultiHeadAttentionInputs,
 )
 from emperor.attention._validation import AttentionValidatorBase
+from emperor.augmentations.adaptive_parameters import SumGroupingConfig
 from support.attention import build_attention_config
 
 
@@ -333,13 +334,16 @@ class TestPrepareAttentionMasks(TestMask):
                     causal_attention_mask_flag=True,
                 )
                 cfg.source_memory_flag = enabled
+                cfg.source_memory_config = AttentionSourceMemoryConfig(
+                    grouping_config=SumGroupingConfig(chunk_size=2)
+                )
                 masks = Mask(cfg)
                 tokens = self.query_tensor(cfg)
                 token_mask = torch.zeros(3, 3, dtype=torch.bool)
                 token_mask[1, 0] = True
                 supplied_mask = token_mask
                 if explicit_memory_mask:
-                    memory_mask = torch.zeros_like(token_mask)
+                    memory_mask = torch.zeros(3, 2, dtype=torch.bool)
                     memory_mask[2, 1] = True
                     supplied_mask = torch.cat((token_mask, memory_mask), dim=-1)
                 padding = torch.tensor([[False, False, True], [False, True, False]])
@@ -367,14 +371,20 @@ class TestPrepareAttentionMasks(TestMask):
                 expected_padding = torch.zeros(2, 3).masked_fill(padding, -torch.inf)
                 expected_attention = expected_tokens
                 if enabled:
-                    expected_memory = expected_tokens.clone()
-                    if explicit_memory_mask:
-                        expected_memory[2, 1] = -torch.inf
-                    expected_attention = torch.cat(
-                        (expected_tokens, expected_memory), dim=-1
+                    expected_memory = torch.tensor(
+                        [
+                            [[-torch.inf, 0], [-torch.inf, 0], [0, 0]],
+                            [[0, -torch.inf], [-torch.inf, -torch.inf], [0, 0]],
+                        ]
                     )
+                    if explicit_memory_mask:
+                        expected_memory[:, 2, 1] = -torch.inf
+                    expected_attention = torch.cat(
+                        (expected_tokens.expand(2, -1, -1), expected_memory), dim=-1
+                    ).repeat_interleave(cfg.num_heads, dim=0)
+                    memory_padding = torch.tensor([[0, -torch.inf], [0, 0]])
                     expected_padding = torch.cat(
-                        (expected_padding, expected_padding), dim=-1
+                        (expected_padding, memory_padding), dim=-1
                     )
                 else:
                     self.assertIs(extended, prepared)

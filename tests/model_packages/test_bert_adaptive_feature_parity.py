@@ -58,6 +58,7 @@ def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_me
         recurrent_ponder_cost_weight=0.01,
         expert_attention_use_kv_expert_models_flag=False,
         attn_source_memory_flag=True,
+        attn_source_memory_chunk_size=10,
         attn_grouping_scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
         attn_chunk_size=5,
         attn_grouping_sequence_length=100,
@@ -80,7 +81,6 @@ def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_me
     projections = (
         attention.projector.key_model,
         attention.projector.value_model,
-        attention.projector.source_memory.model,
     )
     generated_weight_shapes = []
 

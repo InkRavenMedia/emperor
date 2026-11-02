@@ -33,6 +33,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from models import _attention_source_memory as _source_memory
 
 from ._residual import (
     ResidualStackSource,
@@ -278,6 +279,9 @@ def _attention(
         projection_model_config=_projection_stack(runtime, attention_options),
         relative_positional_embedding_config=None,
         source_memory_flag=attention_options.source_memory_flag,
+        source_memory_config=_source_memory.build_source_memory_config(
+            attention_options
+        ),
         experts_config=_experts_config(
             runtime,
             runtime.model_dim,

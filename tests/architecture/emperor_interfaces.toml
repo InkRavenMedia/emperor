@@ -186,8 +186,8 @@ owners = ["emperor.experiments._tasks", "emperor.experiments._tasks", "emperor.e
 [[interfaces]]
 module = "emperor.attention"
 kind = "runtime"
-exports = ["MultiHeadAttentionConfig", "SelfAttentionConfig", "SelfAttentionProjectionStrategy", "IndependentAttentionConfig", "MixtureOfAttentionHeadsConfig", "MixerAttentionConfig", "AttentionLayerState", "AttentionMonitorCallback"]
-owners = ["emperor.attention._config", "emperor.attention._variants.self_attention.config", "emperor.attention._variants.self_attention.config", "emperor.attention._variants.independent.config", "emperor.attention._variants.mixture.config", "emperor.attention._variants.mixer.config", "emperor.attention._state", "emperor.attention._monitoring.callback"]
+exports = ["AttentionSourceMemoryConfig", "MultiHeadAttentionConfig", "SelfAttentionConfig", "SelfAttentionProjectionStrategy", "IndependentAttentionConfig", "MixtureOfAttentionHeadsConfig", "MixerAttentionConfig", "AttentionLayerState", "AttentionMonitorCallback"]
+owners = ["emperor.attention._config", "emperor.attention._config", "emperor.attention._variants.self_attention.config", "emperor.attention._variants.self_attention.config", "emperor.attention._variants.independent.config", "emperor.attention._variants.mixture.config", "emperor.attention._variants.mixer.config", "emperor.attention._state", "emperor.attention._monitoring.callback"]
 
 [[interfaces]]
 module = "emperor.augmentations"

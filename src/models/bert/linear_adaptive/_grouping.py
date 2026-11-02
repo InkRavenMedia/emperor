@@ -86,10 +86,10 @@ def grouping_from_fields(
 
 def grouping_keys(config_module):
     return {
-        name.lower()
-        for name in vars(config_module)
-        if name.isupper()
-        and any(name.lower().endswith(field) for field in GROUPING_FIELDS)
+        prefix + field
+        for prefix in ("", "attn_", "ff_", "router_")
+        for field in GROUPING_FIELDS
+        if hasattr(config_module, (prefix + field).upper())
     }
 
 

@@ -57,15 +57,15 @@ class SelfAttentionProcessor(ProcessorBase):
         attention_inputs: "MultiHeadAttentionInputs",
     ) -> Tensor:
         if self.cfg.rotary_base is not None:
-            memory_length = (
+            token_length = (
                 attention_inputs.runtime_layout.real_source_sequence_length
                 if self.source_memory_flag
-                else 0
+                else None
             )
             attention_inputs = replace(
                 attention_inputs,
                 query=self.__rotate_positions(attention_inputs.query),
-                key=self.__rotate_positions(attention_inputs.key, memory_length),
+                key=self.__rotate_positions(attention_inputs.key, token_length),
             )
         scaled_inputs = replace(
             attention_inputs,
@@ -83,7 +83,12 @@ class SelfAttentionProcessor(ProcessorBase):
         )
         return masked_attention_logits
 
-    def __rotate_positions(self, features: Tensor, memory_length: int = 0) -> Tensor:
+    def __rotate_positions(
+        self, features: Tensor, token_length: int | None = None
+    ) -> Tensor:
+        if token_length is None:
+            token_length = features.size(-2)
+        token_features = features[..., :token_length, :]
         head_dim = features.shape[-1]
         frequency_dtype = (
             torch.float64 if features.dtype == torch.float64 else torch.float32
@@ -93,18 +98,17 @@ class SelfAttentionProcessor(ProcessorBase):
         )
         inverse_frequencies = self.cfg.rotary_base ** (-pair_indices / head_dim)
         positions = torch.arange(
-            features.shape[-2] - memory_length,
+            token_length,
             device=features.device,
             dtype=frequency_dtype,
         )
-        if memory_length:
-            positions = torch.cat((positions, positions[:memory_length]))
         angles = positions[:, None] * inverse_frequencies
         cosine, sine = angles.cos().to(features.dtype), angles.sin().to(features.dtype)
-        even, odd = features[..., 0::2], features[..., 1::2]
-        return torch.stack(
+        even, odd = token_features[..., 0::2], token_features[..., 1::2]
+        rotated_tokens = torch.stack(
             (even * cosine - odd * sine, even * sine + odd * cosine), dim=-1
         ).flatten(-2)
+        return torch.cat((rotated_tokens, features[..., token_length:, :]), dim=-2)
 
     def _compute_normalized_attention_weights(
         self,

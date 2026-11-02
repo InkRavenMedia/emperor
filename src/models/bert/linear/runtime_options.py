@@ -24,6 +24,7 @@ from emperor.memory import (
     DynamicMemoryConfig,
     MemoryPositionOptions,
 )
+from models import _attention_source_memory as _source_memory
 from models.bert.linear._residual import ResidualStackOptions
 
 
@@ -263,7 +264,7 @@ class TransformerPositionalEmbeddingOptions:
 
 
 @dataclass(frozen=True)
-class TransformerAttentionOptions:
+class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     num_heads: int
     num_layers: int
     bias_flag: bool

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 from torch import Tensor
 
+from emperor.attention._ops.memory_mask import GroupedMemoryMask
 from emperor.attention._runtime import AttentionRuntimeLayout
 from emperor.attention._validation import AttentionValidatorBase
 
@@ -26,6 +27,11 @@ class Mask:
         self.causal_attention_mask_flag = self.cfg.causal_attention_mask_flag
         self.return_attention_weights_flag = self.cfg.return_attention_weights_flag
         self.source_memory_flag: bool = self.cfg.source_memory_flag
+        self.grouped_memory_mask = (
+            GroupedMemoryMask(self.cfg.source_memory_config, num_heads=self.num_heads)
+            if self.source_memory_flag
+            else None
+        )
         self.query_dtype: torch.dtype | None = None
         self.query_device: torch.device | None = None
 
@@ -68,16 +74,22 @@ class Mask:
             return self.prepare_attention_masks(attention_inputs), None
         mask = attention_inputs.attention_mask
         source_length = attention_inputs.key.size(0)
-        if mask is None or mask.size(-1) != 2 * source_length:
+        chunk_size = self.grouped_memory_mask.chunk_size
+        memory_length = (source_length + chunk_size - 1) // chunk_size
+        if mask is None or mask.size(-1) != source_length + memory_length:
             return self.prepare_attention_masks(attention_inputs), None
-        token_mask, memory_mask = mask.split(source_length, dim=-1)
-        prepared_memory = self.prepare_attention_masks(
-            replace(attention_inputs, attention_mask=memory_mask)
-        )
+        token_mask, memory_mask = mask.split((source_length, memory_length), dim=-1)
         prepared_tokens = self.prepare_attention_masks(
             replace(attention_inputs, attention_mask=token_mask)
         )
-        return prepared_tokens, prepared_memory.attention_mask
+        memory_layout = replace(
+            attention_inputs.runtime_layout, source_sequence_length=memory_length
+        )
+        self._validate_mask_shapes(None, memory_mask, memory_layout)
+        self.__set_runtime_query_properties(attention_inputs.query)
+        prepared_memory = self.__canonical_mask(memory_mask, "attention_mask")
+        self.__clear_runtime_query_properties()
+        return prepared_tokens, prepared_memory
 
     def extend_source_memory_masks(
         self,
@@ -86,27 +98,7 @@ class Mask:
     ) -> MultiHeadAttentionInputs:
         if not self.source_memory_flag:
             return attention_inputs
-        return replace(
-            attention_inputs,
-            attention_mask=self.__extend_source_memory_mask(
-                attention_inputs.attention_mask, memory_mask
-            ),
-            key_padding_mask=self.__extend_source_memory_mask(
-                attention_inputs.key_padding_mask
-            ),
-        )
-
-    @staticmethod
-    def __extend_source_memory_mask(
-        mask: Tensor | None, memory_mask: Tensor | None = None
-    ) -> Tensor | None:
-        if mask is None:
-            return None
-        if memory_mask is None:
-            memory_mask = mask
-        else:
-            memory_mask = memory_mask.masked_fill(mask.isneginf(), -torch.inf)
-        return torch.cat((mask, memory_mask), dim=-1)
+        return self.grouped_memory_mask.extend_masks(attention_inputs, memory_mask)
 
     def __set_runtime_query_properties(self, query: Tensor) -> None:
         self.query_dtype = query.dtype

@@ -29,17 +29,7 @@ if TYPE_CHECKING:
 
 class MixtureOfAttentionHeadsProjector(ProjectorBase):
     def __init__(self, cfg: "MixtureOfAttentionHeadsConfig"):
-        source_memory_flag: bool = bool(cfg.source_memory_flag)
-        memory_model_config = None
-        if source_memory_flag and cfg.use_kv_expert_models_flag:
-            memory_model_config = _MixtureOfExpertsMapConfig(
-                replace(
-                    cfg.experts_config,
-                    input_dim=cfg.embedding_dim,
-                    output_dim=cfg.query_key_projection_dim or cfg.embedding_dim,
-                )
-            )
-        super().__init__(cfg, source_memory_model_config=memory_model_config)
+        super().__init__(cfg)
         self.experts_config: MixtureOfExpertsConfig = self.cfg.experts_config
         self.use_kv_expert_models_flag: bool = self.cfg.use_kv_expert_models_flag
 
@@ -81,18 +71,10 @@ class MixtureOfAttentionHeadsProjector(ProjectorBase):
     def _compute_memory_projection(
         self, source: Tensor, key_padding_mask: Tensor | None = None
     ) -> Tensor:
-        memory, self.skip_mask, loss = self.source_memory(
-            source,
-            probabilities=self.probabilities,
-            indices=self.indices,
-            skip_mask=self.skip_mask,
-        )
-        if loss is not None:
-            self._accumulate_auxiliary_loss(loss)
-        sequence_length, batch_size, _ = source.shape
+        memory = super()._compute_memory_projection(source, key_padding_mask)
         if self.use_kv_expert_models_flag:
-            return memory.reshape(sequence_length, batch_size, self.top_k, -1)
-        return memory.reshape(sequence_length, batch_size, -1)
+            return memory.unsqueeze(2).expand(-1, -1, self.top_k, -1)
+        return memory
 
     def _build_output_model(self) -> MixtureOfExperts:
         overrides = MixtureOfExpertsConfig(
