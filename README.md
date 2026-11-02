@@ -22,9 +22,8 @@ which ideas are worth exploring next.
 
 ## About the author
 
-Emperor is a personal research project by the developer behind
-[InkRaven](https://inkraven.de/). Visit the website to learn more
-about my work in web development and AI.
+Emperor is my personal machine learning research project. You can also find me
+at [InkRaven](https://inkraven.de/).
 
 ## Research mission
 
@@ -177,45 +176,58 @@ mise run experiment -- \
 
 This configuration includes:
 
+- **BERT pretraining:** a bidirectional encoder trained with masked language
+  modeling and next-sentence prediction, following
+  [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/pdf/1810.04805).
 - **Data-dependent parameters:** adaptive linear layers generate weights, biases,
   and diagonal coefficients from their inputs. This applies to the experts,
-  routers, key/value projections, and attention memory projection.
+  routers, and key/value projections, drawing on
+  the parameter-generation principle of
+  [HyperNetworks](https://arxiv.org/pdf/1609.09106).
 - **Grouped parameter generation:** token-level adaptive layers sum groups of
   five tokens to generate 20 parameter sets for each 100-token sequence. Each
   set is shared by its five tokens, while the output retains all 100 positions.
-  The same grouping setting applies inside experts, where their two Soft MoE
-  slots form one partial group per expert and sequence.
+  The same grouping setting applies inside experts, where their ten Soft MoE
+  slots form two groups of five per expert and sequence.
 - **Soft mixture of experts:** both attention and feedforward computation use
   learned soft assignments to pool token information into expert slots and
-  combine expert outputs back into token representations.
-- **Adaptive routing:** each Soft MoE module has one router that scores all of
-  its experts and slots. The router uses the same adaptive linear model family
-  as its experts, with its own parameters.
-- **Latent-space reasoning research:** a recurrent transformer block repeatedly
-  updates the sequence's hidden representations, providing a way to investigate
-  iterative computation within the model's latent space.
+  combine expert outputs back into token representations. This applies the
+  slot-routing idea from
+  [From Sparse to Soft Mixtures of Experts](https://arxiv.org/pdf/2308.00951),
+  extending it to attention in this project.
+- **Latent-space reasoning research:** a shared recurrent transformer block
+  repeatedly updates the sequence's hidden representations, following the
+  recurrence principle of
+  [Universal Transformers](https://arxiv.org/abs/1807.03819).
+  [Less is More: Recursive Reasoning with Tiny Networks](https://arxiv.org/pdf/2510.04871v1)
+  provides related inspiration for iterative latent reasoning; this example
+  selects the general recurrent block rather than the TRM architecture.
 - **Adaptive halting:** a learned stick-breaking controller determines when
-  individual token positions halt. A ponder-cost penalty accounts for additional
-  computation during training.
+  individual token positions halt, following
+  [Sparse Universal Transformer](https://arxiv.org/pdf/2310.07096). A ponder-cost
+  penalty accounts for additional computation during training, with
+  [Adaptive Computation Time for Recurrent Neural Networks](https://arxiv.org/abs/1603.08983)
+  providing the foundational adaptive-computation idea.
 - **Gradual depth growth:** the recurrent computation starts at two iterations
   and can grow smoothly toward a maximum of ten as training progresses.
-- **Attention memory:** an independent adaptive projection generates additional
-  key/value sources from the current sequence. These memory sources are used
-  within attention, and its output returns to the original sequence length.
+- **Attention memory:** the sequence is summed in chunks of ten tokens, and an
+  independent learned linear model generates one memory embedding per chunk.
+  The 100-token example adds ten memory key/value sources while preserving the
+  original output sequence length.
 - **Attention residual connections:** learned attention weights combine states
-  from earlier recurrent computation steps.
+  from earlier recurrent computation steps, applying
+  [Attention Residuals](https://arxiv.org/pdf/2603.15031) across recurrent depth.
+  Residual routing keys use
+  [Root Mean Square Layer Normalization](https://arxiv.org/abs/1910.07467).
 - **Hierarchical byte embeddings:** a byte-level transformer builds token
   representations from their UTF-8 bytes, with learned byte positions and a
-  limit of 64 bytes per token.
-- **Training regularization:** dropout, gradient clipping, soft-clamp adaptive
-  weight normalization, and scheduled adaptive weight decay are enabled.
-- **Inspection and checkpointing:** attention, recurrent computation, layer
-  controllers, and adaptive parameters can be monitored during training, and
-  checkpoints preserve the model and optimizer state.
+  limit of 64 bytes per token. This adapts the byte-to-token encoder idea from
+  [Hierarchical Autoregressive Transformers: Combining Byte- and Word-Level Processing for Robust, Adaptable Language Models](https://arxiv.org/abs/2501.10322).
 
-This configuration completed a five-minute local GPU training test with finite
-losses and gradients and a successful checkpoint reload. Longer training and
-evaluations of language and reasoning quality remain research work.
+The earlier configuration with two slots per expert completed a five-minute
+local GPU training test with finite losses and gradients and a successful
+checkpoint reload. Longer training and evaluations of language and reasoning
+quality remain research work.
 
 ## Environment Setup
 
