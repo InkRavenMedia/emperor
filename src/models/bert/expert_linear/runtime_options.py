@@ -32,6 +32,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models import _attention_source_memory as _source_memory
 from models.bert.expert_linear._residual import ResidualStackOptions
 
 
@@ -235,7 +236,7 @@ class TransformerPositionalEmbeddingOptions:
 
 
 @dataclass(frozen=True)
-class TransformerAttentionOptions:
+class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     attention_soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_heads: int
     num_layers: int

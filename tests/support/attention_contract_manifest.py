@@ -31,6 +31,10 @@ ATTENTION_CONTRACT_MANIFEST = {
     "emperor.attention._config": module_contract(
         ("configuration schema", "build dispatch", "runtime maxima documentation"),
         "tests.unit.test_attention",
+        AttentionSourceMemoryConfig=class_contract(
+            ("independent generator", "context grouping", "total memory count"),
+            "tests.unit.test_grouped_attention_memory",
+        ),
         MultiHeadAttentionConfig=class_contract(
             ("defaults", "overrides", "abstract build"),
             "tests.unit.test_attention",
@@ -189,6 +193,22 @@ ATTENTION_CONTRACT_MANIFEST = {
                 "inherited and explicit memory masks",
             ),
             "tests.unit.test_attention_mask",
+        ),
+    ),
+    "emperor.attention._ops.memory_context": module_contract(
+        ("independent sequence contexts", "runtime chunk divisibility"),
+        "tests.unit.test_grouped_attention_memory",
+        MemoryContext=class_contract(
+            ("group reduction", "padding exclusion", "slot conditioning"),
+            "tests.unit.test_grouped_attention_memory",
+        ),
+    ),
+    "emperor.attention._ops.memory_mask": module_contract(
+        ("context visibility", "causal masking", "explicit memory masking"),
+        "tests.unit.test_grouped_attention_memory",
+        GroupedMemoryMask=class_contract(
+            ("configured mask extension", "context visibility", "branch expansion"),
+            "tests.unit.test_grouped_attention_memory",
         ),
     ),
     "emperor.attention._ops.processing": module_contract(

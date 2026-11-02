@@ -72,9 +72,19 @@ class GrouperAbstract(Module):
         return nn.Identity()
 
     def forward(self, input_rows: Tensor) -> tuple[Tensor, GroupPlan]:
-        group_plan = self.splitter.split(input_rows)
+        group_plan = self.split(input_rows)
         context = self.summarize(group_plan.grouped_members, group_plan.valid_members)
         return context, group_plan
+
+    def split(
+        self, input_rows: Tensor, *, sequence_length: int | None = None
+    ) -> GroupPlan:
+        """Split at a runtime sequence length without mutating the configured layout."""
+        if sequence_length is None:
+            return self.splitter.split(input_rows)
+        config = replace(self.cfg, sequence_length=sequence_length)
+        self.VALIDATOR.validate_grouping_value(config)
+        return GroupSplitter(config).split(input_rows)
 
     def summarize(self, X: Tensor, valid_members: Tensor | None = None) -> Tensor:
         grouped_tokens = X

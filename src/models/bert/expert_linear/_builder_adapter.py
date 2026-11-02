@@ -4,6 +4,7 @@ from dataclasses import replace
 from types import ModuleType
 from typing import Any, Literal
 
+from models import _attention_source_memory as _source_memory
 from models.bert.expert_linear import _config_defaults as config_defaults
 from models.bert.expert_linear._experts_builder_adapter import (
     _expert_dynamic_memory_options_from_kwargs,
@@ -496,6 +497,9 @@ def _modern_attention_options(
                 "attn_bias_flag": "bias_flag",
                 "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
                 "attn_source_memory_flag": "source_memory_flag",
+                **{
+                    f"attn_{name}": name for name in _source_memory.SOURCE_MEMORY_FIELDS
+                },
             },
         ),
     )
@@ -877,6 +881,7 @@ def _modern_supported_flat_keys() -> set[str]:
         "attn_bias_flag",
         "attn_add_key_value_bias_flag",
         "attn_source_memory_flag",
+        *(f"attn_{name}" for name in _source_memory.SOURCE_MEMORY_FIELDS),
         "ff_num_layers",
         "soft_moe_config",
         "ff_bias_flag",

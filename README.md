@@ -66,11 +66,11 @@ Emperor can combine these research ideas in a single model. One example is a
 small BERT pretraining configuration built from the
 [`bert/expert_linear_adaptive`](src/models/bert/expert_linear_adaptive/) package.
 
-**All 137 adaptive linear layers use 32 × 32 main weight matrices:** each maps
-32 input features to 32 output features. This describes the adaptive core;
-embeddings, prediction heads, and parts of the byte encoder use other matrix
-shapes. The complete configuration has approximately 4.96 million trainable
-parameters.
+The adaptive core contains **136 adaptive linear layers**: 133 use 32 × 32 main
+weight matrices, and the three Soft MoE router output layers use 32 × 160
+matrices to score 16 experts with 10 slots each. Embeddings, prediction heads,
+and parts of the byte encoder use other matrix shapes. The complete
+configuration has **5,023,983 trainable parameters** (approximately 5.02 million).
 
 After [GPU environment setup](#environment-setup), run the following Bash
 command from the repository root with the WikiText-2 text files available in
@@ -84,7 +84,7 @@ mise run experiment -- \
   --experiment-task bert-pretraining \
   --preset baseline \
   --datasets wiki-text2-bert-pretraining \
-  --logdir bert-025-soft-moe-memory-chunk5-wiki-text2 \
+  --logdir bert-025-soft-moe-params-chunk5-memory-chunk10-wiki-text2 \
   --monitors attention recurrent-layer layer-controller adaptive \
   --config \
   --adaptive-generator-stack-hidden-dim 32 \
@@ -157,11 +157,14 @@ mise run experiment -- \
   --weight-option DualModelDynamicWeightConfig \
   --weight-option-flag true \
   --attn-source-memory-flag true \
+  --attn-source-memory-chunk-size 10 \
+  --attn-source-memory-grouping-method SumGroupingConfig \
+  --attn-source-memory-model-config '{"type":"LinearLayerConfig","bias_flag":true}' \
   --mlm-decoder-weight-tying-flag false \
   --contextual-embedding-config None \
   --attention-soft-moe-flag true \
   --soft-moe-flag true \
-  --soft-moe-slots-per-expert 2 \
+  --soft-moe-slots-per-expert 10 \
   --soft-moe-scoring-hidden-dim 32 \
   --soft-moe-scoring-num-layers 2 \
   --grouping-scope SEQUENCE \

@@ -6,6 +6,7 @@ from types import ModuleType
 from typing import Any, Final
 
 from model_runtime.packages.runtime_values import validate_runtime_default_values
+from models import _attention_source_memory as _source_memory
 
 from . import config
 from .runtime_options import (
@@ -166,6 +167,7 @@ def attention_options_from_config(
         ),
         zero_attention_flag=getattr(config_module, f"{prefix}_ZERO_ATTENTION_FLAG"),
         source_memory_flag=getattr(config_module, f"{prefix}_SOURCE_MEMORY_FLAG"),
+        **_source_memory.source_memory_defaults(config_module, prefix=prefix),
         stack_options=SubmoduleStackOptions(
             hidden_dim=getattr(config_module, f"{prefix}_STACK_HIDDEN_DIM"),
             num_layers=getattr(config_module, f"{prefix}_NUM_LAYERS"),
@@ -314,6 +316,9 @@ def _path_field_map(*, attention: bool) -> dict[str, tuple[str, str]]:
                 ),
                 "zero_attention_flag": ("path", "zero_attention_flag"),
                 "source_memory_flag": ("path", "source_memory_flag"),
+                **{
+                    name: ("path", name) for name in _source_memory.SOURCE_MEMORY_FIELDS
+                },
             }
         )
     for field_name in _STACK_OPTION_FIELDS:

@@ -1,3 +1,4 @@
+from emperor.attention import AttentionSourceMemoryConfig  # noqa: F401
 from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
@@ -53,18 +54,21 @@ from emperor.halting import (
     HaltingHiddenStateModeOptions,
     StickBreakingConfig,
 )
-from emperor.layers import (
+from emperor.layers import (  # noqa: F401
     ActivationOptions,
     AdditiveResidualConfig,  # noqa: F401
     AttentionResidualConfig,  # noqa: F401
     LastLayerBiasOptions,
+    LayerConfig,
     LayerGateOptions,
     LayerNormPositionOptions,
+    LayerStackConfig,
     NormalizationOptions,
     ResidualConfig,
     WeightedBlendResidualConfig,  # noqa: F401
     WeightedResidualConfig,  # noqa: F401
 )
+from emperor.linears import LinearLayerConfig  # noqa: F401
 from emperor.memory import (
     AttentionDynamicMemoryConfig,  # noqa: F401
     DynamicMemoryConfig,
@@ -74,6 +78,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from models import _attention_source_memory as _source_memory
 
 # Global
 BATCH_SIZE = 64
@@ -96,6 +101,15 @@ ATTN_ZERO_ATTENTION_FLAG: bool = False
 
 # Temporary sources for encoder and decoder self-attention.
 ATTN_SOURCE_MEMORY_FLAG: bool = False
+ATTN_SOURCE_MEMORY_CONFIG: _source_memory.AttentionSourceMemoryConfig | None = None
+ATTN_SOURCE_MEMORY_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_source_memory.GroupingConfig] | None = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
+    _source_memory.SummaryNormalizationOptions | None
+) = None
+ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: float | None = None
 
 ## Attention Projection Stack Options
 ATTN_NUM_LAYERS: int = 1

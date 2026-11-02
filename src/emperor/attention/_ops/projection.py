@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from emperor.attention._runtime import (
         MultiHeadAttentionInputs,
     )
-    from emperor.config import ConfigBase
     from emperor.layers import (
         LayerStackConfig,
         RecurrentCompositionConfig,
@@ -27,12 +26,7 @@ if TYPE_CHECKING:
 class ProjectorBase(Module):
     VALIDATOR = AttentionSourceMemoryValidator
 
-    def __init__(
-        self,
-        cfg: "MultiHeadAttentionConfig",
-        *,
-        source_memory_model_config: "ConfigBase | None" = None,
-    ):
+    def __init__(self, cfg: "MultiHeadAttentionConfig"):
         super().__init__()
         self.cfg = cfg
         self.embedding_dim: int = self.cfg.embedding_dim
@@ -44,17 +38,12 @@ class ProjectorBase(Module):
         )
         self.__resolve_kv_dimensions()
         self.output_model = self._build_output_model()
-        self.source_memory = self.__maybe_initialize_source_memory(
-            source_memory_model_config
-        )
+        self.source_memory = self.__maybe_initialize_source_memory()
         self.auxiliary_loss: Tensor | None = None
 
-    def __maybe_initialize_source_memory(
-        self,
-        model_config: "ConfigBase | None",
-    ) -> AttentionSourceMemory | None:
+    def __maybe_initialize_source_memory(self) -> AttentionSourceMemory | None:
         if self.source_memory_flag:
-            return AttentionSourceMemory(self.cfg, model_config=model_config)
+            return AttentionSourceMemory(self.cfg)
         return None
 
     def __resolve_kv_dimensions(self) -> None:
@@ -82,7 +71,7 @@ class ProjectorBase(Module):
         memory, _, loss = self.source_memory(source, skip_mask=active_rows)
         if loss is not None:
             self._accumulate_auxiliary_loss(loss)
-        return memory.reshape(source.size(0), source.size(1), -1)
+        return memory.reshape(-1, source.size(1), memory.size(-1))
 
     def _compute_projection(
         self,
@@ -140,7 +129,14 @@ class ProjectorBase(Module):
         memory_projection = self._compute_memory_projection(
             attention_inputs.key, attention_inputs.key_padding_mask
         )
-        self.VALIDATOR.validate_projected_output(memory_projection, projections.key)
+        source_length = attention_inputs.key.size(0)
+        chunk_size = self.source_memory.context.chunk_size
+        expected_memory_length = (source_length + chunk_size - 1) // chunk_size
+        self.VALIDATOR.validate_projected_output(
+            memory_projection,
+            projections.key,
+            memory_length=expected_memory_length,
+        )
         keys_with_memory = torch.cat((projections.key, memory_projection), dim=0)
         values_with_memory = torch.cat((projections.value, memory_projection), dim=0)
         memory_sequence_length = memory_projection.size(0)

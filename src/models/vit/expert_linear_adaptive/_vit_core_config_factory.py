@@ -25,6 +25,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
+from models import _attention_source_memory as _source_memory
 from models.vit.expert_linear_adaptive._control_factory_dependencies import (
     VitControlFactoryDependencies,
 )
@@ -238,6 +239,9 @@ class VitCoreConfigFactory:
             )
             if attention_config is not None:
                 attention_config.source_memory_flag = source_memory_flag
+                attention_config.source_memory_config = (
+                    _source_memory.build_source_memory_config(attention_options)
+                )
                 return attention_config
         return SelfAttentionConfig(
             batch_size=self.batch_size,
@@ -258,6 +262,9 @@ class VitCoreConfigFactory:
             projection_model_config=projection_model_config,
             projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
             source_memory_flag=source_memory_flag,
+            source_memory_config=_source_memory.build_source_memory_config(
+                attention_options
+            ),
         )
 
     def _build_feed_forward_config(self) -> FeedForwardConfig:

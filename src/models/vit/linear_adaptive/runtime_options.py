@@ -34,6 +34,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models import _attention_source_memory as _source_memory
 from models.vit.linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
@@ -241,7 +242,7 @@ class TransformerPositionalEmbeddingOptions:
 
 
 @dataclass(frozen=True)
-class TransformerAttentionOptions:
+class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     num_heads: int
     num_layers: int
     bias_flag: bool

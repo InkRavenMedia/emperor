@@ -10,6 +10,7 @@ from emperor.layers import (
 )
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
+from models import _attention_source_memory as _source_memory
 from models.bert.expert_linear_adaptive._component_config import (
     build_hierarchical_embedding_config,
 )
@@ -771,6 +772,7 @@ def _attention_options_from_kwargs(
         bias_flag=config_module.ATTN_BIAS_FLAG,
         add_key_value_bias_flag=config_module.ATTN_ADD_KEY_VALUE_BIAS_FLAG,
         source_memory_flag=config_module.ATTN_SOURCE_MEMORY_FLAG,
+        **_source_memory.source_memory_defaults(config_module),
     )
     updates = _pop_updates(
         kwargs,
@@ -781,6 +783,7 @@ def _attention_options_from_kwargs(
             "attn_bias_flag": "bias_flag",
             "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
             "attn_source_memory_flag": "source_memory_flag",
+            **{f"attn_{name}": name for name in _source_memory.SOURCE_MEMORY_FIELDS},
         },
     )
     return replace(options, **updates) if updates else options

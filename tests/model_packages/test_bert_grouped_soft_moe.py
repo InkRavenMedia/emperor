@@ -36,6 +36,7 @@ def grouped_model():
         sequence_length=100,
         attention_soft_moe_config=attention_routing_config(),
         attn_source_memory_flag=True,
+        attn_source_memory_chunk_size=10,
         expert_attention_use_kv_expert_models_flag=False,
         grouping_scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
         chunk_size=5,
@@ -166,7 +167,8 @@ def test_every_adaptive_layer_groups_and_trains_with_soft_attention_and_memory()
 
 def test_grouped_soft_bert_preserves_padding_and_sample_independence():
     torch.manual_seed(26)
-    model = grouped_model().eval()
+    # Compare batching semantics without float32 accumulation differences across GEMMs.
+    model = grouped_model().double().eval()
     token_ids, active_tokens, token_types = token_batch()
     with torch.no_grad():
         original = model(token_ids, active_tokens, token_types)

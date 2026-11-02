@@ -1,6 +1,9 @@
 """Public Interface for attention configuration and state."""
 
-from emperor.attention._config import MultiHeadAttentionConfig
+from emperor.attention._config import (
+    AttentionSourceMemoryConfig,
+    MultiHeadAttentionConfig,
+)
 from emperor.attention._monitoring.callback import AttentionMonitorCallback
 from emperor.attention._state import AttentionLayerState
 from emperor.attention._variants.independent.config import (
@@ -16,6 +19,7 @@ from emperor.attention._variants.self_attention.config import (
 )
 
 __all__ = (
+    "AttentionSourceMemoryConfig",
     "MultiHeadAttentionConfig",
     "SelfAttentionConfig",
     "SelfAttentionProjectionStrategy",

@@ -28,6 +28,7 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
+from models import _attention_source_memory as _source_memory
 
 from ._recurrent_composition import build_recurrent_composition
 from ._residual import (
@@ -233,6 +234,7 @@ def _self_attention(
         projection_model_config=_projection_stack(runtime, options),
         relative_positional_embedding_config=None,
         source_memory_flag=options.source_memory_flag,
+        source_memory_config=_source_memory.build_source_memory_config(options),
         projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
     )
 
@@ -264,6 +266,7 @@ def _cross_attention(
         projection_model_config=_projection_stack(runtime, options),
         relative_positional_embedding_config=None,
         source_memory_flag=options.source_memory_flag,
+        source_memory_config=_source_memory.build_source_memory_config(options),
     )
 
 
