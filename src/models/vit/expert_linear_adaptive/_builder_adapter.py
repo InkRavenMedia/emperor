@@ -8,6 +8,7 @@ from enum import Enum, auto
 from types import ModuleType
 from typing import Any, TypeVar
 
+from models import _attention_source_memory as _source_memory
 from models.vit.expert_linear_adaptive import _config_defaults as config_defaults
 from models.vit.expert_linear_adaptive import (
     _experts_builder_adapter as experts_builder_adapter,
@@ -1530,6 +1531,9 @@ def _attention_options_from_kwargs(
                 "attn_bias_flag": "bias_flag",
                 "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
                 "attn_source_memory_flag": "source_memory_flag",
+                **{
+                    f"attn_{name}": name for name in _source_memory.SOURCE_MEMORY_FIELDS
+                },
             },
         ),
     )
@@ -1765,6 +1769,7 @@ _ATTENTION_FLAT_KEYS = frozenset(
         "attn_bias_flag",
         "attn_add_key_value_bias_flag",
         "attn_source_memory_flag",
+        *(f"attn_{name}" for name in _source_memory.SOURCE_MEMORY_FIELDS),
     }
 )
 _FEED_FORWARD_FLAT_KEYS = frozenset(

@@ -48,6 +48,7 @@ def test_shared_adaptive_routers_inherit_expert_generators_with_independent_para
         hierarchical=False,
         attention_soft_moe_config=routing_config,
         attn_source_memory_flag=True,
+        attn_source_memory_chunk_size=2,
         weight_option_flag=True,
         weight_option=DualModelDynamicWeightConfig,
         bias_option_flag=True,

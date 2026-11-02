@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from emperor.attention._base import MultiHeadAttentionAbstract
+from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
 from models.catalog import model_package
 
@@ -33,6 +34,7 @@ def configuration(package_name, *, default_source_stack=False, **overrides):
         submodule_stack_hidden_dim=8,
         submodule_stack_num_layers=1,
         attn_source_memory_flag=True,
+        attn_source_memory_chunk_size=2,
     )
     if "expert" in package_name:
         values.update(
@@ -101,13 +103,13 @@ def test_public_options_build_and_execute_memory_in_every_package(package_name):
     handles = []
     for attention in attentions:
         memory = attention.projector.source_memory.model
-        assert type(memory) is type(attention.projector.key_model)
+        assert isinstance(memory.cfg, LinearLayerConfig)
+        assert attention.projector.source_memory.context.chunk_size == 2
         key_parameters = dict(attention.projector.key_model.named_parameters())
         memory_parameters = dict(memory.named_parameters())
-        assert memory_parameters.keys() == key_parameters.keys()
-        for name, parameter in memory_parameters.items():
-            assert parameter.shape == key_parameters[name].shape
-            assert parameter.data_ptr() != key_parameters[name].data_ptr()
+        assert {p.data_ptr() for p in memory_parameters.values()}.isdisjoint(
+            p.data_ptr() for p in key_parameters.values()
+        )
         handles.append(
             memory.register_forward_hook(lambda _m, _a, out: calls.append(out))
         )
@@ -133,11 +135,15 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
     spec = package.runtime_defaults_spec
     raw = {
         "ATTN_SOURCE_MEMORY_FLAG": "true",
+        "ATTN_SOURCE_MEMORY_CHUNK_SIZE": "2",
     }
     fields = {field.key for field in configuration_schema(package).fields}
     assert fields.issuperset(raw)
+    from models._attention_source_memory import SOURCE_MEMORY_FIELDS
+
     assert {field for field in fields if field.startswith("ATTN_SOURCE_MEMORY_")} == {
-        "ATTN_SOURCE_MEMORY_FLAG"
+        "ATTN_SOURCE_MEMORY_FLAG",
+        *(f"ATTN_{name.upper()}" for name in SOURCE_MEMORY_FIELDS),
     }
     values = {key.lower(): spec.parse_value(key, value) for key, value in raw.items()}
     config = configuration(package_name, attn_memory_flag=True, **values)
@@ -146,8 +152,8 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
         m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
     ]
     for attention in attentions:
-        assert type(attention.projector.source_memory.model) is type(
-            attention.projector.key_model
+        assert isinstance(
+            attention.projector.source_memory.model.cfg, LinearLayerConfig
         )
         assert attention.cfg.projection_model_config.shared_memory_config is not None
     model.eval()

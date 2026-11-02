@@ -21,6 +21,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
+from models import _attention_source_memory as _source_memory
 from models.bert.linear import _config_defaults as config_defaults
 from models.bert.linear._encoder_control_config_factory import (
     GateConfigFactory,
@@ -222,6 +223,9 @@ class CoreConfigFactory:
             causal_attention_mask_flag=encoder_options.causal_attention_mask_flag,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
             source_memory_flag=source_memory_flag,
+            source_memory_config=_source_memory.build_source_memory_config(
+                attention_options
+            ),
             average_attention_weights_flag=False,
             return_attention_weights_flag=False,
             batch_first_flag=True,

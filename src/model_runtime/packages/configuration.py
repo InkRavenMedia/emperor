@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import json
+from dataclasses import fields
 from enum import Enum
 from types import ModuleType, NoneType, UnionType
 from typing import Any, Union, cast, get_args, get_origin
@@ -195,12 +197,68 @@ def parse_config_value(
     key: str,
     raw_value: str,
 ) -> Any:
+    annotation = getattr(config_module, "__annotations__", {}).get(key)
+    if raw_value.lstrip().startswith("{") and any(
+        issubclass(candidate, ConfigBase)
+        for candidate in _annotation_classes(annotation)
+    ):
+        try:
+            return _parse_config_object(config_module, json.loads(raw_value))
+        except (TypeError, ValueError) as exc:
+            raise ConfigValueError(
+                f"Invalid configuration object for {key}: {exc}"
+            ) from exc
     return _parse_from_current_value(
         config_module,
         getattr(config_module, key, None),
         getattr(config_module, "__annotations__", {}).get(key),
         raw_value,
     )
+
+
+def _parse_config_object(config_module: ModuleType, value: Any) -> Any:
+    """Decode only package-exposed config constructors and qualified enum members."""
+    if isinstance(value, dict):
+        name = value.get("type")
+        if not isinstance(name, str):
+            raise ConfigValueError(
+                "Configuration objects require a string 'type' field."
+            )
+        config_type = _class_lookup(config_module, name)
+        if not issubclass(config_type, ConfigBase):
+            raise ConfigValueError(f"{name} is not a configuration class.")
+        supplied = value.keys() - {"type"}
+        unknown = supplied - {field.name for field in fields(config_type)}
+        if unknown:
+            raise ConfigValueError(f"Unknown {name} fields: {sorted(unknown)}")
+        return config_type(
+            **{key: _parse_config_object(config_module, value[key]) for key in supplied}
+        )
+    if isinstance(value, list):
+        return [_parse_config_object(config_module, item) for item in value]
+    if isinstance(value, str) and "." in value:
+        enum_name, member = value.rsplit(".", 1)
+        enum_type = getattr(config_module, enum_name, None)
+        if inspect.isclass(enum_type) and issubclass(enum_type, Enum):
+            return _enum_lookup(enum_type, member)
+    return value
+
+
+def _config_json_value(value: Any) -> Any:
+    if isinstance(value, ConfigBase):
+        return {
+            "type": type(value).__name__,
+            **{
+                field.name: _config_json_value(getattr(value, field.name))
+                for field in fields(value)
+                if getattr(value, field.name) is not None
+            },
+        }
+    if isinstance(value, Enum):
+        return f"{type(value).__name__}.{value.name}"
+    if isinstance(value, (list, tuple)):
+        return [_config_json_value(item) for item in value]
+    return value
 
 
 def abstract_config_class_error(candidate: type) -> str | None:
@@ -221,6 +279,12 @@ def abstract_config_class_error(candidate: type) -> str | None:
 
 
 def serialize_config_value(value: Any) -> bool | int | float | str | None:
+    if isinstance(value, ConfigBase):
+        try:
+            return json.dumps(_config_json_value(value), separators=(",", ":"))
+        except TypeError:
+            # Preserve the existing display form for configs containing non-JSON values.
+            return str(value)
     if isinstance(value, Enum) and value.name.lower() in {"none", "null"}:
         return f"{type(value).__name__}.{value.name}"
     if hasattr(value, "name"):

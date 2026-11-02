@@ -41,6 +41,7 @@ from emperor.transformer import (
     TransformerEncoderLayer,
 )
 from model_runtime.packages import iter_supported_config_keys
+from models._attention_source_memory import SOURCE_MEMORY_FIELDS
 from models.catalog import model_package
 from models.config_overrides import print_config_options
 from models.transformer.expert_linear.config_builder import (
@@ -164,6 +165,7 @@ class TestTransformerModelPackages(unittest.TestCase):
                     adaptive=adaptive,
                     vocab_size=16,
                     attn_source_memory_flag=True,
+                    attn_source_memory_chunk_size=2,
                 )
                 model = model_type(config).eval()
                 memories = [
@@ -362,6 +364,7 @@ class TestTransformerModelPackages(unittest.TestCase):
                         "add_key_value_bias_flag",
                         "zero_attention_flag",
                         "source_memory_flag",
+                        *SOURCE_MEMORY_FIELDS,
                         "stack_options",
                         "layer_controller_options",
                         "dynamic_memory_options",

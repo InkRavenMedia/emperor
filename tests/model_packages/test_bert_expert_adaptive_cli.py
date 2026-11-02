@@ -68,15 +68,17 @@ def test_readme_command_reaches_standard_training_dispatch(monkeypatch, tmp_path
 def test_readme_flags_build_the_tested_adaptive_architecture():
     configuration = configuration_from_cli(readme_arguments())
     model = model_package(PACKAGE_NAME).build_model(configuration)
-    assert sum(parameter.numel() for parameter in model.parameters()) == 4_962_897
+    assert sum(parameter.numel() for parameter in model.parameters()) == 5_023_983
     adaptive_layers = [
         module
         for module in model.modules()
         if isinstance(getattr(module, "cfg", None), AdaptiveLinearLayerConfig)
     ]
-    assert len(adaptive_layers) == 137
+    assert len(adaptive_layers) == 136
+    assert sum(layer.output_dim == 160 for layer in adaptive_layers) == 3
     for layer in adaptive_layers:
-        assert (layer.input_dim, layer.output_dim) == (32, 32)
+        assert layer.input_dim == 32
+        assert layer.output_dim in (32, 160)
         grouping = layer.cfg.adaptive_augmentation_config.grouping_config
         assert isinstance(grouping, SumGroupingConfig)
         assert grouping.chunk_size == 5
@@ -91,6 +93,14 @@ def test_readme_flags_build_the_tested_adaptive_architecture():
         )
         == 1
     )
+    memory = next(
+        module
+        for module in model.modules()
+        if type(module).__name__ == "AttentionSourceMemory"
+    )
+    assert isinstance(memory.context.grouping_config, SumGroupingConfig)
+    assert memory.context.chunk_size == 10
+    assert sum(parameter.numel() for parameter in memory.parameters()) == 32 * 32 + 32
 
 
 @pytest.mark.parametrize(

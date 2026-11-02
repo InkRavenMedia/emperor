@@ -8,8 +8,19 @@ from emperor.config import ConfigBase, optional_field
 if TYPE_CHECKING:
     from torch.types import _dtype as DType
 
+    from emperor.augmentations.adaptive_parameters import GroupingConfig
     from emperor.embedding.relative import RelativePositionalEmbeddingConfig
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
+
+
+@dataclass
+class AttentionSourceMemoryConfig(ConfigBase):
+    model_config: ConfigBase | None = optional_field(
+        "Independent row-preserving memory generator. Defaults to a learned linear projection."
+    )
+    grouping_config: "GroupingConfig | None" = optional_field(
+        "Per-sequence chunk_size grouping; generate one memory embedding per reduced chunk. Runtime inputs determine layout and length."
+    )
 
 
 @dataclass
@@ -74,6 +85,9 @@ class MultiHeadAttentionConfig(ConfigBase):
         optional_field("Configuration for the relative positional embedding module.")
     )
     source_memory_flag: bool | None = optional_field(
-        "Append one memory source per input token using an independent model "
-        "with the key/value projection architecture."
+        "Enable temporary chunk-generated memory sources appended to keys and values. "
+        "Requires source_memory_config with chunk_size grouping."
+    )
+    source_memory_config: AttentionSourceMemoryConfig | None = optional_field(
+        "Memory generator and chunk grouping configuration; required when source_memory_flag is enabled."
     )

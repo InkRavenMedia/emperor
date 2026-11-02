@@ -11,6 +11,7 @@ from emperor.memory import AttentionDynamicMemoryConfig
 from emperor.memory._base import DynamicMemoryAbstract
 from emperor.sampler import RouterConfig
 from emperor.transformer import FeedForward
+from models._attention_source_memory import SOURCE_MEMORY_FIELDS
 from models.catalog import model_package
 from tests.model_packages.test_attention_source_memory import (
     configuration as attention_configuration,
@@ -311,6 +312,11 @@ def test_memory_and_expert_options_are_exposed_in_public_configuration(name):
             "NUM_MEMORY_SLOTS",
             "TEST_TIME_TRAINING_LEARNING_RATE",
             "TEST_TIME_TRAINING_NUM_INNER_STEPS",
+        )
+    else:
+        suffixes += tuple(
+            field.removeprefix("source_memory_").upper()
+            for field in SOURCE_MEMORY_FIELDS
         )
     assert {field for field in fields if field.startswith(prefix)} == {
         prefix + suffix for suffix in suffixes

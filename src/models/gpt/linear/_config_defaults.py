@@ -12,6 +12,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models import _attention_source_memory as _source_memory
 from models.gpt.linear.runtime_options import (
     DynamicMemoryOptions,
     GptEmbeddingOptions,
@@ -119,6 +120,7 @@ def gpt_attention_options(config: _ConfigDefaults) -> TransformerAttentionOption
         bias_flag=config.ATTN_BIAS_FLAG,
         add_key_value_bias_flag=config.ATTN_ADD_KEY_VALUE_BIAS_FLAG,
         source_memory_flag=config.ATTN_SOURCE_MEMORY_FLAG,
+        **_source_memory.source_memory_defaults(config),
     )
 
 

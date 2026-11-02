@@ -16,6 +16,7 @@ from support.attention import build_attention_config
 from support.attention_contract_manifest import ATTENTION_CONTRACT_MANIFEST
 
 EXPECTED_EXPORTS = (
+    "AttentionSourceMemoryConfig",
     "MultiHeadAttentionConfig",
     "SelfAttentionConfig",
     "SelfAttentionProjectionStrategy",

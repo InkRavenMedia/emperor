@@ -27,6 +27,7 @@ from support.attention import build_attention_config
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 EXPECTED_EXPORTS = (
+    "AttentionSourceMemoryConfig",
     "MultiHeadAttentionConfig",
     "SelfAttentionConfig",
     "SelfAttentionProjectionStrategy",
@@ -38,6 +39,7 @@ EXPECTED_EXPORTS = (
 )
 
 EXPECTED_OWNERS = {
+    "AttentionSourceMemoryConfig": "emperor.attention._config",
     "MultiHeadAttentionConfig": "emperor.attention._config",
     "SelfAttentionConfig": "emperor.attention._variants.self_attention.config",
     "SelfAttentionProjectionStrategy": (
@@ -69,6 +71,7 @@ BASE_CONFIG_FIELDS = (
     "projection_model_config",
     "relative_positional_embedding_config",
     "source_memory_flag",
+    "source_memory_config",
 )
 
 

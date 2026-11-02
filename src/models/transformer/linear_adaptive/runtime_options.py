@@ -37,6 +37,7 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
+from models import _attention_source_memory as _source_memory
 
 
 @dataclass(frozen=True)
@@ -218,7 +219,7 @@ class RecurrentControllerOptions:
 
 
 @dataclass(frozen=True)
-class TransformerAttentionOptions:
+class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     num_heads: int = 4
     add_key_value_bias_flag: bool = False
     zero_attention_flag: bool = False

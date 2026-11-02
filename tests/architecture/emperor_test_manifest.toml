@@ -587,6 +587,7 @@ modules = [
 [families.attention]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_grouped_attention_memory.py",
   "tests/model_packages/test_mlp_mixer_source_memory.py",
   "tests/model_packages/test_attention_source_memory.py",
   "tests/unit/test_attention_soft_moe.py",
@@ -604,6 +605,7 @@ focused_tests = [
   "tests/model_packages/mlp_mixer/expert_linear_adaptive/test_model.py",
 ]
 integration_tests = [
+  "tests/model_packages/test_grouped_attention_memory.py",
   "tests/model_packages/test_memory_expert_parity.py",
   "tests/model_packages/test_mlp_mixer_source_memory.py",
   "tests/model_packages/test_attention_source_memory.py",
@@ -644,6 +646,8 @@ modules = [
   "src/emperor/attention/_ops/batching.py",
   "src/emperor/attention/_ops/bias.py",
   "src/emperor/attention/_ops/masking.py",
+  "src/emperor/attention/_ops/memory_context.py",
+  "src/emperor/attention/_ops/memory_mask.py",
   "src/emperor/attention/_ops/processing.py",
   "src/emperor/attention/_ops/projection.py",
   "src/emperor/attention/_ops/reshaping.py",

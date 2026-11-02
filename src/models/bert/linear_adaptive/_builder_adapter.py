@@ -4,6 +4,7 @@ from dataclasses import replace
 from types import ModuleType
 from typing import Any, TypeVar, cast
 
+from models import _attention_source_memory as _source_memory
 from models.bert.linear_adaptive import _config_defaults as config_defaults
 from models.bert.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.bert.linear_adaptive._generation import (
@@ -523,6 +524,7 @@ def _bert_boundary_builder_kwargs(
         "attn_bias_flag",
         "attn_add_key_value_bias_flag",
         "attn_source_memory_flag",
+        *(f"attn_{name}" for name in _source_memory.SOURCE_MEMORY_FIELDS),
     }
     if _option_requested(kwargs, "attention_options", attention_keys):
         provided = cast(
@@ -1451,6 +1453,9 @@ def _attention_options_from_kwargs(
                 "attn_bias_flag": "bias_flag",
                 "attn_add_key_value_bias_flag": "add_key_value_bias_flag",
                 "attn_source_memory_flag": "source_memory_flag",
+                **{
+                    f"attn_{name}": name for name in _source_memory.SOURCE_MEMORY_FIELDS
+                },
             },
         ),
     )
