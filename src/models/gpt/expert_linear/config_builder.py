@@ -1,6 +1,7 @@
 from typing import TYPE_CHECKING
 
 import models.gpt.expert_linear.config as config
+from models import _sequence_expansion
 from models.gpt.expert_linear._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -141,9 +142,10 @@ class _GptExpertLinearConfigBuilderImplementation:
         return factory.build_boundary_config()
 
     def __decoder_config(self):
-        return CoreConfigFactory(
-            self.__core_config_dependencies()
-        ).build_decoder_config()
+        return _sequence_expansion.with_expansion_attention_capacity(
+            CoreConfigFactory(self.__core_config_dependencies()).build_decoder_config(),
+            self.sequence_length,
+        )
 
     def __core_config_dependencies(self) -> CoreConfigDependencies:
         return CoreConfigDependencies(

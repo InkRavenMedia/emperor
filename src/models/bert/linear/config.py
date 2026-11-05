@@ -1,13 +1,17 @@
 from emperor.attention import AttentionSourceMemoryConfig  # noqa: F401
-from emperor.augmentations.adaptive_parameters import (  # noqa: F401  # noqa: F401
+from emperor.augmentations.adaptive_parameters import (  # noqa: F401
+    AdaptiveLinearLayerConfig,  # noqa: F401
+    AdaptiveParameterAugmentationConfig,
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
+    AdditiveDynamicBiasConfig,
     AttentionGroupingConfig,
     MeanGroupingConfig,
     MeanStdGroupingConfig,
     RMSGroupingConfig,
     SumGroupingConfig,
     SummaryNormalizationOptions,
+    WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase  # noqa: F401
 from emperor.datasets.text.bert_pretraining import (
@@ -16,6 +20,7 @@ from emperor.datasets.text.bert_pretraining import (
 from emperor.embedding.absolute import (
     AbsolutePositionalEmbeddingConfig,
     TextLearnedPositionalEmbeddingConfig,
+    TextSinusoidalPositionalEmbeddingConfig,  # noqa: F401
 )
 from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
@@ -48,6 +53,7 @@ from emperor.memory import (
     MemoryPositionOptions,
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
+from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 from models import _attention_source_memory as _source_memory
@@ -658,3 +664,15 @@ FF_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
 
 declare_soft_moe_runtime_defaults(globals())
+
+
+# Sequence Expansion
+SEQUENCE_EXPANSION_FLAG: bool = False
+SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
+SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
+SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
+SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+    TextLearnedPositionalEmbeddingConfig
+    | TextSinusoidalPositionalEmbeddingConfig
+    | None
+) = None

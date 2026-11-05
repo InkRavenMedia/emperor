@@ -82,6 +82,22 @@ class _SequenceExpansionState(LayerState):
         self.expansion_padding_mask = result.key_padding_mask
         self.sequence_expansions = (*self.sequence_expansions, result.expansion)
 
+    def gather_input_tokens(self, hidden: Tensor) -> Tensor:
+        """Restore original token positions for tasks whose labels cover the input.
+
+        Expansion preserves the order of valid input tokens and appends new tokens.
+        Original padding positions receive zero vectors; generated positions remain
+        available in the full state for callers supplying their own supervision.
+        """
+        if not self.sequence_expansions:
+            return hidden
+        original_padding = self.sequence_expansions[0].input_padding_mask
+        original_indices = (~original_padding).long().cumsum(dim=1).sub(1).clamp_min(0)
+        original_hidden = hidden.gather(
+            1, original_indices.unsqueeze(-1).expand(-1, -1, hidden.size(-1))
+        )
+        return original_hidden.masked_fill(original_padding.unsqueeze(-1), 0)
+
     def validate_recurrent_shape(self, previous_hidden: Tensor) -> None:
         if self.hidden.shape == previous_hidden.shape:
             return

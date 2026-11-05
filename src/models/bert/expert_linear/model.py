@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.attention import AttentionLayerState
 from emperor.experiments.bert_pretraining import BertPretrainingExperiment
 from emperor.layers import ActivationOptions, LayerConfig, LayerNormPositionOptions
+from emperor.transformer import TransformerEncoderLayerState
+from models import _sequence_expansion
 from models.bert.expert_linear._boundary_config_factory import BertBoundaryConfig
 from models.bert.expert_linear.experiment_config import ExperimentConfig
 
@@ -49,6 +50,9 @@ class Model(BertPretrainingExperiment):
         boundary_config = self.__validate_boundary_config(experiment_config)
         super().__init__(config)
         self.experiment_config: ExperimentConfig = experiment_config
+        self.sequence_expansion_enabled = (
+            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.encoder_config, 0) > 0
+        )
         self.boundary_config: BertBoundaryConfig = boundary_config
         self.__validate_pretraining_dimensions()
         self.token_embedding = self._build_token_embedding()
@@ -193,7 +197,9 @@ class Model(BertPretrainingExperiment):
         input_ids: Tensor,
         attention_mask: Tensor | None = None,
         token_type_ids: Tensor | None = None,
+        align_to_input: bool = False,
     ) -> tuple[Tensor, Tensor, Tensor]:
+        """Return all token logits, or restore input positions with align_to_input."""
         input_ids, attention_mask, token_type_ids = self._prepare_model_inputs(
             input_ids,
             attention_mask,
@@ -203,11 +209,22 @@ class Model(BertPretrainingExperiment):
         hidden, embedding_loss = self.__build_input_embeddings(
             input_ids, token_type_ids, attention_mask
         )
-        sequence_output, auxiliary_loss = self.__run_encoder(hidden, attention_mask)
+        sequence_output, auxiliary_loss = self.__run_encoder(
+            hidden, attention_mask, align_to_input
+        )
         mlm_logits = self.__build_mlm_logits(sequence_output)
         nsp_logits = self.__build_nsp_logits(sequence_output)
         total_auxiliary_loss = auxiliary_loss + embedding_loss
         return mlm_logits, nsp_logits, total_auxiliary_loss
+
+    def forward_for_input_tokens(
+        self, input_ids: Tensor, attention_mask: Tensor, token_type_ids: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor]:
+        if not self.sequence_expansion_enabled:
+            return super().forward_for_input_tokens(
+                input_ids, attention_mask, token_type_ids
+            )
+        return self(input_ids, attention_mask, token_type_ids, align_to_input=True)
 
     def __build_input_embeddings(
         self,
@@ -230,14 +247,17 @@ class Model(BertPretrainingExperiment):
         self,
         hidden: Tensor,
         attention_mask: Tensor,
+        align_to_input: bool = False,
     ) -> tuple[Tensor, Tensor]:
         encoder_state = self.transformer(
-            AttentionLayerState(
+            TransformerEncoderLayerState(
                 hidden=hidden,
                 key_padding_mask=attention_mask == 0,
             )
         )
         sequence_output = self.encoder_layer_norm(encoder_state.hidden)
+        if align_to_input:
+            sequence_output = encoder_state.gather_input_tokens(sequence_output)
         auxiliary_loss = (
             encoder_state.loss
             if encoder_state.loss is not None

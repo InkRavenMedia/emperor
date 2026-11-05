@@ -28,6 +28,7 @@ from emperor.transformer import (
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.bert.expert_linear_adaptive._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -165,7 +166,9 @@ class BertBackendConfigBuilder:
 
         positional_embedding_config = self._build_positional_embedding_config()
         boundary_config = self._build_boundary_config()
-        encoder_config = self._build_encoder_config()
+        encoder_config = _sequence_expansion.with_expansion_attention_capacity(
+            self._build_encoder_config(), self.sequence_length
+        )
         return ModelConfig(
             learning_rate=self.learning_rate,
             batch_size=self.batch_size,
@@ -232,6 +235,9 @@ class BertBackendConfigBuilder:
             gate_config=gate_factory.build_gate_config(),
             halting_config=None,
             layer_model_config=layer_model_config,
+            sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+                self.encoder_options, self.hidden_dim
+            ),
         )
         stack_config = LayerStackConfig(
             input_dim=self.hidden_dim,

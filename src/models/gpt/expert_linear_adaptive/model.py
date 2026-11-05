@@ -19,6 +19,8 @@ from emperor.transformer.hierarchical import (
     HierarchicalLanguageModelBatch,
     HierarchicalTextGenerationOutput,
 )
+from emperor.transformer.sequence_expansion import SequenceExpansion
+from models import _sequence_expansion
 from models.gpt.expert_linear_adaptive._boundary_config_factory import GptBoundaryConfig
 from models.gpt.expert_linear_adaptive.experiment_config import ExperimentConfig
 
@@ -49,6 +51,9 @@ class Model(LanguageModelExperiment):
         self.__validate_tied_vocabulary_sizes(config, boundary_config)
         super().__init__(config)
         self.experiment_config: ExperimentConfig = experiment_config
+        self.sequence_expansion_enabled = (
+            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.decoder_config, 0) > 0
+        )
         self.boundary_config: GptBoundaryConfig = boundary_config
         hierarchical = experiment_config.hierarchical_language_model_config
         enabled = boundary_config.embedding_options.hierarchical_language_model_flag
@@ -61,6 +66,9 @@ class Model(LanguageModelExperiment):
                 raise ValueError(
                     "Hierarchical language modeling requires lm_head_weight_tying_flag=False"
                 )
+            SequenceExpansion.VALIDATOR.validate_fixed_token_output(
+                experiment_config.decoder_config, "Hierarchical language modeling"
+            )
             self.hierarchical_model = hierarchical.build()
             return
         embedding_options = boundary_config.embedding_options
@@ -248,7 +256,9 @@ class Model(LanguageModelExperiment):
         self,
         input_ids: Tensor | HierarchicalLanguageModelBatch,
         attention_mask: Tensor | None = None,
+        align_to_input: bool = False,
     ) -> tuple[Tensor, Tensor] | HierarchicalByteDecoderOutput:
+        """Return all token logits, or restore input positions with align_to_input."""
         if hasattr(self, "hierarchical_model"):
             if attention_mask is not None:
                 raise ValueError("hierarchical batches carry their own attention_mask")
@@ -261,9 +271,16 @@ class Model(LanguageModelExperiment):
         hidden, embedding_loss = self.__build_input_embeddings(
             input_ids, attention_mask
         )
-        sequence_output, auxiliary_loss = self.__run_decoder(hidden, attention_mask)
+        sequence_output, auxiliary_loss = self.__run_decoder(
+            hidden, attention_mask, align_to_input
+        )
         logits = self.lm_head(sequence_output)
         return logits, (auxiliary_loss + embedding_loss).reshape(())
+
+    def forward_for_input_tokens(self, input_ids: Tensor) -> tuple[Tensor, Tensor]:
+        if not self.sequence_expansion_enabled:
+            return super().forward_for_input_tokens(input_ids)
+        return self(input_ids, align_to_input=True)
 
     def __build_input_embeddings(
         self, input_ids: Tensor, attention_mask: Tensor
@@ -291,6 +308,7 @@ class Model(LanguageModelExperiment):
         self,
         hidden: Tensor,
         attention_mask: Tensor,
+        align_to_input: bool = False,
     ) -> tuple[Tensor, Tensor]:
         decoder_state = self.transformer(
             TransformerDecoderLayerState(
@@ -299,6 +317,8 @@ class Model(LanguageModelExperiment):
             )
         )
         sequence_output = self.decoder_layer_norm(decoder_state.hidden)
+        if align_to_input:
+            sequence_output = decoder_state.gather_input_tokens(sequence_output)
         auxiliary_loss = (
             decoder_state.loss
             if decoder_state.loss is not None
@@ -415,7 +435,7 @@ class Model(LanguageModelExperiment):
             self.eval()
             with torch.no_grad():
                 for _ in range(max_new_tokens):
-                    logits, _auxiliary_loss = self(generated)
+                    logits, _auxiliary_loss = self.forward_for_input_tokens(generated)
                     next_token = logits[:, -1, :].argmax(dim=-1, keepdim=True)
                     generated = torch.cat((generated, next_token), dim=1)
         finally:

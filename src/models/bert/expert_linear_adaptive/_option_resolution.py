@@ -11,6 +11,7 @@ from emperor.layers import (
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.bert.expert_linear_adaptive._component_config import (
     build_hierarchical_embedding_config,
 )
@@ -641,10 +642,12 @@ def _encoder_options_from_kwargs(
         normalization=config_module.NORMALIZATION,
         causal_attention_mask_flag=config_module.CAUSAL_ATTENTION_MASK_FLAG,
         output_normalization=config_module.ENCODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config_module),
     )
     updates = _pop_updates(
         kwargs,
         {
+            **{name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS},
             "hidden_dim": "hidden_dim",
             "stack_num_layers": "num_layers",
             "stack_activation": "activation",

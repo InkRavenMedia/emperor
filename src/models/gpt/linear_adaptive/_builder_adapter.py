@@ -5,6 +5,7 @@ from types import ModuleType
 from typing import Any, TypeVar, cast
 
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.gpt.linear_adaptive import _config_defaults as config_defaults
 from models.gpt.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.gpt.linear_adaptive._generation import (
@@ -520,6 +521,7 @@ def _gpt_boundary_builder_kwargs(
         )
 
     attention_keys = {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "attn_num_heads",
         "attn_num_layers",
         "attn_bias_flag",
@@ -1393,6 +1395,9 @@ def _decoder_options_from_kwargs(
         **_updates(
             kwargs,
             {
+                **{
+                    name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS
+                },
                 "hidden_dim": "hidden_dim",
                 "stack_num_layers": "num_layers",
                 "stack_activation": "activation",

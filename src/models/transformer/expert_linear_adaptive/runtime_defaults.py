@@ -15,6 +15,7 @@ from emperor.augmentations.adaptive_parameters import (
 from emperor.config import ConfigBase
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 
 from . import config
 from .runtime_options import (
@@ -1034,6 +1035,7 @@ def runtime_from_config() -> RuntimeOptions:
         recurrent_residual_block_size=config.RECURRENT_RESIDUAL_BLOCK_SIZE,
         recurrent_residual_rms_norm_epsilon=config.RECURRENT_RESIDUAL_RMS_NORM_EPSILON,
         recurrent_residual_model_flag=config.RECURRENT_RESIDUAL_MODEL_FLAG,
+        **_sequence_expansion.sequence_expansion_defaults(config, "ENCODER_"),
     )
     experts = ExpertOptions(
         use_kv_expert_models_flag=(config.EXPERT_ATTENTION_USE_KV_EXPERT_MODELS_FLAG),
@@ -1096,6 +1098,7 @@ def runtime_from_config() -> RuntimeOptions:
             num_layers=config.DECODER_NUM_LAYERS,
             layer_norm_position=config.DECODER_LAYER_NORM_POSITION,
             normalization=config.DECODER_NORMALIZATION,
+            **_sequence_expansion.sequence_expansion_defaults(config, "DECODER_"),
         ),
         encoder_attention_options=attention_options_from_config(config, "ENCODER_ATTN"),
         decoder_self_attention_options=attention_options_from_config(
@@ -1232,7 +1235,9 @@ def _resolve_scoped_stack(
         key = f"{prefix}{field_name}"
         if key in values:
             updates[field_name] = values.pop(key)
-    return replace(current, **updates)
+    return replace(
+        current, **_sequence_expansion.scoped_sequence_expansion_updates(updates)
+    )
 
 
 def _resolve_transformer_stacks(

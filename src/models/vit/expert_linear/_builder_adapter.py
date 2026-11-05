@@ -8,6 +8,7 @@ from types import ModuleType
 from typing import Any
 
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.vit.expert_linear import _config_defaults as config_defaults
 from models.vit.expert_linear._experts_builder_adapter import (
     _SUBMODULE_STACK_FIELD_MAP,
@@ -670,6 +671,9 @@ def _encoder_options_from_kwargs(
         **_updates(
             kwargs,
             {
+                **{
+                    name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS
+                },
                 "hidden_dim": "hidden_dim",
                 "stack_num_layers": "num_layers",
                 "stack_activation": "activation",
@@ -939,6 +943,7 @@ _POSITIONAL_EMBEDDING_FLAT_KEYS = frozenset(
 )
 _ATTENTION_FLAT_KEYS = frozenset(
     {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "attention_soft_moe_config",
         "attn_num_heads",
         "attn_num_layers",

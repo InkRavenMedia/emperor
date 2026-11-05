@@ -30,10 +30,11 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 
 
 @dataclass(frozen=True)
-class TransformerStackOptions:
+class TransformerStackOptions(_sequence_expansion.SequenceExpansionOptions):
     num_layers: int = 3
     layer_norm_position: LayerNormPositionOptions = LayerNormPositionOptions.BEFORE
     normalization: NormalizationOptions = field(

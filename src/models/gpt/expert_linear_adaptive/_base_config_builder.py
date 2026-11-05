@@ -28,6 +28,7 @@ from emperor.transformer import (
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.gpt.expert_linear_adaptive._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -160,7 +161,9 @@ class GptBackendConfigBuilder:
         from emperor.config import ModelConfig
 
         positional_embedding_config = self._build_positional_embedding_config()
-        decoder_config = self._build_decoder_config()
+        decoder_config = _sequence_expansion.with_expansion_attention_capacity(
+            self._build_decoder_config(), self.sequence_length
+        )
         boundary_config = BoundaryConfigFactory(
             BoundaryConfigDependencies(
                 input_dim=self.input_dim,
@@ -225,6 +228,9 @@ class GptBackendConfigBuilder:
             gate_config=gate_factory.build_gate_config(),
             halting_config=None,
             layer_model_config=layer_model_config,
+            sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+                self.decoder_options, self.hidden_dim
+            ),
         )
         stack_config = LayerStackConfig(
             input_dim=self.hidden_dim,

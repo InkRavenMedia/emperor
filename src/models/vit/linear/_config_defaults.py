@@ -2,6 +2,7 @@ from enum import Enum, auto
 from types import ModuleType
 
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.vit.linear.runtime_options import (
     DynamicMemoryOptions,
     LayerControllerOptions,
@@ -62,6 +63,7 @@ def vit_encoder_options(config: ModuleType) -> TransformerEncoderOptions:
         normalization=config.NORMALIZATION,
         causal_attention_mask_flag=False,
         output_normalization=config.ENCODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config),
     )
 
 

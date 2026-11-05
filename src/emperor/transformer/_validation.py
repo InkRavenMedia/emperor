@@ -731,9 +731,9 @@ class FeedForwardValidator(ValidatorBase):
         )
 
     @staticmethod
-    def validate_soft_layout(inputs, padding_mask, batch_first) -> None:
+    def validate_padding_layout(inputs, padding_mask, batch_first) -> None:
         if not isinstance(batch_first, bool):
-            raise TypeError("Soft MoE batch_first must be Boolean.")
+            raise TypeError("Feed-forward batch_first must be Boolean.")
         if padding_mask is None:
             return
         expected = inputs.shape[:2] if batch_first else (inputs.size(1), inputs.size(0))
@@ -743,14 +743,14 @@ class FeedForwardValidator(ValidatorBase):
             or padding_mask.device != inputs.device
         ):
             raise ValueError(
-                "Soft MoE padding_mask must have shape [batch, tokens] on the input device."
+                "Feed-forward padding_mask must have shape [batch, tokens] on the input device."
             )
         if padding_mask.dtype != torch.bool:
             if not padding_mask.is_floating_point():
                 raise TypeError(
-                    "Soft MoE padding_mask must be Boolean or additive floating point."
+                    "Feed-forward padding_mask must be Boolean or additive floating point."
                 )
             if (padding_mask.isnan() | padding_mask.isposinf()).any():
                 raise ValueError(
-                    "Soft MoE additive padding masks cannot contain NaN or positive infinity."
+                    "Feed-forward additive padding masks cannot contain NaN or positive infinity."
                 )
