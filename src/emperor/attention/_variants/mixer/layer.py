@@ -106,7 +106,7 @@ class MixerAttention(Module):
         else:
             mixing_input = token_vectors.reshape(-1, self.mixing_sequence_length)
             mixing_state = Layer.run_model_from_hidden(self.mixing_model, mixing_input)
-        mixing_state = self.VALIDATOR.validate_mixing_state(
+        self.VALIDATOR.validate_mixing_state(
             mixing_state,
             mixing_input,
         )
