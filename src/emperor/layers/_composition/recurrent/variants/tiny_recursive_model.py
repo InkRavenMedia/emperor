@@ -127,6 +127,7 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
             recurrent_state,
             answer=recurrent_state.answer.detach(),
             latent=recurrent_state.latent.detach(),
+            context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
@@ -162,14 +163,33 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
             recurrent_state.auxiliary_losses,
             transition_result.loss,
         )
-        state_updates = (
-            {"answer": transition_result.hidden}
-            if self.__updates_answer(recurrent_state)
-            else {"latent": transition_result.hidden}
+        context_state = (
+            getattr(transition_result, "context_state", None)
+            or recurrent_state.context_state
         )
+        state_updates = {
+            "answer": context_state.align_recurrent_hidden(
+                recurrent_state.answer,
+                initial=self.answer_initial,
+                source_state=recurrent_state.context_state,
+            ),
+            "latent": context_state.align_recurrent_hidden(
+                recurrent_state.latent,
+                initial=self.latent_initial,
+                source_state=recurrent_state.context_state,
+            ),
+        }
+        state_updates[
+            "answer" if self.__updates_answer(recurrent_state) else "latent"
+        ] = transition_result.hidden
         return replace(
             recurrent_state,
             **state_updates,
+            context_state=context_state,
+            fixed_input=context_state.align_recurrent_hidden(
+                recurrent_state.fixed_input,
+                source_state=recurrent_state.context_state,
+            ),
             auxiliary_losses=auxiliary_losses,
             transition_index=recurrent_state.transition_index + 1,
             halting_state=transition_result.halting_state,

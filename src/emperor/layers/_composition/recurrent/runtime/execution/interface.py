@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 class RecurrentExecutionResult:
     hidden: Tensor
     loss: Tensor | None
+    context_state: LayerState | None = None
 
 
 class RecurrentExecutionState(Protocol):

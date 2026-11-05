@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from functools import partial
 from typing import TYPE_CHECKING, Generic
 
@@ -81,8 +82,7 @@ class RecurrentExecution(Generic[_StateT]):
         iteration_schedule: RecurrentIterationSchedule,
         execution_plan: RecurrentNestedSmoothHandoffExecutionPlan,
     ) -> LayerState:
-        original_hidden = layer_state.hidden
-        original_loss = layer_state.loss
+        original_state = replace(layer_state)
         try:
             with self.__runtime_state_guard.rollback_handoff_on_failure(adapter):
                 execution_result = self.__execute_committed_nested_smooth_depth_handoff(
@@ -96,8 +96,9 @@ class RecurrentExecution(Generic[_StateT]):
                     execution_result,
                 )
         except BaseException:
-            layer_state.hidden = original_hidden
-            layer_state.loss = original_loss
+            layer_state.hidden = original_state.hidden
+            layer_state.loss = original_state.loss
+            layer_state.commit_recurrent_context(original_state)
             raise
 
     def __execute_committed_nested_smooth_depth_handoff(
@@ -142,8 +143,8 @@ class RecurrentExecution(Generic[_StateT]):
         transition_weight = execution_plan.transition_weight
         blended_result = RecurrentExecutionResult(
             hidden=self.__blend_recurrent_branch_hidden(
-                source_result.hidden,
-                target_result.hidden,
+                source_result,
+                target_result,
                 transition_weight,
             ),
             loss=adapter._blend_recurrent_branch_losses(
@@ -152,6 +153,9 @@ class RecurrentExecution(Generic[_StateT]):
                 target_result.loss,
                 transition_weight,
             ),
+            context_state=(
+                source_result if transition_weight == 0 else target_result
+            ).context_state,
         )
         return self.__accumulate_caller_loss_once(
             adapter,
@@ -166,10 +170,10 @@ class RecurrentExecution(Generic[_StateT]):
         recurrent_result: RecurrentExecutionResult,
     ) -> RecurrentExecutionResult:
         if recurrent_result.loss is None:
-            return RecurrentExecutionResult(recurrent_result.hidden, caller_loss)
-        return RecurrentExecutionResult(
-            recurrent_result.hidden,
-            adapter._accumulate_auxiliary_loss(
+            return replace(recurrent_result, loss=caller_loss)
+        return replace(
+            recurrent_result,
+            loss=adapter._accumulate_auxiliary_loss(
                 caller_loss,
                 recurrent_result.loss,
             ),
@@ -183,6 +187,8 @@ class RecurrentExecution(Generic[_StateT]):
     ) -> LayerState:
         layer_state.hidden = execution_result.hidden
         layer_state.loss = execution_result.loss
+        if execution_result.context_state is not None:
+            layer_state.commit_recurrent_context(execution_result.context_state)
         iteration_schedule.record_successful_forward()
         return layer_state
 
@@ -211,8 +217,7 @@ class RecurrentExecution(Generic[_StateT]):
         iteration_schedule: RecurrentIterationSchedule,
         execution_plan: RecurrentSmoothHandoffExecutionPlan,
     ) -> LayerState:
-        original_hidden = layer_state.hidden
-        original_loss = layer_state.loss
+        original_state = replace(layer_state)
         try:
             with self.__runtime_state_guard.rollback_handoff_on_failure(adapter):
                 execution_result = self.__execute_committed_smooth_depth_handoff(
@@ -226,8 +231,9 @@ class RecurrentExecution(Generic[_StateT]):
                     execution_result,
                 )
         except BaseException:
-            layer_state.hidden = original_hidden
-            layer_state.loss = original_loss
+            layer_state.hidden = original_state.hidden
+            layer_state.loss = original_state.loss
+            layer_state.commit_recurrent_context(original_state)
             raise
 
     def __execute_committed_smooth_depth_handoff(
@@ -268,8 +274,8 @@ class RecurrentExecution(Generic[_StateT]):
         target_result = self.__finalize_branch(adapter, target_state)
         transition_weight = execution_plan.transition_weight
         blended_hidden = self.__blend_recurrent_branch_hidden(
-            source_result.hidden,
-            target_result.hidden,
+            source_result,
+            target_result,
             transition_weight,
         )
         blended_recurrent_loss = adapter._blend_recurrent_branch_losses(
@@ -278,29 +284,40 @@ class RecurrentExecution(Generic[_StateT]):
             target_result.loss,
             transition_weight,
         )
+        context_state = (
+            source_result if transition_weight == 0 else target_result
+        ).context_state
         if blended_recurrent_loss is None:
-            return RecurrentExecutionResult(blended_hidden, layer_state.loss)
+            return RecurrentExecutionResult(
+                blended_hidden, layer_state.loss, context_state
+            )
         return RecurrentExecutionResult(
             blended_hidden,
             adapter._accumulate_auxiliary_loss(
                 layer_state.loss,
                 blended_recurrent_loss,
             ),
+            context_state,
         )
 
     @staticmethod
     def __blend_recurrent_branch_hidden(
-        source_hidden: torch.Tensor,
-        target_hidden: torch.Tensor,
+        source: RecurrentExecutionResult,
+        target: RecurrentExecutionResult,
         transition_weight: float,
     ) -> torch.Tensor:
         if transition_weight == 0.0:
-            return source_hidden
+            return source.hidden
         if transition_weight == 1.0:
-            return target_hidden
+            return target.hidden
+        source_hidden = source.hidden
+        if target.context_state is not None:
+            source_hidden = target.context_state.align_recurrent_hidden(
+                source_hidden, source_state=source.context_state
+            )
         return (
             1.0 - transition_weight
-        ) * source_hidden + transition_weight * target_hidden
+        ) * source_hidden + transition_weight * target.hidden
 
     def __advance_handoff_branches_through_shared_boundary(
         self,
@@ -448,4 +465,8 @@ class RecurrentExecution(Generic[_StateT]):
             adapter._recurrent_branch_loss(recurrent_state),
             recurrent_state.halting_state,
         )
-        return RecurrentExecutionResult(finalized_hidden, finalized_loss)
+        return RecurrentExecutionResult(
+            finalized_hidden,
+            finalized_loss,
+            replace(recurrent_state.context_state, hidden=finalized_hidden),
+        )

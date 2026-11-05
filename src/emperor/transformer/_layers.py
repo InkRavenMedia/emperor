@@ -12,6 +12,11 @@ from emperor.layers import (
 from emperor.nn import Module
 from emperor.transformer._state import TransformerDecoderLayerState
 from emperor.transformer._validation import TransformerValidator
+from emperor.transformer.sequence_expansion._block import _SequenceExpansionBlockLayer
+from emperor.transformer.sequence_expansion._validation import (
+    TransformerDecoderBlockValidator,
+    TransformerEncoderBlockValidator,
+)
 
 if TYPE_CHECKING:
     from emperor.config import ConfigBase
@@ -230,7 +235,9 @@ class TransformerEncoderLayer(Module):
         return state.hidden, loss
 
 
-class TransformerEncoderBlockLayer(Layer):
+class TransformerEncoderBlockLayer(_SequenceExpansionBlockLayer):
+    VALIDATOR = TransformerEncoderBlockValidator
+
     def _handle_model_processing(
         self,
         state: LayerState,
@@ -253,7 +260,9 @@ class TransformerEncoderBlockLayer(Layer):
         return state
 
 
-class TransformerDecoderBlockLayer(Layer):
+class TransformerDecoderBlockLayer(_SequenceExpansionBlockLayer):
+    VALIDATOR = TransformerDecoderBlockValidator
+
     def _handle_model_processing(
         self,
         state: LayerState,

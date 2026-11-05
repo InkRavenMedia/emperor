@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 
 from emperor.config import ConfigBase, optional_field
 from emperor.layers import LayerConfig
+from emperor.transformer.sequence_expansion._config import SequenceExpansionConfig
 
 if TYPE_CHECKING:
     from emperor.attention import (
@@ -63,6 +64,10 @@ class TransformerEncoderLayerConfig(ConfigBase):
 
 @dataclass
 class TransformerEncoderBlockLayerConfig(LayerConfig):
+    sequence_expansion_config: SequenceExpansionConfig | None = optional_field(
+        "Experimental expansion before attention and residual capture; None disables it."
+    )
+
     def _registry_owner(self) -> type:
         from emperor.transformer._layers import TransformerEncoderBlockLayer
 
@@ -104,6 +109,10 @@ class TransformerDecoderLayerConfig(ConfigBase):
 
 @dataclass
 class TransformerDecoderBlockLayerConfig(LayerConfig):
+    sequence_expansion_config: SequenceExpansionConfig | None = optional_field(
+        "Experimental target expansion before attention and residual capture; None disables it."
+    )
+
     def _registry_owner(self) -> type:
         from emperor.transformer._layers import TransformerDecoderBlockLayer
 

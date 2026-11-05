@@ -273,8 +273,14 @@ owners = ["emperor.sampler._config", "emperor.sampler._config", "emperor.sampler
 [[interfaces]]
 module = "emperor.transformer"
 kind = "runtime"
-exports = ["Transformer", "TransformerConfig", "TransformerEncoderLayer", "TransformerEncoderBlockLayer", "TransformerDecoderBlockLayer", "TransformerDecoderLayerState", "TransformerDecoderLayer", "TransformerEncoderLayerConfig", "TransformerEncoderBlockLayerConfig", "TransformerDecoderBlockLayerConfig", "TransformerDecoderLayerConfig", "FeedForward", "FeedForwardConfig", "SwiGLUFeedForward", "SwiGLUFeedForwardConfig"]
-owners = ["emperor.transformer._model", "emperor.transformer._config", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._state", "emperor.transformer._layers", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward"]
+exports = ["SequenceExpansion", "SequenceExpansionConfig", "SequenceExpansionRecord", "SequenceExpansionResult", "TransformerEncoderLayerState", "Transformer", "TransformerConfig", "TransformerEncoderLayer", "TransformerEncoderBlockLayer", "TransformerDecoderBlockLayer", "TransformerDecoderLayerState", "TransformerDecoderLayer", "TransformerEncoderLayerConfig", "TransformerEncoderBlockLayerConfig", "TransformerDecoderBlockLayerConfig", "TransformerDecoderLayerConfig", "FeedForward", "FeedForwardConfig", "SwiGLUFeedForward", "SwiGLUFeedForwardConfig"]
+owners = ["emperor.transformer.sequence_expansion._model", "emperor.transformer.sequence_expansion._config", "emperor.transformer.sequence_expansion._state", "emperor.transformer.sequence_expansion._state", "emperor.transformer._state", "emperor.transformer._model", "emperor.transformer._config", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._layers", "emperor.transformer._state", "emperor.transformer._layers", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._config", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward", "emperor.transformer._feed_forward"]
+
+[[interfaces]]
+module = "emperor.transformer.sequence_expansion"
+kind = "runtime"
+exports = ["SequenceExpansion", "SequenceExpansionConfig", "SequenceExpansionRecord", "SequenceExpansionResult"]
+owners = ["emperor.transformer.sequence_expansion._model", "emperor.transformer.sequence_expansion._config", "emperor.transformer.sequence_expansion._state", "emperor.transformer.sequence_expansion._state"]
 
 [[interfaces]]
 module = "emperor.datasets.image.classification"

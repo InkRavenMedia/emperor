@@ -7,7 +7,12 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from emperor._validation import ValidatorBase, _validate_grouped_row_preservation
+from emperor._validation import (
+    ValidatorBase,
+    _config_validator,
+    _configuration_visits,
+    _validate_grouped_row_preservation,
+)
 from emperor.layers._composition.gate.validation import LayerGateValidator
 from emperor.layers._composition.residual.validation import (
     ResidualConnectionValidator,
@@ -157,10 +162,12 @@ def _validate_variant_transition_output(
         field_name="transition output hidden",
         owner_name=owner_name,
     )
-    if output_state.hidden.shape != transition_input.shape:
+    try:
+        output_state.validate_recurrent_shape(transition_input)
+    except ValueError as error:
         raise ValueError(
             f"{transition_name} transition block must preserve hidden shape."
-        )
+        ) from error
     if output_state.hidden.dtype != transition_input.dtype:
         raise ValueError(
             f"{transition_name} transition block must preserve hidden dtype."
@@ -368,6 +375,14 @@ class _RecurrentCompositionValidator(ValidatorBase):
         cls, config: RecurrentCompositionConfig
     ) -> None:
         owner_name = type(config).__name__
+        for visit in _configuration_visits(config, owner_name):
+            validate_placement = getattr(
+                _config_validator(visit.config), "validate_recurrent_placement", None
+            )
+            if callable(validate_placement):
+                validate_placement(
+                    visit.config, path=visit.path, recurrent_config=config
+                )
         _validate_grouped_row_preservation(config, root=owner_name)
         _validate_recurrent_normalization_position(config, owner_name)
         cls.GATE_VALIDATOR.validate_recurrent_gate_config(
