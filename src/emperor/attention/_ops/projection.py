@@ -12,6 +12,7 @@ from emperor.nn import Module
 
 if TYPE_CHECKING:
     from emperor.attention._config import MultiHeadAttentionConfig
+    from emperor.attention._memory.config import AttentionSourceMemoryConfig
     from emperor.attention._runtime import (
         MultiHeadAttentionInputs,
     )
@@ -31,6 +32,9 @@ class ProjectorBase(Module):
         self.query_key_projection_dim: int = self.cfg.query_key_projection_dim
         self.value_projection_dim: int = self.cfg.value_projection_dim
         self.source_memory_flag: bool = bool(self.cfg.source_memory_flag)
+        self.source_memory_config: AttentionSourceMemoryConfig | None = (
+            self.cfg.source_memory_config
+        )
         self.projection_model_config: LayerStackConfig | RecurrentCompositionConfig = (
             self.cfg.projection_model_config
         )
@@ -40,9 +44,18 @@ class ProjectorBase(Module):
         self.auxiliary_loss: Tensor | None = None
 
     def __maybe_initialize_source_memory(self) -> AttentionSourceMemory | None:
-        if self.source_memory_flag:
-            return AttentionSourceMemory(self.cfg)
-        return None
+        if not self.source_memory_flag:
+            return None
+        self.VALIDATOR.validate_projection_widths(
+            self.embedding_dim,
+            self.query_key_projection_dim,
+            self.value_projection_dim,
+        )
+        self.VALIDATOR.validate_config_type(self.source_memory_config)
+        return self._build_from_config(
+            self.source_memory_config,
+            embedding_dim=self.embedding_dim,
+        )
 
     def __resolve_kv_dimensions(self) -> None:
         if not self.query_key_projection_dim:
