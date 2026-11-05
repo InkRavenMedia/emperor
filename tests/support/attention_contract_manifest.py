@@ -197,6 +197,8 @@ ATTENTION_CONTRACT_MANIFEST = {
             (
                 "independent generator",
                 "context grouping",
+                "inferred embedding width",
+                "registry construction and overrides",
             ),
             "tests.unit.test_grouped_attention_memory",
         ),

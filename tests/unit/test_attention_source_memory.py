@@ -23,14 +23,19 @@ from emperor.memory._base import DynamicMemoryAbstract
 from support.attention import build_attention_config
 
 
-def source_memory_config(chunk_size=1):
+def source_memory_config(chunk_size=1, embedding_dim=None):
     return AttentionSourceMemoryConfig(
-        grouping_config=SumGroupingConfig(chunk_size=chunk_size)
+        grouping_config=SumGroupingConfig(chunk_size=chunk_size),
+        embedding_dim=embedding_dim,
     )
 
 
 def test_source_memory_builds_and_runs_without_a_projector():
-    memory = AttentionSourceMemory(attention_config()).double().eval()
+    config = source_memory_config(embedding_dim=4)
+    assert config.registry_owner() is AttentionSourceMemory
+    memory = config.build().double().eval()
+    assert isinstance(memory, AttentionSourceMemory)
+    assert memory.cfg is config
     inputs = torch.randn(3, 2, 4, dtype=torch.float64, requires_grad=True)
     projected, skip_mask, loss = memory(inputs)
     assert projected.shape == (6, 4)
@@ -43,6 +48,50 @@ def test_source_memory_builds_and_runs_without_a_projector():
         parameter.grad is not None and parameter.grad.abs().sum() > 0
         for parameter in memory.parameters()
     )
+
+
+def test_source_memory_build_overrides_preserve_the_original_configuration():
+    config = source_memory_config(chunk_size=2, embedding_dim=9)
+    memory = config.build(
+        AttentionSourceMemoryConfig(
+            embedding_dim=4, model_config=LinearLayerConfig(bias_flag=False)
+        )
+    )
+    assert config.embedding_dim == 9
+    assert config.model_config is None
+    assert config.grouping_config.feature_dim is None
+    assert memory.cfg.embedding_dim == 4
+    assert memory.context.cfg is memory.cfg
+    assert memory.context.chunk_size == 2
+    assert memory.model.input_dim == memory.model.output_dim == 4
+    assert memory.model.bias_params is None
+    memory_rows, _, _ = memory(torch.randn(5, 2, 4))
+    assert memory_rows.shape == (6, 4)
+
+
+def test_projector_builds_memory_from_its_own_config_with_inferred_width():
+    memory_config = source_memory_config(chunk_size=2, embedding_dim=99)
+    config = attention_config(source_memory_config=memory_config)
+    model = config.build()
+    memory = model.projector.source_memory
+    assert isinstance(memory.cfg, AttentionSourceMemoryConfig)
+    assert memory.cfg.embedding_dim == config.embedding_dim == 4
+    assert model.cfg.source_memory_config.embedding_dim == 99
+    assert memory_config.embedding_dim == 99
+    assert memory_config.grouping_config.feature_dim is None
+    assert memory.cfg.model_config is None
+    assert memory.context.chunk_size == 2
+
+
+@pytest.mark.parametrize("embedding_dim", [None, 0, -1, True, 4.0])
+def test_standalone_memory_requires_a_positive_embedding_dimension(embedding_dim):
+    with pytest.raises(ValueError, match="embedding_dim.*positive integer"):
+        source_memory_config(embedding_dim=embedding_dim).build()
+
+
+def test_memory_constructor_rejects_the_parent_attention_config():
+    with pytest.raises(TypeError, match="AttentionSourceMemoryConfig"):
+        AttentionSourceMemory(attention_config())
 
 
 def test_memory_uses_its_own_linear_generator_without_input_blending():
