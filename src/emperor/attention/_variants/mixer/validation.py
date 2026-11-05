@@ -3,18 +3,17 @@
 from typing import TYPE_CHECKING
 
 import torch
+from torch import Tensor
 
 from emperor._validation import (
     ValidatorBase,
+    _adaptive_grouping_configs,
     _configuration_visits,
     _first_adaptive_grouping_path,
 )
-from emperor.attention._validation import AttentionSourceMemoryValidator
 from emperor.layers import LayerState
 
 if TYPE_CHECKING:
-    from torch import Tensor
-
     from emperor.attention._variants.mixer.layer import MixerAttention
 
 
@@ -30,10 +29,26 @@ class MixerAttentionValidator(ValidatorBase):
             sequence_length=model.sequence_length,
         )
         if model.cfg.source_memory_config is not None:
-            AttentionSourceMemoryValidator.validate_memory_config(
-                model.cfg.source_memory_config
-            )
+            cls.validate_memory_config(model.cfg.source_memory_config)
         cls._validate_mixing_model_config(model.mixing_model_config)
+
+    @staticmethod
+    def validate_memory_config(memory_config) -> None:
+        from emperor.memory import DynamicMemoryConfig
+
+        if not isinstance(memory_config, DynamicMemoryConfig):
+            raise TypeError("source_memory_config must be a DynamicMemoryConfig.")
+        if any(_adaptive_grouping_configs(memory_config, root="source_memory_config")):
+            raise ValueError(
+                "Attention source memory requires independent token rows; grouping is unsupported."
+            )
+
+    @staticmethod
+    def validate_output(memory: Tensor, source: Tensor) -> None:
+        if not isinstance(memory, Tensor) or memory.shape != source.shape:
+            raise ValueError(
+                "Attention source memory must preserve the token rows and feature width."
+            )
 
     @classmethod
     def _validate_mixing_model_config(cls, mixing_model_config: object) -> None:

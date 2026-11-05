@@ -39,7 +39,7 @@ EXPECTED_EXPORTS = (
 )
 
 EXPECTED_OWNERS = {
-    "AttentionSourceMemoryConfig": "emperor.attention._config",
+    "AttentionSourceMemoryConfig": "emperor.attention._memory.config",
     "MultiHeadAttentionConfig": "emperor.attention._config",
     "SelfAttentionConfig": "emperor.attention._variants.self_attention.config",
     "SelfAttentionProjectionStrategy": (

@@ -3,24 +3,16 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from emperor.attention._memory.config import (
+    AttentionSourceMemoryConfig as AttentionSourceMemoryConfig,
+)
 from emperor.config import ConfigBase, optional_field
 
 if TYPE_CHECKING:
     from torch.types import _dtype as DType
 
-    from emperor.augmentations.adaptive_parameters import GroupingConfig
     from emperor.embedding.relative import RelativePositionalEmbeddingConfig
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
-
-
-@dataclass
-class AttentionSourceMemoryConfig(ConfigBase):
-    model_config: ConfigBase | None = optional_field(
-        "Independent row-preserving memory generator. Defaults to a learned linear projection."
-    )
-    grouping_config: "GroupingConfig | None" = optional_field(
-        "Per-sequence chunk_size grouping; generate one memory embedding per reduced chunk. Runtime inputs determine layout and length."
-    )
 
 
 @dataclass

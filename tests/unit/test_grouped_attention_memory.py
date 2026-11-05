@@ -1,10 +1,11 @@
+import pickle
 from dataclasses import replace
 
 import pytest
 import torch
 
 from emperor.attention import AttentionSourceMemoryConfig
-from emperor.attention._ops.source_memory import AttentionSourceMemory
+from emperor.attention._memory.model import AttentionSourceMemory
 from emperor.augmentations.adaptive_parameters import SumGroupingConfig
 from tests.unit.test_attention_source_memory import attention_config
 
@@ -23,6 +24,19 @@ def grouped_config(*, chunk=2, **overrides):
         ),
         **overrides,
     )
+
+
+def test_memory_config_preserves_its_previous_serialized_owner():
+    legacy_config_reference = (
+        b"cemperor.attention._config\nAttentionSourceMemoryConfig\n."
+    )
+    assert pickle.loads(legacy_config_reference) is AttentionSourceMemoryConfig
+    config = AttentionSourceMemoryConfig(
+        grouping_config=SumGroupingConfig(chunk_size=2)
+    )
+    restored = pickle.loads(pickle.dumps(config))
+    assert type(restored) is AttentionSourceMemoryConfig
+    assert restored == config
 
 
 def test_standalone_memory_requires_explicit_context_configuration():

@@ -1,5 +1,3 @@
-"""Visibility of memory is the intersection of its context members' visibility."""
-
 from dataclasses import replace
 from typing import cast
 
@@ -7,17 +5,31 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
-from emperor.attention._config import AttentionSourceMemoryConfig
+from emperor.attention._memory.config import AttentionSourceMemoryConfig
 from emperor.attention._runtime import AttentionRuntimeLayout, MultiHeadAttentionInputs
 
 
 class GroupedMemoryMask:
-    """Extend already-canonical token masks with context-memory visibility."""
-
     def __init__(self, cfg: AttentionSourceMemoryConfig, *, num_heads: int) -> None:
         self.cfg: AttentionSourceMemoryConfig = cfg
         self.num_heads: int = num_heads
         self.chunk_size: int = self.cfg.grouping_config.chunk_size
+
+    def split_attention_mask(
+        self, attention_inputs: MultiHeadAttentionInputs
+    ) -> tuple[Tensor | None, Tensor | None]:
+        attention_mask = attention_inputs.attention_mask
+        source_length = attention_inputs.key.size(0)
+        memory_length = (source_length + self.chunk_size - 1) // self.chunk_size
+        if (
+            attention_mask is None
+            or attention_mask.size(-1) != source_length + memory_length
+        ):
+            return attention_mask, None
+        token_mask, memory_mask = attention_mask.split(
+            (source_length, memory_length), dim=-1
+        )
+        return token_mask, memory_mask
 
     def extend_masks(
         self,
@@ -131,8 +143,8 @@ class GroupedMemoryMask:
             ),
         )
 
-    @staticmethod
     def __expand_attention_mask(
+        self,
         attention_mask: Tensor | None,
         key_padding_mask: Tensor,
         runtime_layout: AttentionRuntimeLayout,
