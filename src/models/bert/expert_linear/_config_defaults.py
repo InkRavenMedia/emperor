@@ -12,6 +12,7 @@ from emperor.layers import (
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.bert.expert_linear.runtime_options import (
     BertEmbeddingOptions,
     BertMlmHeadOptions,
@@ -70,6 +71,7 @@ def bert_encoder_options(config: ModuleType) -> TransformerEncoderOptions:
         normalization=config.NORMALIZATION,
         causal_attention_mask_flag=config.CAUSAL_ATTENTION_MASK_FLAG,
         output_normalization=config.ENCODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config),
     )
 
 

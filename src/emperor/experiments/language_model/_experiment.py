@@ -74,7 +74,7 @@ class LanguageModelExperiment(LightningModule):
         tokens, targets = self._unpack_batch(batch)
         tokens = tokens.to(self.device)
         targets = targets.to(self.device)
-        output = self(tokens)
+        output = self.forward_for_input_tokens(tokens)
         if isinstance(output, tuple):
             if len(output) != 2:
                 raise ValueError(
@@ -114,6 +114,12 @@ class LanguageModelExperiment(LightningModule):
             labels=targets,
             auxiliary_loss=auxiliary_loss,
         )
+
+    def forward_for_input_tokens(
+        self, tokens: Tensor
+    ) -> Tensor | tuple[Tensor, Tensor | None]:
+        """Return predictions aligned with the task's input-token labels."""
+        return self(tokens)
 
     @staticmethod
     def _unpack_batch(batch: LanguageModelBatch) -> LanguageModelBatch:

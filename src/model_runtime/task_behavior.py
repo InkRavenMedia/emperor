@@ -45,6 +45,7 @@ class ExperimentTaskBehavior:
         return self.synthetic_input_builder(dataset, configuration)
 
     def validate_dataset(self, dataset: type, configuration: Any) -> None:
+        self.validate_configuration(configuration)
         if self.task != ExperimentTask.CAUSAL_LANGUAGE_MODELING:
             return
         experiment = getattr(configuration, "experiment_config", None)
@@ -54,6 +55,17 @@ class ExperimentTaskBehavior:
             raise ValueError(
                 "Hierarchical language modeling requires a compatible raw-text dataset such as WikiText103Hierarchical"
             )
+
+    def validate_configuration(self, configuration: Any) -> None:
+        from emperor.transformer.sequence_expansion import SequenceExpansion
+
+        experiment = getattr(configuration, "experiment_config", None)
+        if getattr(experiment, "hierarchical_language_model_config", None) is None:
+            return
+        SequenceExpansion.VALIDATOR.validate_fixed_token_output(
+            getattr(experiment, "decoder_config", None),
+            "Hierarchical language modeling",
+        )
 
     def dataset_constructor_kwargs(self, configuration: Any) -> dict[str, Any]:
         arguments = {

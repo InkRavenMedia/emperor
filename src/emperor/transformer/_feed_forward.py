@@ -174,11 +174,29 @@ class FeedForward(Module):
             )
         original_shape = input_batch.shape
         flattened_input = input_batch.reshape(-1, self.input_dim)
+        valid_rows = None
+        if padding_mask is not None:
+            self.VALIDATOR.validate_padding_layout(
+                input_batch, padding_mask, batch_first
+            )
+            excluded = (
+                padding_mask
+                if padding_mask.dtype == torch.bool
+                else padding_mask.isneginf()
+            )
+            if not batch_first:
+                excluded = excluded.transpose(0, 1)
+            valid_rows = ~excluded.reshape(-1)
+            flattened_input = flattened_input[valid_rows]
         feed_forward_state = Layer.run_model_from_hidden(
             self.model,
             flattened_input,
         )
-        output = feed_forward_state.hidden.view(*original_shape[:-1], self.output_dim)
+        output = feed_forward_state.hidden
+        if valid_rows is not None:
+            restored = output.new_zeros(valid_rows.numel(), self.output_dim)
+            output = restored.index_copy(0, valid_rows.nonzero().squeeze(1), output)
+        output = output.view(*original_shape[:-1], self.output_dim)
         loss = (
             feed_forward_state.loss
             if feed_forward_state.loss is not None
@@ -195,7 +213,7 @@ class FeedForward(Module):
     ) -> tuple[Tensor, Tensor]:
         from emperor.experts import MixtureOfExpertsLayerState
 
-        self.VALIDATOR.validate_soft_layout(inputs, padding_mask, batch_first)
+        self.VALIDATOR.validate_padding_layout(inputs, padding_mask, batch_first)
         tokens = inputs if batch_first else inputs.transpose(0, 1)
         active = None
         if padding_mask is not None:

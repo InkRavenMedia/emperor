@@ -23,6 +23,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.vit.linear._residual import ResidualStackOptions
 
 
@@ -203,7 +204,7 @@ class RecurrentControllerOptions:
 
 
 @dataclass(frozen=True)
-class TransformerEncoderOptions:
+class TransformerEncoderOptions(_sequence_expansion.SequenceExpansionOptions):
     output_normalization: NormalizationOptions = field(
         default=NormalizationOptions.LAYER_NORM, kw_only=True
     )

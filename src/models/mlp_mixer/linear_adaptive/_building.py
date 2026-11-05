@@ -47,6 +47,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
+from models import _sequence_expansion
 from models.mlp_mixer.linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -857,6 +858,9 @@ def encoder_config(runtime: RuntimeOptions, tokens: int):
         ),
     )
     block_layer = TransformerEncoderBlockLayerConfig(
+        sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+            runtime, runtime.hidden_dim
+        ),
         activation=ActivationOptions.DISABLED,
         residual_config=_residual(
             runtime,

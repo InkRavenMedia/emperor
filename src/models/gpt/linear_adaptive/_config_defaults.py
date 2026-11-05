@@ -23,6 +23,7 @@ from emperor.layers import (
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.gpt.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
     AdaptiveGeneratorStackSource,
@@ -117,6 +118,7 @@ def gpt_decoder_options(config: ModuleType) -> TransformerDecoderOptions:
         layer_norm_position=config.LAYER_NORM_POSITION,
         normalization=config.NORMALIZATION,
         output_normalization=config.DECODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config),
     )
 
 

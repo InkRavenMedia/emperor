@@ -316,6 +316,9 @@ class ExperimentBase:
                     "Accepted Run materialization must produce exactly one "
                     f"configuration, got {len(configs)}."
                 )
+            experiment_task_behavior(self.experiment_task).validate_configuration(
+                configs[0]
+            )
             training_runs.append(
                 TrainingRun(
                     experiment_task=self.experiment_task,

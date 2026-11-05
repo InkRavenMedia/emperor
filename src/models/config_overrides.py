@@ -5,6 +5,7 @@ import inspect
 from enum import Enum
 from typing import Any
 
+from model_runtime.inspection.field_descriptions import config_field_description
 from model_runtime.packages import (
     ModelPackage,
 )
@@ -93,7 +94,17 @@ def add_config_override_arguments(
             dest=dest,
             default=None,
             metavar="VALUE",
-            help=argparse.SUPPRESS,
+            help=(
+                config_field_description(
+                    key,
+                    section="Sequence Expansion",
+                    kind="unknown",
+                    nullable=package.runtime_defaults_spec.current_value(key) is None,
+                    default=package.runtime_defaults_spec.current_value(key),
+                )
+                if "SEQUENCE_EXPANSION_" in key
+                else argparse.SUPPRESS
+            ),
         )
         dest_to_key[dest] = key
     parser.add_argument(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from emperor.config import ModelConfig
+from models import _sequence_expansion
 
 from ._building import encoder_config, output_config, patch_config, sequence_length
 from .experiment_config import ExperimentConfig
@@ -31,7 +32,9 @@ class MlpMixerExpertLinearAdaptiveConfigBuilder:
             sequence_length=self.sequence_length,
             experiment_config=ExperimentConfig(
                 patch_config=patch_config(runtime),
-                encoder_config=encoder_config(runtime, self.sequence_length),
+                encoder_config=_sequence_expansion.with_expansion_attention_capacity(
+                    encoder_config(runtime, self.sequence_length), self.sequence_length
+                ),
                 output_config=output_config(runtime),
                 encoder_output_normalization=runtime.encoder_output_normalization,
             ),

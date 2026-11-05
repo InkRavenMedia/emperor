@@ -10,6 +10,7 @@ from emperor.layers import (
 )
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.gpt.expert_linear_adaptive._expert_adapter_support import (
     _SUBMODULE_STACK_FIELD_MAP,
     _controller_stack_source,
@@ -567,10 +568,12 @@ def _decoder_options_from_kwargs(
         layer_norm_position=config_module.LAYER_NORM_POSITION,
         normalization=config_module.NORMALIZATION,
         output_normalization=config_module.DECODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config_module),
     )
     updates = _pop_updates(
         kwargs,
         {
+            **{name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS},
             "hidden_dim": "hidden_dim",
             "stack_num_layers": "num_layers",
             "stack_activation": "activation",

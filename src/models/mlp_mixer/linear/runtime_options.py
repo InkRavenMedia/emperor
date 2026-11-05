@@ -17,10 +17,11 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
+from models import _sequence_expansion
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions:
+class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     token_mixer_soft_moe_config: SoftMoEConfig | None = field(
         default=None, kw_only=True
     )

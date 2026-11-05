@@ -10,6 +10,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerState,
 )
+from emperor.transformer import TransformerEncoderLayerState
 from models.vit.linear.experiment_config import ExperimentConfig
 
 if TYPE_CHECKING:
@@ -67,7 +68,9 @@ class Model(ClassifierExperiment):
         return self.positional_embedding(patch_embeddings)
 
     def __encode_token_embeddings(self, token_embeddings: Tensor) -> LayerState:
-        encoder_state = Layer.run_model_from_hidden(self.transformer, token_embeddings)
+        encoder_state = self.transformer(
+            TransformerEncoderLayerState(hidden=token_embeddings)
+        )
         encoder_state.hidden = self.encoder_layer_norm(encoder_state.hidden)
         return encoder_state
 

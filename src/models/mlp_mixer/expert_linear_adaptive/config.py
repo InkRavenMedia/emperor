@@ -1,4 +1,6 @@
-from emperor.augmentations.adaptive_parameters import (
+from emperor.augmentations.adaptive_parameters import (  # noqa: F401
+    AdaptiveLinearLayerConfig,
+    AdaptiveParameterAugmentationConfig,
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
     AdditiveDynamicBiasConfig,  # noqa: F401
@@ -44,6 +46,10 @@ from emperor.augmentations.adaptive_parameters import (
     WeightNormalizationPositionOptions,
 )
 from emperor.config import ConfigBase
+from emperor.embedding.absolute import (  # noqa: F401
+    TextLearnedPositionalEmbeddingConfig,
+    TextSinusoidalPositionalEmbeddingConfig,
+)
 from emperor.experts import (
     DroppedTokenOptions,
     ExpertWeightingPositionOptions,
@@ -55,18 +61,21 @@ from emperor.halting import (
     HaltingHiddenStateModeOptions,
     StickBreakingConfig,
 )
-from emperor.layers import (
+from emperor.layers import (  # noqa: F401
     ActivationOptions,
     AdditiveResidualConfig,
     AttentionResidualConfig,  # noqa: F401
     LastLayerBiasOptions,
+    LayerConfig,
     LayerGateOptions,
     LayerNormPositionOptions,
+    LayerStackConfig,
     NormalizationOptions,
     ResidualConfig,
     WeightedBlendResidualConfig,  # noqa: F401
     WeightedResidualConfig,  # noqa: F401
 )
+from emperor.linears import LinearLayerConfig  # noqa: F401
 from emperor.memory import (
     AttentionDynamicMemoryConfig,  # noqa: F401
     DynamicMemoryConfig,
@@ -75,6 +84,7 @@ from emperor.memory import (
     MemoryPositionOptions,
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
+from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 
@@ -1181,3 +1191,15 @@ CHANNEL_MIXER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 CHANNEL_MIXER_GROUPING_RMS_NORM_EPSILON: float | None = None
 
 declare_soft_moe_runtime_defaults(globals())
+
+
+# Optional Sequence Expansion
+SEQUENCE_EXPANSION_FLAG: bool = False
+SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
+SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
+SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
+SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+    TextLearnedPositionalEmbeddingConfig
+    | TextSinusoidalPositionalEmbeddingConfig
+    | None
+) = None

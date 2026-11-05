@@ -4,6 +4,27 @@ from dataclasses import dataclass
 from typing import Any
 
 EXPLICIT_FIELD_DESCRIPTIONS = {
+    "SEQUENCE_EXPANSION_FLAG": (
+        "Enables count prediction and latent-token expansion before each transformer "
+        "block invocation, including supported recurrent passes. Defaults to false."
+    ),
+    "SEQUENCE_EXPANSION_CONFIG": (
+        "Supplies a complete SequenceExpansionConfig as structured configuration JSON. "
+        "Individual expansion settings override the corresponding fields."
+    ),
+    "SEQUENCE_EXPANSION_MAX_NEW_TOKENS": (
+        "Sets the per-invocation maximum. Each sample adds the most probable count "
+        "from 1 through this value; it is not an overall sequence-length limit."
+    ),
+    "SEQUENCE_EXPANSION_MODEL_CONFIG": (
+        "Supplies the required count-predictor configuration as structured JSON. "
+        "Input width and output count are inferred from the block and per-call maximum."
+    ),
+    "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG": (
+        "Optionally supplies learned or sinusoidal text positions for generated tokens "
+        "as structured JSON. None leaves positions disabled unless the complete "
+        "expansion configuration supplies them."
+    ),
     "BATCH_SIZE": (
         "Sets the number of examples processed in each training batch. Larger "
         "batches can improve throughput but use more memory and change optimizer "
@@ -479,8 +500,18 @@ def config_field_description(
 ) -> str:
     """Return practical help text for a public config field."""
 
-    explicit_description = EXPLICIT_FIELD_DESCRIPTIONS.get(key)
+    description_key = key
+    for prefix in ("ENCODER_", "DECODER_"):
+        if key.startswith(f"{prefix}SEQUENCE_EXPANSION_"):
+            description_key = key.removeprefix(prefix)
+            break
+    explicit_description = EXPLICIT_FIELD_DESCRIPTIONS.get(description_key)
     if explicit_description is not None:
+        if description_key != key:
+            return (
+                explicit_description
+                + " Overrides the common setting for this stack; None inherits it."
+            )
         return explicit_description
 
     subject = _subject_for_key(key, section)
