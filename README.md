@@ -1,24 +1,25 @@
 # Emperor
 
+**A PyTorch research framework for small, adaptive neural networks.**
+
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](mise.toml)
+[![PyTorch 2.12](https://img.shields.io/badge/PyTorch-2.12-EE4C2C?logo=pytorch&logoColor=white)](#environment-setup)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC_BY--NC_4.0-4C566A)](LICENSE)
+
 **Current package version:** `0.1.0`
 
-Emperor is a personal PyTorch research framework for building experimental neural
-network models from reusable, inspectable components. The repository combines:
+Emperor is a personal machine learning research project for building experimental
+models from reusable, inspectable components. Use the CLI and browser Workbench
+to inspect architectures, train models, compare variants, and review results.
 
-- `src/emperor/` - core neural modules, controller primitives, datasets, training
-  helpers, and monitor callbacks.
-- `src/model_runtime/` - consumer-neutral Model Package, Inspection, Run, and
-  project Adapter interfaces shared by the CLI and Workbench.
-- `src/models/` - reference experiment packages that compose the core modules into
-  runnable architectures.
-- `apps/workbench/api/` - the separately installable FastAPI application for
-  inspection, run history, config snapshots, and local training jobs.
-- `apps/workbench/web/` - the Next.js Workbench frontend for planning experiments
-  and reviewing live or historical monitor data.
+The focus is repeatable experimentation: build small models, measure what
+changes, and use the evidence to decide which ideas to explore next.
 
-The main goal is repeatable model experimentation: build small models, compare
-variants, watch what happens during training, and use the results to decide
-which ideas are worth exploring next.
+[Research mission](#research-mission) ·
+[Example model](#example-model-adaptive-bert-with-soft-moe-and-attention-memory) ·
+[Installation](#environment-setup) · [Quick start](#quick-start) ·
+[Experiment CLI](#running-experiments) · [Workbench](#workbench) ·
+[Results and logs](#results-and-logs)
 
 ## About the author
 
@@ -71,10 +72,67 @@ matrices to score 16 experts with 10 slots each. Embeddings, prediction heads,
 and parts of the byte encoder use other matrix shapes. The complete
 configuration has **5,023,983 trainable parameters** (approximately 5.02 million).
 
+### Research foundations
+
+This configuration includes:
+
+- **BERT pretraining:** a bidirectional encoder trained with masked language
+  modeling and next-sentence prediction, following
+  [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/pdf/1810.04805).
+- **Data-dependent parameters:** adaptive linear layers generate weights, biases,
+  and diagonal coefficients from their inputs. This applies to the experts,
+  routers, and key/value projections, drawing on
+  the parameter-generation principle of
+  [HyperNetworks](https://arxiv.org/pdf/1609.09106).
+- **Grouped parameter generation:** token-level adaptive layers sum groups of
+  five tokens to generate 20 parameter sets for each 100-token sequence. Each
+  set is shared by its five tokens, while the output retains all 100 positions.
+  The same grouping setting applies inside experts, where their ten Soft MoE
+  slots form two groups of five per expert and sequence.
+- **Soft mixture of experts:** both attention and feedforward computation use
+  learned soft assignments to pool token information into expert slots and
+  combine expert outputs back into token representations. This applies the
+  slot-routing idea from
+  [From Sparse to Soft Mixtures of Experts](https://arxiv.org/pdf/2308.00951),
+  extending it to attention in this project.
+- **Latent-space reasoning research:** a shared recurrent transformer block
+  repeatedly updates the sequence's hidden representations, following the
+  recurrence principle of
+  [Universal Transformers](https://arxiv.org/abs/1807.03819).
+  [Less is More: Recursive Reasoning with Tiny Networks](https://arxiv.org/pdf/2510.04871v1)
+  provides related inspiration for iterative latent reasoning; this example
+  selects the general recurrent block rather than the TRM architecture.
+- **Adaptive halting:** a learned stick-breaking controller determines when
+  individual token positions halt, following
+  [Sparse Universal Transformer](https://arxiv.org/pdf/2310.07096). A ponder-cost
+  penalty accounts for additional computation during training, with
+  [Adaptive Computation Time for Recurrent Neural Networks](https://arxiv.org/abs/1603.08983)
+  providing the foundational adaptive-computation idea.
+- **Gradual depth growth:** the recurrent computation starts at two iterations
+  and can grow smoothly toward a maximum of ten as training progresses.
+- **Attention memory:** the sequence is summed in chunks of ten tokens, and an
+  independent learned linear model generates one memory embedding per chunk.
+  The 100-token example adds ten memory key/value sources while preserving the
+  original output sequence length.
+- **Attention residual connections:** learned attention weights combine states
+  from earlier recurrent computation steps, applying
+  [Attention Residuals](https://arxiv.org/pdf/2603.15031) across recurrent depth.
+  Residual routing keys use
+  [Root Mean Square Layer Normalization](https://arxiv.org/abs/1910.07467).
+- **Hierarchical byte embeddings:** a byte-level transformer builds token
+  representations from their UTF-8 bytes, with learned byte positions and a
+  limit of 64 bytes per token. This adapts the byte-to-token encoder idea from
+  [Hierarchical Autoregressive Transformers: Combining Byte- and Word-Level Processing for Robust, Adaptable Language Models](https://arxiv.org/abs/2501.10322).
+
+### Run the example
+
 After [GPU environment setup](#environment-setup), run the following Bash
 command from the repository root with the WikiText-2 text files available in
 `data/wikitext-2/wikitext-2/`. The flags enable the hierarchical input encoder,
 Soft MoE in attention and feedforward layers, and attention memory.
+
+<details>
+<summary>Full training command (Bash)</summary>
 
 ```bash
 mise run experiment -- \
@@ -174,66 +232,27 @@ mise run experiment -- \
   --attn-grouping-input-order SEQUENCE_FIRST
 ```
 
-This configuration includes:
+</details>
 
-- **BERT pretraining:** a bidirectional encoder trained with masked language
-  modeling and next-sentence prediction, following
-  [BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding](https://arxiv.org/pdf/1810.04805).
-- **Data-dependent parameters:** adaptive linear layers generate weights, biases,
-  and diagonal coefficients from their inputs. This applies to the experts,
-  routers, and key/value projections, drawing on
-  the parameter-generation principle of
-  [HyperNetworks](https://arxiv.org/pdf/1609.09106).
-- **Grouped parameter generation:** token-level adaptive layers sum groups of
-  five tokens to generate 20 parameter sets for each 100-token sequence. Each
-  set is shared by its five tokens, while the output retains all 100 positions.
-  The same grouping setting applies inside experts, where their ten Soft MoE
-  slots form two groups of five per expert and sequence.
-- **Soft mixture of experts:** both attention and feedforward computation use
-  learned soft assignments to pool token information into expert slots and
-  combine expert outputs back into token representations. This applies the
-  slot-routing idea from
-  [From Sparse to Soft Mixtures of Experts](https://arxiv.org/pdf/2308.00951),
-  extending it to attention in this project.
-- **Latent-space reasoning research:** a shared recurrent transformer block
-  repeatedly updates the sequence's hidden representations, following the
-  recurrence principle of
-  [Universal Transformers](https://arxiv.org/abs/1807.03819).
-  [Less is More: Recursive Reasoning with Tiny Networks](https://arxiv.org/pdf/2510.04871v1)
-  provides related inspiration for iterative latent reasoning; this example
-  selects the general recurrent block rather than the TRM architecture.
-- **Adaptive halting:** a learned stick-breaking controller determines when
-  individual token positions halt, following
-  [Sparse Universal Transformer](https://arxiv.org/pdf/2310.07096). A ponder-cost
-  penalty accounts for additional computation during training, with
-  [Adaptive Computation Time for Recurrent Neural Networks](https://arxiv.org/abs/1603.08983)
-  providing the foundational adaptive-computation idea.
-- **Gradual depth growth:** the recurrent computation starts at two iterations
-  and can grow smoothly toward a maximum of ten as training progresses.
-- **Attention memory:** the sequence is summed in chunks of ten tokens, and an
-  independent learned linear model generates one memory embedding per chunk.
-  The 100-token example adds ten memory key/value sources while preserving the
-  original output sequence length.
-- **Attention residual connections:** learned attention weights combine states
-  from earlier recurrent computation steps, applying
-  [Attention Residuals](https://arxiv.org/pdf/2603.15031) across recurrent depth.
-  Residual routing keys use
-  [Root Mean Square Layer Normalization](https://arxiv.org/abs/1910.07467).
-- **Hierarchical byte embeddings:** a byte-level transformer builds token
-  representations from their UTF-8 bytes, with learned byte positions and a
-  limit of 64 bytes per token. This adapts the byte-to-token encoder idea from
-  [Hierarchical Autoregressive Transformers: Combining Byte- and Word-Level Processing for Robust, Adaptable Language Models](https://arxiv.org/abs/2501.10322).
+### Validation status
 
 The earlier configuration with two slots per expert completed a five-minute
 local GPU training test with finite losses and gradients and a successful
 checkpoint reload. Longer training and evaluations of language and reasoning
 quality remain research work.
 
-## Environment Setup
+## Environment setup
 
 **System requirements:** Git and [mise](https://mise.jdx.dev/). Mise provisions
 the pinned Python 3.13 and Node 24 toolchains; Visual Studio, Xcode, and a
 system Python or Node installation are not setup prerequisites.
+
+Clone the repository, then run the setup commands below from its root:
+
+```text
+git clone https://github.com/InkRavenMedia/emperor.git
+cd emperor
+```
 
 The guaranteed CPU baseline covers Ubuntu 24.04 x64, WSL2 Ubuntu 24.04 x64,
 Windows 11 x64 with PowerShell, and macOS 15+ Apple Silicon. Intel macOS is not
@@ -328,17 +347,8 @@ mise run experiment -- \
 Emperor does not automatically select a GPU or change training precision for
 this profile.
 
-The Workbench is available at:
-
-```text
-http://localhost:9000
-```
-
-The local Workbench API defaults to:
-
-```text
-http://127.0.0.1:9999
-```
+The Workbench opens at [localhost:9000](http://localhost:9000). The local API
+defaults to [127.0.0.1:9999](http://127.0.0.1:9999).
 
 Start, inspect, or stop validated Workbench process trees:
 
@@ -360,7 +370,7 @@ export WORKBENCH_FRONTEND_PORT=9000
 export NEXT_PUBLIC_WORKBENCH_API_URL=http://127.0.0.1:9999
 ```
 
-## Current State
+## Current state
 
 Use this command to validate the full local setup:
 
@@ -388,7 +398,7 @@ The Workbench has grown into a local experiment workbench with three workspaces:
 - **Logs** - browse historical TensorBoard runs, inspect saved graphs, and
   review metrics and monitor data from completed runs.
 
-## Quick Start
+## Quick start
 
 After `mise run dev`, use this path to inspect the stable model and run one
 short training job.
@@ -431,7 +441,7 @@ mise run experiment -- \
   --config --num-epochs 1
 
 # 7. Open TensorBoard logs if you want the raw event view.
-tensorboard --logdir logs/quickstart
+mise exec -- python tools/emperor_dev.py python -- -m tensorboard.main --logdir logs/quickstart
 ```
 
 The smoke run builds the `baseline` preset, trains it on `mnist` for one epoch,
@@ -562,7 +572,7 @@ mise run experiment -- \
   --config --batch-size 64 --learning-rate 0.0003 --trainer-gradient-clip-val 0.5
 ```
 
-## Running Experiments
+## Running experiments
 
 Use the canonical `mise` task from the repository root:
 
@@ -781,7 +791,7 @@ mise run experiment -- \
   --datasets mnist fashion-mnist
 ```
 
-### Config Overrides
+### Config overrides
 
 Use `--config` to override model config values without editing `config.py`:
 
@@ -828,6 +838,22 @@ mise run experiment -- \
   --datasets mnist \
   --config --recurrent-max-steps 6 --recurrent-halting-threshold 0.95
 ```
+
+Run a ViT classifier with up to three new latent tokens per block invocation:
+
+```bash
+mise run experiment -- \
+  --model-type vit \
+  --model linear \
+  --preset baseline \
+  --datasets mnist \
+  --config \
+  --sequence-expansion-flag true \
+  --sequence-expansion-max-new-tokens 3 \
+  --sequence-expansion-model-config '{"type":"LinearLayerConfig","bias_flag":true}'
+```
+
+For MLP-Mixer, use `--model-type mlp_mixer` with the same expansion flags.
 
 List overridable fields:
 
@@ -898,8 +924,8 @@ checking planned runs, watching monitor signals while a job is active, and
 reviewing logs once there are completed results. The terminal CLI remains the
 simpler path for scripted or repeatable runs.
 
-The Workbench should be treated as a vibecoded prototype: it is useful for local
-research workflows today, but its implementation is expected to be refactored
+The Workbench is a research prototype under active development. It supports
+local research workflows today, and its implementation will continue to evolve
 as the experiment workflow and architecture settle.
 
 See [`apps/workbench/README.md`](apps/workbench/README.md) for the focused
@@ -941,12 +967,12 @@ caches inside one backend worker; they are not cross-worker invalidation. Prefer
 one backend worker for hosted Workbench deployments unless you add a shared
 cache/invalidation design.
 
-## Results and Logs
+## Results and logs
 
 Training metrics are logged under `logs/`. Launch TensorBoard with:
 
 ```bash
-tensorboard --logdir logs/
+mise exec -- python tools/emperor_dev.py python -- -m tensorboard.main --logdir logs/
 ```
 
 Run the archive task from the project directory to archive the contents of
@@ -988,7 +1014,7 @@ with
 `WORKBENCH_API_LOG_ARCHIVE_UPLOAD_CONCURRENCY=<count>`. Size limits always have
 finite defaults and cannot be disabled with null configuration values.
 
-## Test and Quality Commands
+## Test and quality commands
 
 Use the canonical task from the repository root for the normal unit-test workflow.
 It discovers the external `tests/` tree with fail-fast enabled. The script adds
@@ -1082,6 +1108,16 @@ Python environment and existing frontend dependencies, but downloads nothing:
 cd apps/workbench/web
 npm run test:contract:e2e
 ```
+
+## Project structure
+
+| Path | Purpose |
+| --- | --- |
+| [`src/emperor/`](src/emperor/) | Neural modules, controller primitives, datasets, training helpers, and monitor callbacks. |
+| [`src/model_runtime/`](src/model_runtime/) | Shared model-package, inspection, run, and project-adapter interfaces for the CLI and Workbench. |
+| [`src/models/`](src/models/) | Reference experiment packages that compose the core modules into runnable architectures. |
+| [`apps/workbench/api/`](apps/workbench/api/) | The separately installable FastAPI app for inspection, run history, config snapshots, and local training jobs. |
+| [`apps/workbench/web/`](apps/workbench/web/) | The Next.js frontend for planning experiments and reviewing live or historical monitor data. |
 
 ## License
 
