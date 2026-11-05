@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 
 from emperor.attention._variants.mixer.validation import (
@@ -36,6 +37,9 @@ class MixerAttention(Module):
         self.embedding_dim: int = self.cfg.embedding_dim
         self.sequence_length: int = self.cfg.sequence_length
         self.batch_first_flag: bool = self.cfg.batch_first_flag
+        self.variable_sequence_length_flag: bool = bool(
+            self.cfg.variable_sequence_length_flag
+        )
         self.mixing_model_config: (
             LayerStackConfig | MixtureOfExpertsModelConfig | RecurrentCompositionConfig
         ) = self.cfg.mixing_model_config
@@ -87,13 +91,10 @@ class MixerAttention(Module):
         )
 
         sequence_axis = 1 if self.batch_first_flag else 0
-        if self.source_memory is not None:
-            # Per-token rows keep optional adaptation independent across tokens.
-            token_rows = q.reshape(-1, self.embedding_dim)
-            memory = self.source_memory(token_rows)
-            self.VALIDATOR.validate_output(memory, token_rows)
-            q = torch.cat((q, memory.reshape_as(q)), dim=sequence_axis)
-        token_vectors = q.movedim(sequence_axis, -1)
+        input_sequence_length = q.size(sequence_axis)
+        token_vectors, excluded = self.__prepare_mixing_input(
+            q, k_padding_mask, sequence_axis
+        )
         leading_shape = token_vectors.shape[:-1]
         if self.uses_soft_moe:
             from emperor.experts import MixtureOfExpertsLayerState
@@ -116,6 +117,39 @@ class MixerAttention(Module):
             self.mixing_sequence_length,
         )
         mixed = mixed_vectors.movedim(-1, sequence_axis)
-        if self.source_memory is not None:
-            mixed = mixed.narrow(sequence_axis, 0, self.sequence_length)
+        mixed = mixed.narrow(sequence_axis, 0, input_sequence_length)
+        if excluded is not None:
+            mixed = mixed.masked_fill(excluded.unsqueeze(-1), 0)
         return mixed, None, mixing_state.loss
+
+    def __prepare_mixing_input(
+        self, q: Tensor, k_padding_mask: Tensor | None, sequence_axis: int
+    ) -> tuple[Tensor, Tensor | None]:
+        excluded = None
+        if k_padding_mask is not None:
+            excluded = (
+                k_padding_mask
+                if k_padding_mask.dtype == torch.bool
+                else k_padding_mask.isneginf()
+            )
+            if not self.batch_first_flag:
+                excluded = excluded.transpose(0, 1)
+            q = q.masked_fill(excluded.unsqueeze(-1), 0)
+        token_vectors = self.__token_vectors(q, sequence_axis)
+        if self.source_memory is not None:
+            # Per-token rows keep optional adaptation independent across tokens.
+            token_rows = q.reshape(-1, self.embedding_dim)
+            memory = self.source_memory(token_rows)
+            self.VALIDATOR.validate_output(memory, token_rows)
+            memory = memory.reshape_as(q)
+            if excluded is not None:
+                memory = memory.masked_fill(excluded.unsqueeze(-1), 0)
+            token_vectors = torch.cat(
+                (token_vectors, self.__token_vectors(memory, sequence_axis)), dim=-1
+            )
+        return token_vectors, excluded
+
+    def __token_vectors(self, tokens: Tensor, sequence_axis: int) -> Tensor:
+        vectors = tokens.movedim(sequence_axis, -1)
+        unused_positions = self.sequence_length - vectors.size(-1)
+        return F.pad(vectors, (0, unused_positions)) if unused_positions else vectors

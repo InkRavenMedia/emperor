@@ -987,3 +987,26 @@ class TestTransformerMixerAttention(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_variable_mixer_masks_padding_and_preserves_valid_gradients():
+    from dataclasses import replace
+
+    config = replace(
+        _mixer_config(sequence_length=7), variable_sequence_length_flag=True
+    )
+    model = config.build()
+    inputs = torch.randn(2, 5, 4, requires_grad=True)
+    padding = torch.tensor([[False, False, False, True, True], [False] * 5])
+    output, _, _ = model(inputs, inputs, inputs, padding)
+    perturbed = inputs.detach().clone().masked_fill(padding.unsqueeze(-1), 9999)
+    perturbed_output, _, _ = model(perturbed, perturbed, perturbed, padding)
+    torch.testing.assert_close(output, perturbed_output)
+    assert output.shape == inputs.shape
+    assert torch.count_nonzero(output[padding]) == 0
+    output.square().sum().backward()
+    assert torch.count_nonzero(inputs.grad[padding]) == 0
+    assert inputs.grad[~padding].abs().sum() > 0
+    restored = config.build()
+    restored.load_state_dict(model.state_dict(), strict=True)
+    torch.testing.assert_close(restored(inputs, inputs, inputs, padding)[0], output)

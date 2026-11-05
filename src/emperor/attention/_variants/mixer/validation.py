@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class MixerAttentionValidator(ValidatorBase):
-    OPTIONAL_FIELDS = {"source_memory_config"}
+    OPTIONAL_FIELDS = {"source_memory_config", "variable_sequence_length_flag"}
 
     @classmethod
     def validate(cls, model: "MixerAttention") -> None:
@@ -128,12 +128,12 @@ class MixerAttentionValidator(ValidatorBase):
     ) -> None:
         cls._validate_self_processing(q, k, v)
         cls._validate_unsupported_inputs(
-            key_padding_mask,
             attention_mask,
             static_k,
             static_v,
         )
         cls._validate_runtime_tensor(model, q)
+        cls._validate_padding_mask(model, q, key_padding_mask)
 
     @staticmethod
     def _validate_self_processing(q: object, k: object, v: object) -> None:
@@ -144,13 +144,10 @@ class MixerAttentionValidator(ValidatorBase):
 
     @staticmethod
     def _validate_unsupported_inputs(
-        key_padding_mask: "Tensor | None",
         attention_mask: "Tensor | None",
         static_k: "Tensor | None",
         static_v: "Tensor | None",
     ) -> None:
-        if key_padding_mask is not None:
-            raise RuntimeError("MixerAttention does not support key padding masks.")
         if attention_mask is not None:
             raise RuntimeError("MixerAttention does not support attention masks.")
         if static_k is not None or static_v is not None:
@@ -181,7 +178,10 @@ class MixerAttentionValidator(ValidatorBase):
 
         sequence_axis = 1 if model.batch_first_flag else 0
         actual_sequence_length = tensor.size(sequence_axis)
-        if actual_sequence_length != model.sequence_length:
+        if actual_sequence_length != model.sequence_length and not (
+            model.variable_sequence_length_flag
+            and actual_sequence_length < model.sequence_length
+        ):
             raise RuntimeError(
                 "MixerAttention sequence length must be exactly "
                 f"{model.sequence_length}, got {actual_sequence_length}."
@@ -191,6 +191,37 @@ class MixerAttentionValidator(ValidatorBase):
             raise RuntimeError(
                 "MixerAttention embedding width must be exactly "
                 f"{model.embedding_dim}, got {actual_embedding_dim}."
+            )
+
+    @staticmethod
+    def _validate_padding_mask(
+        model, tensor: Tensor, padding_mask: Tensor | None
+    ) -> None:
+        if padding_mask is None:
+            return
+        if not model.variable_sequence_length_flag:
+            raise RuntimeError(
+                "MixerAttention does not support key padding masks unless variable_sequence_length_flag is enabled."
+            )
+        expected_shape = (
+            tensor.shape[:2]
+            if model.batch_first_flag
+            else (tensor.size(1), tensor.size(0))
+        )
+        if not isinstance(padding_mask, Tensor) or padding_mask.shape != expected_shape:
+            raise ValueError(
+                "MixerAttention key padding mask must match batch and sequence dimensions."
+            )
+        if padding_mask.device != tensor.device:
+            raise ValueError(
+                "MixerAttention key padding mask must match the input device."
+            )
+        if padding_mask.dtype != torch.bool and (
+            not padding_mask.is_floating_point()
+            or not ((padding_mask == 0) | padding_mask.isneginf()).all()
+        ):
+            raise ValueError(
+                "MixerAttention key padding mask must be Boolean or additive 0/-inf."
             )
 
     @staticmethod
