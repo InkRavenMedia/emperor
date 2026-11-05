@@ -1,11 +1,14 @@
 from typing import TYPE_CHECKING
 
+import torch
 from torch import Tensor
 
-from emperor.attention import AttentionLayerState
 from emperor.layers import LayerConfig, LayerNormPositionOptions, NormalizationOptions
 from emperor.nn import Module
-from emperor.transformer._state import TransformerDecoderLayerState
+from emperor.transformer._state import (
+    TransformerDecoderLayerState,
+    TransformerEncoderLayerState,
+)
 from emperor.transformer._validation import TransformerValidator
 
 if TYPE_CHECKING:
@@ -73,6 +76,14 @@ class Transformer(Module):
             attention_mask=source_attention_mask,
         )
         encoder_output = None if encoder_state is None else encoder_state.hidden
+        if (
+            self.decoder_model is not None
+            and isinstance(encoder_state, TransformerEncoderLayerState)
+            and encoder_state.sequence_expansions
+        ):
+            encoder_key_padding_mask = self.__expanded_encoder_padding_mask(
+                encoder_state, encoder_key_padding_mask
+            )
         decoder_state = self.__run_decoder_if_present(
             target_token_embeddings=target_token_embeddings,
             encoder_output=encoder_output,
@@ -93,7 +104,7 @@ class Transformer(Module):
     ) -> "LayerState | None":
         if self.encoder_model is None:
             return None
-        state = AttentionLayerState(
+        state = TransformerEncoderLayerState(
             hidden=source_token_embeddings,
             key_padding_mask=source_key_padding_mask,
             attention_mask=attention_mask,
@@ -101,6 +112,46 @@ class Transformer(Module):
         state = self.encoder_model(state)
         state.hidden = self.encoder_layer_norm(state.hidden)
         return state
+
+    def __expanded_encoder_padding_mask(
+        self, state: TransformerEncoderLayerState, padding: Tensor | None
+    ) -> Tensor:
+        if padding is None:
+            return state.key_padding_mask
+        original_padding = state.sequence_expansions[0].input_padding_mask
+        original_length = original_padding.size(1)
+        if (
+            padding.ndim != 2
+            or padding.size(0) != state.hidden.size(0)
+            or padding.size(1) not in (original_length, state.hidden.size(1))
+        ):
+            raise ValueError(
+                "encoder_key_padding_mask must match the original or expanded encoder sequence."
+            )
+        if padding.dtype != torch.bool and not padding.is_floating_point():
+            raise ValueError(
+                "encoder_key_padding_mask must be Boolean or floating point."
+            )
+        if padding.size(1) == original_length:
+            padding = self.__compact_encoder_padding_mask(
+                padding, original_padding, state.hidden.size(1)
+            )
+        return padding.masked_fill(
+            state.key_padding_mask.to(padding.device),
+            True if padding.dtype == torch.bool else -torch.inf,
+        )
+
+    def __compact_encoder_padding_mask(
+        self, padding: Tensor, original_padding: Tensor, output_length: int
+    ) -> Tensor:
+        original_valid = ~original_padding.to(padding.device)
+        compacted_positions = original_valid.cumsum(1) - 1
+        batch_indices, token_indices = original_valid.nonzero(as_tuple=True)
+        compacted_padding = padding.new_zeros(padding.size(0), output_length)
+        return compacted_padding.index_put(
+            (batch_indices, compacted_positions[batch_indices, token_indices]),
+            padding[batch_indices, token_indices],
+        )
 
     def __run_decoder_if_present(
         self,

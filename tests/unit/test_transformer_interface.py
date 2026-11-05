@@ -5,8 +5,14 @@ from pathlib import Path
 
 import emperor.layers as layers
 import emperor.transformer as transformer
+import emperor.transformer.sequence_expansion as sequence_expansion
 
 TRANSFORMER_EXPORTS = (
+    "SequenceExpansion",
+    "SequenceExpansionConfig",
+    "SequenceExpansionRecord",
+    "SequenceExpansionResult",
+    "TransformerEncoderLayerState",
     "Transformer",
     "TransformerConfig",
     "TransformerEncoderLayer",
@@ -62,6 +68,7 @@ class TestTransformerInterface(unittest.TestCase):
 
     def test_configuration_exports_resolve_to_the_lightweight_config_module(self):
         expected_modules = {
+            "SequenceExpansionConfig": "emperor.transformer.sequence_expansion._config",
             "TransformerConfig": "emperor.transformer._config",
             "TransformerEncoderLayerConfig": "emperor.transformer._config",
             "TransformerEncoderBlockLayerConfig": "emperor.transformer._config",
@@ -76,6 +83,20 @@ class TestTransformerInterface(unittest.TestCase):
                 self.assertIs(
                     exported, getattr(importlib.import_module(module_name), name)
                 )
+
+    def test_sequence_expansion_exports_have_their_own_component_owner(self):
+        expected_owners = {
+            "SequenceExpansion": "emperor.transformer.sequence_expansion._model",
+            "SequenceExpansionConfig": "emperor.transformer.sequence_expansion._config",
+            "SequenceExpansionRecord": "emperor.transformer.sequence_expansion._state",
+            "SequenceExpansionResult": "emperor.transformer.sequence_expansion._state",
+        }
+        self.assertEqual(sequence_expansion.__all__, tuple(expected_owners))
+        for name, owner in expected_owners.items():
+            with self.subTest(name=name):
+                exported = getattr(sequence_expansion, name)
+                self.assertEqual(exported.__module__, owner)
+                self.assertIs(exported, getattr(transformer, name))
 
     def test_layer_configs_do_not_own_causality(self):
         for config_type in (
@@ -102,6 +123,8 @@ class TestTransformerInterface(unittest.TestCase):
                 "encoder_padding_mask",
                 "cross_attention_mask",
                 "controller_state",
+                "sequence_expansions",
+                "_expansion_position_offset",
             },
         )
 
