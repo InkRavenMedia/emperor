@@ -10,6 +10,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
 )
+from emperor.transformer import TransformerEncoderLayerState
 
 from .experiment_config import ExperimentConfig
 
@@ -37,12 +38,20 @@ class Model(ClassifierExperiment):
 
     def forward(self, X: Tensor) -> Tensor | tuple[Tensor, Tensor]:
         patch_tokens = self.patch(X.to(self.device))
-        encoder_state = Layer.run_model_from_hidden(
-            self.transformer,
-            patch_tokens,
+        encoder_state = self.transformer(
+            TransformerEncoderLayerState(hidden=patch_tokens)
         )
         normalized_tokens = self.encoder_layer_norm(encoder_state.hidden)
-        pooled_hidden = normalized_tokens.mean(dim=1)
+        if encoder_state.key_padding_mask is None:
+            pooled_hidden = normalized_tokens.mean(dim=1)
+        else:
+            valid_tokens = ~encoder_state.key_padding_mask
+            pooled_hidden = normalized_tokens.masked_fill(
+                ~valid_tokens.unsqueeze(-1), 0
+            ).sum(dim=1)
+            pooled_hidden = pooled_hidden / valid_tokens.sum(
+                dim=1, keepdim=True
+            ).clamp_min(1)
         output_state = Layer.run_model_from_hidden(self.output, pooled_hidden)
         logits = output_state.hidden
         if encoder_state.loss is not None and encoder_state.loss.item() != 0.0:

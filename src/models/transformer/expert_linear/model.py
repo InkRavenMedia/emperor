@@ -7,10 +7,13 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.attention import AttentionLayerState
 from emperor.experiments.translation import TranslationExperiment
 from emperor.layers import LayerConfig, LayerNormPositionOptions
-from emperor.transformer import TransformerDecoderLayerState
+from emperor.transformer import (
+    TransformerDecoderLayerState,
+    TransformerEncoderLayerState,
+)
+from models import _sequence_expansion
 
 if TYPE_CHECKING:
     from emperor.config import ModelConfig
@@ -29,6 +32,9 @@ class Model(TranslationExperiment):
     def __init__(self, config: ModelConfig) -> None:
         super().__init__(config)
         self.experiment_config = config.experiment_config
+        self.sequence_expansion_enabled = (
+            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.decoder_config, 0) > 0
+        )
         cfg = self.experiment_config
         self.source_sequence_length = cfg.source_sequence_length
         self.target_sequence_length = cfg.target_sequence_length
@@ -64,8 +70,12 @@ class Model(TranslationExperiment):
         self.output_projection.weight = shared.weight
 
     def forward(
-        self, source_ids: Tensor, target_input_ids: Tensor
+        self,
+        source_ids: Tensor,
+        target_input_ids: Tensor,
+        align_to_input: bool = False,
     ) -> tuple[Tensor, Tensor]:
+        """Return all token logits, or restore input positions with align_to_input."""
         self._validate_ids(source_ids, self.source_sequence_length, "source")
         self._validate_ids(
             target_input_ids,
@@ -77,9 +87,17 @@ class Model(TranslationExperiment):
                 "source_ids and target_input_ids must have matching batch sizes."
             )
         encoded, source_mask, encoder_loss = self._encode(source_ids)
-        decoded, decoder_loss = self._decode(target_input_ids, encoded, source_mask)
+        decode = self._decode_input_tokens if align_to_input else self._decode
+        decoded, decoder_loss = decode(target_input_ids, encoded, source_mask)
         auxiliary_loss = (encoder_loss + decoder_loss).reshape(())
         return self.output_projection(decoded), auxiliary_loss
+
+    def forward_for_input_tokens(
+        self, source_ids: Tensor, target_input_ids: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        if not self.sequence_expansion_enabled:
+            return super().forward_for_input_tokens(source_ids, target_input_ids)
+        return self(source_ids, target_input_ids, align_to_input=True)
 
     def _embed(self, ids, embedding, positions):
         return self.embedding_dropout(
@@ -91,7 +109,7 @@ class Model(TranslationExperiment):
         source_ids = source_ids.to(self.device, dtype=torch.long)
         padding = source_ids.eq(self.pad_token_id)
         state = self.encoder(
-            AttentionLayerState(
+            TransformerEncoderLayerState(
                 hidden=self._embed(
                     source_ids, self.source_embedding, self.source_positional_embedding
                 ),
@@ -101,11 +119,26 @@ class Model(TranslationExperiment):
         output = self.encoder_layer_norm(state.hidden)
         return (
             output,
-            padding,
+            state.key_padding_mask,
             state.loss if state.loss is not None else output.new_zeros(()),
         )
 
-    def _decode(self, target_ids, encoder_output, source_padding_mask):
+    def _decode_input_tokens(
+        self, target_ids: Tensor, encoder_output: Tensor, source_padding_mask: Tensor
+    ) -> tuple[Tensor, Tensor]:
+        if self.sequence_expansion_enabled:
+            return self._decode(
+                target_ids, encoder_output, source_padding_mask, align_to_input=True
+            )
+        return self._decode(target_ids, encoder_output, source_padding_mask)
+
+    def _decode(
+        self,
+        target_ids,
+        encoder_output,
+        source_padding_mask,
+        align_to_input: bool = False,
+    ):
         self._validate_ids(target_ids, self.target_sequence_length, "target")
         target_ids = target_ids.to(self.device, dtype=torch.long)
         state = self.decoder(
@@ -119,6 +152,8 @@ class Model(TranslationExperiment):
             )
         )
         output = self.decoder_layer_norm(state.hidden)
+        if align_to_input:
+            output = state.gather_input_tokens(output)
         return output, state.loss if state.loss is not None else output.new_zeros(())
 
     def _validate_ids(self, ids, maximum, name):
@@ -170,7 +205,9 @@ class Model(TranslationExperiment):
                 source_ids.size(0), dtype=torch.bool, device=source_ids.device
             )
             for position in range(1, maximum):
-                decoded, _ = self._decode(generated[:, :position], encoded, source_mask)
+                decoded, _ = self._decode_input_tokens(
+                    generated[:, :position], encoded, source_mask
+                )
                 next_ids = self.output_projection(decoded[:, -1]).argmax(-1)
                 next_ids = torch.where(
                     finished,

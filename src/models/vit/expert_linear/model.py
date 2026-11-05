@@ -4,7 +4,8 @@ import torch.nn as nn
 from torch import Tensor
 
 from emperor.experiments.classifier import ClassifierExperiment
-from emperor.layers import Layer, LayerConfig, LayerNormPositionOptions
+from emperor.layers import LayerConfig, LayerNormPositionOptions
+from emperor.transformer import TransformerEncoderLayerState
 from models.vit.expert_linear.experiment_config import ExperimentConfig
 
 if TYPE_CHECKING:
@@ -63,7 +64,7 @@ class Model(ClassifierExperiment):
         hidden = self.patch(images)
         hidden = self.positional_embedding(hidden)
 
-        encoder_state = Layer.run_model_from_hidden(self.transformer, hidden)
+        encoder_state = self.transformer(TransformerEncoderLayerState(hidden=hidden))
         hidden = self.encoder_layer_norm(encoder_state.hidden)
 
         cls_hidden = hidden[:, 0, :]

@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING
 
+from models import _sequence_expansion
 from models.bert.linear._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
@@ -170,7 +171,9 @@ class BertLinearConfigBuilder:
     def __encoder_config(self):
         core_config_dependencies = self.__core_config_dependencies()
         core_config_factory = CoreConfigFactory(core_config_dependencies)
-        return core_config_factory.build_encoder_config()
+        return _sequence_expansion.with_expansion_attention_capacity(
+            core_config_factory.build_encoder_config(), self.sequence_length
+        )
 
     def __core_config_dependencies(self) -> CoreConfigDependencies:
         return CoreConfigDependencies(

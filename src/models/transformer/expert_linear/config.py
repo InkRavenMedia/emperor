@@ -1,17 +1,22 @@
 from emperor.attention import AttentionSourceMemoryConfig  # noqa: F401
-from emperor.augmentations.adaptive_parameters import (  # noqa: F401  # noqa: F401
+from emperor.augmentations.adaptive_parameters import (  # noqa: F401
+    AdaptiveLinearLayerConfig,  # noqa: F401
+    AdaptiveParameterAugmentationConfig,
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
+    AdditiveDynamicBiasConfig,
     AttentionGroupingConfig,
     MeanGroupingConfig,
     MeanStdGroupingConfig,
     RMSGroupingConfig,
     SumGroupingConfig,
     SummaryNormalizationOptions,
+    WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase  # noqa: F401
 from emperor.embedding.absolute import (
     AbsolutePositionalEmbeddingConfig,
+    TextLearnedPositionalEmbeddingConfig,  # noqa: F401
     TextSinusoidalPositionalEmbeddingConfig,
 )
 from emperor.experts import (
@@ -47,6 +52,7 @@ from emperor.memory import (
     MemoryPositionOptions,
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
+from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from models import _attention_source_memory as _source_memory
 
@@ -543,3 +549,37 @@ EXPERT_STACK_NUM_LAYERS = 1
 EXPERT_STACK_ACTIVATION = ActivationOptions.RELU
 
 del _target_prefix
+
+
+# Sequence Expansion
+SEQUENCE_EXPANSION_FLAG: bool = False
+SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
+SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
+SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
+SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+    TextLearnedPositionalEmbeddingConfig
+    | TextSinusoidalPositionalEmbeddingConfig
+    | None
+) = None
+
+# Encoder Sequence Expansion
+ENCODER_SEQUENCE_EXPANSION_FLAG: bool | None = None
+ENCODER_SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
+ENCODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
+ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
+ENCODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+    TextLearnedPositionalEmbeddingConfig
+    | TextSinusoidalPositionalEmbeddingConfig
+    | None
+) = None
+
+# Decoder Sequence Expansion
+DECODER_SEQUENCE_EXPANSION_FLAG: bool | None = None
+DECODER_SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
+DECODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
+DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
+DECODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+    TextLearnedPositionalEmbeddingConfig
+    | TextSinusoidalPositionalEmbeddingConfig
+    | None
+) = None

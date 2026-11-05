@@ -5,6 +5,7 @@ from types import ModuleType
 from typing import Any, Literal
 
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.bert.expert_linear import _config_defaults as config_defaults
 from models.bert.expert_linear._experts_builder_adapter import (
     _expert_dynamic_memory_options_from_kwargs,
@@ -444,6 +445,9 @@ def _modern_encoder_options(
         **_modern_option_updates(
             kwargs,
             {
+                **{
+                    name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS
+                },
                 "hidden_dim": "hidden_dim",
                 "stack_num_layers": "num_layers",
                 "stack_activation": "activation",
@@ -852,6 +856,7 @@ def _modern_option_updates(
 
 def _modern_supported_flat_keys() -> set[str]:
     keys = {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "token_type_vocab_size",
         "embedding_layer_norm_flag",
         "embedding_normalization",

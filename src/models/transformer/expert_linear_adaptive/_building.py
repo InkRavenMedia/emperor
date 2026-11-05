@@ -39,6 +39,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.transformer.expert_linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -739,6 +740,9 @@ def _encoder(runtime: RuntimeOptions):
         ),
         memory_config=None,
         layer_model_config=inner,
+        sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+            options, runtime.model_dim
+        ),
     )
     return _controlled_stack(runtime, options, layer)
 
@@ -802,6 +806,9 @@ def _decoder(runtime: RuntimeOptions):
         ),
         memory_config=None,
         layer_model_config=inner,
+        sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+            options, runtime.model_dim
+        ),
     )
     return _controlled_stack(runtime, options, layer)
 
@@ -817,6 +824,20 @@ def build_experiment_config(runtime: RuntimeOptions) -> ExperimentConfig:
     position_kwargs = {
         name: value for name, value in available_values.items() if name in active_fields
     }
+    encoder_config = _encoder(runtime)
+    source_capacity = (
+        _sequence_expansion.expanded_sequence_capacity(
+            encoder_config, runtime.source_sequence_length
+        )
+        if runtime.encoder_options.sequence_expansion_flag
+        else None
+    )
+    encoder_config = _sequence_expansion.with_expansion_attention_capacity(
+        encoder_config, runtime.source_sequence_length
+    )
+    decoder_config = _sequence_expansion.with_expansion_attention_capacity(
+        _decoder(runtime), runtime.target_sequence_length, source_capacity
+    )
     return ExperimentConfig(
         source_positional_embedding_config=positional(
             num_embeddings=runtime.source_sequence_length,
@@ -826,8 +847,8 @@ def build_experiment_config(runtime: RuntimeOptions) -> ExperimentConfig:
             num_embeddings=runtime.target_sequence_length,
             **position_kwargs,
         ),
-        encoder_config=_encoder(runtime),
-        decoder_config=_decoder(runtime),
+        encoder_config=encoder_config,
+        decoder_config=decoder_config,
         vocab_size=runtime.vocab_size,
         model_dim=runtime.model_dim,
         source_sequence_length=runtime.source_sequence_length,

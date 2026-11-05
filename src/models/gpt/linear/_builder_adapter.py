@@ -5,6 +5,7 @@ from types import ModuleType
 from typing import Any, Literal
 
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.gpt.linear import _config_defaults as config_defaults
 from models.gpt.linear._residual import (
     ResidualStackSource,
@@ -350,6 +351,9 @@ def _modern_decoder_options(
         **_modern_option_updates(
             kwargs,
             {
+                **{
+                    name: name for name in _sequence_expansion.SEQUENCE_EXPANSION_FIELDS
+                },
                 "hidden_dim": "hidden_dim",
                 "stack_num_layers": "num_layers",
                 "stack_activation": "activation",
@@ -735,6 +739,7 @@ def _modern_option_updates(
 
 def _modern_supported_flat_keys() -> set[str]:
     keys = {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "hierarchical_language_model_flag",
         "hierarchical_byte_embedding_dim",
         "hierarchical_byte_encoder_num_layers",

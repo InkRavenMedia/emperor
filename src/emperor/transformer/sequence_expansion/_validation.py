@@ -16,6 +16,16 @@ if TYPE_CHECKING:
 
 class SequenceExpansionValidator:
     @staticmethod
+    def validate_fixed_token_output(config, operation: str) -> None:
+        for visit in _configuration_visits(config, operation):
+            if getattr(visit.config, "sequence_expansion_config", None) is not None:
+                raise ValueError(
+                    f"{operation} requires unchanged token positions and sequence "
+                    "lengths, but Sequence Expansion changes them. Disable expansion "
+                    "on this output stack or use an expansion-aware task."
+                )
+
+    @staticmethod
     def validate_recurrent_placement(config, *, path: str, recurrent_config) -> None:
         from emperor.layers import AdditiveResidualConfig
 
@@ -233,19 +243,36 @@ class _TransformerExpansionBlockValidator(Layer.VALIDATOR):
 
     @classmethod
     def __validate_self_attention(cls, attention_config) -> None:
-        from emperor.attention import SelfAttentionConfig
+        from emperor.attention import (
+            MixerAttentionConfig,
+            MixtureOfAttentionHeadsConfig,
+            SelfAttentionConfig,
+        )
+
+        if isinstance(attention_config, MixerAttentionConfig):
+            if (
+                cls.DECODER
+                or not attention_config.batch_first_flag
+                or not attention_config.variable_sequence_length_flag
+            ):
+                raise ValueError(
+                    "SequenceExpansion requires batch-first variable-length MixerAttention in an encoder."
+                )
+            return
 
         if (
-            type(attention_config) is not SelfAttentionConfig
+            not isinstance(
+                attention_config, (SelfAttentionConfig, MixtureOfAttentionHeadsConfig)
+            )
             or attention_config.batch_first_flag is not True
             or (not cls.DECODER and attention_config.causal_attention_mask_flag)
         ):
             raise ValueError(
-                "SequenceExpansion requires batch-first SelfAttentionConfig (noncausal for encoders)."
+                "SequenceExpansion requires batch-first SelfAttentionConfig or MixtureOfAttentionHeadsConfig (noncausal for encoders)."
             )
         if (
             attention_config.relative_positional_embedding_config is not None
-            or attention_config.rotary_base is not None
+            or getattr(attention_config, "rotary_base", None) is not None
         ):
             raise ValueError(
                 "SequenceExpansion does not yet support relative or rotary attention positions."
@@ -262,21 +289,27 @@ class _TransformerExpansionBlockValidator(Layer.VALIDATOR):
             feed_forward_config, (FeedForwardConfig, SwiGLUFeedForwardConfig)
         ):
             raise ValueError(
-                "SequenceExpansion requires an ordinary pointwise feed-forward module."
+                "SequenceExpansion requires a pointwise feed-forward module."
             )
 
     @staticmethod
     def __validate_cross_attention(cross_attention_config) -> None:
         if cross_attention_config is None:
             return
-        from emperor.attention import IndependentAttentionConfig
+        from emperor.attention import (
+            IndependentAttentionConfig,
+            MixtureOfAttentionHeadsConfig,
+        )
 
         if (
-            type(cross_attention_config) is not IndependentAttentionConfig
+            not isinstance(
+                cross_attention_config,
+                (IndependentAttentionConfig, MixtureOfAttentionHeadsConfig),
+            )
             or cross_attention_config.batch_first_flag is not True
         ):
             raise ValueError(
-                "SequenceExpansion requires batch-first IndependentAttentionConfig for cross-attention."
+                "SequenceExpansion requires batch-first IndependentAttentionConfig or MixtureOfAttentionHeadsConfig for cross-attention."
             )
         if (
             cross_attention_config.relative_positional_embedding_config is not None
@@ -305,6 +338,11 @@ class _TransformerExpansionBlockValidator(Layer.VALIDATOR):
 
     @classmethod
     def __validate_token_component(cls, config, token_block_config, path: str) -> None:
+        from emperor.experts import (
+            MixtureOfExpertsConfig,
+            MixtureOfExpertsLayerConfig,
+            MixtureOfExpertsModelConfig,
+        )
         from emperor.layers import LayerConfig, RecurrentCompositionConfig
         from emperor.linears import LinearLayerConfig
         from emperor.transformer._feed_forward import FeedForwardConfig
@@ -318,14 +356,23 @@ class _TransformerExpansionBlockValidator(Layer.VALIDATOR):
         if isinstance(config, FeedForwardConfig):
             from emperor.layers import LayerStackConfig
 
-            if not isinstance(config.stack_config, LayerStackConfig):
+            if not isinstance(
+                config.stack_config, (LayerStackConfig, MixtureOfExpertsModelConfig)
+            ):
                 raise ValueError(
-                    "SequenceExpansion requires a pointwise feed-forward LayerStackConfig."
+                    "SequenceExpansion requires a pointwise feed-forward stack or mixture of experts."
                 )
         if isinstance(config, LayerConfig) and config is not token_block_config:
-            if type(config.layer_model_config) is not LinearLayerConfig:
+            allowed_model_types = (
+                (LinearLayerConfig, MixtureOfExpertsConfig)
+                if isinstance(config, MixtureOfExpertsLayerConfig)
+                else (LinearLayerConfig,)
+            )
+            if config.layer_model_config is not None and not isinstance(
+                config.layer_model_config, allowed_model_types
+            ):
                 raise ValueError(
-                    "SequenceExpansion supports ordinary linear projection/feed-forward stacks only."
+                    "SequenceExpansion requires linear, adaptive linear, or expert projection/feed-forward stacks."
                 )
         for name in (
             "shared_halting_config",

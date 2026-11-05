@@ -93,7 +93,7 @@ class TranslationExperiment(LightningModule):
         target_input_ids = target_ids[:, :-1]
         labels = target_ids[:, 1:]
         logits, auxiliary_loss = self._validate_model_output(
-            self(source_ids, target_input_ids),
+            self.forward_for_input_tokens(source_ids, target_input_ids),
             labels,
         )
         flat_logits = logits.reshape(-1, logits.size(-1))
@@ -108,6 +108,12 @@ class TranslationExperiment(LightningModule):
             labels=labels,
             auxiliary_loss=auxiliary_loss,
         )
+
+    def forward_for_input_tokens(
+        self, source_ids: Tensor, target_input_ids: Tensor
+    ) -> tuple[Tensor, Tensor | None]:
+        """Return predictions aligned with the teacher-forced target inputs."""
+        return self(source_ids, target_input_ids)
 
     def _unpack_batch(self, batch: TranslationBatch) -> TranslationBatch:
         if len(batch) != 2:

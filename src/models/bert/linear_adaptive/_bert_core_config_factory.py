@@ -20,6 +20,7 @@ from emperor.transformer import (
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
 from models.bert.linear_adaptive._control_factory_dependencies import (
     BertControlFactoryDependencies,
 )
@@ -147,6 +148,9 @@ class BertCoreConfigFactory:
             ),
             halting_config=None,
             layer_model_config=self._build_encoder_layer_config(),
+            sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
+                self.encoder_options, self.hidden_dim
+            ),
         )
         stack_config = LayerStackConfig(
             input_dim=self.hidden_dim,

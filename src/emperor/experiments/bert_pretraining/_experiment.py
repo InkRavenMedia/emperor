@@ -148,7 +148,7 @@ class BertPretrainingExperiment(LightningModule):
 
         mlm_logits, nsp_logits, auxiliary_loss, resolved_auxiliary_loss = (
             self._validate_model_output(
-                self(
+                self.forward_for_input_tokens(
                     input_ids,
                     attention_mask=attention_mask,
                     token_type_ids=token_type_ids,
@@ -172,6 +172,14 @@ class BertPretrainingExperiment(LightningModule):
             nsp_logits=nsp_logits,
             next_sentence_labels=next_sentence_labels,
             auxiliary_loss=auxiliary_loss,
+        )
+
+    def forward_for_input_tokens(
+        self, input_ids: Tensor, attention_mask: Tensor, token_type_ids: Tensor
+    ) -> tuple[Tensor, Tensor] | tuple[Tensor, Tensor, Tensor | None]:
+        """Return masked-token predictions in the original input positions."""
+        return self(
+            input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids
         )
 
     def _unpack_batch(self, batch: BertPretrainingBatch) -> BertPretrainingBatch:

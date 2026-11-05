@@ -120,7 +120,10 @@ class _FeedForwardLayer(_TransformerSubLayer):
         self,
         state: LayerState,
     ) -> LayerState:
-        if getattr(self.model, "uses_soft_moe", False):
+        if getattr(self.model, "uses_soft_moe", False) or (
+            getattr(state, "sequence_expansions", ())
+            and hasattr(self.model, "uses_soft_moe")
+        ):
             padding_mask = getattr(
                 state,
                 "target_key_padding_mask",
