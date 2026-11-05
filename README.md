@@ -9,8 +9,8 @@
 **Current package version:** `0.1.0`
 
 Emperor is a personal machine learning research project for building experimental
-models from reusable, inspectable components. Use the CLI and browser Workbench
-to inspect architectures, train models, compare variants, and review results.
+models from reusable, inspectable components. Use the CLI to inspect
+architectures, train models, compare variants, and review results.
 
 The focus is repeatable experimentation: build small models, measure what
 changes, and use the evidence to decide which ideas to explore next.
@@ -18,7 +18,7 @@ changes, and use the evidence to decide which ideas to explore next.
 [Research mission](#research-mission) ·
 [Example model](#example-model-adaptive-bert-with-soft-moe-and-attention-memory) ·
 [Installation](#environment-setup) · [Quick start](#quick-start) ·
-[Experiment CLI](#running-experiments) · [Workbench](#workbench) ·
+[Experiment CLI](#running-experiments) ·
 [Results and logs](#results-and-logs)
 
 ## About the author
@@ -45,8 +45,8 @@ into account.
 
 The repository provides a shared foundation for testing those ideas. Reusable
 PyTorch components and configurable model packages make it possible to build
-variants and compare them with reference models. The CLI and Workbench support
-model inspection, training, and reviewing results, so architectural choices can
+variants and compare them with reference models. The CLI supports model
+inspection, training, and reviewing results, so architectural choices can
 be examined through repeatable experiments.
 
 ### Research directions
@@ -234,174 +234,45 @@ mise run experiment -- \
 
 </details>
 
-### Validation status
-
-The earlier configuration with two slots per expert completed a five-minute
-local GPU training test with finite losses and gradients and a successful
-checkpoint reload. Longer training and evaluations of language and reasoning
-quality remain research work.
-
 ## Environment setup
 
-**System requirements:** Git and [mise](https://mise.jdx.dev/). Mise provisions
-the pinned Python 3.13 and Node 24 toolchains; Visual Studio, Xcode, and a
-system Python or Node installation are not setup prerequisites.
-
-Clone the repository, then run the setup commands below from its root:
+Install Git and [mise](https://mise.jdx.dev/), then clone the repository and set
+up the CPU environment:
 
 ```text
 git clone https://github.com/InkRavenMedia/emperor.git
 cd emperor
-```
-
-The guaranteed CPU baseline covers Ubuntu 24.04 x64, WSL2 Ubuntu 24.04 x64,
-Windows 11 x64 with PowerShell, and macOS 15+ Apple Silicon. Intel macOS is not
-part of the baseline because PyTorch 2.12 has no Intel macOS wheel for the
-required Python 3.13 runtime. MPS execution and CUDA on platforms other than
-Linux x86-64 remain outside the guaranteed baseline.
-
-Set up the repository and start the Workbench with the same commands everywhere:
-
-```text
 mise run setup --profile cpu
-mise run dev
 ```
 
-Setup creates `./torchenv` with the native `bin` or `Scripts` layout, installs
-binary Python dependencies from the matching platform lock, and runs `npm ci`
-for the locked root development tools and Workbench frontend. It records a hash
-of every setup input. Repeating setup is idempotent. Switching profiles
-recreates the launcher-owned virtualenv. CUDA profiles are available only on
-Linux x86-64. The current profile uses PyTorch 2.12.0's CUDA 13.0 wheels:
+Mise provisions the pinned toolchains and project dependencies. Setup creates
+`./torchenv`; run the remaining commands from the repository root. Supported
+CPU environments are Ubuntu 24.04 x64, WSL2 Ubuntu 24.04 x64, Windows 11 x64
+with PowerShell, and macOS 15+ on Apple Silicon. Intel macOS is not supported
+by the pinned PyTorch/Python combination.
+
+For an NVIDIA GPU on Linux x86-64, choose one of these profiles instead:
 
 ```text
 mise run setup --profile cuda
-mise run dev --profile cuda
 ```
 
-The `cuda-legacy` profile uses the official CUDA 12.6 wheels and guarantees the
-GTX 1080 Ti (`sm_61`) target:
+The `cuda` profile uses CUDA 13.0 wheels and requires an R580-or-newer driver.
+For CUDA 12.6, including the GTX 1080 Ti, use:
 
 ```text
 mise run setup --profile cuda-legacy
-mise run dev --profile cuda-legacy
 ```
 
-Always pass the selected non-CPU profile to `dev`; its default remains `cpu`.
-Other GPUs supported by the CUDA 12.6 wheel are best-effort. The wheels supply
-the CUDA runtime, so a system CUDA toolkit is not required. The host NVIDIA
-driver remains external: CUDA 12.x minor compatibility requires Linux driver
-[525.60.13 or newer](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html),
-while driver
-[560.35.05 or newer](https://docs.nvidia.com/cuda/archive/12.6.3/cuda-toolkit-release-notes/index.html)
-avoids minor-compatibility feature limits for the pinned CUDA 12.6 Update 3
-runtime. The CUDA 13 profile requires an R580-or-newer driver.
-
-The native locks live under
-`constraints/python-3.13-<platform>-<arch>-<profile>.txt`. The legacy lock is
-standalone; it does not inherit any CUDA 13 pins.
-
-### GTX 1080 Ti hardware gate
-
-Setup verifies the Torch version, CUDA runtime, and compatible compiled Pascal
-code without requiring an attached GPU. PyTorch 2.12's CUDA 12.6 Linux wheel
-reports an `sm_60` cubin; NVIDIA's same-major forward binary compatibility
-[makes that cubin valid](https://docs.nvidia.com/cuda/cuda-programming-guide/01-introduction/cuda-platform.html#binary-compatibility)
-on the GTX 1080 Ti's `sm_61` capability. Run this manual gate on the target
-machine before treating the hardware path as validated.
-
-First confirm that the driver sees the card:
-
-```bash
-nvidia-smi
-```
-
-Then verify the exact build and physical device capability:
-
-```bash
-mise exec -- python tools/emperor_dev.py python -- -c \
-  "import torch; assert torch.__version__ == '2.12.0+cu126'; assert torch.version.cuda == '12.6'; assert torch.cuda.get_device_capability(0) == (6, 1)"
-```
-
-Allocate and compute a CUDA tensor:
-
-```bash
-mise exec -- python tools/emperor_dev.py python -- -c \
-  "import torch; x = torch.arange(1024, device='cuda'); print((x * x).sum().item())"
-```
-
-Finally run one explicit-GPU training epoch:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --config \
-  --num-epochs 1 \
-  --trainer-accelerator gpu \
-  --trainer-devices 1
-```
-
-Emperor does not automatically select a GPU or change training precision for
-this profile.
-
-The Workbench opens at [localhost:9000](http://localhost:9000). The local API
-defaults to [127.0.0.1:9999](http://127.0.0.1:9999).
-
-Start, inspect, or stop validated Workbench process trees:
-
-```text
-mise run workbench:start
-mise run workbench:status
-mise run workbench:stop
-```
-
-Use the `mise` tasks shown above on Unix-like systems. PowerShell users can run
-`. .\env.ps1`, `. .\env.ps1 -WorkbenchStatus`, or
-`. .\env.ps1 -WorkbenchStop` to activate the virtualenv and manage Workbench.
-
-Default ports can be overridden with:
-
-```bash
-export WORKBENCH_BACKEND_PORT=9999
-export WORKBENCH_FRONTEND_PORT=9000
-export NEXT_PUBLIC_WORKBENCH_API_URL=http://127.0.0.1:9999
-```
-
-## Current state
-
-Use this command to validate the full local setup:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline
-```
-
-`linears/linear` is the recommended smoke-test model. It currently exposes
-baseline, gating, halting, memory, residual, post-norm, and recurrent preset
-families. The other cataloged model packages are research/reference
-implementations for adaptive parameters, experts, neuron clusters, and
-transformer experiments. Before using one for a long run, verify the exact
-preset with `--print-model` and a small one-epoch run.
-
-The Workbench has grown into a local experiment workbench with three workspaces:
-
-- **Model** - choose a model/preset/dataset, inspect module and operation
-  graphs, review parameters, create config snapshots, and inspect historical
-  training-run targets.
-- **Training** - plan, start, and monitor local training jobs for the selected
-  model configuration.
-- **Logs** - browse historical TensorBoard runs, inspect saved graphs, and
-  review metrics and monitor data from completed runs.
+The wheels include the CUDA runtime, so a system CUDA toolkit is not required.
+The legacy profile needs a compatible NVIDIA driver; see NVIDIA's
+[CUDA compatibility requirements](https://docs.nvidia.com/deploy/cuda-compatibility/minor-version-compatibility.html).
+Switching profiles recreates the project environment. Select GPU training
+explicitly with `--config --trainer-accelerator gpu --trainer-devices 1`.
 
 ## Quick start
 
-After `mise run dev`, use this path to inspect the stable model and run one
-short training job.
+After setup, inspect a `linears/linear` baseline and run a short training job:
 
 ```bash
 # 1. Confirm the model categories.
@@ -431,7 +302,7 @@ mise run experiment -- \
   --model linear \
   --list-monitors
 
-# 6. Run a one-epoch smoke training job.
+# 6. Run a one-epoch training example.
 mise run experiment -- \
   --model-type linears \
   --model linear \
@@ -439,12 +310,9 @@ mise run experiment -- \
   --datasets mnist \
   --logdir quickstart \
   --config --num-epochs 1
-
-# 7. Open TensorBoard logs if you want the raw event view.
-mise exec -- python tools/emperor_dev.py python -- -m tensorboard.main --logdir logs/quickstart
 ```
 
-The smoke run builds the `baseline` preset, trains it on `mnist` for one epoch,
+This run builds the `baseline` preset, trains it on `mnist` for one epoch,
 and may download the dataset on first use.
 
 To train the decoder-only GPT baseline from scratch for one WikiText-2 epoch:
@@ -458,21 +326,6 @@ mise run experiment -- \
   --logdir gpt-wikitext2 \
   --config --num-epochs 1
 ```
-
-The GPT packages use causal next-token loss and return token IDs from greedy
-generation. The selectable download-backed datasets are `penn-treebank`,
-`wiki-text2`, `wiki-text103`, and `open-web-text`.
-
-Each training run writes a Lightning/TensorBoard run directory under:
-
-```text
-logs/quickstart/linears/linear/BASELINE/Mnist/<parameter-id>_<timestamp>/version_*/
-```
-
-That `version_*` folder contains TensorBoard event files such as
-`events.out.tfevents.*`, Lightning metadata such as `hparams.yaml`, and
-Emperor's `result.json` with the final parameters and metrics. Checkpoint files
-appear there only when checkpointing is enabled.
 
 ### Continuing from a checkpoint
 
@@ -488,35 +341,70 @@ mise run experiment -- \
   --config --num-epochs 30
 ```
 
-`NUM_EPOCHS` is the total target, not the number of additional epochs. A
-checkpoint saved at epoch 25 has completed 26 epochs, so the new target must be
-greater than 26. Continuation requires exactly one `--preset`, exactly one
-explicitly selected dataset, and no `--presets`, `--all-presets`, grid search,
-or random search.
+`NUM_EPOCHS` is the total target, not the number of additional epochs.
+Continuation requires one preset and one explicitly selected dataset; it
+cannot be combined with grid or random search.
 
-Only continue from a trusted local Lightning checkpoint. Use the same Model
-Package, preset, dataset, compatible Runtime Defaults, and code-compatible
-model structure that created it. Emperor copies the opened source into a
-private immutable snapshot, binds its SHA-256 digest, applies finite archive,
-payload, tensor, and storage admission limits, and strictly loads the selected
-model before Lightning restores optimizer, scheduler, precision, loop, and
-compatible callback state. Lightning receives that snapshot rather than the
-source path.
+Use a trusted local checkpoint with the same model, preset, dataset, and a
+compatible configuration. When checkpointing is enabled, `last.ckpt` contains
+the most recently completed epoch; the best monitored checkpoint may differ.
+Continuation writes a new run and leaves the source checkpoint unchanged.
 
-On Linux, checkpoint decoding also runs under a bounded private decoder process.
-This is defense in depth, not a complete hostile-checkpoint sandbox. A service
-that accepts checkpoints from untrusted parties must additionally contain the
-entire Training Job using deployment-owned process, memory, filesystem, and
-cancellation controls. Other platforms retain the trusted-local path unless a
-caller explicitly requires isolated decoding through `CheckpointAdmissionPolicy`.
+## Running experiments
 
-When checkpointing is requested, `last.ckpt` records the most recently
-completed epoch while the other retained checkpoint is the best monitored
-epoch; these can be different. Continuation writes a new Run Artifact and
-records the source filename, epoch, global step, and admitted SHA-256 digest as
-lineage in progress events and `result.json`. It never appends to or modifies
-the source Run Artifact or checkpoint, and the digest lets the resumed bytes be
-verified independently.
+Use the canonical `mise` task from the repository root:
+
+```bash
+mise run experiment -- \
+  --model-type <type> \
+  --model <name> \
+  [options]
+```
+
+Run with no arguments to print the full flag list:
+
+```bash
+mise run experiment --
+```
+
+Run selected presets sequentially:
+
+```bash
+mise run experiment -- \
+  --model-type linears \
+  --model linear \
+  --presets baseline gating memory \
+  --datasets mnist \
+  --config --num-epochs 1
+```
+
+Run every preset for a model:
+
+```bash
+mise run experiment -- \
+  --model-type linears \
+  --model linear \
+  --all-presets
+```
+
+Use `--print-model-shapes` to inspect module input/output shapes, or
+`--print-model-tensor-shapes` for a detailed method trace. Both use synthetic
+input without downloading a dataset.
+
+Monitor callbacks apply to training runs, not model inspection flags.
+
+Run one preset with selected monitors:
+
+```bash
+mise run experiment -- \
+  --model-type linears \
+  --model linear \
+  --preset baseline \
+  --datasets mnist \
+  --monitors linear halting
+```
+
+Use `--logdir comparison_run` to group runs under a custom log folder.
 
 Important scaling rules:
 
@@ -542,235 +430,12 @@ mise run experiment -- \
 
 That creates `2 x 2 x 10` planned training runs.
 
-Before choosing overrides, print every overridable field and its default value
-for the selected model:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --list-config
-```
-
-Common `config` override examples:
-
-```bash
-# Smaller/faster hidden stack.
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --config --hidden-dim 64 --stack-num-layers 2 --stack-dropout-probability 0.0
-
-# Training hyperparameters.
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --config --batch-size 64 --learning-rate 0.0003 --trainer-gradient-clip-val 0.5
-```
-
-## Running experiments
-
-Use the canonical `mise` task from the repository root:
-
-```bash
-mise run experiment -- \
-  --model-type <type> \
-  --model <name> \
-  [options]
-```
-
-Run with no arguments to print the full flag list:
-
-```bash
-mise run experiment --
-```
-
-List available model types:
-
-```bash
-mise run experiment -- --list-model-types
-```
-
-List models within a type:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --list-models
-```
-
-`--list-models` without `--model-type` still prints the full catalog.
-
-List a model's presets:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --list-presets
-```
-
-List a model's monitor callbacks:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --list-monitors
-```
-
-Run one preset:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline
-```
-
-Run selected presets sequentially:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --presets baseline gating memory \
-  --datasets mnist \
-  --config --num-epochs 1
-```
-
-Run every preset for a model:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --all-presets
-```
-
-Print a model structure instead of training:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --print-model
-```
-
-Run one deterministic synthetic batch and annotate the same tree with every
-executed PyTorch module's tensor input and output shapes:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --print-model-shapes
-```
-
-For the most detailed trace, also print an executed Python method tree with the
-shape of each tensor argument, local variable, and return value, including source
-line numbers:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --print-model-tensor-shapes
-```
-
-Shape inspection uses a synthetic batch of size 1 in evaluation mode with
-gradients disabled. It does not download the selected dataset. Tensor-variable
-tracing covers executed Python under `models` and `emperor`; native PyTorch kernel
-temporaries are represented by their surrounding module inputs and outputs.
-
-Shape tracing is a trusted, sequential local diagnostic. It executes Model
-Package code synchronously in the caller process without a deadline or memory
-isolation, temporarily changes the process CPU Torch RNG, and does not isolate
-CUDA, Python, NumPy, or arbitrary package side effects. Do not overlap it with
-other Torch RNG work. A hosted or untrusted caller must provide process-level
-resource and cancellation containment; Workbench does not currently expose
-shape tracing.
-
-Monitor callbacks apply to training runs, not model inspection flags.
-
-Run one preset with selected monitors:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --datasets mnist \
-  --monitors linear halting
-```
-
-Use a custom log folder:
-
-```bash
-mise run experiment -- \
-  --model-type linears \
-  --model linear \
-  --preset baseline \
-  --logdir comparison_run
-```
-
-Use the same `--logdir` across runs to group TensorBoard logs for comparison.
-
 ### Datasets
 
-Each Model Package groups its Dataset Metadata by Experiment Task in
-`dataset_options.py`. For `linears/linear`, the image-classification Dataset
-Metadata is:
-
-```python
-DATASET_OPTIONS_BY_TASK = {
-    ExperimentTask.IMAGE_CLASSIFICATION: [
-        Mnist,
-        FashionMNIST,
-        Cifar10,
-        Cifar100,
-    ],
-}
-```
-
-BERT-pretraining Dataset Metadata uses the task-specific
-`PennTreebankBertPretraining` and `WikiText2BertPretraining` adapters. Their raw
-text source Interface accepts both TorchText's legacy `.splits(...)` datasets
-and its later `root=..., split=...` factories, while always yielding one text
-unit per source line for next-sentence construction. The verified constraints
-currently select TorchText 0.6.0.
-
-Causal language modeling exposes `PennTreebank`, `WikiText2`, and `WikiText103`
-as download-backed DataModules, with `OpenWebText` available as the much larger
-option. WikiText uses the maintained Salesforce datasets on Hugging Face;
-OpenWebText uses `Skylion007/openwebtext`. The adapters cache the selected corpus
-under their configured root.
-
-Contract tests use deterministic offline source fixtures and do not download
-corpora. They discover every declared Dataset Metadata class and verify its task
-compatibility, one-batch shape, dtype, collation semantics, and seed ownership
-through the public DataModule Interface.
-
-Real downloads remain explicit integration work performed by `prepare_data()`.
-Run that network-dependent suite only when the required sources are available:
-
-```bash
-EMPEROR_RUN_DATASET_DOWNLOAD_TESTS=1 \
-  PYTHONSAFEPATH=1 PYTHONPATH=src:tests \
-  python -P -m unittest integration.datasets.test_dataset_downloads
-```
-
-OpenWebText is excluded from that integration run unless the additional
-`EMPEROR_RUN_LARGE_DATASET_DOWNLOAD_TESTS=1` opt-in is set.
+Available datasets depend on the selected model and task. BERT pretraining
+uses `penn-treebank-bert-pretraining` or `wiki-text2-bert-pretraining`; GPT
+supports `penn-treebank`, `wiki-text2`, `wiki-text103`, and `open-web-text`.
+Datasets may be downloaded on first use and are cached locally.
 
 List available datasets for a model:
 
@@ -911,62 +576,6 @@ mise run experiment -- \
 `--grid-search` and `--random-search` are mutually exclusive and can be combined
 with `--preset`, `--presets`, or `--all-presets`.
 
-## Workbench
-
-The Workbench is the local workbench for model experiments. Use it when you want to
-pick a model, preset, and dataset visually; inspect what a preset builds before
-training; adjust config overrides without assembling a long terminal command;
-start or monitor local training jobs; and review historical runs after the
-experiment finishes.
-
-It is meant for the human loop around training: understanding the model shape,
-checking planned runs, watching monitor signals while a job is active, and
-reviewing logs once there are completed results. The terminal CLI remains the
-simpler path for scripted or repeatable runs.
-
-The Workbench is a research prototype under active development. It supports
-local research workflows today, and its implementation will continue to evolve
-as the experiment workflow and architecture settle.
-
-See [`apps/workbench/README.md`](apps/workbench/README.md) for the focused
-Workbench guide.
-
-Hosted or non-local deployments should configure explicit CORS origins in the
-Workbench backend environment:
-
-```bash
-export WORKBENCH_API_CORS_ORIGINS='["https://workbench.example.com"]'
-```
-
-Hosted frontend builds should also set `NEXT_PUBLIC_WORKBENCH_API_URL` and, when
-multiple API origins are allowed, `NEXT_PUBLIC_WORKBENCH_API_ALLOWED_ORIGINS` so
-browser requests and bearer tokens cannot be redirected to arbitrary origins.
-
-Bearer auth can be enabled with:
-
-```bash
-export WORKBENCH_API_AUTH_MODE=bearer
-export WORKBENCH_API_TOKEN=<token>
-```
-
-Example hosted pairing:
-
-```bash
-# Frontend build env
-export NEXT_PUBLIC_WORKBENCH_API_URL=https://api.example.com
-export NEXT_PUBLIC_WORKBENCH_API_ALLOWED_ORIGINS='["https://api.example.com"]'
-
-# Backend runtime env
-export WORKBENCH_API_CORS_ORIGINS='["https://workbench.example.com"]'
-export WORKBENCH_API_AUTH_MODE=bearer
-export WORKBENCH_API_TOKEN='<replace-with-a-secret-token>'
-```
-
-The Workbench backend is local-file-backed. Its in-process locks protect shared
-caches inside one backend worker; they are not cross-worker invalidation. Prefer
-one backend worker for hosted Workbench deployments unless you add a shared
-cache/invalidation design.
-
 ## Results and logs
 
 Training metrics are logged under `logs/`. Launch TensorBoard with:
@@ -975,138 +584,23 @@ Training metrics are logged under `logs/`. Launch TensorBoard with:
 mise exec -- python tools/emperor_dev.py python -- -m tensorboard.main --logdir logs/
 ```
 
-Run the archive task from the project directory to archive the contents of
-`./logs` directly from the filesystem:
+Each training run writes a Lightning/TensorBoard run directory under:
+
+```text
+logs/quickstart/linears/linear/BASELINE/Mnist/<parameter-id>_<timestamp>/version_*/
+```
+
+That `version_*` folder contains TensorBoard event files such as
+`events.out.tfevents.*`, Lightning metadata such as `hparams.yaml`, and
+Emperor's `result.json` with the final parameters and metrics. Checkpoint files
+appear there only when checkpointing is enabled.
+
+Archive all logs, a named experiment, or choose an output path:
 
 ```text
 mise run logs:archive
 mise run logs:archive -- my_experiment
-mise run logs:archive -- logs/my_experiment
-```
-
-When a specific experiment folder is selected, the archive keeps that experiment
-prefix. Archive members are rooted directly at experiment paths, so importing
-restores them beneath `logs/` without a top-level `logs/` wrapper.
-
-By default, the archive is written in the current directory. Pass an explicit
-second argument to choose the zip path:
-
-```text
-mise run logs:archive -- logs emperor_logs.zip
 mise run logs:archive -- logs path/to/emperor_logs.zip
-```
-
-To restore that archive into another local project, start the Workbench backend,
-open the Workbench, choose **Import Logs** in the top navigation, and select the
-produced `.zip` file. Backend defaults keep log imports disabled in every
-authentication mode; enable them explicitly with
-`WORKBENCH_API_ALLOW_LOG_IMPORTS=true`. The normal `mise run dev` launcher sets
-that opt-in for its loopback development backend. The import extracts into that
-project's server-side `logs/` directory and overwrites files that already exist
-at the same archive paths. Enabled imports default to a 512 MiB compressed limit
-and a 2 GiB extracted limit, at most 32,000 archive members, a 4 MiB cumulative
-UTF-8 member-path budget, and one active archive import at a time. Override them
-with
-`WORKBENCH_API_MAX_UPLOAD_SIZE=<bytes>` or
-`WORKBENCH_API_MAX_LOG_ARCHIVE_EXTRACTED_SIZE=<bytes>`,
-`WORKBENCH_API_MAX_LOG_ARCHIVE_MEMBER_COUNT=<count>`,
-`WORKBENCH_API_MAX_LOG_ARCHIVE_PATH_BYTES=<bytes>`, or
-`WORKBENCH_API_LOG_ARCHIVE_UPLOAD_CONCURRENCY=<count>`. Size limits always have
-finite defaults and cannot be disabled with null configuration values.
-
-## Test and quality commands
-
-Use the canonical task from the repository root for the normal unit-test workflow.
-It discovers the external `tests/` tree with fail-fast enabled. The script adds
-only that test tree to `PYTHONPATH`; Emperor and its first-party Model Packages
-must come from the active environment's editable or regular installation. Run
-`python -m pip install --no-deps -e .` first when using an environment that was
-not created by `mise run setup`.
-
-```text
-mise run test
-```
-
-Target a specific unit-test module, class, or test method when iterating on a
-failure:
-
-```text
-mise run test -- layer
-mise run test -- layer TestLayer
-mise run test -- layer TestLayer test_forward_output_shape
-```
-
-The task maps the first argument to `tests/unit/test_<name>.py` and then passes
-any class or method name through to `python -P -m unittest -f`.
-
-Verify the protected Emperor interfaces, private-import boundaries, dependency
-direction, and zero external retired-interface import ledger with:
-
-```text
-mise run test:emperor-interfaces
-```
-
-Attention has focused correctness, complete statement-and-branch coverage, and
-mutation-strength gates:
-
-```text
-mise run test:attention
-mise run test:attention-coverage
-mise run test:attention-mutation
-```
-
-The family runner reports only the Attention modules declared in the test
-manifest and requires 100% statement and branch coverage. Mutation scope comes
-from the same manifest and the task fails when any mutant remains unreviewed.
-
-Verify the wheel/source-distribution manifests and compare clean editable and
-regular installs from outside the checkout with:
-
-```bash
-python -P tools/verify_distribution.py
-```
-
-The verification uses the dependencies already available in the active
-environment and never downloads or upgrades them.
-
-Run the exact locked strict type checker with:
-
-```bash
-mise run test:model-runtime-types
-```
-
-The strict Pyright include list covers stable capability areas and may only
-grow. `mise run setup --profile cpu` provisions Pyright 1.1.411 from the root
-Node lockfile. GitHub workflow enforcement is currently deferred, so run this
-task locally before committing Runtime changes.
-
-Capture the production Workbench browser and long-session baseline after a
-frontend build with:
-
-```bash
-cd apps/workbench/web
-npm run build
-npm run performance:budget
-npm run performance:browser
-```
-
-The browser harness uses temporary backend data and a fake process only at the
-Training Job runner boundary. It measures hydration, main-thread and React
-work, repeated workspace/graph/chart cycles, API timings, heap growth, completed
-Training and log-import flows, WebGL frames and disposal, and the existing
-bundle budgets. Machine-sensitive results are informational; stable workflow,
-disposal, error, and bundle checks fail the harness.
-
-For Workbench-specific changes, run the relevant backend or frontend checks from
-the package being changed after the unit suite is green.
-
-The live backend/frontend contract E2E uses two loopback FastAPI servers,
-temporary filesystem roots, and fake Training Jobs. It requires the verified
-Python environment and existing frontend dependencies, but downloads nothing:
-
-```bash
-cd apps/workbench/web
-npm run test:contract:e2e
 ```
 
 ## Project structure
@@ -1114,10 +608,8 @@ npm run test:contract:e2e
 | Path | Purpose |
 | --- | --- |
 | [`src/emperor/`](src/emperor/) | Neural modules, controller primitives, datasets, training helpers, and monitor callbacks. |
-| [`src/model_runtime/`](src/model_runtime/) | Shared model-package, inspection, run, and project-adapter interfaces for the CLI and Workbench. |
+| [`src/model_runtime/`](src/model_runtime/) | Shared model-package, inspection, run, and project-adapter interfaces for the CLI. |
 | [`src/models/`](src/models/) | Reference experiment packages that compose the core modules into runnable architectures. |
-| [`apps/workbench/api/`](apps/workbench/api/) | The separately installable FastAPI app for inspection, run history, config snapshots, and local training jobs. |
-| [`apps/workbench/web/`](apps/workbench/web/) | The Next.js frontend for planning experiments and reviewing live or historical monitor data. |
 
 ## License
 
