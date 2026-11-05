@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from emperor.attention._validation import AttentionSourceMemoryValidator
 from emperor.attention._variants.mixer.validation import (
     MixerAttentionValidator,
 )
@@ -92,7 +91,7 @@ class MixerAttention(Module):
             # Per-token rows keep optional adaptation independent across tokens.
             token_rows = q.reshape(-1, self.embedding_dim)
             memory = self.source_memory(token_rows)
-            AttentionSourceMemoryValidator.validate_output(memory, token_rows)
+            self.VALIDATOR.validate_output(memory, token_rows)
             q = torch.cat((q, memory.reshape_as(q)), dim=sequence_axis)
         token_vectors = q.movedim(sequence_axis, -1)
         leading_shape = token_vectors.shape[:-1]

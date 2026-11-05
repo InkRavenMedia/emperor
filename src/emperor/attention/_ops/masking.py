@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 from torch import Tensor
 
-from emperor.attention._ops.memory_mask import GroupedMemoryMask
+from emperor.attention._memory.masking import GroupedMemoryMask
 from emperor.attention._runtime import AttentionRuntimeLayout
 from emperor.attention._validation import AttentionValidatorBase
 
@@ -72,18 +72,16 @@ class Mask:
     ) -> tuple[MultiHeadAttentionInputs, Tensor | None]:
         if not self.source_memory_flag:
             return self.prepare_attention_masks(attention_inputs), None
-        mask = attention_inputs.attention_mask
-        source_length = attention_inputs.key.size(0)
-        chunk_size = self.grouped_memory_mask.chunk_size
-        memory_length = (source_length + chunk_size - 1) // chunk_size
-        if mask is None or mask.size(-1) != source_length + memory_length:
+        token_mask, memory_mask = self.grouped_memory_mask.split_attention_mask(
+            attention_inputs
+        )
+        if memory_mask is None:
             return self.prepare_attention_masks(attention_inputs), None
-        token_mask, memory_mask = mask.split((source_length, memory_length), dim=-1)
         prepared_tokens = self.prepare_attention_masks(
             replace(attention_inputs, attention_mask=token_mask)
         )
         memory_layout = replace(
-            attention_inputs.runtime_layout, source_sequence_length=memory_length
+            attention_inputs.runtime_layout, source_sequence_length=memory_mask.size(-1)
         )
         self._validate_mask_shapes(None, memory_mask, memory_layout)
         self.__set_runtime_query_properties(attention_inputs.query)

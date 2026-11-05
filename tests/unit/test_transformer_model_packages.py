@@ -9,7 +9,7 @@ from unittest.mock import patch
 import torch
 import torch.nn as nn
 
-from emperor.attention._ops.source_memory import AttentionSourceMemory
+from emperor.attention._memory.model import AttentionSourceMemory
 from emperor.attention._variants.independent.layer import IndependentAttention
 from emperor.attention._variants.mixture.layer import MixtureOfAttentionHeads
 from emperor.attention._variants.self_attention.layer import SelfAttention

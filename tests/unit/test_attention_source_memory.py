@@ -13,7 +13,7 @@ from emperor.attention import (
     SelfAttentionConfig,
     SelfAttentionProjectionStrategy,
 )
-from emperor.attention._ops.source_memory import AttentionSourceMemory
+from emperor.attention._memory.model import AttentionSourceMemory
 from emperor.attention._runtime import AttentionRuntimeLayout, MultiHeadAttentionInputs
 from emperor.augmentations.adaptive_parameters import SumGroupingConfig
 from emperor.embedding.relative import DynamicPositionalBiasConfig

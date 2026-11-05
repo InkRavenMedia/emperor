@@ -1,14 +1,12 @@
 """Private attention projection operations."""
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
-import torch
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.attention._ops.source_memory import AttentionSourceMemory
-from emperor.attention._validation import AttentionSourceMemoryValidator
+from emperor.attention._memory.model import AttentionSourceMemory
+from emperor.attention._memory.validation import AttentionSourceMemoryValidator
 from emperor.layers import Layer
 from emperor.nn import Module
 
@@ -129,25 +127,10 @@ class ProjectorBase(Module):
         memory_projection = self._compute_memory_projection(
             attention_inputs.key, attention_inputs.key_padding_mask
         )
-        source_length = attention_inputs.key.size(0)
-        chunk_size = self.source_memory.context.chunk_size
-        expected_memory_length = (source_length + chunk_size - 1) // chunk_size
-        self.VALIDATOR.validate_projected_output(
-            memory_projection,
-            projections.key,
-            memory_length=expected_memory_length,
-        )
-        keys_with_memory = torch.cat((projections.key, memory_projection), dim=0)
-        values_with_memory = torch.cat((projections.value, memory_projection), dim=0)
-        memory_sequence_length = memory_projection.size(0)
-        runtime_layout_with_memory = projections.runtime_layout.with_source_extension(
-            memory_sequence_length
-        )
-        return replace(
+        return self.source_memory.append_to_projections(
             projections,
-            key=keys_with_memory,
-            value=values_with_memory,
-            runtime_layout=runtime_layout_with_memory,
+            memory_projection,
+            source_length=attention_inputs.key.size(0),
         )
 
     def _compute_qkv_projections(
