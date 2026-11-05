@@ -5,40 +5,50 @@ from torch import Tensor
 from emperor._validation import _adaptive_grouping_configs, _configuration_visits
 
 if TYPE_CHECKING:
-    from emperor.attention._config import MultiHeadAttentionConfig
+    from emperor.attention._memory.config import AttentionSourceMemoryConfig
     from emperor.attention._runtime import MultiHeadAttentionInputs
     from emperor.config import ConfigBase
 
 
 class AttentionSourceMemoryValidator:
-    @staticmethod
-    def validate_config(cfg: "MultiHeadAttentionConfig") -> None:
-        widths = (
-            cfg.embedding_dim,
-            cfg.query_key_projection_dim or cfg.embedding_dim,
-            cfg.value_projection_dim or cfg.embedding_dim,
-        )
-        if len(set(widths)) != 1:
+    @classmethod
+    def validate_config(cls, cfg: "AttentionSourceMemoryConfig") -> None:
+        cls.validate_config_type(cfg)
+        if type(cfg.embedding_dim) is not int or cfg.embedding_dim <= 0:
             raise ValueError(
-                "Attention source memory requires equal input, key and value widths."
+                "Attention source memory embedding_dim must be a positive integer."
             )
-        if cfg.source_memory_config is None:
+
+    @staticmethod
+    def validate_config_type(config: object) -> None:
+        from emperor.attention._memory.config import AttentionSourceMemoryConfig
+
+        if config is None:
             raise ValueError(
                 "Attention source memory requires source_memory_config with chunk_size grouping."
+            )
+        if not isinstance(config, AttentionSourceMemoryConfig):
+            raise TypeError(
+                "source_memory_config must be an AttentionSourceMemoryConfig."
+            )
+
+    @staticmethod
+    def validate_projection_widths(
+        embedding_dim: int, key_projection_dim: int, value_projection_dim: int
+    ) -> None:
+        if len({embedding_dim, key_projection_dim, value_projection_dim}) != 1:
+            raise ValueError(
+                "Attention source memory requires equal input, key and value widths."
             )
 
     @classmethod
     def validate_context_config(cls, config: object) -> None:
-        from emperor.attention._config import AttentionSourceMemoryConfig
         from emperor.augmentations.adaptive_parameters import (
             AdaptiveParameterGroupingScopeOptions,
             GroupingConfig,
         )
 
-        if not isinstance(config, AttentionSourceMemoryConfig):
-            raise TypeError(
-                "source_memory_config must be an AttentionSourceMemoryConfig."
-            )
+        cls.validate_config_type(config)
         grouping_config = config.grouping_config
         if not isinstance(grouping_config, GroupingConfig):
             raise TypeError("Attention memory requires a concrete grouping_config.")
@@ -111,7 +121,6 @@ class AttentionSourceMemoryValidator:
                 "Attention memory generator must preserve row count and embedding width."
             )
 
-
     @staticmethod
     def validate_inputs(inputs: "MultiHeadAttentionInputs") -> None:
         if inputs.static_key is not None or inputs.static_value is not None:
@@ -122,7 +131,6 @@ class AttentionSourceMemoryValidator:
             raise ValueError(
                 "Attention source memory requires self-attention over the same input tensor."
             )
-
 
     @staticmethod
     def validate_projected_output(

@@ -17,12 +17,16 @@ def isolated_random_state():
         yield
 
 
+def memory_config(*, chunk=2):
+    return AttentionSourceMemoryConfig(
+        embedding_dim=4,
+        grouping_config=SumGroupingConfig(chunk_size=chunk),
+    )
+
+
 def grouped_config(*, chunk=2, **overrides):
     return attention_config(
-        source_memory_config=AttentionSourceMemoryConfig(
-            grouping_config=SumGroupingConfig(chunk_size=chunk),
-        ),
-        **overrides,
+        source_memory_config=memory_config(chunk=chunk), **overrides
     )
 
 
@@ -41,7 +45,7 @@ def test_memory_config_preserves_its_previous_serialized_owner():
 
 def test_standalone_memory_requires_explicit_context_configuration():
     with pytest.raises(ValueError, match="source_memory_config.*chunk_size"):
-        AttentionSourceMemory(attention_config(source_memory_config=None))
+        AttentionSourceMemory(None)
 
 
 @pytest.mark.parametrize("variant", ["self", "independent", "mixture"])
@@ -69,7 +73,7 @@ def test_enabled_attention_memory_cannot_fall_back_to_token_projections(variant)
 def test_grouped_memory_generates_one_embedding_per_chunk_and_keeps_parameters(
     chunk_size,
 ):
-    memory = AttentionSourceMemory(grouped_config(chunk=chunk_size)).double()
+    memory = memory_config(chunk=chunk_size).build().double()
     with torch.no_grad():
         memory.model.weight_params.copy_(torch.eye(4))
         memory.model.bias_params.zero_()
@@ -99,7 +103,7 @@ def test_grouped_memory_generates_one_embedding_per_chunk_and_keeps_parameters(
 
 
 def test_memory_generator_receives_chunk_summaries_without_slot_conditioning():
-    memory = AttentionSourceMemory(grouped_config()).double()
+    memory = memory_config().build().double()
     with torch.no_grad():
         memory.model.weight_params.copy_(2 * torch.eye(4))
         memory.model.bias_params.fill_(3)
@@ -125,7 +129,7 @@ def test_memory_preserves_layout_with_bias_and_zero_attention_sources(layout):
 
 
 def test_invalid_sequence_does_not_poison_a_later_valid_forward():
-    memory = AttentionSourceMemory(grouped_config())
+    memory = memory_config().build()
     parameters = dict(memory.named_parameters())
     checkpoint = {name: value.clone() for name, value in memory.state_dict().items()}
     with pytest.raises(ValueError, match="sequence_length must be a positive integer"):
@@ -163,7 +167,7 @@ def test_attention_memory_resolves_each_runtime_layout_independently(causal):
 
 
 def test_generator_output_width_is_validated_before_restoring_memory_rows(monkeypatch):
-    memory = AttentionSourceMemory(grouped_config())
+    memory = memory_config().build()
     monkeypatch.setattr(memory.model, "forward", lambda inputs: inputs[:, :3])
     with pytest.raises(ValueError, match="must preserve row count and embedding width"):
         memory(torch.ones(5, 2, 4))
@@ -213,9 +217,9 @@ def test_each_reduction_matches_independent_reference_with_padding(method):
             layer_norm_position=layers.LayerNormPositionOptions.DISABLED,
             layer_model_config=LinearLayerConfig(bias_flag=False),
         )
-    config = grouped_config()
-    config.source_memory_config.grouping_config = reducer
-    memory = AttentionSourceMemory(config).double()
+    config = memory_config()
+    config.grouping_config = reducer
+    memory = config.build().double()
     with torch.no_grad():
         memory.model.weight_params.copy_(torch.eye(4))
         memory.model.bias_params.zero_()
@@ -365,15 +369,15 @@ def test_attention_paths_shapes_gradients_batch_independence_and_checkpoints(
 @pytest.mark.parametrize("chunk", [0, True, -1, 2.5])
 def test_invalid_chunk_sizes(chunk):
     with pytest.raises((TypeError, ValueError), match="positive"):
-        AttentionSourceMemory(grouped_config(chunk=chunk))
+        memory_config(chunk=chunk).build()
 
 
 def test_group_count_and_context_mixing_models_are_rejected():
-    config = grouped_config()
-    config.source_memory_config.grouping_config.group_count = 3
+    config = memory_config()
+    config.grouping_config.group_count = 3
     with pytest.raises(ValueError, match="chunk_size only"):
-        AttentionSourceMemory(config)
-    config.source_memory_config.grouping_config.group_count = None
-    config.source_memory_config.model_config = attention_config()
+        config.build()
+    config.grouping_config.group_count = None
+    config.model_config = attention_config()
     with pytest.raises(ValueError, match="independent rows"):
-        AttentionSourceMemory(config)
+        config.build()
