@@ -17,7 +17,7 @@ class MixerAttentionConfig(ConfigBase):
         "Exact feature width of each token passed to the mixer."
     )
     sequence_length: int | None = optional_field(
-        "Exact token sequence length accepted by the mixer."
+        "Token-mixing width; variable-length inputs may use fewer positions when enabled."
     )
     batch_first_flag: bool | None = optional_field(
         "Explicit input layout. True selects [batch, sequence, embedding]; "
@@ -32,6 +32,9 @@ class MixerAttentionConfig(ConfigBase):
     source_memory_config: "DynamicMemoryConfig | None" = optional_field(
         "Optional memory module generating one extra token per input token. "
         "All positions are mixed, then memory output positions are discarded."
+    )
+    variable_sequence_length_flag: bool | None = optional_field(
+        "Accept masked sequences up to sequence_length, padding only inside token mixing. None preserves exact-length mixing."
     )
 
     def _registry_owner(self) -> type:
