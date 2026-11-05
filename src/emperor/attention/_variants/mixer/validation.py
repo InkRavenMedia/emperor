@@ -197,7 +197,7 @@ class MixerAttentionValidator(ValidatorBase):
     def validate_mixing_state(
         state: object,
         flattened_input: "Tensor",
-    ) -> LayerState:
+    ) -> None:
         if not isinstance(state, LayerState):
             raise RuntimeError(
                 "MixerAttention mixing model must return a LayerState, got "
@@ -223,4 +223,3 @@ class MixerAttentionValidator(ValidatorBase):
                 "MixerAttention mixing model must preserve device "
                 f"{flattened_input.device}, got {hidden.device}."
             )
-        return state
