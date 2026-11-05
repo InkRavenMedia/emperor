@@ -31,10 +31,6 @@ ATTENTION_CONTRACT_MANIFEST = {
     "emperor.attention._config": module_contract(
         ("configuration schema", "build dispatch", "runtime maxima documentation"),
         "tests.unit.test_attention",
-        AttentionSourceMemoryConfig=class_contract(
-            ("independent generator", "context grouping", "total memory count"),
-            "tests.unit.test_grouped_attention_memory",
-        ),
         MultiHeadAttentionConfig=class_contract(
             ("defaults", "overrides", "abstract build"),
             "tests.unit.test_attention",
@@ -82,10 +78,6 @@ ATTENTION_CONTRACT_MANIFEST = {
         MultiHeadAttentionValidator=class_contract(
             ("configuration", "runtime tensor", "selected source validation"),
             "tests.unit.test_attention_correctness_regressions",
-        ),
-        AttentionSourceMemoryValidator=class_contract(
-            ("memory dimensions", "token independence", "self-attention restriction"),
-            "tests.unit.test_attention_source_memory",
         ),
     ),
     "emperor.attention._monitoring.callback": module_contract(
@@ -195,15 +187,37 @@ ATTENTION_CONTRACT_MANIFEST = {
             "tests.unit.test_attention_mask",
         ),
     ),
-    "emperor.attention._ops.memory_context": module_contract(
-        ("independent sequence contexts", "runtime chunk divisibility"),
+    "emperor.attention._memory": module_contract(
+        ("private memory namespace",), EXPORT_TEST
+    ),
+    "emperor.attention._memory.config": module_contract(
+        ("memory generator and grouping configuration",),
         "tests.unit.test_grouped_attention_memory",
-        MemoryContext=class_contract(
-            ("group reduction", "padding exclusion", "slot conditioning"),
+        AttentionSourceMemoryConfig=class_contract(
+            (
+                "independent generator",
+                "context grouping",
+            ),
             "tests.unit.test_grouped_attention_memory",
         ),
     ),
-    "emperor.attention._ops.memory_mask": module_contract(
+    "emperor.attention._memory.validation": module_contract(
+        ("memory configuration and tensor contracts",),
+        "tests.unit.test_attention_source_memory",
+        AttentionSourceMemoryValidator=class_contract(
+            ("memory dimensions", "token independence", "self-attention restriction"),
+            "tests.unit.test_attention_source_memory",
+        ),
+    ),
+    "emperor.attention._memory.context": module_contract(
+        ("independent sequence contexts", "runtime chunk divisibility"),
+        "tests.unit.test_grouped_attention_memory",
+        MemoryContext=class_contract(
+            ("group reduction", "padding exclusion", "valid chunk selection"),
+            "tests.unit.test_grouped_attention_memory",
+        ),
+    ),
+    "emperor.attention._memory.masking": module_contract(
         ("context visibility", "causal masking", "explicit memory masking"),
         "tests.unit.test_grouped_attention_memory",
         GroupedMemoryMask=class_contract(
@@ -257,8 +271,12 @@ ATTENTION_CONTRACT_MANIFEST = {
             "tests.unit.test_attention_zero_attention",
         ),
     ),
-    "emperor.attention._ops.source_memory": module_contract(
-        ("memory model construction", "independent per-token projection"),
+    "emperor.attention._memory.model": module_contract(
+        (
+            "memory model construction",
+            "independent chunk generation",
+            "projected K/V extension",
+        ),
         "tests.unit.test_attention_source_memory",
         AttentionSourceMemory=class_contract(
             (

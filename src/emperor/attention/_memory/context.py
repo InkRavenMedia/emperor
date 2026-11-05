@@ -6,8 +6,8 @@ import torch
 from torch import Tensor
 from torch.nn import functional as F
 
-from emperor.attention._config import AttentionSourceMemoryConfig
-from emperor.attention._validation import AttentionSourceMemoryValidator
+from emperor.attention._memory.config import AttentionSourceMemoryConfig
+from emperor.attention._memory.validation import AttentionSourceMemoryValidator
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
@@ -50,7 +50,6 @@ class MemoryContext(Module):
         context_embeddings, valid_context_mask = self.__summarize_valid_chunks(
             grouped_tokens, valid_members
         )
-        # One context per chunk, in batch-first layout: [B, G, D] and [B, G].
         return (
             context_embeddings.reshape(
                 batch_size, num_context_chunks, self.embedding_dim

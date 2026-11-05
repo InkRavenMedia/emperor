@@ -1,18 +1,24 @@
 """Generate one attention memory embedding from each reduced sequence chunk."""
 
+from dataclasses import replace
+from typing import TYPE_CHECKING
+
+import torch
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.attention._config import (
-    AttentionSourceMemoryConfig,
-    MultiHeadAttentionConfig,
-)
-from emperor.attention._ops.memory_context import MemoryContext
-from emperor.attention._validation import AttentionSourceMemoryValidator
+from emperor.attention._config import MultiHeadAttentionConfig
+from emperor.attention._memory.config import AttentionSourceMemoryConfig
+from emperor.attention._memory.context import MemoryContext
+from emperor.attention._memory.validation import AttentionSourceMemoryValidator
 from emperor.config import ConfigBase
 from emperor.layers import Layer, LayerState
 from emperor.linears import LinearAbstract, LinearLayerConfig
 from emperor.nn import Module
+
+
+if TYPE_CHECKING:
+    from emperor.attention._runtime import MultiHeadAttentionInputs
 
 
 class AttentionSourceMemory(Module):
@@ -82,3 +88,29 @@ class AttentionSourceMemory(Module):
             auxiliary_loss_getter() if auxiliary_loss_getter is not None else None
         )
         return memory_state
+
+    def append_to_projections(
+        self,
+        projections: "MultiHeadAttentionInputs",
+        memory_projection: Tensor,
+        source_length: int,
+    ) -> "MultiHeadAttentionInputs":
+        chunk_size = self.context.chunk_size
+        expected_memory_length = (source_length + chunk_size - 1) // chunk_size
+        self.VALIDATOR.validate_projected_output(
+            memory_projection,
+            projections.key,
+            memory_length=expected_memory_length,
+        )
+        keys_with_memory = torch.cat((projections.key, memory_projection), dim=0)
+        values_with_memory = torch.cat((projections.value, memory_projection), dim=0)
+        memory_sequence_length = memory_projection.size(0)
+        runtime_layout_with_memory = projections.runtime_layout.with_source_extension(
+            memory_sequence_length
+        )
+        return replace(
+            projections,
+            key=keys_with_memory,
+            value=values_with_memory,
+            runtime_layout=runtime_layout_with_memory,
+        )
