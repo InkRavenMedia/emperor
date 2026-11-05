@@ -105,6 +105,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         return replace(
             recurrent_state,
             hidden=recurrent_state.hidden.detach(),
+            context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
@@ -142,10 +143,19 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         recurrent_state: _StandardRecurrentState,
         transition_result: RecurrentTransitionResult,
     ) -> _StandardRecurrentState:
+        context_state = (
+            getattr(transition_result, "context_state", None)
+            or recurrent_state.context_state
+        )
         return replace(
             recurrent_state,
             hidden=transition_result.hidden,
             loss=transition_result.loss,
+            context_state=context_state,
+            fixed_input=context_state.align_recurrent_hidden(
+                recurrent_state.fixed_input,
+                source_state=recurrent_state.context_state,
+            ),
             transition_index=recurrent_state.transition_index + 1,
             halting_state=transition_result.halting_state,
             all_items_halted=transition_result.all_items_halted,

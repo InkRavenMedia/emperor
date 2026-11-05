@@ -20,9 +20,23 @@ from emperor.transformer._layers import (
     TransformerEncoderLayer,
 )
 from emperor.transformer._model import Transformer
-from emperor.transformer._state import TransformerDecoderLayerState
+from emperor.transformer._state import (
+    TransformerDecoderLayerState,
+    TransformerEncoderLayerState,
+)
+from emperor.transformer.sequence_expansion import (
+    SequenceExpansion,
+    SequenceExpansionConfig,
+    SequenceExpansionRecord,
+    SequenceExpansionResult,
+)
 
 __all__ = (
+    "SequenceExpansion",
+    "SequenceExpansionConfig",
+    "SequenceExpansionRecord",
+    "SequenceExpansionResult",
+    "TransformerEncoderLayerState",
     "Transformer",
     "TransformerConfig",
     "TransformerEncoderLayer",

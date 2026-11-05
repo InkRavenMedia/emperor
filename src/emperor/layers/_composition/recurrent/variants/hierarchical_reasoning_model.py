@@ -121,6 +121,7 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
             recurrent_state,
             high=recurrent_state.high.detach(),
             low=recurrent_state.low.detach(),
+            context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
@@ -154,14 +155,33 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
             recurrent_state.auxiliary_losses,
             transition_result.loss,
         )
-        state_updates = (
-            {"high": transition_result.hidden}
-            if self.__updates_high(recurrent_state)
-            else {"low": transition_result.hidden}
+        context_state = (
+            getattr(transition_result, "context_state", None)
+            or recurrent_state.context_state
+        )
+        state_updates = {
+            "high": context_state.align_recurrent_hidden(
+                recurrent_state.high,
+                initial=self.high_initial,
+                source_state=recurrent_state.context_state,
+            ),
+            "low": context_state.align_recurrent_hidden(
+                recurrent_state.low,
+                initial=self.low_initial,
+                source_state=recurrent_state.context_state,
+            ),
+        }
+        state_updates["high" if self.__updates_high(recurrent_state) else "low"] = (
+            transition_result.hidden
         )
         return replace(
             recurrent_state,
             **state_updates,
+            context_state=context_state,
+            fixed_input=context_state.align_recurrent_hidden(
+                recurrent_state.fixed_input,
+                source_state=recurrent_state.context_state,
+            ),
             auxiliary_losses=auxiliary_losses,
             transition_index=recurrent_state.transition_index + 1,
             halting_state=transition_result.halting_state,

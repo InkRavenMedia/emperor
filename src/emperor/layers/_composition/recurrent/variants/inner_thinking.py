@@ -118,10 +118,11 @@ class InnerThinkingRecurrent(RecurrentLayer):
         selection = RecurrentTokenSelection(
             token_sample.indices, token_sample.valid, token_sample.sequence_length
         )
-        selected_state = selection.select_state(
-            state, attention_heads=self.__attention_heads(state)
+        selected_state = state.select_recurrent_tokens(
+            selection.select_state(state, attention_heads=self.__attention_heads(state))
         )
         selected_input = selected_state.hidden
+        selected_context = replace(selected_state)
         output_state = self.block_model(selected_state)
         self.VALIDATOR.validate_transition_output(
             output_state, selected_input, expected_feature_dim=self.output_dim
@@ -131,16 +132,21 @@ class InnerThinkingRecurrent(RecurrentLayer):
             output_state.hidden
         )
         selected_token_update = (
-            output_state.hidden
+            selected_context.align_recurrent_hidden(
+                output_state.hidden, source_state=output_state
+            )
             * selected_token_weights
             * step_weight
             * self.thinking_step_scale
         )
-        return replace(
-            state,
-            hidden=selection.scatter_update(previous_hidden, selected_token_update),
-            loss=output_state.loss,
+        hidden = selection.scatter_update(previous_hidden, selected_token_update)
+        # Newly generated tokens receive only the thinking-step weight; their
+        # owner merges them into the full sequence, reusing its padding slots.
+        generated_state = replace(
+            output_state,
+            hidden=output_state.hidden * step_weight * self.thinking_step_scale,
         )
+        return state.merge_recurrent_tokens(generated_state, hidden)
 
     def __attention_heads(self, state: LayerState) -> int:
         if not any(

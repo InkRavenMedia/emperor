@@ -137,11 +137,11 @@ class RecurrentLayerValidator(_RecurrentCompositionValidator):
                 "recurrent transition block must return LayerState, got "
                 f"{type(output_state).__name__}."
             )
-        cls.validate_candidate(
+        cls.validate_hidden(
             output_state.hidden,
-            transition_input,
             expected_feature_dim,
         )
+        output_state.validate_recurrent_shape(transition_input)
         if output_state.hidden.dtype != transition_input.dtype:
             raise ValueError("recurrent transition block must preserve hidden dtype.")
         if output_state.hidden.device != transition_input.device:

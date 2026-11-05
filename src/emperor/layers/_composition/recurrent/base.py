@@ -57,6 +57,7 @@ class RecurrentTransitionResult:
     loss: Tensor | None
     halting_state: HaltingStateBase | None
     all_items_halted: bool
+    context_state: LayerState | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class _RecurrentTransitionCandidate:
     hidden: Tensor
     loss: Tensor | None
     residual_input: Tensor
+    context_state: LayerState
 
 
 _ProvisionalSourceBranchOutput = TypeVar("_ProvisionalSourceBranchOutput")
@@ -289,6 +291,7 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
                 else transition_candidate.loss.detach()
             ),
             residual_input=transition_candidate.residual_input.detach(),
+            context_state=transition_candidate.context_state.detach_recurrent_context(),
         )
         target_result = self.__apply_halting_and_observe_recurrent_transition(
             recurrent_state,
@@ -332,7 +335,10 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         residual_input = candidate_hidden
         candidate_hidden = self.__maybe_apply_residual_connection(
             candidate_hidden,
-            prepared_transition.previous_evolving_hidden,
+            output_state.align_recurrent_hidden(
+                prepared_transition.previous_evolving_hidden,
+                source_state=recurrent_state.context_state,
+            ),
             prepared_transition.residual_state,
             prepared_transition.residual_schedule,
             transition_index,
@@ -342,6 +348,7 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             hidden=candidate_hidden,
             loss=output_state.loss,
             residual_input=residual_input,
+            context_state=replace(output_state, hidden=candidate_hidden),
         )
 
     def __advance_detached_target_residual_state(
@@ -385,7 +392,10 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         )
         if observe_transition:
             self._observe_recurrent_step(
-                previous_evolving_hidden,
+                transition_candidate.context_state.align_recurrent_hidden(
+                    previous_evolving_hidden,
+                    source_state=recurrent_state.context_state,
+                ),
                 output_hidden,
             )
         return RecurrentTransitionResult(
@@ -393,6 +403,9 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             loss=transition_candidate.loss,
             halting_state=halting_state,
             all_items_halted=self.__all_items_halted(halting_state),
+            context_state=replace(
+                transition_candidate.context_state, hidden=output_hidden
+            ),
         )
 
     def __maybe_apply_layer_norm_before(self, hidden: Tensor) -> Tensor:

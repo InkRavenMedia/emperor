@@ -306,6 +306,7 @@ modules = [
 [families.layers]
 status = "partial"
 focused_tests = [
+  "tests/unit/test_sequence_expansion.py",
   "tests/unit/test_inspection_shape_trace.py",
   "tests/unit/test_layer*.py",
   "tests/unit/test_mirrored_layer_stack.py",
@@ -694,6 +695,7 @@ modules = [
 [families.transformer]
 status = "pending"
 focused_tests = [
+  "tests/unit/test_sequence_expansion.py",
   "tests/unit/test_attention_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
   "tests/unit/test_adaptive_parameter_grouping_boundaries.py",
@@ -736,6 +738,13 @@ modules = [
   "src/emperor/transformer/_soft_moe_config.py",
   "src/emperor/transformer/_layers.py",
   "src/emperor/transformer/_model.py",
+  "src/emperor/transformer/sequence_expansion/__init__.py",
+  "src/emperor/transformer/sequence_expansion/_block.py",
+  "src/emperor/transformer/sequence_expansion/_config.py",
+  "src/emperor/transformer/sequence_expansion/_layout.py",
+  "src/emperor/transformer/sequence_expansion/_model.py",
+  "src/emperor/transformer/sequence_expansion/_state.py",
+  "src/emperor/transformer/sequence_expansion/_validation.py",
   "src/emperor/transformer/_state.py",
   "src/emperor/transformer/_validation.py",
   "src/emperor/transformer/hierarchical/__init__.py",
