@@ -353,7 +353,11 @@ export function MonitorEmptyState({
   busy?: boolean;
 }) {
   return (
-    <SurfacePanel padding="spacious" className="min-h-40 place-items-center text-center">
+    <SurfacePanel
+      padding="spacious"
+      role={busy ? "status" : undefined}
+      className="min-h-40 place-items-center text-center"
+    >
       <div className="grid justify-items-center gap-2">
         {busy && <Loader2 className="h-5 w-5 animate-spin text-violet" aria-hidden />}
         <div className="text-sm font-semibold text-ink">{title}</div>
@@ -367,19 +371,25 @@ export function MissingMetricCard({
   metric,
   nodePath,
   busy = false,
+  failed = false,
 }: {
   metric: string;
   nodePath: string;
   busy?: boolean;
+  failed?: boolean;
 }) {
   return (
     <div className="grid min-h-40 place-items-center p-4 text-center">
       <div className="grid justify-items-center gap-2">
         {busy && <Loader2 className="h-5 w-5 animate-spin text-violet" aria-hidden />}
-        <div className="text-sm font-semibold text-ink">Metric not found</div>
+      <div className="text-sm font-semibold text-ink">
+        {busy ? "Loading metric…" : failed ? "Metric unavailable" : "Metric not found"}
+      </div>
         <div className="max-w-sm text-xs text-ink-faint">
           {busy
             ? `Waiting for ${metric} from ${nodePath}.`
+          : failed
+            ? `Monitor data could not be loaded for ${nodePath}.`
             : `${nodePath} has no matching ${metric} tag.`}
         </div>
       </div>
