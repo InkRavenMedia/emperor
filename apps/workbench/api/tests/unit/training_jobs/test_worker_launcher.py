@@ -10,14 +10,45 @@ from types import SimpleNamespace
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
+from emperor_workbench.training_jobs._containment._cgroup_v2 import (
+    StrictCancellationUnavailable,
+)
 from emperor_workbench.training_jobs._containment._launcher import (
     TRAINING_LOGS_ROOT_ENV,
     TrainingWorkerLauncher,
 )
-from tests.unit.training_jobs._support import RecordingRunner
+from tests.support.training_jobs import FakeProcess, FakeRunner
+from tests.unit.training_jobs._support import FakeCgroup, RecordingRunner
 
 
 class TrainingWorkerLauncherTests(unittest.TestCase):
+    def test_strict_launch_rejects_ready_marker_left_by_previous_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            job_root = root / "job-1"
+            job_root.mkdir()
+            process = FakeProcess(exit_code=125)
+            (job_root / "cgroup.ready").write_text(f"{process.pid}\n", encoding="ascii")
+            cgroup = FakeCgroup()
+            cgroup.processes = False
+            runner = FakeRunner(process)
+            launcher = TrainingWorkerLauncher(
+                cwd=root,
+                runner=runner,
+                cancellation_mode="strict-cgroup",
+                cgroup_manager=SimpleNamespace(
+                    create_job_cgroup=lambda _job_id: cgroup
+                ),
+            )
+
+            with self.assertRaisesRegex(
+                StrictCancellationUnavailable, "before the worker joined its cgroup"
+            ):
+                launcher.launch(job_root=job_root, payload={"id": "job-1"})
+
+            self.assertEqual(len(runner.commands), 1)
+            self.assertTrue(cgroup.cleaned)
+
     def test_launcher_writes_payload_and_starts_worker_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
