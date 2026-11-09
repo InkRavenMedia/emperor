@@ -7,6 +7,7 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SelectOnlyDropdown } from "@/features/workbench/components/screen/select-only-dropdown";
 import { HoverTooltip } from "@/features/workbench/components/shared/hover-tooltip";
 import { type RuntimeDefaultsFieldPresentation } from "@/features/workbench/state/runtime-defaults/runtime-defaults-presentation";
+import { isPresentConfigOptionValue } from "@/lib/config";
 import { cn } from "@/lib/utils";
 
 type ConfigFieldControlDensity = "comfortable" | "compact";
@@ -15,6 +16,7 @@ const booleanOptions = [
   { value: "true", label: "On" },
   { value: "false", label: "Off" },
 ] as const;
+const nullableBooleanOptions = [...booleanOptions, { value: "", label: "None" }] as const;
 
 const modifiedControlClassName =
   "border-violet/55 bg-modified-field hover:border-violet/70";
@@ -48,20 +50,21 @@ function BooleanSegmentedControl({
   label,
   labelledBy,
   value,
+  nullable,
   onChange,
   disabled,
-  isCompact,
   className,
 }: {
   id: string;
   label: string;
   labelledBy?: string;
   value: string;
+  nullable: boolean;
   onChange: (value: string) => void;
   disabled: boolean;
-  isCompact: boolean;
   className?: string;
 }) {
+  const options = nullable ? nullableBooleanOptions : booleanOptions;
   return (
     <SegmentedControl
       id={id}
@@ -69,17 +72,14 @@ function BooleanSegmentedControl({
       aria-labelledby={labelledBy}
       aria-disabled={disabled || undefined}
       className={cn(
-        "grid w-full min-w-0 grid-cols-2 overflow-hidden rounded-control border border-line bg-panel-2/90 p-0 font-sans font-semibold text-ink transition-colors",
-        isCompact
-          ? "h-touch type-compact md:h-control-lg"
-          : "h-touch type-compact md:h-control-lg",
+        "grid h-touch w-full min-w-0 overflow-hidden rounded-control border border-line bg-panel-2/90 p-0 font-sans type-compact font-semibold text-ink transition-colors md:h-control-lg",
+        nullable ? "grid-cols-3" : "grid-cols-2",
         disabled && "opacity-60",
         className,
       )}
     >
-      {booleanOptions.map((option) => {
-        const isSelected =
-          option.value === "true" ? value === "true" : value !== "true";
+      {options.map((option) => {
+        const isSelected = option.value === value;
         return (
           <button
             key={option.value}
@@ -242,9 +242,13 @@ export function ConfigFieldValueEditor({
           id={controlId}
           label={controlLabel ?? presentation.label}
           labelledBy={controlLabelledBy}
-          value={value}
+          value={
+            field.nullable && !isPresentConfigOptionValue(value)
+              ? ""
+              : String(presentation.isEnabledValue)
+          }
+          nullable={field.nullable}
           disabled={isControlDisabled}
-          isCompact={isCompact}
           onChange={(nextValue) => onChange(field.key, nextValue)}
           className={cn(isModified && modifiedControlClassName, resetPaddingClassName)}
         />

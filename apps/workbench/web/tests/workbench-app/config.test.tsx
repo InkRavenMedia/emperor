@@ -2788,7 +2788,7 @@ describe("WorkbenchApp Full Config", () => {
     ).toBeEnabled();
   });
 
-  it("renders stack booleans as two-option segmented controls", async () => {
+  it("keeps required booleans binary and lets optional booleans be unset", async () => {
     setupConfigScenario({
       schemaResponse: {
         ...schemaResponse,
@@ -2845,22 +2845,22 @@ describe("WorkbenchApp Full Config", () => {
       await user.click(gateModelStackAccordion);
     }
     const gateModelStackPanel = accordionPanelFor(gateModelStackAccordion);
-    const gateBias = expectBooleanSegmentedControl(
-      gateModelStackPanel,
-      /bias flag/i,
-    );
-    const gatePipeline = expectBooleanSegmentedControl(
-      gateModelStackPanel,
-      /apply output postprocessing flag/i,
-    );
+    const gateBias = within(within(gateModelStackPanel).getByRole("radiogroup", {
+      name: /bias flag/i,
+    }));
+    const gatePipeline = within(within(gateModelStackPanel).getByRole("radiogroup", {
+      name: /apply output postprocessing flag/i,
+    }));
+    const pipelineOn = gatePipeline.getByRole("radio", { name: "On" });
+    const pipelineOff = gatePipeline.getByRole("radio", { name: "Off" });
+    const pipelineNone = gatePipeline.getByRole("radio", { name: "None" });
 
-    expect(gateBias.on).toHaveAttribute("aria-checked", "true");
-    expect(gateBias.off).toHaveAttribute("aria-checked", "false");
-    expect(gatePipeline.on).toHaveAttribute("aria-checked", "false");
-    expect(gatePipeline.off).toHaveAttribute("aria-checked", "true");
+    expect(gateBias.getByRole("radio", { name: "On" })).toBeChecked();
+    expect(pipelineNone).toBeChecked();
+    expect(pipelineOff).not.toBeChecked();
 
-    await user.click(gatePipeline.on);
-    expect(gatePipeline.on).toHaveAttribute("aria-checked", "true");
+    await user.click(pipelineOn);
+    expect(pipelineOn).toBeChecked();
     let commandDialog = await openTrainingCommand(user, dialog);
     expect(commandField(commandDialog)).toHaveValue(
       "mise run experiment -- --model-type linears --model linear --preset baseline --config --stack-gate-flag true --gate-stack-apply-output-postprocessing-flag true",
@@ -2871,11 +2871,24 @@ describe("WorkbenchApp Full Config", () => {
       }),
     );
 
-    await user.click(gatePipeline.off);
-    expect(gatePipeline.off).toHaveAttribute("aria-checked", "true");
+    await user.click(pipelineOff);
+    expect(pipelineOff).toBeChecked();
     commandDialog = await openTrainingCommand(user, dialog);
     expect(commandField(commandDialog)).toHaveValue(
       "mise run experiment -- --model-type linears --model linear --preset baseline --config --stack-gate-flag true --gate-stack-apply-output-postprocessing-flag false",
+    );
+    await user.click(
+      within(commandDialog).getByRole("button", { name: /close training command/i }),
+    );
+
+    await user.click(pipelineNone);
+    const biasNone = gateBias.getByRole("radio", { name: "None" });
+    await user.click(biasNone);
+    expect(pipelineNone).toBeChecked();
+    expect(biasNone).toBeChecked();
+    commandDialog = await openTrainingCommand(user, dialog);
+    expect(commandField(commandDialog)).toHaveValue(
+      "mise run experiment -- --model-type linears --model linear --preset baseline --config --stack-gate-flag true --gate-stack-bias-flag None",
     );
   });
 
