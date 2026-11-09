@@ -846,10 +846,10 @@ export function configFieldSelectOptions(
 }
 
 export function overrideDigest(overrides: OverrideValues) {
-  return Object.entries(overrides)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("\u0000");
+  const entries = Object.keys(overrides)
+    .sort()
+    .map((key) => [key, overrides[key]]);
+  return JSON.stringify(entries);
 }
 
 export function activeOverrideScopeLabel(scope: ActiveOverrideScope) {

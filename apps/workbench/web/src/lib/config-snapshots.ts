@@ -5,6 +5,7 @@ import {
   defaultConfigFieldValue,
   hasOverride,
   normalizeConfigFieldValue,
+  overrideDigest,
   overrideValue,
   overrideValueForConfigField,
   type OverrideValues,
@@ -120,19 +121,14 @@ function snapshotIdentity({
   modelType,
   model,
   preset,
-  entries,
+  overrides,
 }: {
   modelType: string;
   model: string;
   preset: string;
-  entries: ConfigSnapshotOverrideEntry[];
+  overrides: OverrideValues;
 }) {
-  return [
-    modelType,
-    model,
-    preset,
-    ...entries.map((entry) => `${entry.key}=${entry.value}`),
-  ].join("\u0000");
+  return JSON.stringify([modelType, model, preset, overrideDigest(overrides)]);
 }
 
 export function configSnapshotIdentity({
@@ -149,7 +145,12 @@ export function configSnapshotIdentity({
   overrides: OverrideValues;
 }) {
   const { entries } = configSnapshotOverrideEntries(fields, overrides);
-  return snapshotIdentity({ modelType, model, preset, entries });
+  return snapshotIdentity({
+    modelType,
+    model,
+    preset,
+    overrides: overridesFromSnapshotEntries(entries),
+  });
 }
 
 function normalizeSnapshotName(name: string) {
@@ -242,7 +243,13 @@ export function validateConfigSnapshotCandidate({
     return adaptiveOptionValidation;
   }
 
-  const identity = snapshotIdentity({ modelType, model, preset, entries });
+  const normalizedOverrides = overridesFromSnapshotEntries(entries);
+  const identity = snapshotIdentity({
+    modelType,
+    model,
+    preset,
+    overrides: normalizedOverrides,
+  });
   const duplicate = snapshots.some((snapshot) => {
     if (
       snapshot.id === excludeSnapshotId ||
@@ -272,7 +279,7 @@ export function validateConfigSnapshotCandidate({
   return {
     ok: true as const,
     entries,
-    overrides: overridesFromSnapshotEntries(entries),
+    overrides: normalizedOverrides,
     identity,
   };
 }
@@ -372,13 +379,6 @@ export function groupConfigSnapshotsByPreset(
   })).filter((group) => group.snapshots.length > 0);
 }
 
-function overrideRecordKey(overrides: OverrideValues) {
-  return Object.entries(overrides)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("\u0000");
-}
-
 export function draftMatchesConfigSnapshot({
   snapshot,
   preset,
@@ -390,6 +390,6 @@ export function draftMatchesConfigSnapshot({
 }) {
   return (
     snapshot.preset === preset &&
-    overrideRecordKey(snapshot.overrides) === overrideRecordKey(overrides)
+    overrideDigest(snapshot.overrides) === overrideDigest(overrides)
   );
 }

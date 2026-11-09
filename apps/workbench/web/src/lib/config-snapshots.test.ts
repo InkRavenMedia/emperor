@@ -4,6 +4,7 @@ import {
   configSnapshotOverrideCountLabel,
   configSnapshotOverrideEntries,
   createConfigSnapshot,
+  draftMatchesConfigSnapshot,
   groupConfigSnapshotsByPreset,
   validateConfigSnapshotCandidate,
   validateConfigSnapshotName,
@@ -386,6 +387,38 @@ describe("config snapshots", () => {
 
     expect(nameResult).toMatchObject({ ok: true, name: "existing" });
     expect(configResult.ok).toBe(true);
+  });
+
+  it("distinguishes override values containing a snapshot key separator", () => {
+    const notesField: ConfigField = {
+      ...fields[2],
+      key: "notes",
+      configKey: "NOTES",
+      flag: "--notes",
+      label: "Notes",
+      default: "",
+      choices: [],
+    };
+    const snapshot = {
+      ...makeSnapshot({ num_epochs: "12" }),
+      overrides: { notes: "Custom", num_epochs: "12" },
+    };
+    const overrides = { notes: "Custom\u0000num_epochs=12" };
+    const { modelType, model, preset } = snapshot;
+
+    expect(
+      draftMatchesConfigSnapshot({ snapshot, preset, overrides }),
+    ).toBe(false);
+    expect(
+      validateConfigSnapshotCandidate({
+        modelType,
+        model,
+        preset,
+        fields: [notesField, ...fields],
+        overrides,
+        snapshots: [snapshot],
+      }),
+    ).toMatchObject({ ok: true, overrides });
   });
 
   it("rejects locked-field overrides defensively", () => {

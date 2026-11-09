@@ -94,4 +94,19 @@ describe("target preview coordination", () => {
       variants.length,
     );
   });
+
+  it("distinguishes an override value from multiple override entries", () => {
+    const target = {
+      modelType: "linears",
+      model: "linear",
+      preset: "baseline",
+      dataset: "Mnist",
+    };
+
+    expect(
+      inspectionTargetKey({ ...target, overrides: { alpha: "1\u0000beta=2" } }),
+    ).not.toBe(
+      inspectionTargetKey({ ...target, overrides: { alpha: "1", beta: "2" } }),
+    );
+  });
 });
