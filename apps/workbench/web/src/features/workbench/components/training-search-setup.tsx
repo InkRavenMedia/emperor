@@ -239,6 +239,7 @@ export function TrainingSearchSetup({
             axes={axes}
             search={effective}
             isLoading={isLoading}
+            disabled={isDisabled}
             onToggleAxis={toggleAxis}
             onToggleValue={toggleValue}
           />

@@ -21,18 +21,21 @@ export function TrainingSearchAxisList({
   axes,
   search,
   isLoading,
+  disabled,
   onToggleAxis,
   onToggleValue,
 }: {
   axes: SearchAxis[];
   search: TrainingSearchState;
   isLoading: boolean;
+  disabled: boolean;
   onToggleAxis: (axis: SearchAxis) => void;
   onToggleValue: (axis: SearchAxis, value: ConfigValue) => void;
 }) {
   return (
     <div className="grid min-w-0 grid-cols-1 gap-2">
       {axes.map((axis) => {
+        const isAxisDisabled = disabled || axis.locked;
         const selectedCount = selectedValueCount(axis, search);
         const axisSelected = selectedCount > 0;
         const lockedByPresets = axis.lockedByPresets ?? [];
@@ -61,13 +64,13 @@ export function TrainingSearchAxisList({
             <label
               className={cn(
                 "grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-2",
-                axis.locked ? "cursor-not-allowed" : "cursor-pointer",
+                isAxisDisabled ? "cursor-not-allowed" : "cursor-pointer",
               )}
             >
               <Checkbox
                 name={`training-search-axis-${axis.key}`}
                 checked={axisSelected}
-                disabled={axis.locked}
+                disabled={isAxisDisabled}
                 onCheckedChange={() => onToggleAxis(axis)}
                 aria-label={`search axis ${axis.key}`}
               />
@@ -116,13 +119,13 @@ export function TrainingSearchAxisList({
                       checked
                         ? "border-violet/35 bg-violet/15 text-violet"
                         : "border-line bg-black/10 text-ink-dim hover:border-violet/25 hover:text-ink",
-                      axis.locked && "cursor-not-allowed opacity-65",
+                      isAxisDisabled && "cursor-not-allowed opacity-65",
                     )}
                   >
                     <Checkbox
                       name={`training-search-value-${axis.key}-${value}`}
                       checked={checked}
-                      disabled={axis.locked}
+                      disabled={isAxisDisabled}
                       onCheckedChange={() => onToggleValue(axis, value)}
                       aria-label={`search value ${axis.key} ${label}`}
                       className="h-4 w-4 rounded-chip"
