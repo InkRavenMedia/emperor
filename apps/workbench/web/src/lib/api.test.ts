@@ -1502,18 +1502,16 @@ describe("requestJson success", () => {
     }
   });
 
-  it("rejects runtime API URLs with query strings or fragments", async () => {
-    expect(
-      validateWorkbenchApiBaseUrl("https://api.example.test?debug=true"),
-    ).toMatchObject({ ok: false });
-    expect(
-      validateWorkbenchApiBaseUrl(
-        "https://api.example.test/workbench#status",
-      ),
-    ).toMatchObject({ ok: false });
-    await expect(
-      setWorkbenchApiBaseUrl("https://api.example.test?debug=true"),
-    ).rejects.toThrow(/without credentials, query, or fragment/i);
+  it.each([
+    "https://api.example.test?debug=true",
+    "https://api.example.test/workbench#status",
+    "https://api.example.test/workbench?",
+    "https://api.example.test/workbench#",
+  ])("rejects runtime API URLs with a query or fragment (%s)", async (url) => {
+    expect(validateWorkbenchApiBaseUrl(url)).toMatchObject({ ok: false });
+    await expect(setWorkbenchApiBaseUrl(url)).rejects.toThrow(
+      /without credentials, query, or fragment/i,
+    );
   });
 
   it("preserves POST request init fields when attaching the bearer token", async () => {
