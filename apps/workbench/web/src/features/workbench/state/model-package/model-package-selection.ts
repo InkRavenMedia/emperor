@@ -62,12 +62,7 @@ export function deriveModelPackageSelection(
     configFields,
     modelConfigSnapshots,
     modelConfigSnapshotGroups,
-    presetOwnedFieldCount: configSections.reduce(
-      (total, section) =>
-        total +
-        presetOwnedRuntimeDefaultCount(configSectionsFields([section])),
-      0,
-    ),
+    presetOwnedFieldCount: presetOwnedRuntimeDefaultCount(configFields),
     fieldCount: configFields.length,
   };
 }
