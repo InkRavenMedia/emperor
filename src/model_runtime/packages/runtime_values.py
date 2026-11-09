@@ -17,7 +17,6 @@ from typing import (
     is_typeddict,
 )
 
-from model_runtime.packages import soft_moe
 from model_runtime.packages.configuration import (
     abstract_config_class_error,
     config_key_to_model_param,
@@ -657,7 +656,9 @@ def validate_runtime_default_value_types(
         config_module=config_module,
         accepted=accepted,
     )
-    soft_moe.validate_soft_moe_runtime_values(values, config_module)
+    from model_runtime.packages.soft_moe import validate_soft_moe_runtime_values
+
+    validate_soft_moe_runtime_values(values, config_module)
 
 
 def validate_runtime_default_values(
@@ -683,7 +684,9 @@ def validate_runtime_default_values(
         package=package,
         config_module=config_module,
     )
-    return soft_moe.resolve_soft_moe_runtime_defaults(normalized, config_module)
+    from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
+
+    return resolve_soft_moe_runtime_defaults(normalized, config_module)
 
 
 @dataclass(frozen=True, slots=True)
