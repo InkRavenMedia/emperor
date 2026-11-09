@@ -30,6 +30,7 @@ class SemanticTypePolicy:
     description: str | None = None
     graph_role: GraphRole = "architecture"
     residual_field_descriptions: tuple[str, str] | None = None
+    shares_layer_configuration: bool = False
 
 
 class SemanticTypeCatalog:
@@ -78,12 +79,14 @@ def _semantic_type_policy(
     *,
     graph_role: GraphRole = "architecture",
     residual_field_descriptions: tuple[str, str] | None = None,
+    shares_layer_configuration: bool = False,
 ) -> SemanticTypePolicy:
     return SemanticTypePolicy(
         type_reference=_LazyTypeReference.parse(type_reference),
         description=description,
         graph_role=graph_role,
         residual_field_descriptions=residual_field_descriptions,
+        shares_layer_configuration=shares_layer_configuration,
     )
 
 
@@ -212,26 +215,31 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             "emperor.layers._layer.pipeline.postprocessing.LayerPostprocessingDelegate",
             "Internal Layer Pipeline Module that applies activation, gating, and dropout in order.",
             graph_role="internal",
+            shares_layer_configuration=True,
         ),
         _semantic_type_policy(
             "emperor.layers._layer.pipeline.halting.LayerHaltingDelegate",
             "Internal Layer Pipeline Module that owns halting updates and finalization.",
             graph_role="internal",
+            shares_layer_configuration=True,
         ),
         _semantic_type_policy(
             "emperor.layers._layer.pipeline.memory.LayerMemoryDelegate",
             "Internal Layer Pipeline Module that applies dynamic memory at its configured position.",
             graph_role="internal",
+            shares_layer_configuration=True,
         ),
         _semantic_type_policy(
             "emperor.layers._layer.pipeline.residual.LayerResidualDelegate",
             "Internal Layer Pipeline Module that owns residual state and composition.",
             graph_role="internal",
+            shares_layer_configuration=True,
         ),
         _semantic_type_policy(
             "emperor.layers._layer.pipeline.normalization.LayerNormalizationDelegate",
             "Internal Layer Pipeline Module that applies normalization at its configured position.",
             graph_role="internal",
+            shares_layer_configuration=True,
         ),
         _semantic_type_policy(
             "emperor.layers._config.LayerConfig",
