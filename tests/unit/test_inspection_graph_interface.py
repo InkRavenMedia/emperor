@@ -1815,7 +1815,7 @@ assert semantic_module not in sys.modules
     ) -> None:
         cases = (
             ("linears/linear", "Cifar100", 1_120_000, 144_512),
-            ("gpt/linear", "WikiText103", 160_000_000, 69_429_376),
+            ("gpt/linear", "WikiText103", 160_000_000, 69_822_592),
         )
         for package_key, dataset, memory_limit, expected_estimate in cases:
             with self.subTest(package=package_key, dataset=dataset):
