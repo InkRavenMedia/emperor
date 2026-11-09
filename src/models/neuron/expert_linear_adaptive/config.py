@@ -1758,3 +1758,8 @@ OUTPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None 
 OUTPUT_LAYER_GROUPING_MODEL_CONFIG: ConfigBase | None = None
 OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: float | None = None
+
+
+from models import _component_defaults
+
+_component_defaults.declare_component_defaults(globals())

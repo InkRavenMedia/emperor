@@ -47,7 +47,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
-from models import _sequence_expansion
+from models import _learned_grouping, _sequence_expansion
 from models.mlp_mixer.linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -72,7 +72,6 @@ from ._control_options import (
     submodule_stack_options,
     token_mixer_control_options,
 )
-from ._grouping import grouping_from_runtime
 from ._residual import (
     ResidualStackSource,
     build_residual_config,
@@ -419,7 +418,9 @@ def _backend_linear_config(
     return AdaptiveLinearLayerTemplateConfig(
         bias_flag=bias_flag or bias_config is not None,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-            grouping_config=grouping_from_runtime(runtime, grouping_prefix),
+            grouping_config=_learned_grouping.grouping_from_runtime(
+                runtime, grouping_prefix
+            ),
             diagonal_config=_diagonal_config(
                 runtime,
                 options.diagonal,

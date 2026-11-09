@@ -33,8 +33,8 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models import _learned_grouping
 from models.neuron.linear_adaptive import config
-from models.neuron.linear_adaptive._hidden._grouping import grouping_from_fields
 
 _PACKAGE = "models.neuron.linear_adaptive._hidden"
 _ValueT = TypeVar("_ValueT")
@@ -2161,6 +2161,16 @@ def _read_grouping(reader: RuntimeOverrideReader, prefix: str = ""):
     values["grouping_model_config"] = reader.read(
         _optional_instance_field(key, getattr(config, key.upper()), ConfigBase)
     )
+    key = prefix + "grouping_model_option"
+    values["grouping_model_option"] = reader.read(
+        _optional_enum_field(
+            key, getattr(config, key.upper()), _learned_grouping.GroupingModelOptions
+        )
+    )
+    key = prefix + "grouping_model_bias_flag"
+    values["grouping_model_bias_flag"] = reader.read(
+        _optional_boolean_field(key, getattr(config, key.upper()))
+    )
     key = prefix + "grouping_attention_hidden_dim"
     values["grouping_attention_hidden_dim"] = reader.read(
         _optional_integer_field(key, getattr(config, key.upper()))
@@ -2169,7 +2179,7 @@ def _read_grouping(reader: RuntimeOverrideReader, prefix: str = ""):
     values["grouping_rms_norm_epsilon"] = reader.read(
         _optional_float_field(key, getattr(config, key.upper()))
     )
-    return grouping_from_fields(values, prefix=prefix or "main")
+    return _learned_grouping.grouping_from_fields(values, prefix=prefix or "main")
 
 
 def _read_runtime_values(reader: RuntimeOverrideReader) -> RuntimeDefaultValues:

@@ -776,6 +776,14 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('TOKEN_MIXER_SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 386, (386, 20)),
         ('TOKEN_MIXER_SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 386, (386, 21)),
     )),
+    RuntimeDefaultsSection(('Main Grouping',), (
+        ('GROUPING_MODEL_OPTION', 995, (995, 22)),
+        ('GROUPING_MODEL_BIAS_FLAG', 995, (995, 23)),
+    )),
+    RuntimeDefaultsSection(('Channel Mixer Grouping',), (
+        ('CHANNEL_MIXER_GROUPING_MODEL_OPTION', 1008, (1008, 24)),
+        ('CHANNEL_MIXER_GROUPING_MODEL_BIAS_FLAG', 1008, (1008, 25)),
+    )),
 )
 
 SEARCH_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (

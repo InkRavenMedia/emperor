@@ -1135,6 +1135,22 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG', 1671, (1671,)),
         ('OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG', 1672, (1672,)),
     )),
+    RuntimeDefaultsSection(('Main Adaptive Parameter Grouping',), (
+        ('GROUPING_MODEL_OPTION', 1050, (1050, 0)),
+        ('GROUPING_MODEL_BIAS_FLAG', 1050, (1050, 1)),
+    )),
+    RuntimeDefaultsSection(('Router Adaptive Parameter Grouping',), (
+        ('ROUTER_GROUPING_MODEL_OPTION', 1064, (1064, 2)),
+        ('ROUTER_GROUPING_MODEL_BIAS_FLAG', 1064, (1064, 3)),
+    )),
+    RuntimeDefaultsSection(('Input Layer Adaptive Parameter Grouping',), (
+        ('INPUT_LAYER_GROUPING_MODEL_OPTION', 1078, (1078, 4)),
+        ('INPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 1078, (1078, 5)),
+    )),
+    RuntimeDefaultsSection(('Output Layer Adaptive Parameter Grouping',), (
+        ('OUTPUT_LAYER_GROUPING_MODEL_OPTION', 1092, (1092, 6)),
+        ('OUTPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 1092, (1092, 7)),
+    )),
 )
 
 SEARCH_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (

@@ -1282,6 +1282,24 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 446, (446, 24)),
         ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 446, (446, 25)),
         ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 446, (446, 26)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_OPTION', 449, (449, 27)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_BIAS_FLAG', 449, (449, 28)),
+    )),
+    RuntimeDefaultsSection(('Main Grouping',), (
+        ('GROUPING_MODEL_OPTION', 1468, (1468, 29)),
+        ('GROUPING_MODEL_BIAS_FLAG', 1468, (1468, 30)),
+    )),
+    RuntimeDefaultsSection(('Router Grouping',), (
+        ('ROUTER_GROUPING_MODEL_OPTION', 1621, (1621, 31)),
+        ('ROUTER_GROUPING_MODEL_BIAS_FLAG', 1621, (1621, 32)),
+    )),
+    RuntimeDefaultsSection(('Attn Grouping',), (
+        ('ATTN_GROUPING_MODEL_OPTION', 1634, (1634, 33)),
+        ('ATTN_GROUPING_MODEL_BIAS_FLAG', 1634, (1634, 34)),
+    )),
+    RuntimeDefaultsSection(('Ff Grouping',), (
+        ('FF_GROUPING_MODEL_OPTION', 1647, (1647, 35)),
+        ('FF_GROUPING_MODEL_BIAS_FLAG', 1647, (1647, 36)),
     )),
 )
 

@@ -22,8 +22,10 @@ from emperor.augmentations.adaptive_parameters import (
     RMSGroupingConfig,
     SumGroupingConfig,
 )
+from emperor.layers import LayerConfig, LayerStackConfig
 from model_runtime.inspection import configuration_schema
 from model_runtime.packages import parse_config_value, serialize_config_value
+from models._learned_grouping import GroupingModelOptions
 from models.catalog import model_package
 from support.adaptive_grouping_variants import grouping_model_config
 
@@ -155,16 +157,18 @@ def test_generation_settings_reach_executable_adaptive_layers(
 
 @pytest.mark.parametrize("package_name", PACKAGES)
 @pytest.mark.parametrize(
-    "method",
+    "method,flat",
     (
-        SumGroupingConfig,
-        MeanGroupingConfig,
-        RMSGroupingConfig,
-        MeanStdGroupingConfig,
-        AttentionGroupingConfig,
+        (SumGroupingConfig, False),
+        (MeanGroupingConfig, False),
+        (RMSGroupingConfig, False),
+        (MeanStdGroupingConfig, False),
+        (AttentionGroupingConfig, False),
+        (MeanStdGroupingConfig, True),
+        (AttentionGroupingConfig, True),
     ),
 )
-def test_grouping_summaries_can_generate_mixture_parameters(package_name, method):
+def test_grouping_summaries_can_generate_mixture_parameters(package_name, method, flat):
     overrides = dict(
         weight_option_flag=True,
         weight_option=MatrixWeightsMixtureConfig,
@@ -176,7 +180,14 @@ def test_grouping_summaries_can_generate_mixture_parameters(package_name, method
         adaptive_generator_stack_hidden_dim=8,
         adaptive_generator_stack_num_layers=1,
     )
-    if method in (MeanStdGroupingConfig, AttentionGroupingConfig):
+    if flat:
+        overrides.update(
+            grouping_model_option=GroupingModelOptions.LINEAR,
+            grouping_model_bias_flag=False,
+        )
+        if method is AttentionGroupingConfig:
+            overrides["grouping_attention_hidden_dim"] = 7
+    elif method in (MeanStdGroupingConfig, AttentionGroupingConfig):
         overrides["grouping_model_config"] = grouping_model_config(method)
     configuration = model_package(package_name).build_configuration(
         config_overrides=overrides
@@ -191,6 +202,14 @@ def test_grouping_summaries_can_generate_mixture_parameters(package_name, method
         isinstance(augmentation.grouping_config, method)
         for augmentation in augmentations
     )
+    if flat:
+        scorer = augmentations[0].grouping_config.model_config
+        if method is AttentionGroupingConfig:
+            assert isinstance(scorer, LayerStackConfig)
+            assert scorer.hidden_dim == 7
+            scorer = scorer.layer_config
+        assert isinstance(scorer, LayerConfig)
+        assert scorer.layer_model_config.bias_flag is False
     template_config = import_module(
         "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
     ).AdaptiveLinearLayerTemplateConfig
@@ -226,6 +245,8 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
         "chunk_size",
         "grouping_method",
         "grouping_model_config",
+        "grouping_model_option",
+        "grouping_model_bias_flag",
     ):
         assert key in schema
     config_module = import_module(
@@ -241,6 +262,7 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
         ("bias_option", MatrixBiasMixtureConfig),
         ("weight_input_factor_source", LowRankFactorSourceOptions.SHARED_PARAMETER),
         ("grouping_method", AttentionGroupingConfig),
+        ("grouping_model_option", GroupingModelOptions.LINEAR),
     ):
         serialized = serialize_config_value(value)
         assert serialized in schema[key].choices

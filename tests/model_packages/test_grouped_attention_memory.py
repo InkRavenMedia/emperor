@@ -111,6 +111,11 @@ def test_cli_options_reach_built_memory_and_forward(package_name, capsys):
         assert model_option.value_type == "enum" and "LINEAR" in model_option.choices
         assert bias_flag.value_type == "bool" and bias_flag.choices == (True, False)
         assert model_option.flag in listed and bias_flag.flag in listed
+        grouping_option = fields[f"{prefix}_SOURCE_MEMORY_GROUPING_MODEL_OPTION"]
+        grouping_bias = fields[f"{prefix}_SOURCE_MEMORY_GROUPING_MODEL_BIAS_FLAG"]
+        assert grouping_option.choices == ("LINEAR",)
+        assert grouping_bias.choices == (True, False)
+        assert grouping_option.flag in listed and grouping_bias.flag in listed
     overrides = parse_overrides(
         package_name,
         "--attn-source-memory-flag",
@@ -195,6 +200,35 @@ def test_cli_rejects_removed_memory_count_option(package_name):
                 package_name, f"--{prefix}-source-memory-num-embeddings", "6"
             )
         assert error.value.code == 2
+
+
+@pytest.mark.parametrize("method", ["AttentionGroupingConfig", "MeanStdGroupingConfig"])
+def test_cli_learned_grouping_builds_a_linear_model_without_json(method):
+    package = model_package("bert/linear")
+    overrides = parse_overrides(
+        package.catalog_key,
+        "--attn-source-memory-flag",
+        "true",
+        "--attn-source-memory-chunk-size",
+        "2",
+        "--attn-source-memory-grouping-method",
+        method,
+        "--attn-source-memory-grouping-model-option",
+        "LINEAR",
+        "--attn-source-memory-grouping-model-bias-flag",
+        "false",
+    )
+    model = package.build_model(build_config(package.catalog_key, overrides))
+    execute(model, package.catalog_key)[0].sum().backward()
+    groupers = [
+        attention.projector.source_memory.context.grouper
+        for attention in model.modules()
+        if isinstance(attention, ATTENTION_TYPES)
+    ]
+    assert groupers
+    for grouper in groupers:
+        assert grouper.cfg.model_config.layer_model_config.bias_flag is False
+        assert any(p.grad is not None for p in grouper.parameters())
 
 
 @pytest.mark.parametrize("method", ["AttentionGroupingConfig", "MeanStdGroupingConfig"])
@@ -390,10 +424,16 @@ def test_transformer_path_overrides_and_cross_attention_rejection(variant):
         "LINEAR",
         "--attn-source-memory-model-bias-flag",
         "true",
+        "--attn-source-memory-grouping-method",
+        "AttentionGroupingConfig",
+        "--attn-source-memory-grouping-model-option",
+        "LINEAR",
         "--decoder-self-attn-source-memory-chunk-size",
         "1",
         "--decoder-self-attn-source-memory-grouping-method",
-        "MeanGroupingConfig",
+        "MeanStdGroupingConfig",
+        "--decoder-self-attn-source-memory-grouping-model-bias-flag",
+        "false",
         "--decoder-self-attn-source-memory-model-bias-flag",
         "false",
         "--decoder-cross-attn-source-memory-flag",
@@ -411,7 +451,13 @@ def test_transformer_path_overrides_and_cross_attention_rejection(variant):
         (1, False),
         (2, True),
     }
-    assert any(isinstance(m.cfg.grouping_config, MeanGroupingConfig) for m in memories)
+    assert {
+        (
+            type(m.cfg.grouping_config).__name__,
+            m.cfg.grouping_config.model_config.layer_model_config.bias_flag,
+        )
+        for m in memories
+    } == {("AttentionGroupingConfig", True), ("MeanStdGroupingConfig", False)}
     assert torch.isfinite(execute(model, name)[0]).all()
     with pytest.raises(ValueError, match="self-attention|cross-attention"):
         build_config(name, overrides | {"decoder_cross_attn_source_memory_flag": True})

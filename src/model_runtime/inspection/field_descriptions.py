@@ -15,6 +15,10 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
     "ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG": (
         "Sets whether the linear source-memory generator includes a bias term."
     ),
+    "ATTN_SOURCE_MEMORY_GROUPING_MODEL_OPTION": (
+        "Selects the scorer for attention grouping or the statistics projection for "
+        "mean/std grouping. Choose LINEAR for either learned grouping method."
+    ),
     "SEQUENCE_EXPANSION_FLAG": (
         "Enables count prediction and latent-token expansion before each transformer "
         "block invocation, including supported recurrent passes. Defaults to false."

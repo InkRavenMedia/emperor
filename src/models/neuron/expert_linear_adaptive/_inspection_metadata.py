@@ -1212,6 +1212,22 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM', 1759, (1759,)),
         ('OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON', 1760, (1760,)),
     )),
+    RuntimeDefaultsSection(('Main Grouping',), (
+        ('GROUPING_MODEL_OPTION', 1261, (1261, 0)),
+        ('GROUPING_MODEL_BIAS_FLAG', 1261, (1261, 1)),
+    )),
+    RuntimeDefaultsSection(('Router Grouping',), (
+        ('ROUTER_GROUPING_MODEL_OPTION', 1414, (1414, 2)),
+        ('ROUTER_GROUPING_MODEL_BIAS_FLAG', 1414, (1414, 3)),
+    )),
+    RuntimeDefaultsSection(('Input Layer Grouping',), (
+        ('INPUT_LAYER_GROUPING_MODEL_OPTION', 1583, (1583, 4)),
+        ('INPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 1583, (1583, 5)),
+    )),
+    RuntimeDefaultsSection(('Output Layer Grouping',), (
+        ('OUTPUT_LAYER_GROUPING_MODEL_OPTION', 1758, (1758, 6)),
+        ('OUTPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 1758, (1758, 7)),
+    )),
 )
 
 SEARCH_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
