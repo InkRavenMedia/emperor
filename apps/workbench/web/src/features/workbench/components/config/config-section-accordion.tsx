@@ -7,21 +7,11 @@ import {
   type RuntimeDefaultsInheritedFieldPresentation,
   type RuntimeDefaultsSectionPresentation,
 } from "@/features/workbench/state/runtime-defaults/runtime-defaults-presentation";
+import { sectionCountLabel, splitSectionSignature } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { ConfigFieldControl } from "@/features/workbench/components/config/config-field-control";
 import { ConfigMetricBadge } from "@/features/workbench/components/config/config-metric-badge";
 import { surfacePanelBaseClassName } from "@/components/ui/surface-panel";
-
-function sectionCountLabel(
-  count: number,
-  noun: "field" | "override" | "preset",
-) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
-function titlesFromSignature(signature: string) {
-  return signature ? signature.split("\u0000") : [];
-}
 
 function SectionHeaderControl({
   presentation,
@@ -277,24 +267,24 @@ export function ConfigSectionAccordion({
     directMetrics,
     stackInheritanceHint,
     inheritedField,
-    childTitleSignature,
+    childKeySignature,
     groupTitleSignature,
     enabledGroupTitleSignature,
   } = section;
-  const childSectionTitles = titlesFromSignature(childTitleSignature);
-  const childExpansionKey = `${autoOpenKey ?? ""}\u0001${childTitleSignature}`;
-  const defaultOpenChildSectionTitles = new Set(childSectionTitles);
+  const childSectionKeys = splitSectionSignature(childKeySignature);
+  const childExpansionKey = `${autoOpenKey ?? ""}\u0001${childKeySignature}`;
+  const defaultOpenChildSectionKeys = new Set(childSectionKeys);
   const [childExpansion, setChildExpansion] = useState(() => ({
     key: childExpansionKey,
-    openTitles: defaultOpenChildSectionTitles,
+    openTitles: defaultOpenChildSectionKeys,
   }));
-  const openChildSectionTitles =
+  const openChildSectionKeys =
     childExpansion.key === childExpansionKey
       ? childExpansion.openTitles
-      : defaultOpenChildSectionTitles;
+      : defaultOpenChildSectionKeys;
   const boundaryExpansionKey = `${groupTitleSignature}\u0001${enabledGroupTitleSignature}`;
   const defaultOpenBoundaryGroupTitles = new Set(
-    titlesFromSignature(enabledGroupTitleSignature),
+    splitSectionSignature(enabledGroupTitleSignature),
   );
   const [boundaryExpansion, setBoundaryExpansion] = useState(() => ({
     key: boundaryExpansionKey,
@@ -330,7 +320,7 @@ export function ConfigSectionAccordion({
       const next = new Set(
         current.key === childExpansionKey
           ? current.openTitles
-          : defaultOpenChildSectionTitles,
+          : defaultOpenChildSectionKeys,
       );
       if (next.has(childTitle)) {
         next.delete(childTitle);
@@ -547,15 +537,15 @@ export function ConfigSectionAccordion({
             {children.map((childSection) => {
               const isChildOpen =
                 !childSection.isDisabled &&
-                openChildSectionTitles.has(childSection.title);
+                openChildSectionKeys.has(childSection.key);
               return (
                 <ConfigSectionAccordion
-                  key={childSection.title}
+                  key={childSection.key}
                   section={childSection}
                   refCallback={() => undefined}
                   isOpen={isChildOpen}
                   autoOpenKey={autoOpenKey}
-                  onToggle={() => toggleChildSection(childSection.title)}
+                  onToggle={() => toggleChildSection(childSection.key)}
                   onFieldChange={onFieldChange}
                   onFieldReset={onFieldReset}
                 />

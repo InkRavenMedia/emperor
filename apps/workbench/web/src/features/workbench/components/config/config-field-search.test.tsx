@@ -16,7 +16,7 @@ function option(index: number): RuntimeDefaultsSearchOptionPresentation {
     flag: `--${key.replaceAll("_", "-")}`,
     type: "int",
     sectionTitle: "Model",
-    rootSectionTitle: "Model",
+    rootSectionKey: "Model",
     field: {
       schema: {
         key,

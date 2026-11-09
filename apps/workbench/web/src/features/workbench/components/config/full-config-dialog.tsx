@@ -87,13 +87,13 @@ export function FullConfigDialog({
     schemaFields: configFields,
     presetOwnedFieldCount,
     sections: visibleRenderSections,
-    defaultOpenSectionTitles,
+    defaultOpenSectionKeys,
     searchOpenKey,
     isSearchActive,
     search,
   } = schemaPresentation;
   const {
-    openSectionTitles,
+    openSectionKeys,
     sectionRefs,
     toggleSection,
     setOpenSections,
@@ -101,18 +101,18 @@ export function FullConfigDialog({
   } = useConfigDialogSections(
     visibleRenderSections,
     searchOpenKey,
-    defaultOpenSectionTitles,
+    defaultOpenSectionKeys,
   );
-  const effectiveOpenSectionTitles = useMemo(() => {
-    const titles = new Set<string>();
-    for (const title of openSectionTitles) {
-      const section = visibleRenderSections.find((candidate) => candidate.title === title);
+  const effectiveOpenSectionKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const key of openSectionKeys) {
+      const section = visibleRenderSections.find((candidate) => candidate.key === key);
       if (section && !section.isDisabled) {
-        titles.add(title);
+        keys.add(key);
       }
     }
-    return titles;
-  }, [openSectionTitles, visibleRenderSections]);
+    return keys;
+  }, [openSectionKeys, visibleRenderSections]);
   const enabledVisibleSections = useMemo(
     () =>
       visibleRenderSections.filter(
@@ -123,14 +123,14 @@ export function FullConfigDialog({
   const areAllEnabledSectionsOpen =
     enabledVisibleSections.length > 0 &&
     enabledVisibleSections.every((section) =>
-      effectiveOpenSectionTitles.has(section.title),
+      effectiveOpenSectionKeys.has(section.key),
     );
   const trainingCommand = session.trainingCommand;
   const handleToggleAllSections = useCallback(() => {
     setOpenSections(
       areAllEnabledSectionsOpen
         ? []
-        : enabledVisibleSections.map((section) => section.title),
+        : enabledVisibleSections.map((section) => section.key),
     );
   }, [areAllEnabledSectionsOpen, enabledVisibleSections, setOpenSections]);
   const { status: copyStatus, copy: copyTrainingCommand } =
@@ -153,7 +153,7 @@ export function FullConfigDialog({
   function handleSearchSelect(option: RuntimeDefaultsSearchOptionPresentation) {
     setSearchQuery(option.label);
     setSelectedFieldKey(option.key);
-    jumpToSection(option.rootSectionTitle);
+    jumpToSection(option.rootSectionKey);
   }
 
   return (
@@ -398,7 +398,7 @@ export function FullConfigDialog({
             </div>
             <SectionNavigation
               sections={visibleRenderSections}
-              openSectionTitles={effectiveOpenSectionTitles}
+              openSectionKeys={effectiveOpenSectionKeys}
               areAllSectionsOpen={areAllEnabledSectionsOpen}
               emptyMessage={isSearchActive ? "No matching sections" : undefined}
               onJumpToSection={jumpToSection}
@@ -408,17 +408,17 @@ export function FullConfigDialog({
             <div className="grid auto-rows-max items-start gap-3">
               {visibleRenderSections.length > 0 ? (
                 visibleRenderSections.map((section) => {
-                  const isSectionOpen = effectiveOpenSectionTitles.has(section.title);
+                  const isSectionOpen = effectiveOpenSectionKeys.has(section.key);
                   return (
                     <ConfigSectionAccordion
-                      key={section.title}
+                      key={section.key}
                       section={section}
                       refCallback={(element) => {
-                        sectionRefs.current[section.title] = element;
+                        sectionRefs.current[section.key] = element;
                       }}
                       isOpen={isSectionOpen}
                       autoOpenKey={searchOpenKey}
-                      onToggle={() => toggleSection(section.title)}
+                      onToggle={() => toggleSection(section.key)}
                       onFieldChange={handleFieldChange}
                       onFieldReset={handleFieldReset}
                     />

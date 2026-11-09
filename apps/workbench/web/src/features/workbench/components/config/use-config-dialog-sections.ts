@@ -1,95 +1,96 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { sectionTitlesFromSignature } from "@/lib/config";
+import { splitSectionSignature } from "@/lib/config";
 
 // Manages which config sections are open in the full-config dialog, keeping the
 // open set in sync with the section list and supporting jump-to-section (which
 // opens the target, then scrolls to it).
 export function useConfigDialogSections(
-  sections: Array<{ title: string }>,
+  sections: Array<{ key: string }>,
   autoOpenKey?: string,
-  initialOpenTitles?: string[],
+  initialOpenKeys?: string[],
 ) {
-  const sectionTitles = useMemo(() => sections.map((section) => section.title), [sections]);
-  const initialOpenTitleSignature = useMemo(
-    () => (initialOpenTitles ?? sectionTitles).join(String.fromCharCode(0)),
-    [initialOpenTitles, sectionTitles],
+  const sectionSignature = sections.map((section) => section.key).join("\u0000");
+  const sectionKeys = useMemo(
+    () => splitSectionSignature(sectionSignature),
+    [sectionSignature],
   );
-  const [openSectionTitles, setOpenSectionTitles] = useState(
-    () => new Set(sectionTitlesFromSignature(initialOpenTitleSignature)),
+  const initialOpenKeySignature = (initialOpenKeys ?? sectionKeys).join("\u0000");
+  const [openSectionKeys, setOpenSectionKeys] = useState(
+    () => new Set(splitSectionSignature(initialOpenKeySignature)),
   );
   const previousAutoOpenKey = useRef(autoOpenKey);
   const areAllSectionsOpen =
-    sectionTitles.length > 0 && sectionTitles.every((title) => openSectionTitles.has(title));
+    sectionKeys.length > 0 && sectionKeys.every((key) => openSectionKeys.has(key));
   const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
 
   useEffect(() => {
-    const initialOpen = sectionTitlesFromSignature(initialOpenTitleSignature).filter(
-      (title) => sectionTitles.includes(title),
+    const initialOpen = splitSectionSignature(initialOpenKeySignature).filter(
+      (key) => sectionKeys.includes(key),
     );
-    const sectionTitleSet = new Set(sectionTitles);
+    const sectionKeySet = new Set(sectionKeys);
     const shouldResetOpenSections = previousAutoOpenKey.current !== autoOpenKey;
     previousAutoOpenKey.current = autoOpenKey;
 
-    setOpenSectionTitles((current) => {
+    setOpenSectionKeys((current) => {
       if (shouldResetOpenSections) {
         return new Set(initialOpen);
       }
       const next = new Set<string>();
-      for (const title of current) {
-        if (sectionTitleSet.has(title)) {
-          next.add(title);
+      for (const key of current) {
+        if (sectionKeySet.has(key)) {
+          next.add(key);
         }
       }
-      for (const title of initialOpen) {
-        next.add(title);
+      for (const key of initialOpen) {
+        next.add(key);
       }
       return next;
     });
-  }, [sectionTitles, initialOpenTitleSignature, autoOpenKey]);
+  }, [sectionKeys, initialOpenKeySignature, autoOpenKey]);
 
-  function toggleSection(title: string) {
-    setOpenSectionTitles((current) => {
+  function toggleSection(key: string) {
+    setOpenSectionKeys((current) => {
       const next = new Set(current);
-      if (next.has(title)) {
-        next.delete(title);
+      if (next.has(key)) {
+        next.delete(key);
       } else {
-        next.add(title);
+        next.add(key);
       }
       return next;
     });
   }
 
   function toggleAllSections() {
-    setOpenSectionTitles(areAllSectionsOpen ? new Set<string>() : new Set(sectionTitles));
+    setOpenSectionKeys(areAllSectionsOpen ? new Set<string>() : new Set(sectionKeys));
   }
 
-  function setOpenSections(titles: string[]) {
-    setOpenSectionTitles(new Set(titles));
+  function setOpenSections(keys: string[]) {
+    setOpenSectionKeys(new Set(keys));
   }
 
-  function jumpToSection(title: string) {
+  function jumpToSection(key: string) {
     flushSync(() => {
-      setOpenSectionTitles((current) => {
-        if (current.has(title)) {
+      setOpenSectionKeys((current) => {
+        if (current.has(key)) {
           return current;
         }
         const next = new Set(current);
-        next.add(title);
+        next.add(key);
         return next;
       });
     });
     const reduceMotion = window.matchMedia?.(
       "(prefers-reduced-motion: reduce)",
     ).matches;
-    sectionRefs.current[title]?.scrollIntoView({
+    sectionRefs.current[key]?.scrollIntoView({
       block: "start",
       behavior: reduceMotion ? "auto" : "smooth",
     });
   }
 
   return {
-    openSectionTitles,
+    openSectionKeys,
     areAllSectionsOpen,
     sectionRefs,
     toggleSection,

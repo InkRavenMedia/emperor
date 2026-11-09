@@ -44,6 +44,8 @@ export const configFieldSchema = z.object({
   label: z.string(),
   section: z.string(),
   sectionPath: z.array(z.string()).min(1),
+  sectionIdPath: z.array(z.string().min(1)).min(1).nullable().optional(),
+  sectionControlFieldKey: z.string().min(1).nullable().optional(),
   description: z.string().default(""),
   type: z.string(),
   default: configValueSchema,

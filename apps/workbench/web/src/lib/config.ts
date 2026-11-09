@@ -7,9 +7,10 @@ export type ActiveOverrideScope = "preset" | "snapshot";
 
 export type ConfigSection = {
   title: string;
+  idPath?: string[];
   fields: ConfigField[];
   children?: ConfigSection[];
-  controlFieldKey?: string;
+  controlFieldKey?: string | null;
 };
 
 export type ConfigFieldGroup = {
@@ -27,6 +28,7 @@ export type ConfigFieldGroup = {
 
 export type ConfigSearchOption = {
   sectionTitle: string;
+  rootSectionKey: string;
   field: ConfigField;
   key: string;
   label: string;
@@ -77,7 +79,8 @@ export function overrideValue(overrides: OverrideValues, key: string) {
   return entry?.[1];
 }
 
-const CONTROLLED_SECTION_FLAG_KEYS_BY_TITLE = new Map([
+// Older backends send headings without canonical section metadata.
+const LEGACY_SECTION_CONTROL_KEYS = new Map([
   ["Attention Mode", "expert_attention_flag"],
   ["Gate Options", "stack_gate_flag"],
   ["Gate Stack Options", "gate_stack_independent_flag"],
@@ -206,233 +209,233 @@ const CONTROLLED_SECTION_FLAG_KEYS_BY_TITLE = new Map([
   ],
 ]);
 
-const INHERITED_STACK_SECTIONS_BY_TITLE = new Map([
+const INHERITED_STACK_SECTIONS_BY_CONTROL = new Map([
   [
-    "Gate Stack Options",
+    "gate_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Halting Stack Options",
+    "halting_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Memory Stack Options",
+    "memory_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Router Gate Stack Options",
+    "router_gate_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Router Halting Stack Options",
+    "router_halting_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Router Memory Stack Options",
+    "router_memory_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Router Recurrent Gate Stack Options",
+    "router_recurrent_gate_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Router Recurrent Halting Stack Options",
+    "router_recurrent_halting_stack_independent_flag",
     {
       sourceTitle: "Layer Stack Submodule Options",
       inheritedLabel: "Inherits Layer Stack Submodule",
     },
   ],
   [
-    "Expert Gate Stack Options",
+    "expert_gate_stack_independent_flag",
     {
       sourceTitle: "Expert Stack Options",
       inheritedLabel: "Inherits Expert Stack",
     },
   ],
   [
-    "Expert Halting Stack Options",
+    "expert_halting_stack_independent_flag",
     {
       sourceTitle: "Expert Stack Options",
       inheritedLabel: "Inherits Expert Stack",
     },
   ],
   [
-    "Expert Memory Stack Options",
+    "expert_memory_stack_independent_flag",
     {
       sourceTitle: "Expert Stack Options",
       inheritedLabel: "Inherits Expert Stack",
     },
   ],
   [
-    "Expert Recurrent Gate Stack Options",
+    "expert_recurrent_gate_stack_independent_flag",
     {
       sourceTitle: "Expert Stack Options",
       inheritedLabel: "Inherits Expert Stack",
     },
   ],
   [
-    "Expert Recurrent Halting Stack Options",
+    "expert_recurrent_halting_stack_independent_flag",
     {
       sourceTitle: "Expert Stack Options",
       inheritedLabel: "Inherits Expert Stack",
     },
   ],
   [
-    "Feed-Forward Gate Stack Options",
+    "ff_gate_stack_independent_flag",
     {
       sourceTitle: "Feed-Forward Stack Options",
       inheritedLabel: "Inherits Feed-Forward Stack",
     },
   ],
   [
-    "Feed-Forward Halting Stack Options",
+    "ff_halting_stack_independent_flag",
     {
       sourceTitle: "Feed-Forward Stack Options",
       inheritedLabel: "Inherits Feed-Forward Stack",
     },
   ],
   [
-    "Feed-Forward Memory Stack Options",
+    "ff_memory_stack_independent_flag",
     {
       sourceTitle: "Feed-Forward Stack Options",
       inheritedLabel: "Inherits Feed-Forward Stack",
     },
   ],
   [
-    "Feed-Forward Recurrent Gate Stack Options",
+    "ff_recurrent_gate_stack_independent_flag",
     {
       sourceTitle: "Feed-Forward Stack Options",
       inheritedLabel: "Inherits Feed-Forward Stack",
     },
   ],
   [
-    "Feed-Forward Recurrent Halting Stack Options",
+    "ff_recurrent_halting_stack_independent_flag",
     {
       sourceTitle: "Feed-Forward Stack Options",
       inheritedLabel: "Inherits Feed-Forward Stack",
     },
   ],
   [
-    "Attention Projection Gate Stack Options",
+    "attn_gate_stack_independent_flag",
     {
       sourceTitle: "Attention Projection Stack Options",
       inheritedLabel: "Inherits Attention Projection Stack",
     },
   ],
   [
-    "Attention Projection Halting Stack Options",
+    "attn_halting_stack_independent_flag",
     {
       sourceTitle: "Attention Projection Stack Options",
       inheritedLabel: "Inherits Attention Projection Stack",
     },
   ],
   [
-    "Attention Projection Memory Stack Options",
+    "attn_memory_stack_independent_flag",
     {
       sourceTitle: "Attention Projection Stack Options",
       inheritedLabel: "Inherits Attention Projection Stack",
     },
   ],
   [
-    "Attention Projection Recurrent Gate Stack Options",
+    "attn_recurrent_gate_stack_independent_flag",
     {
       sourceTitle: "Attention Projection Stack Options",
       inheritedLabel: "Inherits Attention Projection Stack",
     },
   ],
   [
-    "Attention Projection Recurrent Halting Stack Options",
+    "attn_recurrent_halting_stack_independent_flag",
     {
       sourceTitle: "Attention Projection Stack Options",
       inheritedLabel: "Inherits Attention Projection Stack",
     },
   ],
   [
-    "Recurrent Gate Stack Options",
+    "recurrent_gate_stack_independent_flag",
     {
       sourceTitle: "Gate Stack Options",
       inheritedLabel: "Inherits Gate Stack",
     },
   ],
   [
-    "Recurrent Halting Stack Options",
+    "recurrent_halting_stack_independent_flag",
     {
       sourceTitle: "Halting Stack Options",
       inheritedLabel: "Inherits Halting Stack",
     },
   ],
   [
-    "Weight Generator Stack Options",
+    "weight_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Bias Generator Stack Options",
+    "bias_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Diagonal Generator Stack Options",
+    "diagonal_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Mask Stack Options",
+    "mask_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Router Weight Generator Stack Options",
+    "router_weight_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Router Bias Generator Stack Options",
+    "router_bias_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Router Diagonal Generator Stack Options",
+    "router_diagonal_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
     },
   ],
   [
-    "Router Mask Stack Options",
+    "router_mask_generator_stack_independent_flag",
     {
       sourceTitle: "Adaptive Generator Stack Options",
       inheritedLabel: "Inherits Adaptive Stack",
@@ -450,15 +453,11 @@ const ADAPTIVE_GENERATOR_STACK_SECTION = "Adaptive Generator Stack Options";
 const MIXTURE_OF_EXPERTS_SECTION = "Mixture Of Experts Model Options";
 const ATTENTION_MODE_SECTION = "Attention Mode";
 
-const DISPLAY_SECTION_PATH_OVERRIDES_BY_FIELD_KEY = new Map<string, string[]>([
-  [
-    "expert_attention_flag",
-    [MIXTURE_OF_EXPERTS_SECTION, ATTENTION_MODE_SECTION],
-  ],
-  [
-    "expert_attention_use_kv_expert_models_flag",
-    [MIXTURE_OF_EXPERTS_SECTION, ATTENTION_MODE_SECTION],
-  ],
+const MIXTURE_OF_EXPERTS_ID = "mixture_of_experts_model";
+const ATTENTION_MODE_ID = "attention_mode";
+const ATTENTION_MODE_FIELDS = new Set([
+  "expert_attention_flag",
+  "expert_attention_use_kv_expert_models_flag",
 ]);
 
 const DISPLAY_CONFIG_FIELD_LABELS_BY_KEY = new Map<string, string>([
@@ -507,8 +506,22 @@ export function displayConfigSectionDescription(title: string) {
   return DISPLAY_CONFIG_SECTIONS.get(title)?.description;
 }
 
-function displaySectionPathOverride(field: ConfigField) {
-  return DISPLAY_SECTION_PATH_OVERRIDES_BY_FIELD_KEY.get(configKeyToken(field.key));
+function displaySectionField(field: ConfigField): ConfigField {
+  if (!ATTENTION_MODE_FIELDS.has(configKeyToken(field.key))) {
+    return field;
+  }
+  const rootTitle = field.sectionIdPath?.[0] === MIXTURE_OF_EXPERTS_ID
+    ? field.sectionPath[0]!
+    : MIXTURE_OF_EXPERTS_SECTION;
+  return {
+    ...field,
+    section: ATTENTION_MODE_SECTION,
+    sectionPath: [rootTitle, ATTENTION_MODE_SECTION],
+    ...(field.sectionIdPath && {
+      sectionIdPath: [MIXTURE_OF_EXPERTS_ID, ATTENTION_MODE_ID],
+      sectionControlFieldKey: "expert_attention_flag",
+    }),
+  };
 }
 
 function sentenceCaseLabel(label: string) {
@@ -561,7 +574,7 @@ function stackSectionLabelPrefix(sectionTitle: string) {
 
 export function displayConfigFieldLabel(
   field: ConfigField,
-  sectionTitle: string,
+  section: ConfigSection,
   groupTitle?: string,
 ) {
   const explicitLabel = DISPLAY_CONFIG_FIELD_LABELS_BY_KEY.get(
@@ -571,7 +584,7 @@ export function displayConfigFieldLabel(
     return explicitLabel;
   }
 
-  const controlFieldKey = CONTROLLED_SECTION_FLAG_KEYS_BY_TITLE.get(sectionTitle);
+  const controlFieldKey = sectionControlKey(section);
   if (
     controlFieldKey &&
     configFieldMatchesKey(field, controlFieldKey)
@@ -585,8 +598,8 @@ export function displayConfigFieldLabel(
   const normalizedLabel = label.toLowerCase();
   const prefixCandidates = [
     stackFieldLabelPrefix(field.key),
-    stackSectionLabelPrefix(sectionTitle),
-    ...sectionTitleLabelPrefixes(sectionTitle),
+    stackSectionLabelPrefix(section.title),
+    ...sectionTitleLabelPrefixes(section.title),
     groupTitle ? groupTitle.toLowerCase() : undefined,
   ]
     .filter((prefix): prefix is string => Boolean(prefix))
@@ -627,10 +640,12 @@ export function configSectionsFields(sections: ConfigSection[]): ConfigField[] {
   return sections.flatMap((section) => configSectionFields(section));
 }
 
+export function configSectionKey(section: Pick<ConfigSection, "title" | "idPath">) {
+  return section.idPath?.join("/") ?? section.title;
+}
+
 export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSection[] {
-  type DraftSection = {
-    title: string;
-    fields: ConfigField[];
+  type DraftSection = ConfigSection & {
     children: DraftSection[];
   };
 
@@ -639,33 +654,38 @@ export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSec
   function getOrCreateChildSection(
     parent: DraftSection[] | DraftSection,
     title: string,
+    idPath?: string[],
   ) {
     const children = Array.isArray(parent) ? parent : parent.children;
-    let child = children.find((candidate) => candidate.title === title);
+    const identity = configSectionKey({ title, idPath });
+    let child = children.find((candidate) => configSectionKey(candidate) === identity);
     if (!child) {
-      child = { title, fields: [], children: [] };
+      child = { title, idPath, fields: [], children: [] };
       children.push(child);
     }
     return child;
   }
 
   for (const rawField of fields) {
-    const normalizedField = normalizeConfigFieldForDisplay(rawField);
-    const overriddenSectionPath = displaySectionPathOverride(normalizedField);
-    const field = overriddenSectionPath
-      ? {
-          ...normalizedField,
-          section: overriddenSectionPath[overriddenSectionPath.length - 1]!,
-          sectionPath: overriddenSectionPath,
-        }
-      : normalizedField;
+    const field = displaySectionField(normalizeConfigFieldForDisplay(rawField));
     const sectionPath = normalizedFieldSectionPath(field);
+    const idPath = field.sectionIdPath?.length === sectionPath.length
+      ? field.sectionIdPath
+      : undefined;
     let currentSection = getOrCreateChildSection(
       rootSections,
       sectionPath[0]!,
+      idPath?.slice(0, 1),
     );
-    for (const sectionTitle of sectionPath.slice(1)) {
-      currentSection = getOrCreateChildSection(currentSection, sectionTitle);
+    for (const [index, sectionTitle] of sectionPath.slice(1).entries()) {
+      currentSection = getOrCreateChildSection(
+        currentSection,
+        sectionTitle,
+        idPath?.slice(0, index + 2),
+      );
+    }
+    if (idPath && field.sectionControlFieldKey !== undefined) {
+      currentSection.controlFieldKey = field.sectionControlFieldKey;
     }
     currentSection.fields.push(field);
   }
@@ -674,6 +694,10 @@ export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSec
     return {
       title: section.title,
       fields: section.fields,
+      ...(section.idPath && {
+        idPath: section.idPath,
+        controlFieldKey: section.controlFieldKey ?? null,
+      }),
       ...(section.children.length > 0
         ? { children: section.children.map(finalizeSection) }
         : {}),
@@ -755,10 +779,13 @@ export function configFieldByKey(fields: ConfigField[], key: string) {
 }
 
 export function inheritedHiddenModelFieldHint(
-  section: Pick<ConfigSection, "title" | "fields">,
+  section: ConfigSection,
   allFields: ConfigField[],
 ): InheritedConfigFieldHint | undefined {
-  if (section.title !== LAYER_STACK_OPTIONS_SECTION) {
+  const isLayerStack = section.idPath
+    ? section.idPath.at(-1) === "stack_num_layers"
+    : section.title === LAYER_STACK_OPTIONS_SECTION;
+  if (!isLayerStack) {
     return undefined;
   }
   if (configFieldByKey(section.fields, "hidden_dim")) {
@@ -768,10 +795,11 @@ export function inheritedHiddenModelFieldHint(
   if (!sourceField) {
     return undefined;
   }
+  const sourceTitle = sourceField.section || GLOBAL_CONFIG_SECTION;
   return {
     label: sourceField.label,
-    title: `${sourceField.label} comes from ${GLOBAL_CONFIG_SECTION} / ${sourceField.configKey}.`,
-    sourceTitle: GLOBAL_CONFIG_SECTION,
+    title: `${sourceField.label} comes from ${sourceTitle} / ${sourceField.configKey}.`,
+    sourceTitle,
     sourceField,
   };
 }
@@ -860,11 +888,14 @@ export function isEnabledConfigValue(value: string) {
   return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-export function controlledSectionFlagField(
-  section: Pick<ConfigSection, "title" | "fields" | "controlFieldKey">,
-) {
-  const controlFieldKey =
-    section.controlFieldKey ?? CONTROLLED_SECTION_FLAG_KEYS_BY_TITLE.get(section.title);
+function sectionControlKey(section: ConfigSection) {
+  return section.controlFieldKey === undefined
+    ? LEGACY_SECTION_CONTROL_KEYS.get(section.title)
+    : section.controlFieldKey;
+}
+
+export function controlledSectionFlagField(section: ConfigSection) {
+  const controlFieldKey = sectionControlKey(section);
   if (controlFieldKey) {
     return section.fields.find((field) => configFieldMatchesKey(field, controlFieldKey));
   }
@@ -900,16 +931,15 @@ export function controlledSectionState(
 }
 
 export function inheritedStackSectionHint(
-  section: Pick<ConfigSection, "title" | "fields" | "controlFieldKey">,
+  section: ConfigSection,
   overrides: OverrideValues,
 ): InheritedStackSectionHint | undefined {
-  const inheritance = INHERITED_STACK_SECTIONS_BY_TITLE.get(section.title);
-  if (!inheritance) {
-    return undefined;
-  }
-
   const controlField = controlledSectionFlagField(section);
   if (!controlField) {
+    return undefined;
+  }
+  const inheritance = INHERITED_STACK_SECTIONS_BY_CONTROL.get(configKeyToken(controlField.key));
+  if (!inheritance) {
     return undefined;
   }
 
@@ -959,7 +989,7 @@ export function disabledConfigFieldReasons(
 
     if (!sectionDisabledReason) {
       const boundaryGroups = boundaryModelFieldGroups(
-        section.title,
+        section,
         section.fields,
         overrides,
       );
@@ -1003,10 +1033,11 @@ export function flattenConfigSearchOptions(
   sections: ConfigSection[],
 ) {
   const options: ConfigSearchOption[] = [];
-  function collectSectionOptions(section: ConfigSection) {
+  function collectSectionOptions(section: ConfigSection, rootSectionKey: string) {
     for (const field of section.fields) {
       options.push({
         sectionTitle: section.title,
+        rootSectionKey,
         field,
         key: field.key,
         label: field.label,
@@ -1016,11 +1047,11 @@ export function flattenConfigSearchOptions(
       });
     }
     for (const child of section.children ?? []) {
-      collectSectionOptions(child);
+      collectSectionOptions(child, rootSectionKey);
     }
   }
   for (const section of sections) {
-    collectSectionOptions(section);
+    collectSectionOptions(section, configSectionKey(section));
   }
   return options;
 }
@@ -1095,11 +1126,12 @@ export function filterConfigSectionsForSearch(
     .filter((section): section is ConfigSection => Boolean(section));
 }
 
-function boundaryModelPrefix(sectionTitle: string) {
-  if (sectionTitle === INPUT_BOUNDARY_MODEL_SECTION) {
+function boundaryModelPrefix(section: ConfigSection) {
+  const anchor = section.idPath?.at(-1);
+  if (anchor === "input_layer_weight_option" || (!anchor && section.title === INPUT_BOUNDARY_MODEL_SECTION)) {
     return "input_layer_";
   }
-  if (sectionTitle === OUTPUT_BOUNDARY_MODEL_SECTION) {
+  if (anchor === "output_layer_weight_option" || (!anchor && section.title === OUTPUT_BOUNDARY_MODEL_SECTION)) {
     return "output_layer_";
   }
   return undefined;
@@ -1150,11 +1182,11 @@ function boundaryModelStackHint(): NonNullable<ConfigFieldGroup["stackHint"]> {
 }
 
 export function boundaryModelFieldGroups(
-  sectionTitle: string,
+  section: ConfigSection,
   fields: ConfigField[],
   overrides: OverrideValues = {},
 ): ConfigFieldGroup[] | undefined {
-  const prefix = boundaryModelPrefix(sectionTitle);
+  const prefix = boundaryModelPrefix(section);
   if (!prefix) {
     return undefined;
   }
@@ -1204,7 +1236,7 @@ export function boundaryModelFieldGroups(
 }
 
 function withSectionControlField(section: ConfigSection): ConfigSection {
-  const controlFieldKey = CONTROLLED_SECTION_FLAG_KEYS_BY_TITLE.get(section.title);
+  const controlFieldKey = sectionControlKey(section);
   const children = section.children?.map(withSectionControlField);
   return {
     ...section,
@@ -1229,11 +1261,11 @@ function withRequiredControlFields(
   const controlField = controlFieldForSection(section) ?? controlFieldForSection(sourceSection);
   const hasControlField =
     controlField && section.fields.some((field) => field.key === controlField.key);
-  const sourceChildrenByTitle = new Map(
-    (sourceSection?.children ?? []).map((child) => [child.title, child]),
+  const sourceChildren = new Map(
+    (sourceSection?.children ?? []).map((child) => [configSectionKey(child), child]),
   );
   const children = (section.children ?? []).map((child) =>
-    withRequiredControlFields(child, sourceChildrenByTitle.get(child.title)),
+    withRequiredControlFields(child, sourceChildren.get(configSectionKey(child))),
   );
   const fieldsWithControl =
     controlField && !hasControlField ? [controlField, ...section.fields] : section.fields;
@@ -1257,17 +1289,17 @@ export function deriveNestedConfigSections(
     return derivedSections;
   }
 
-  const sourceSectionsByTitle = new Map(
+  const sourceSectionsByKey = new Map(
     groupConfigFieldsBySectionPath(configSectionsFields(sourceSections))
       .map(withSectionControlField)
       .map((section) => [
-        section.title,
+        configSectionKey(section),
         section,
       ]),
   );
 
   return derivedSections.map((section) =>
-    withRequiredControlFields(section, sourceSectionsByTitle.get(section.title)),
+    withRequiredControlFields(section, sourceSectionsByKey.get(configSectionKey(section))),
   );
 }
 
@@ -1287,6 +1319,6 @@ export function sectionCountLabel(count: number, noun: "field" | "override" | "p
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
 
-export function sectionTitlesFromSignature(signature: string) {
+export function splitSectionSignature(signature: string) {
   return signature ? signature.split("\u0000") : [];
 }
