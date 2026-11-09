@@ -5,7 +5,7 @@ from types import ModuleType
 from typing import Any, TypeVar, cast
 
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models import _bert_embedding, _sequence_expansion
 from models.bert.linear_adaptive import _config_defaults as config_defaults
 from models.bert.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.bert.linear_adaptive._generation import (
@@ -141,7 +141,7 @@ def linear_adaptive_builder_kwargs_from_flat(
     flat_kwargs = {
         key: value for key, value in flat_kwargs.items() if key not in generation_fields
     }
-    kwargs = dict(flat_kwargs)
+    kwargs = _bert_embedding.resolve_runtime_defaults(flat_kwargs, config_module)
     _auto_enable_adaptive_option_flags(kwargs)
     consumed: set[str] = set()
     builder_kwargs = _top_level_kwargs(kwargs, consumed)

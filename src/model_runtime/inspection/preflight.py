@@ -19,6 +19,7 @@ from model_runtime.packages.inspection_limits import (
 
 _DENSE_PARAMETER_ALLOWANCE = 6
 _PARAMETER_MEMORY_SHARE_DIVISOR = 2
+_CONTEXTUAL_BYTE_FEATURE_WIDTH = 9  # Eight bits and a byte-presence mask.
 _EFFECTIVE_CONFIGURATION_FIELDS = (
     ("input_dim", "INPUT_DIM"),
     ("hidden_dim", "HIDDEN_DIM"),
@@ -206,6 +207,12 @@ class _InspectionPreflight:
         expansion_position_counts = _positive_ints_ending_with(
             self._effective, "sequence_expansion_positional_embedding_num_embeddings"
         )
+        byte_positions = _positive_ints_ending_with(
+            self._effective, "hierarchical_max_token_bytes"
+        )
+        contextual_byte_counts = _positive_ints_ending_with(
+            self._effective, "contextual_embedding_max_token_bytes"
+        )
         expert_count = max(
             (1, *_positive_ints_ending_with(self._effective, "num_experts"))
         )
@@ -216,6 +223,8 @@ class _InspectionPreflight:
                 *vocabulary_sizes,
                 *sequence_lengths,
                 layer_count * sum(expansion_position_counts),
+                *byte_positions,
+                _CONTEXTUAL_BYTE_FEATURE_WIDTH * sum(contextual_byte_counts),
             )
         )
         shared_estimate = hidden_dimension * embedding_and_io_width

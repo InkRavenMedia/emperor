@@ -61,7 +61,7 @@ from emperor.memory import (
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory, _component_defaults
+from models import _attention_source_memory, _bert_embedding, _component_defaults
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -940,6 +940,7 @@ CONFIG_SCHEMA_SKIP_KEYS: set[str] = {
 }
 
 declare_soft_moe_runtime_defaults(globals())
+_bert_embedding.declare_runtime_defaults(globals())
 
 
 # Sequence Expansion

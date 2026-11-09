@@ -27,6 +27,8 @@ _FIELD_MAXIMUM_RULES: tuple[
         (
             "SEQUENCE_LENGTH",
             "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS",
+            "HIERARCHICAL_MAX_TOKEN_BYTES",
+            "CONTEXTUAL_EMBEDDING_MAX_TOKEN_BYTES",
         ),
         "maximum_sequence_length",
         None,

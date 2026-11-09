@@ -56,7 +56,7 @@ from emperor.memory import (
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory, _component_defaults
+from models import _attention_source_memory, _bert_embedding, _component_defaults
 
 # Global
 INPUT_DIM: int = BERT_PRETRAINING_TARGET_VOCAB_SIZE
@@ -664,6 +664,7 @@ FF_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
 
 declare_soft_moe_runtime_defaults(globals())
+_bert_embedding.declare_runtime_defaults(globals())
 
 
 # Sequence Expansion

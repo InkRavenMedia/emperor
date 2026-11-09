@@ -58,6 +58,8 @@ def test_field_maximum_suffix_policy_and_precedence_are_stable() -> None:
         "VOCAB_SIZE": 102,
         "SOURCE_SEQUENCE_LENGTH": 103,
         "ENCODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS": 103,
+        "HIERARCHICAL_MAX_TOKEN_BYTES": 103,
+        "CONTEXTUAL_EMBEDDING_MAX_TOKEN_BYTES": 103,
         "NUM_LAYERS": 104,
         "ENCODER_NUM_EXPERTS": 105,
         "ATTN_NUM_HEADS": 106,

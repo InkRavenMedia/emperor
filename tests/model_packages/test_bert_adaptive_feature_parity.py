@@ -16,8 +16,11 @@ from emperor.augmentations.adaptive_parameters import (
     GeneratorDynamicBiasConfig,
     SumGroupingConfig,
 )
+from emperor.embedding.contextual import ByteContextualEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteEmbeddingConfig
 from emperor.halting import HaltingHiddenStateModeOptions, StickBreakingConfig
 from emperor.layers import RecurrentLayerConfig
+from model_runtime.inspection.schema import configuration_schema
 from models.catalog import model_package
 from models.cli_selection import resolve_cli_selection
 from models.experiment_cli_parser import get_experiment_parser
@@ -435,3 +438,68 @@ def test_contextual_and_hierarchical_modes_are_mutually_exclusive():
     )
     with pytest.raises(ValueError, match="mutually exclusive"):
         model_package("bert/expert_linear_adaptive").build_model(bert_config)
+
+
+@pytest.mark.parametrize("variant", ("linear", "expert_linear", *ADAPTIVE_VARIANTS))
+@pytest.mark.parametrize("mode", ("hierarchical", "contextual"))
+def test_native_bert_embedding_flags_build_from_cli(variant, mode):
+    package_name = f"bert/{variant}"
+    package = model_package(package_name)
+    length_flag = (
+        "--hierarchical-max-token-bytes"
+        if mode == "hierarchical"
+        else "--contextual-embedding-max-token-bytes"
+    )
+    fields = {field.flag: field for field in configuration_schema(package).fields}
+    assert fields[f"--{mode}-embedding-flag"].value_type == "bool"
+    assert fields[length_flag].value_type == "int"
+    assert fields["--mlm-decoder-weight-tying-flag"].value_type == "bool"
+    parsed = get_experiment_parser(package).parse_args(
+        [
+            "--preset",
+            "baseline",
+            "--config",
+            f"--{mode}-embedding-flag",
+            "true",
+            length_flag,
+            "9",
+            "--mlm-decoder-weight-tying-flag",
+            "false",
+        ]
+    )
+    selection = resolve_cli_selection(
+        parsed, package, package.preset_type, build_monitor_callbacks=False
+    )
+    model_config = configuration(
+        package_name, hierarchical=False, soft=False, **selection.config_overrides
+    )
+    model = package.build_model(model_config).eval()
+    model.set_token_vocabulary(TOKEN_TEXTS)
+    embedding = model.token_embedding.embedding.cfg
+    expected = (
+        HierarchicalByteEmbeddingConfig
+        if mode == "hierarchical"
+        else ByteContextualEmbeddingConfig
+    )
+    assert isinstance(embedding, expected)
+    assert embedding.max_token_bytes == 9
+    with torch.no_grad():
+        outputs = model(*inputs())
+    assert outputs[0].shape == (2, 4, len(TOKEN_TEXTS))
+    assert all(torch.isfinite(output).all() for output in outputs)
+
+
+@pytest.mark.parametrize("variant", ("linear", "expert_linear", *ADAPTIVE_VARIANTS))
+def test_native_bert_contextual_flag_preserves_explicit_config(variant):
+    explicit = contextual_config(max_token_bytes=7, hidden_dim=8)
+    model_config = configuration(
+        f"bert/{variant}",
+        hierarchical=False,
+        soft=False,
+        contextual_embedding_config=explicit,
+        contextual_embedding_flag=True,
+        contextual_embedding_max_token_bytes=5,
+        mlm_decoder_weight_tying_flag=False,
+    )
+    options = model_config.experiment_config.boundary_config.embedding_options
+    assert options.contextual_embedding_config == explicit

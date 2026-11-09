@@ -54,6 +54,14 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
     "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS": (
         "Sets the initial positional table capacity for generated tokens."
     ),
+    "HIERARCHICAL_EMBEDDING_FLAG": (
+        "Enables the hierarchical byte encoder. For BERT, turn off MLM decoder "
+        "weight tying to use this embedding."
+    ),
+    "CONTEXTUAL_EMBEDDING_FLAG": (
+        "Enables contextual byte embeddings. For BERT, turn off MLM decoder "
+        "weight tying to use this embedding."
+    ),
     "BATCH_SIZE": (
         "Sets the number of examples processed in each training batch. Larger "
         "batches can improve throughput but use more memory and change optimizer "

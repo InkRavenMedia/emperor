@@ -5,7 +5,7 @@ from types import ModuleType
 from typing import Any, Literal
 
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models import _bert_embedding, _sequence_expansion
 from models.bert.expert_linear import _config_defaults as config_defaults
 from models.bert.expert_linear._experts_builder_adapter import (
     _expert_dynamic_memory_options_from_kwargs,
@@ -104,7 +104,7 @@ def expert_linear_builder_kwargs_from_flat(
     flat_kwargs: dict[str, Any],
     config_module: ModuleType,
 ) -> dict[str, Any]:
-    kwargs = dict(flat_kwargs)
+    kwargs = _bert_embedding.resolve_runtime_defaults(flat_kwargs, config_module)
     encoder_options = _modern_encoder_options(
         kwargs,
         config_module,
