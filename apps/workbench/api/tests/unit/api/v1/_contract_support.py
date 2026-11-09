@@ -383,6 +383,8 @@ CONFIG_FIELD_FIELDS = (
     "label",
     "section",
     "sectionPath",
+    "sectionIdPath",
+    "sectionControlFieldKey",
     "description",
     "type",
     "default",

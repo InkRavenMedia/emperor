@@ -72,6 +72,8 @@ class ConfigFieldResponse(ApiResponseModel):
     label: str
     section: str
     sectionPath: list[str] = Field(min_length=1)
+    sectionIdPath: list[str] | None = Field(default=None, min_length=1)
+    sectionControlFieldKey: str | None = None
     description: str = ""
     type: str
     default: ConfigValue

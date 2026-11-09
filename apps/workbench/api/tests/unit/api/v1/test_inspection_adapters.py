@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from unittest.mock import Mock
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
@@ -36,6 +36,9 @@ from emperor_workbench.project_adapter import (
 )
 from tests.support.inspection import config_schema as support_config_schema
 from tests.support.inspection import inspect_model as support_inspect_model
+from tests.support.inspection import (
+    legacy_config_schema_payload,
+)
 from tests.support.inspection import (
     search_space_schema as support_search_space_schema,
 )
@@ -194,7 +197,9 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             with self.subTest(model=model_id, preset=preset, presets=presets):
                 selected = self.catalog().select(model_id)
                 self.assertEqual(
-                    config_schema_response(selected.configuration(preset)).model_dump(),
+                    legacy_config_schema_payload(
+                        config_schema_response(selected.configuration(preset))
+                    ),
                     support_config_schema(model_id, preset),
                 )
                 self.assertEqual(
@@ -203,6 +208,42 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                     ).model_dump(),
                     support_search_space_schema(model_id, preset, presets),
                 )
+
+    def test_configuration_section_metadata_survives_heading_renames(self) -> None:
+        schema = (
+            self.catalog().select("linears/linear_adaptive").configuration("baseline")
+        )
+        original = config_schema_response(schema)
+        renamed = config_schema_response(
+            replace(
+                schema,
+                fields=tuple(
+                    replace(
+                        field,
+                        section_path=tuple(
+                            f"Renamed {title}" for title in field.section_path
+                        ),
+                    )
+                    for field in schema.fields
+                ),
+            )
+        )
+
+        for before, after in zip(original.fields, renamed.fields, strict=True):
+            self.assertEqual(len(before.sectionIdPath), len(before.sectionPath))
+            self.assertEqual(after.sectionIdPath, before.sectionIdPath)
+            self.assertEqual(
+                after.sectionControlFieldKey, before.sectionControlFieldKey
+            )
+            self.assertNotEqual(after.sectionPath, before.sectionPath)
+        fields = {field.key: field for field in renamed.fields}
+        self.assertEqual(
+            fields["STACK_GATE_FLAG"].sectionControlFieldKey, "stack_gate_flag"
+        )
+        self.assertEqual(
+            fields["GATE_STACK_INDEPENDENT_FLAG"].sectionControlFieldKey,
+            "gate_stack_independent_flag",
+        )
 
     def test_model_package_metadata_is_frozen_and_semantic(self) -> None:
         selected = self.catalog().select("linears/linear")
@@ -341,7 +382,7 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            config_schema_response(configuration).model_dump(),
+            legacy_config_schema_payload(config_schema_response(configuration)),
             support_config_schema("linears/linear", "baseline"),
         )
         self.assertEqual(

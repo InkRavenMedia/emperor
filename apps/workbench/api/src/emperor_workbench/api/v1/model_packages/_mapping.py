@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from model_runtime.inspection import ConfigurationSchema, SearchSpace
 
+from emperor_workbench.api.v1.model_packages._config_sections import (
+    configuration_section_metadata,
+)
 from emperor_workbench.api.v1.model_packages._contracts import (
     ConfigFieldConditionResponse,
     ConfigFieldResponse,
@@ -104,6 +107,9 @@ def monitors_response(
 
 
 def config_schema_response(schema: ConfigurationSchema) -> ConfigSchemaResponse:
+    section_metadata = configuration_section_metadata(
+        schema.fields, model_type=schema.identity.model_type
+    )
     return ConfigSchemaResponse(
         modelType=schema.identity.model_type,
         model=schema.identity.model,
@@ -115,6 +121,8 @@ def config_schema_response(schema: ConfigurationSchema) -> ConfigSchemaResponse:
                 label=field.key.lower().replace("_", " "),
                 section=field.section_path[-1],
                 sectionPath=list(field.section_path),
+                sectionIdPath=section_metadata[field.section_path][0],
+                sectionControlFieldKey=section_metadata[field.section_path][1],
                 description=field.description,
                 type=field.value_type,
                 default=field.default,
