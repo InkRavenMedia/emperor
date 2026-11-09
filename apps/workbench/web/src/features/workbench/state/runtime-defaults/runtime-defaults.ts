@@ -7,6 +7,7 @@ import {
   defaultConfigFieldValue,
   fieldValue,
   hasOverride,
+  isEnabledConfigValue,
   isPresentConfigOptionValue,
   normalizeConfigFieldValue,
   overrideValue,
@@ -104,10 +105,6 @@ function deleteOverrideByKey(overrides: OverrideValues, key: string) {
   }
 }
 
-export function isEnabledRuntimeDefaultValue(value: string) {
-  return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
 function normalizeAdaptiveOptionOverrides(
   fields: ConfigField[],
   overrides: OverrideValues,
@@ -122,7 +119,7 @@ function normalizeAdaptiveOptionOverrides(
     }
 
     const flagValue = fieldValue(flagField, next);
-    if (isEnabledRuntimeDefaultValue(flagValue)) {
+    if (isEnabledConfigValue(flagValue)) {
       if (!isPresentConfigOptionValue(overrideValue(next, optionField.key))) {
         const optionChoice = concreteConfigOptionChoice(optionField);
         if (optionChoice !== undefined) {

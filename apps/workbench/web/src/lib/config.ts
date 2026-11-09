@@ -856,7 +856,7 @@ export function activeOverrideScopeLabel(scope: ActiveOverrideScope) {
   return scope === "snapshot" ? "Snapshot draft" : "Preset overrides";
 }
 
-function isEnabledConfigValue(value: string) {
+export function isEnabledConfigValue(value: string) {
   return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 }
 

@@ -6,6 +6,7 @@ import {
   type OverrideValues,
   boundaryModelFieldGroups,
   configFieldSelectOptions,
+  configKeyToken,
   configSearchOptionMatchesQuery,
   configSectionFields,
   configSectionsFields,
@@ -23,11 +24,11 @@ import {
   hasOverride,
   inheritedHiddenModelFieldHint,
   inheritedStackSectionHint,
+  isEnabledConfigValue,
   sectionElementId,
 } from "@/lib/config";
 import {
   applicableConfigFields,
-  isEnabledRuntimeDefaultValue,
   runtimeDefaultsMetrics,
   type RuntimeDefaultsMetrics,
 } from "@/features/workbench/state/runtime-defaults/runtime-defaults";
@@ -119,10 +120,10 @@ export type RuntimeDefaultsSchemaPresentation = {
 };
 
 function attentionModeValueLabel(field: ConfigField, value: string) {
-  if (field.key.trim().replace(/-/g, "_").toLowerCase() !== "expert_attention_flag") {
+  if (configKeyToken(field.key) !== "expert_attention_flag") {
     return undefined;
   }
-  return isEnabledRuntimeDefaultValue(value)
+  return isEnabledConfigValue(value)
     ? "MixtureOfAttentionHeads"
     : "SelfAttention";
 }
@@ -142,7 +143,7 @@ function presentField(
     selectOptions: configFieldSelectOptions(field, overrides),
     isModified: hasOverride(overrides, field.key),
     isPresetOwned: field.locked === true,
-    isEnabledValue: isEnabledRuntimeDefaultValue(value),
+    isEnabledValue: isEnabledConfigValue(value),
     modeLabel: attentionModeValueLabel(field, value),
     disabledReason,
   };
