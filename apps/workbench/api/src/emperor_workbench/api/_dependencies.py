@@ -25,49 +25,60 @@ async def get_workbench_container(request: Request) -> WorkbenchContainer:
     return slot.get()
 
 
+_WorkbenchContainerDep = Annotated[WorkbenchContainer, Depends(get_workbench_container)]
+
+
 async def get_workbench_settings(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> WorkbenchApiSettings:
     return services.settings
 
 
 async def get_project_adapter_client(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> ProjectAdapterClient:
     return services.project_adapter
 
 
 async def get_config_snapshot_service(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> ConfigSnapshotService:
     return services.config_snapshots
 
 
 async def get_inspection_service(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> InspectionService:
     return services.inspection
 
 
 async def get_run_history_service(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> RunHistoryService:
     return services.run_history
 
 
 async def get_training_job_service(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> TrainingJobService:
     return services.training_jobs
 
 
 async def get_training_run_plan_service(
-    services: Annotated[WorkbenchContainer, Depends(get_workbench_container)],
+    services: _WorkbenchContainerDep,
 ) -> RunPlanService:
     return services.training_run_plans
 
 
+ProjectAdapterDep = Annotated[ProjectAdapterClient, Depends(get_project_adapter_client)]
+TrainingJobServiceDep = Annotated[TrainingJobService, Depends(get_training_job_service)]
+WorkbenchSettingsDep = Annotated[WorkbenchApiSettings, Depends(get_workbench_settings)]
+
+
 __all__ = [
+    "ProjectAdapterDep",
+    "TrainingJobServiceDep",
+    "WorkbenchSettingsDep",
     "get_workbench_container",
     "get_config_snapshot_service",
     "get_inspection_service",
