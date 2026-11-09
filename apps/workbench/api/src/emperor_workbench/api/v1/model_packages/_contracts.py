@@ -76,6 +76,7 @@ class ConfigFieldResponse(ApiResponseModel):
     sectionControlFieldKey: str | None = None
     description: str = ""
     type: str
+    legacyJson: bool = False
     default: ConfigValue
     nullable: bool
     choices: list[ConfigValue]

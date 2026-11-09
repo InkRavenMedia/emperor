@@ -7,7 +7,12 @@ from unittest.mock import Mock
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
-from model_runtime.inspection import InspectionResult
+from model_runtime.inspection import (
+    InspectionResult,
+    configuration_schema,
+    search_space_schema,
+)
+from models.catalog import discover_model_packages
 
 from emperor_workbench.api.v1.inspection._mapping import inspection_response
 from emperor_workbench.api.v1.model_packages._mapping import (
@@ -99,6 +104,46 @@ def _selected_with_metadata(payload: object) -> SelectedModelPackage:
 
 
 class InspectionAdapterEquivalenceTests(unittest.TestCase):
+    def test_json_fields_have_flat_workbench_controls(self) -> None:
+        for package in discover_model_packages():
+            response = config_schema_response(configuration_schema(package))
+            search_axes = search_space_schema(package).axes
+            self.assertFalse(
+                any(axis.value_type == "json" for axis in search_axes),
+                f"{package.catalog_key} must expose flat search axes.",
+            )
+            for field in response.fields:
+                if field.type == "json":
+                    with self.subTest(model=package.catalog_key, field=field.key):
+                        self.assertTrue(
+                            field.legacyJson,
+                            "Expose flat controls before adding a JSON field.",
+                        )
+
+    def test_json_editor_is_preserved_when_flat_controls_are_unavailable(self) -> None:
+        package = next(
+            package
+            for package in discover_model_packages()
+            if package.catalog_key == "bert/linear"
+        )
+        schema = configuration_schema(package)
+        response = config_schema_response(
+            replace(
+                schema,
+                fields=tuple(
+                    field
+                    for field in schema.fields
+                    if field.key != "ATTN_SOURCE_MEMORY_MODEL_OPTION"
+                ),
+            )
+        )
+        legacy = next(
+            field
+            for field in response.fields
+            if field.key == "ATTN_SOURCE_MEMORY_MODEL_CONFIG"
+        )
+        self.assertFalse(legacy.legacyJson)
+
     def catalog(self) -> ModelPackageCatalog:
         return ModelPackageCatalog(project_adapter_client())
 

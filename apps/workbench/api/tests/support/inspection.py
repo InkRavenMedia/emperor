@@ -149,7 +149,7 @@ def legacy_config_schema_payload(response: ConfigSchemaResponse) -> dict[str, An
     return response.model_dump(
         exclude={
             "fields": {
-                "__all__": {"sectionIdPath", "sectionControlFieldKey"}
+                "__all__": {"sectionIdPath", "sectionControlFieldKey", "legacyJson"}
             }
         },
     )

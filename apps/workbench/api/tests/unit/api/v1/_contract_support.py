@@ -387,6 +387,7 @@ CONFIG_FIELD_FIELDS = (
     "sectionControlFieldKey",
     "description",
     "type",
+    "legacyJson",
     "default",
     "nullable",
     "choices",

@@ -84,6 +84,54 @@ class ApiIntegrationContractTests(unittest.TestCase):
 
         asyncio.run(call_api())
 
+    def test_inspect_flat_projection_options_match_legacy_json(self) -> None:
+        from emperor_workbench.api import app
+
+        enable = {
+            "ATTN_SOURCE_MEMORY_FLAG": "true",
+            "ATTN_SOURCE_MEMORY_CHUNK_SIZE": "2",
+            "SEQUENCE_EXPANSION_FLAG": "true",
+            "SEQUENCE_EXPANSION_MAX_NEW_TOKENS": "2",
+        }
+        flat = {
+            **enable,
+            "ATTN_SOURCE_MEMORY_MODEL_OPTION": "LINEAR",
+            "ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG": "false",
+            "SEQUENCE_EXPANSION_MODEL_OPTION": "LINEAR",
+            "SEQUENCE_EXPANSION_MODEL_BIAS_FLAG": "false",
+        }
+        linear = '{"type":"LinearLayerConfig","bias_flag":false}'
+        legacy = {
+            **enable,
+            "ATTN_SOURCE_MEMORY_MODEL_CONFIG": linear,
+            "SEQUENCE_EXPANSION_MODEL_CONFIG": linear,
+        }
+        target = {
+            "modelType": "bert",
+            "model": "linear",
+            "preset": "baseline",
+            "dataset": "PennTreebankBertPretraining",
+        }
+
+        async def call_api() -> None:
+            async with _lifespan_client(app) as client:
+                flat_response = await client.post(
+                    "/inspect", json={**target, "overrides": flat}
+                )
+                legacy_response = await client.post(
+                    "/inspect", json={**target, "overrides": legacy}
+                )
+            self.assertEqual(flat_response.status_code, 200, flat_response.text)
+            self.assertEqual(legacy_response.status_code, 200, legacy_response.text)
+            graph = flat_response.json()
+            node_types = {node["typeName"] for node in graph["nodes"]}
+            self.assertTrue(
+                {"AttentionSourceMemory", "SequenceExpansion"} <= node_types
+            )
+            self.assertEqual(graph, legacy_response.json())
+
+        asyncio.run(call_api())
+
     def test_capabilities_endpoint_exposes_local_defaults(self) -> None:
         import httpx
 
