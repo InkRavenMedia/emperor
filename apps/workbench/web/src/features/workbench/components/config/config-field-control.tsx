@@ -285,6 +285,7 @@ export function ConfigFieldValueEditor({
           aria-label={controlLabelledBy ? undefined : controlLabel}
           aria-labelledby={controlLabelledBy}
           autoComplete="off"
+          placeholder={field.type === "json" ? '{"type":"…"}' : undefined}
           value={value}
           disabled={isControlDisabled}
           onChange={(event) => onChange(field.key, event.target.value)}
