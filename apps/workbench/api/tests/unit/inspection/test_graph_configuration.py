@@ -180,6 +180,7 @@ class InspectionGraphConfigurationTests(unittest.TestCase):
                 "halting_config",
                 "memory_config",
                 "layer_model_config",
+                "normalization",
             ],
         )
         self.assertEqual(config_fields(root)["activation"], "GELU")
