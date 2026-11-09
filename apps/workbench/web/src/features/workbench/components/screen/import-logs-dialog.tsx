@@ -73,7 +73,7 @@ function successMessage(result: LogArchiveImportResponse) {
 export function ImportLogsDialog({ onClose }: { onClose: () => void }) {
   const { capabilities } = useWorkbenchCapabilities();
   const workbenchConnection = useWorkbenchConnection();
-  const logQueryCache = useLogQueryCache();
+  const { refreshLogs } = useLogQueryCache();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isImporting, setIsImporting] = useState(false);
@@ -179,7 +179,6 @@ export function ImportLogsDialog({ onClose }: { onClose: () => void }) {
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
-      void logQueryCache.refreshAfterMutation();
     } catch (caughtError) {
       if (operationGenerationRef.current === operationGeneration) {
         setError(messageFromImportError(caughtError));
@@ -188,6 +187,8 @@ export function ImportLogsDialog({ onClose }: { onClose: () => void }) {
       if (operationGenerationRef.current === operationGeneration) {
         uploadControllerRef.current = null;
         setIsImporting(false);
+        // A failed import can still have committed files under existing Run IDs.
+        void refreshLogs();
       }
     }
   };

@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { overviewHarness } from "./support";
@@ -33,6 +33,7 @@ import {
   getPersistedTargetSelectionSnapshot,
 } from "@/features/workbench/state/target/target-selection-storage";
 import { WORKBENCH_API_BASE_URL_STORAGE_KEY } from "@/lib/api/_connection-runtime";
+import { logQueryKeys, monitorQueryKeys } from "@/lib/query-keys";
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -597,13 +598,16 @@ describe("WorkbenchApp Overview", () => {
         destinationRoot: "/workspace/logs",
       },
     });
-    renderWorkbench();
+    const { queryClient } = renderWorkbench();
 
     await user.click(screen.getByRole("button", { name: /import logs/i }));
 
     const dialog = await screen.findByRole("dialog", { name: /import logs/i });
     const fileInput = within(dialog).getByLabelText(/log archive zip file/i);
     await waitFor(() => expect(fileInput).toBeEnabled());
+    const artifactKey = logQueryKeys.artifactsForRun("replaced-run");
+    queryClient.setQueryDefaults(artifactKey, { gcTime: Infinity });
+    queryClient.setQueryData(artifactKey, "before replacement");
 
     const file = new File(["zip"], "logs.zip", { type: "application/zip" });
     await user.upload(fileInput, file);
@@ -631,6 +635,7 @@ describe("WorkbenchApp Overview", () => {
       expect((fileInput as HTMLInputElement).files).toHaveLength(0);
     });
     expect(within(dialog).getByText("No file selected")).toBeInTheDocument();
+    expect(queryClient.getQueryState(artifactKey)?.isInvalidated).toBe(true);
   });
 
   it("shows loading and success states while importing logs", async () => {
@@ -701,6 +706,104 @@ describe("WorkbenchApp Overview", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       /invalid zip archive/i,
     );
+  });
+
+  it("refreshes data after a partially committed archive and preserves explicit retry", async () => {
+    const user = userEvent.setup();
+    const { fetchMock } = setupOverviewScenario({
+      capabilitiesResponse: { ...capabilitiesResponse, uploadsEnabled: true },
+    });
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    const mutationKeys: Array<string | null> = [];
+    fetchMock.mockImplementation((input, init) => {
+      if (!String(input).endsWith("/logs/import")) {
+        return defaultFetch(input, init);
+      }
+      mutationKeys.push(new Headers(init?.headers).get("Idempotency-Key"));
+      return jsonResponse({ detail: "Could not commit the second archive member." }, 400);
+    });
+    const { queryClient } = renderWorkbench();
+    await user.click(screen.getByRole("button", { name: /import logs/i }));
+    const dialog = await screen.findByRole("dialog", { name: /import logs/i });
+    const fileInput = within(dialog).getByLabelText(/log archive zip file/i);
+    await waitFor(() => expect(fileInput).toBeEnabled());
+    const keys = [
+      logQueryKeys.artifactsForRun("imported-run"),
+      monitorQueryKeys.historicalRun("imported-run", "model.layer"),
+      monitorQueryKeys.historicalParameterStatus(["imported-run"]),
+    ];
+    for (const key of keys) {
+      queryClient.setQueryDefaults(key, { gcTime: Infinity });
+      queryClient.setQueryData(key, "before import");
+    }
+    await user.upload(fileInput, new File(["zip"], "logs.zip", { type: "application/zip" }));
+    const submit = within(dialog).getByRole("button", { name: /^import logs$/i });
+    await user.click(submit);
+
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Could not commit the second archive member.",
+    );
+    expect(mutationKeys).toHaveLength(1);
+    expect(mutationKeys[0]).toBeTruthy();
+    expect(within(dialog).getByText("logs.zip")).toBeInTheDocument();
+    for (const key of keys) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+      queryClient.setQueryData(key, "after partial import");
+    }
+
+    await user.click(submit);
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Could not commit the second archive member.",
+    );
+    expect(mutationKeys).toEqual([mutationKeys[0], mutationKeys[0]]);
+    for (const key of keys) {
+      expect(queryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    }
+  });
+
+  it("does not refresh the current backend after an old archive request fails", async () => {
+    const user = userEvent.setup();
+    const pendingUpload = deferred<Response>();
+    const { fetchMock } = setupOverviewScenario({
+      capabilitiesResponse: { ...capabilitiesResponse, uploadsEnabled: true },
+    });
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let dispatched = false;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input).endsWith("/logs/import")) {
+        dispatched = true;
+        return pendingUpload.promise;
+      }
+      return defaultFetch(input, init);
+    });
+    const { queryClient } = renderWorkbench();
+    await user.click(screen.getByRole("button", { name: /import logs/i }));
+    const importDialog = await screen.findByRole("dialog", { name: /import logs/i });
+    const fileInput = within(importDialog).getByLabelText(/log archive zip file/i);
+    await waitFor(() => expect(fileInput).toBeEnabled());
+    await user.upload(fileInput, new File(["zip"], "logs.zip", { type: "application/zip" }));
+    await user.click(within(importDialog).getByRole("button", { name: /^import logs$/i }));
+    expect(dispatched).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /api connection settings/i }));
+    const connectionDialog = await screen.findByRole("dialog", { name: /api connection/i });
+    const input = within(connectionDialog).getByLabelText("API base URL");
+    fireEvent.change(input, { target: { value: "https://api-replacement.example.test" } });
+    fireEvent.click(within(connectionDialog).getByRole("button", { name: /^use api url$/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "https://api-replacement.example.test/capabilities", expect.anything(),
+    ));
+    const key = monitorQueryKeys.historicalParameterStatus(["same-run-id"]);
+    queryClient.setQueryDefaults(key, { gcTime: Infinity });
+    queryClient.setQueryData(key, "new backend data");
+
+    await act(async () => {
+      pendingUpload.resolve(await jsonResponse({ detail: "Old backend partial failure." }, 400));
+    });
+
+    expect(queryClient.getQueryData(key)).toBe("new backend data");
+    expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
+    expect(screen.queryByText("Old backend partial failure.")).not.toBeInTheDocument();
   });
 
   it("shows disabled state when the backend does not expose upload capability", async () => {
