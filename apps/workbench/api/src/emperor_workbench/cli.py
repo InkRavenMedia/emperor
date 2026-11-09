@@ -24,7 +24,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument(
         "--port",
         type=_port,
-        default=_port(os.environ.get("WORKBENCH_BACKEND_PORT", "9999")),
+        default=os.environ.get("WORKBENCH_BACKEND_PORT", "9999"),
     )
     parser.add_argument("--reload", action="store_true")
     args = parser.parse_args(argv)
