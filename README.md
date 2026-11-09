@@ -216,7 +216,8 @@ mise run experiment -- \
   --attn-source-memory-flag true \
   --attn-source-memory-chunk-size 10 \
   --attn-source-memory-grouping-method SumGroupingConfig \
-  --attn-source-memory-model-config '{"type":"LinearLayerConfig","bias_flag":true}' \
+  --attn-source-memory-model-option LINEAR \
+  --attn-source-memory-model-bias-flag true \
   --mlm-decoder-weight-tying-flag false \
   --contextual-embedding-config None \
   --attention-soft-moe-flag true \
@@ -515,7 +516,8 @@ mise run experiment -- \
   --config \
   --sequence-expansion-flag true \
   --sequence-expansion-max-new-tokens 3 \
-  --sequence-expansion-model-config '{"type":"LinearLayerConfig","bias_flag":true}'
+  --sequence-expansion-model-option LINEAR \
+  --sequence-expansion-model-bias-flag true
 ```
 
 For MLP-Mixer, use `--model-type mlp_mixer` with the same expansion flags.
