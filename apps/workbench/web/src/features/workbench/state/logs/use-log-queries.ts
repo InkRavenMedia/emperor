@@ -163,10 +163,15 @@ export function useInfiniteLogRunsQuery({
   });
 }
 
-export function useLogExperimentsQuery({ enabled = true }: QueryOptions = {}) {
+export function useLogExperimentsQuery({
+  enabled = true,
+  includeLegacy = false,
+}: QueryOptions & { includeLegacy?: boolean } = {}) {
   return useQuery({
-    queryKey: LOG_EXPERIMENTS_QUERY_KEY,
-    queryFn: ({ signal }) => fetchLogExperiments({ signal }),
+    queryKey: includeLegacy
+      ? [...LOG_EXPERIMENTS_QUERY_KEY, "legacy"]
+      : LOG_EXPERIMENTS_QUERY_KEY,
+    queryFn: ({ signal }) => fetchLogExperiments({ signal, includeLegacy }),
     enabled,
     retry: false,
     staleTime: LOG_RUNS_STALE_TIME_MS,

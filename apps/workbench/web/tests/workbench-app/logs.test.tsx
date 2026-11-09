@@ -358,6 +358,35 @@ async function selectLogExperiments(
 describe("WorkbenchApp Logs Workspace", () => {
   beforeEach(resetWorkbenchAppTestState);
 
+  it("lists legacy experiments for browsing without offering folder deletion", async () => {
+    const { fetchMock } = setupLogsScenario({
+      logExperimentsResponse: {
+        experiments: [
+          { experiment: "legacy-name", runCount: 1, relativePath: "legacy-name" },
+        ],
+      },
+      logRunsResponse: {
+        runs: [
+          { ...logRunsResponse.runs[0], experiment: "legacy-name", group: "legacy-name" },
+        ],
+      },
+    });
+    renderWorkbench();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("link", { name: /^logs$/i }));
+
+    expect(await findLogOption(user, "Experiments", "legacy-name")).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Delete experiment legacy-name" }),
+    ).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([url]) =>
+        String(url).endsWith("/logs/experiments?includeLegacy=true"),
+      ),
+    ).toBe(true);
+  });
+
   it("opens logs without selecting runs or loading TensorBoard data", async () => {
     const { logRunRequests, logScalarRequests, logTagRequests } = setupLogsScenario();
     renderWorkbench();

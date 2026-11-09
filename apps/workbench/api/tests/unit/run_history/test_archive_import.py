@@ -260,8 +260,13 @@ class LogArchiveImportTests(unittest.TestCase):
 
             runs = service.list_runs(limit=10, offset=0)
             experiments = service.list_experiments(limit=10, offset=0)
+            history = service.list_experiments(limit=10, offset=0, include_legacy=True)
             self.assertEqual(runs.runs[0].experiment, "legacy-name")
             self.assertEqual(experiments.experiments, ())
+            self.assertEqual(
+                [(entry.experiment, entry.run_count) for entry in history.experiments],
+                [("legacy-name", 1)],
+            )
 
 
 if __name__ == "__main__":
