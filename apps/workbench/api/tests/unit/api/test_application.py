@@ -570,17 +570,26 @@ class AppFactoryTests(unittest.TestCase):
                     "emperor_workbench.api._bootstrap.InspectionService",
                     side_effect=failure,
                 ),
-                self.assertRaises(BootstrapFailure) as raised,
             ):
-                acquire_container(
-                    settings,
-                    project_adapter=project_adapter,
-                )
+                cleanup_failure = RuntimeError("mutation cleanup failed")
+                for cleanup_error in (None, cleanup_failure):
+                    with self.subTest(cleanup_error=cleanup_error):
+                        project_adapter.reset_mock()
+                        blocking_work.reset_mock()
+                        mutation_execution.reset_mock()
+                        mutation_execution.close_executor.side_effect = cleanup_error
+                        expected_error = cleanup_error or failure
 
-        self.assertIs(raised.exception, failure)
-        mutation_execution.close_executor.assert_called_once_with()
-        blocking_work.close.assert_called_once_with()
-        project_adapter.close.assert_called_once_with()
+                        with self.assertRaises(type(expected_error)) as raised:
+                            acquire_container(
+                                settings,
+                                project_adapter=project_adapter,
+                            )
+
+                        self.assertIs(raised.exception, expected_error)
+                        mutation_execution.close_executor.assert_called_once_with()
+                        blocking_work.close.assert_called_once_with()
+                        project_adapter.close.assert_called_once_with()
 
     def test_lifespan_cleanup_failure_still_unpublishes_and_closes_later_resources(
         self,
