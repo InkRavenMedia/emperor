@@ -116,7 +116,7 @@
     "linears/linear": ["cfe122a94b689b08965adebb83122f1ae6948531cba9d7fe3d94e3a03bfe1a98", 7497, 35, 1, 5],
     "linears/linear_adaptive": ["3f1854e66057b64b91d76f0f7bfb916fd596a85dde69e7b521cda95cdb380eef", 14345, 70, 1, 7],
     "bert/linear": ["999ebdf0014f4f2902c8d5c2770ca69ad08bb1bffb8afb5845a911a1b13c3aa4", 5378, 28, 1, 4],
-    "gpt/linear": ["2c1eff64d162840c5e0181492b3ac7fd35ed382567064e336ce1ec51d8a7f833", 5375, 27, 1, 4],
+    "gpt/linear": ["95021b583fd3e4bf6fb0f9b23453e6650408c94d4420054f53f0399f9d102354", 5671, 28, 1, 4],
     "transformer/linear": ["ea42fa102fc245bd6b7a77c9d65073128eb125c79175835c479b57f5e5aca389", 4181, 27, 1, 4]
   },
   "catalog": ["e29a170d3b663c97390f5fb93e0ff0ceba38b7a39f726eb4547dea66cd2baeeb", 759, 31],
