@@ -2851,7 +2851,13 @@ describe("WorkbenchApp Full Config", () => {
     expect(pipelineNone).toBeChecked();
     expect(pipelineOff).not.toBeChecked();
 
-    await user.click(pipelineOn);
+    await user.click(pipelineNone);
+    await user.tab({ shift: true });
+    expect(gatePipeline.getAllByRole("radio")).not.toContain(document.activeElement);
+    await user.tab();
+    expect(pipelineNone).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(pipelineOn).toHaveFocus();
     expect(pipelineOn).toBeChecked();
     let commandDialog = await openTrainingCommand(user, dialog);
     expect(commandField(commandDialog)).toHaveValue(
