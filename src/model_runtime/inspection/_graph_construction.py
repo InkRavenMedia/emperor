@@ -204,7 +204,7 @@ def _is_transparent_graph_container(
     return (
         type(parent).__name__ == "LayerStack"
         and child_name == "layers"
-        and type(child).__name__ == "ModuleList"
+        and type(child).__name__ in {"ModuleList", "Sequential"}
     )
 
 
