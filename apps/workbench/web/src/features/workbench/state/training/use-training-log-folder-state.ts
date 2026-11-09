@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
 import { useLogExperimentsQuery } from "@/features/workbench/state/logs/use-log-queries";
 import type { LogExperiment } from "@/lib/api/logs";
+import { isValidLogExperimentName } from "@/lib/log-experiment-name";
 
-const LOG_FOLDER_RE = /^[A-Za-z0-9]+(?:_[A-Za-z0-9]+)*$/;
 const EMPTY_LOG_FOLDER_OPTIONS: LogExperiment[] = [];
 const LOADING_LOG_FOLDERS_COPY = "Loading folders…";
 const EMPTY_LOG_FOLDERS_COPY = "No safe experiment folders found";
@@ -31,7 +31,7 @@ function buildTrainingLogFolderView({
   const existingValid = Boolean(
     existingValue && options.some((option) => option.experiment === existingValue),
   );
-  const newValid = LOG_FOLDER_RE.test(newValue);
+  const newValid = isValidLogExperimentName(newValue);
   const newError =
     newValue.length === 0
       ? "Enter a folder name."
