@@ -5,6 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from model_runtime.inspection import InspectionCaptureLimits
 from model_runtime.packages import model_key
 
 from emperor_workbench.failures import FailureKind
@@ -16,7 +17,8 @@ if TYPE_CHECKING:
     from emperor_workbench.inspection._subprocess import InspectionWorkerLimits
     from emperor_workbench.model_packages import SelectedModelPackage
 
-MAX_WORKER_RESULT_BYTES = 16 * 1024 * 1024
+# The worker adds a JSON envelope around the bounded Inspection result.
+MAX_WORKER_RESULT_BYTES = InspectionCaptureLimits().maximum_output_bytes + 1024
 
 
 @dataclass(frozen=True, slots=True)

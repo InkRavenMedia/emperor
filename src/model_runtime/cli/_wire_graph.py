@@ -18,7 +18,10 @@ from model_runtime.cli._wire_shared import (
     wire_optional_string,
     wire_string,
 )
-from model_runtime.inspection.capture_limits import estimated_output_bytes
+from model_runtime.inspection.capture_limits import (
+    InspectionCaptureLimits,
+    estimated_output_bytes,
+)
 from model_runtime.inspection.records import (
     GraphConfiguration,
     GraphConfigurationField,
@@ -29,6 +32,7 @@ from model_runtime.inspection.records import (
 )
 
 _GRAPH_ROLES = {"architecture", "internal", "runtime"}
+_DEFAULT_CAPTURE_LIMITS = InspectionCaptureLimits()
 _INSPECTION_RESULT_FIELDS = (
     "identity",
     "preset",
@@ -52,10 +56,12 @@ _GRAPH_NODE_FIELDS = (
 
 @dataclass(frozen=True, slots=True)
 class InspectionWireLimits:
-    maximum_graph_nodes: int = 8_192
-    maximum_graph_edges: int = 8_192
-    maximum_configuration_fields: int = 512
-    maximum_output_bytes: int = 16 * 1024**2
+    maximum_graph_nodes: int = _DEFAULT_CAPTURE_LIMITS.maximum_graph_nodes
+    maximum_graph_edges: int = _DEFAULT_CAPTURE_LIMITS.maximum_graph_edges
+    maximum_configuration_fields: int = (
+        _DEFAULT_CAPTURE_LIMITS.maximum_configuration_fields
+    )
+    maximum_output_bytes: int = _DEFAULT_CAPTURE_LIMITS.maximum_output_bytes
 
 
 def _require_output_budget(
