@@ -1301,6 +1301,42 @@ describe("WorkbenchApp Logs Workspace", () => {
     expect(screen.getByText("cat -> dog")).toBeInTheDocument();
   });
 
+  it("displays text-only validation examples for the selected Run", async () => {
+    const textTag = "validation/examples/predictions/text_summary";
+    const { logMediaRequests } = setupLogsScenario({
+      logTagsByRun: {
+        "log-mnist": {
+          scalarTags: [],
+          histogramTags: [],
+          imageTags: [],
+          textTags: [textTag],
+        },
+      },
+      logMediaResponse: {
+        images: [],
+        texts: [{
+          runId: "log-mnist",
+          tag: textTag,
+          step: 2,
+          wallTime: 1780000001,
+          text: "cat -> dog",
+          truncated: true,
+          truncationReason: "Text example truncated by the backend.",
+        }],
+      },
+    });
+    renderWorkbench();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("link", { name: /^logs$/i }));
+    await selectLogExperiments(user, ["test_model"]);
+    await user.click(await screen.findByRole("button", { name: /^validation examples/i }));
+
+    expect(await screen.findByText("cat -> dog")).toBeInTheDocument();
+    expect(screen.getByText("Text example truncated by the backend.")).toBeInTheDocument();
+    expect(logMediaRequests).toEqual([{ runIds: ["log-mnist"], imageTags: [], textTags: [textTag] }]);
+  });
+
   it("loads confusion matrix scalars lazily from hidden matrix rate tags", async () => {
     const matrixRateTags = [
       "validation/confusion_matrix/true_class_0/predicted_class_0/rate",
