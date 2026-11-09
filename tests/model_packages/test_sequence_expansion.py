@@ -101,6 +101,9 @@ def test_flags_are_discoverable_and_disabled_preserves_initialization(
     schema = {field.key: field for field in configuration_schema(package).fields}
     assert keys <= schema.keys()
     assert all(schema[key].description for key in keys)
+    for key in sorted(key for key in keys if key.endswith("_CONFIG")):
+        assert schema[key].value_type == "json", key
+        assert not schema[key].choices, key
     help_text = get_experiment_parser(package).format_help()
     print_config_options(package_name)
     listed = capsys.readouterr().out

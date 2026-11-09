@@ -6,6 +6,7 @@ from enum import Enum
 from types import NoneType, UnionType
 from typing import Any, Union, cast, get_args, get_origin
 
+from emperor.config import ConfigBase
 from model_runtime.inspection.errors import InspectionError
 from model_runtime.inspection.field_descriptions import config_field_description
 from model_runtime.inspection.records import (
@@ -86,6 +87,19 @@ def _annotation_primitive_kind(annotation: Any) -> str | None:
     return None
 
 
+def _annotation_requires_config_object(annotation: Any) -> bool:
+    options = (
+        get_args(annotation)
+        if get_origin(annotation) in {UnionType, Union}
+        else (annotation,)
+    )
+    non_null_options = [option for option in options if option is not NoneType]
+    return bool(non_null_options) and all(
+        isinstance(option, type) and issubclass(option, ConfigBase)
+        for option in non_null_options
+    )
+
+
 def _concrete_value_kind(value: Any) -> str | None:
     kind: str | None = None
     if isinstance(value, bool):
@@ -98,6 +112,8 @@ def _concrete_value_kind(value: Any) -> str | None:
         kind = "string"
     elif isinstance(value, Enum):
         kind = "enum"
+    elif isinstance(value, ConfigBase):
+        kind = "json"
     elif inspect.isclass(value):
         kind = "class"
     return kind
@@ -107,6 +123,8 @@ def _none_value_kind(annotation: Any, annotation_classes: list[type[Any]]) -> st
     primitive_kind = _annotation_primitive_kind(annotation)
     if primitive_kind is not None:
         return primitive_kind
+    if _annotation_requires_config_object(annotation):
+        return "json"
     kind = "unknown"
     if any(issubclass(cls, Enum) for cls in annotation_classes):
         kind = "enum"
