@@ -3552,7 +3552,7 @@ function installFetchMock(options: FetchScenarioOptions = {}) {
         }),
       );
     }
-    if (url.endsWith("/logs/experiments")) {
+    if (new URL(url).pathname === "/logs/experiments") {
       return jsonResponse(experimentResponse);
     }
     if (url.includes("/logs/experiments/")) {

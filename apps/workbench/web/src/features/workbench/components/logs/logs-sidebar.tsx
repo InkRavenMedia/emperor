@@ -34,6 +34,7 @@ import {
   type LogsDeletion,
 } from "@/features/workbench/providers/logs-workspace-provider";
 import { type ChecklistOption } from "@/features/workbench/state/logs/logs-selectors";
+import { isValidLogExperimentName } from "@/lib/log-experiment-name";
 import { cn, errorMessage } from "@/lib/utils";
 
 export type LogsSidebarProps = {
@@ -304,6 +305,9 @@ export function LogsSidebar({ browser, deletion }: LogsSidebarProps) {
             optionActions={
               logDeletionEnabled
                 ? (option) => {
+                    if (!isValidLogExperimentName(option.value)) {
+                      return [];
+                    }
                     const label = `Delete experiment ${option.label}`;
                     return [
                       {

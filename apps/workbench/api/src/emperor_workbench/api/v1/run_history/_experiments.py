@@ -42,8 +42,14 @@ async def logs_experiments(
         DEFAULT_LOG_PAGE_LIMIT
     ),
     offset: Annotated[int, Query(ge=0)] = 0,
+    include_legacy: Annotated[bool, Query(alias="includeLegacy")] = False,
 ) -> LogExperimentsResponse:
-    page = await run_blocking_io(service.list_experiments, limit=limit, offset=offset)
+    page = await run_blocking_io(
+        service.list_experiments,
+        limit=limit,
+        offset=offset,
+        include_legacy=include_legacy,
+    )
     return LogExperimentsResponse.model_validate(log_experiment_page_to_payload(page))
 
 

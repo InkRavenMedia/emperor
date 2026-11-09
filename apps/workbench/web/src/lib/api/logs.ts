@@ -498,10 +498,13 @@ export async function fetchLogRuns(
   };
 }
 
-export async function fetchLogExperiments(options: ApiRequestOptions = {}) {
+export async function fetchLogExperiments(
+  options: ApiRequestOptions & { includeLegacy?: boolean } = {},
+) {
   const page = await fetchPaginated({
     endpoint: "/logs/experiments",
     schema: logExperimentsSchema,
+    params: options.includeLegacy ? { includeLegacy: true } : undefined,
     includeAllPages: true,
     signal: options.signal,
     getItems: (logPage) => logPage.experiments,

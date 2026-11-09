@@ -438,7 +438,7 @@ class LogRunScanner:
             )
         return observations, tuple(fingerprint)
 
-    def list_experiments(self) -> list[LogExperiment]:
+    def list_experiments(self, *, include_legacy: bool = False) -> list[LogExperiment]:
         root = self.resolved_root()
         if not root.exists():
             return []
@@ -450,7 +450,10 @@ class LogRunScanner:
         for child in sorted(root.iterdir(), key=lambda path: path.name):
             if not child.is_dir() or child.is_symlink():
                 continue
-            if not is_valid_log_experiment_name(child.name):
+            run_count = run_counts[child.name]
+            if not is_valid_log_experiment_name(child.name) and not (
+                include_legacy and run_count
+            ):
                 continue
             resolved = self.resolve_under_root(child, root)
             if resolved is None:
@@ -458,7 +461,7 @@ class LogRunScanner:
             experiments.append(
                 LogExperiment(
                     experiment=child.name,
-                    run_count=run_counts[child.name],
+                    run_count=run_count,
                     relative_path=child.name,
                 )
             )
