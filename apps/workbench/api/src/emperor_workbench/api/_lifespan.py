@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Callable
-from contextlib import AbstractAsyncContextManager, asynccontextmanager
+from contextlib import (
+    AbstractAsyncContextManager,
+    AsyncExitStack,
+    ExitStack,
+    asynccontextmanager,
+)
 
 from fastapi import FastAPI
 
@@ -31,30 +36,16 @@ def create_lifespan(
             training_jobs=training_jobs,
             log_experiment_mutations=log_experiment_mutations,
         )
-        slot_installed = False
-        state_published = False
-        try:
-            container_slot.install(container)
-            slot_installed = True
-            api.state.workbench_container = container
-            state_published = True
-            yield
-        finally:
-            try:
-                try:
-                    await container.mutation_execution.close()
-                finally:
-                    try:
-                        container.blocking_work.close()
-                    finally:
-                        container.project_adapter.close()
-            finally:
-                try:
-                    if state_published:
-                        del api.state.workbench_container
-                finally:
-                    if slot_installed:
-                        container_slot.remove(container)
+        with ExitStack() as publication:
+            async with AsyncExitStack() as resources:
+                resources.callback(container.project_adapter.close)
+                resources.callback(container.blocking_work.close)
+                resources.push_async_callback(container.mutation_execution.close)
+                container_slot.install(container)
+                publication.callback(container_slot.remove, container)
+                api.state.workbench_container = container
+                publication.callback(delattr, api.state, "workbench_container")
+                yield
 
     return lifespan
 
