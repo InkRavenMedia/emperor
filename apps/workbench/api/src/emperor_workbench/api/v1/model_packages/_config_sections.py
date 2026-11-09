@@ -24,6 +24,9 @@ _SECTION_CONTROLS = {
     for prefix in ("", "router_")
     for component in ("weight", "bias", "diagonal", "mask")
     for control in ("option_flag", "generator_stack_independent_flag")
+} | {
+    f"{prefix}attn_source_memory_flag"
+    for prefix in ("", "encoder_", "decoder_self_", "decoder_cross_")
 }
 
 # These canonical keys identify sections with specialized Workbench presentation.

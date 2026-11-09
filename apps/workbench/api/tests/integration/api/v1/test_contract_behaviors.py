@@ -19,6 +19,71 @@ PATH_LIKE_DATASET_FIELDS = {
 
 
 class ApiIntegrationContractTests(unittest.TestCase):
+    def test_config_schema_exposes_flat_memory_and_expansion_model_options(
+        self,
+    ) -> None:
+        from emperor_workbench.api import app
+
+        feature_prefixes = {
+            "bert/linear": ("ATTN_SOURCE_MEMORY", "SEQUENCE_EXPANSION"),
+            "gpt/linear": ("ATTN_SOURCE_MEMORY", "SEQUENCE_EXPANSION"),
+            "mlp_mixer/linear": ("SEQUENCE_EXPANSION",),
+            "transformer/linear": (
+                "ATTN_SOURCE_MEMORY",
+                "ENCODER_ATTN_SOURCE_MEMORY",
+                "DECODER_SELF_ATTN_SOURCE_MEMORY",
+                "DECODER_CROSS_ATTN_SOURCE_MEMORY",
+                "SEQUENCE_EXPANSION",
+                "ENCODER_SEQUENCE_EXPANSION",
+                "DECODER_SEQUENCE_EXPANSION",
+            ),
+            "vit/linear": ("ATTN_SOURCE_MEMORY", "SEQUENCE_EXPANSION"),
+        }
+
+        async def call_api() -> None:
+            async with _lifespan_client(app) as client:
+                for model, prefixes in feature_prefixes.items():
+                    response = await client.get(
+                        f"/models/{model}/config-schema",
+                        params={"preset": "baseline"},
+                    )
+                    self.assertEqual(response.status_code, 200, response.text)
+                    fields = {
+                        field["key"]: field for field in response.json()["fields"]
+                    }
+                    for prefix in prefixes:
+                        with self.subTest(model=model, prefix=prefix):
+                            option = fields[f"{prefix}_MODEL_OPTION"]
+                            bias = fields[f"{prefix}_MODEL_BIAS_FLAG"]
+                            legacy = fields[f"{prefix}_MODEL_CONFIG"]
+                            flag_prefix = prefix.lower().replace("_", "-")
+                            self.assertEqual(
+                                option["flag"], f"--{flag_prefix}-model-option"
+                            )
+                            self.assertEqual(option["type"], "enum")
+                            self.assertIn("LINEAR", option["choices"])
+                            self.assertEqual(
+                                bias["flag"], f"--{flag_prefix}-model-bias-flag"
+                            )
+                            self.assertEqual(bias["type"], "bool")
+                            self.assertEqual(bias["choices"], [True, False])
+                            self.assertEqual(legacy["type"], "json")
+                            if (
+                                prefix == "ATTN_SOURCE_MEMORY"
+                                and model != "transformer/linear"
+                            ):
+                                for field in (option, bias, legacy):
+                                    self.assertEqual(
+                                        field["section"],
+                                        "Attention Source Memory Options",
+                                    )
+                                    self.assertEqual(
+                                        field["sectionControlFieldKey"],
+                                        "attn_source_memory_flag",
+                                    )
+
+        asyncio.run(call_api())
+
     def test_capabilities_endpoint_exposes_local_defaults(self) -> None:
         import httpx
 
