@@ -6,6 +6,7 @@ import {
   type GraphParameterActivity,
   type GraphScope,
   ancestorNodeIds,
+  decorateGraphParameterActivity,
   decorateGraphSelection,
   deriveGraphDisplayModel,
   expandableSubtreeNodeIds,
@@ -220,7 +221,6 @@ export function useGraphViewState(
         expandedGraphNodeIds,
         expandedDetailNodeIds,
         canOpenMonitor: canOpenMonitor ? canOpenGraphNodeMonitor : undefined,
-        parameterActivityForNode,
         onActivateNode: activateGraphNode,
         onToggleExpansion: toggleGraphNodeExpansion,
         onOpenMonitor: onOpenMonitor ? openGraphNodeMonitor : undefined,
@@ -236,7 +236,6 @@ export function useGraphViewState(
       graphScope,
       onOpenMonitor,
       openGraphNodeMonitor,
-      parameterActivityForNode,
       toggleGraphNodeExpansion,
       toggleNodeDetails,
     ],
@@ -276,10 +275,7 @@ export function useGraphViewState(
     };
   }, [hasGraphToLayout, layoutGraph]);
 
-  // Structural layout pass: runs the dagre layout. Deliberately excludes
-  // selectedNodeId so that selecting a node does NOT trigger a relayout. The
-  // per-node handlers are useCallback-stable (keyed on navigation/scope), so
-  // keeping them here does not couple layout to selection.
+  // Selection and polling updates decorate the laid-out nodes below.
   const baseLayout = useMemo(() => {
     if (!layoutGraph) {
       return EMPTY_GRAPH_LAYOUT;
@@ -289,12 +285,22 @@ export function useGraphViewState(
 
   const edges = baseLayout.edges;
 
+  const nodesWithActivity = useMemo(
+    () =>
+      decorateGraphParameterActivity(
+        baseLayout.nodes,
+        graphDisplayModel,
+        parameterActivityByNodePath?.size ? parameterActivityForNode : undefined,
+      ),
+    [baseLayout.nodes, graphDisplayModel, parameterActivityByNodePath, parameterActivityForNode],
+  );
+
   // Cheap decoration pass: apply the `selected` flag without relayout. Only the
   // node whose selection changed gets a new object; all others keep their
   // reference so React Flow and the memoized node view skip re-rendering them.
   const nodes = useMemo(
-    () => decorateGraphSelection(baseLayout.nodes, effectiveSelectedNodeId),
-    [baseLayout, effectiveSelectedNodeId],
+    () => decorateGraphSelection(nodesWithActivity, effectiveSelectedNodeId),
+    [nodesWithActivity, effectiveSelectedNodeId],
   );
 
   const selectedNode = useMemo(

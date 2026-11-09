@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { useGraphViewState } from "@/features/workbench/state/graph-monitor/use-graph-view-state";
 import type { GraphNode, InspectResponse } from "@/lib/api/inspection";
+import type { GraphParameterActivity } from "@/lib/graph";
 
 function node(id: string, overrides: Partial<GraphNode> = {}): GraphNode {
   return {
@@ -169,5 +170,39 @@ describe("useGraphViewState selection", () => {
       weightShape: "32 x 32",
     });
     expect(linearNode?.data.parameterActivity).toBe(activity);
+  });
+
+  it("updates activity badges without laying out the same graph again", async () => {
+    const { result, rerender } = renderHook(
+      ({ activity }) =>
+        useGraphViewState(graph, { parameterActivityByNodePath: activity }),
+      { initialProps: { activity: new Map<string, GraphParameterActivity>() } },
+    );
+    await waitFor(() => expect(result.current.nodes).toHaveLength(2));
+
+    const { edges, nodes } = result.current;
+    const activity: GraphParameterActivity = {
+      targetPath: "n1",
+      weights: {
+        status: "updated",
+        source: "historical",
+        sourceLabel: "1 historical run",
+        observedPoints: 2,
+      },
+    };
+    rerender({ activity: new Map([["n1", activity]]) });
+
+    expect(
+      result.current.nodes.find((node) => node.id === "n1")?.data.parameterActivity,
+    ).toBe(activity);
+    expect(result.current.nodes.map((node) => node.position)).toEqual(
+      nodes.map((node) => node.position),
+    );
+    expect(result.current.edges).toBe(edges);
+
+    rerender({ activity: new Map() });
+    expect(result.current.nodes[0]).toBe(nodes[0]);
+    expect(result.current.nodes[1]).toBe(nodes[1]);
+    expect(result.current.edges).toBe(edges);
   });
 });
