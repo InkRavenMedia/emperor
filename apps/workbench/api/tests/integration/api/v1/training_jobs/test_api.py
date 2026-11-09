@@ -407,7 +407,7 @@ class TrainingApiLifecycleTests(unittest.TestCase):
             response = asyncio.run(call_api())
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("planned runs exceeds 2000", response.text)
+        self.assertIn("2160 planned runs exceeds limit 2000", response.json()["detail"])
 
     def test_training_run_plan_deduplicates_search_values(self) -> None:
         import httpx
@@ -559,7 +559,7 @@ class TrainingApiLifecycleTests(unittest.TestCase):
             response = asyncio.run(call_api())
 
         self.assertEqual(response.status_code, 400)
-        self.assertIn("4000 planned runs exceeds 2000", response.text)
+        self.assertIn("4000 planned runs exceeds limit 2000", response.json()["detail"])
 
     def test_training_create_and_run_plan_responses_preserve_public_shape(self) -> None:
         import httpx
