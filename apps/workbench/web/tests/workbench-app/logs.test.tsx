@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { logsHarness } from "./support";
@@ -357,6 +357,40 @@ async function selectLogExperiments(
 
 describe("WorkbenchApp Logs Workspace", () => {
   beforeEach(resetWorkbenchAppTestState);
+
+  it("clears hidden Logs selections and deletion intent after a connection change", async () => {
+    setupLogsScenario();
+    renderWorkbench();
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("link", { name: /^logs$/i }));
+    await screen.findByRole("region", { name: "Log filters" }, { timeout: 3000 });
+    await selectLogExperiments(user, ["test_model"]);
+    await openLogFilter(user, "Experiments");
+    await user.click(
+      screen.getByRole("button", { name: /^delete experiment test_model$/i }),
+    );
+    expect(screen.getByRole("dialog", { name: /^delete experiment$/i })).toBeVisible();
+
+    act(() => window.history.pushState(null, "", "/?workspace=model"));
+    await user.click(screen.getByRole("button", { name: /api connection settings/i }));
+    const connection = await screen.findByRole("dialog", { name: /api connection/i });
+    const url = within(connection).getByLabelText("API base URL");
+    await user.clear(url);
+    await user.type(url, "https://logs-reset.example.test");
+    await user.click(within(connection).getByRole("button", { name: /^use api url$/i }));
+    await waitFor(() => {
+      expect(within(connection).getByText("https://logs-reset.example.test"))
+        .toBeInTheDocument();
+    });
+
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("link", { name: /^logs$/i }));
+    await screen.findByRole("region", { name: "Log filters" });
+    expect(screen.queryByRole("dialog", { name: /^delete experiment$/i }))
+      .not.toBeInTheDocument();
+    await expectLogFilterSelection(user, "Experiments", "test_model", false);
+  });
 
   it("lists legacy experiments for browsing without offering folder deletion", async () => {
     const { fetchMock } = setupLogsScenario({

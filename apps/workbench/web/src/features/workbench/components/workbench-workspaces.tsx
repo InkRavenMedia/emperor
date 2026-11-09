@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { Activity, type ReactNode } from "react";
+import { Activity, useReducer, type ReactNode } from "react";
 import {
   WorkbenchThreeRegionLayout,
   WorkbenchWideWorkspaceRegion,
@@ -9,6 +9,7 @@ import {
   type DeferredWorkbenchWorkspace,
   type FullConfigDialogControls,
 } from "@/features/workbench/state/use-workbench-workspace-shell";
+import { useRegisterWorkbenchConnectionReset } from "@/features/workbench/providers/workbench-connection-provider";
 import { type WorkbenchWorkspace } from "@/types/workbench";
 
 function TrainingWorkspaceLoadingFallback() {
@@ -161,11 +162,19 @@ export function WorkbenchWorkspaceRegions({
   startedLogFolders?: readonly string[];
   trainingRuntimeActivated?: boolean;
 }) {
+  const [logsConnectionRevision, resetLogsForConnectionChange] = useReducer(
+    (revision: number) => revision + 1,
+    0,
+  );
+  // Hidden Logs keeps state while Activity disconnects its effects.
+  useRegisterWorkbenchConnectionReset(resetLogsForConnectionChange);
+
   const model = (
     <WorkbenchModelWorkspace onOpenFullConfig={onOpenFullConfig} />
   );
   const logs = (
     <DeferredLogsWorkspaceProvider
+      key={logsConnectionRevision}
       enabled={activeWorkspace === "logs"}
       startedExperiments={startedLogFolders}
     >
