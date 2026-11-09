@@ -60,7 +60,7 @@ class InspectorSchemaTests(unittest.TestCase):
                 self.assertIn("embedding_layer_norm_flag", fields)
                 self.assertIn("embedding_dropout_probability", fields)
 
-    def test_gpt_search_axes_match_corresponding_bert_backends(self) -> None:
+    def test_gpt_and_bert_search_axes_differ_in_task_normalization(self) -> None:
         for backend in (
             "linear",
             "linear_adaptive",
@@ -74,7 +74,13 @@ class InspectorSchemaTests(unittest.TestCase):
                 bert_axes = _axes_by_key(
                     search_space_schema(f"bert/{backend}", "baseline")
                 )
-                self.assertEqual(set(gpt_axes), set(bert_axes))
+                self.assertEqual(
+                    gpt_axes.keys() - bert_axes.keys(), {"decoder_output_normalization"}
+                )
+                self.assertEqual(
+                    bert_axes.keys() - gpt_axes.keys(),
+                    {"encoder_output_normalization", "mlm_normalization"},
+                )
 
     def test_config_schema_emits_uppercase_public_keys(self) -> None:
         fields = config_schema("linears/linear")["fields"]
@@ -111,7 +117,7 @@ class InspectorSchemaTests(unittest.TestCase):
         self.assertFalse(residual_model_flag["nullable"])
         self.assertEqual(residual_model_flag["applicableWhen"], [])
         self.assertIn(
-            "Residual Stack Options as a data-dependent coefficient model",
+            "Residual Stack Options as a data-dependent query or coefficient model",
             residual_model_flag["description"],
         )
         self.assertEqual(
@@ -313,8 +319,6 @@ class InspectorSchemaTests(unittest.TestCase):
             "ff_stack_gate_flag",
             "attn_num_layers",
             "attn_stack_gate_flag",
-            "adaptive_generator_stack_hidden_dim",
-            "weight_option",
             "top_k",
             "router_noisy_topk_flag",
         }
@@ -327,6 +331,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "trainer_accelerator",
             "trainer_devices",
         }
+        adaptive_fields = {"adaptive_generator_stack_hidden_dim", "weight_option"}
 
         for model_name in (
             "vit/linear",
@@ -341,6 +346,10 @@ class InspectorSchemaTests(unittest.TestCase):
                     self.assertIn(field_key, fields)
                 for field_key in hidden_fields:
                     self.assertNotIn(field_key, fields)
+                self.assertEqual(
+                    adaptive_fields & fields.keys(),
+                    adaptive_fields if model_name.endswith("_adaptive") else set(),
+                )
 
     def test_mlp_mixer_schemas_expose_only_applicable_mixer_controls(self) -> None:
         common_fields = {
@@ -452,12 +461,14 @@ class InspectorSchemaTests(unittest.TestCase):
             "attn_stack_gate_flag",
             "ff_num_layers",
             "ff_stack_gate_flag",
-            "adaptive_generator_stack_hidden_dim",
-            "weight_option",
         }
 
         for model_name, additional_public_fields, additional_hidden_fields in (
-            ("bert/linear_adaptive", set(), {"sequence_length"}),
+            (
+                "bert/linear_adaptive",
+                {"adaptive_generator_stack_hidden_dim", "weight_option"},
+                {"sequence_length"},
+            ),
             ("bert/expert_linear", {"sequence_length"}, set()),
         ):
             fields = _fields_by_key(config_schema(model_name))
@@ -728,7 +739,7 @@ class InspectorSchemaTests(unittest.TestCase):
             adaptive_fields["halting_stack_bias_flag"]["description"],
         )
         self.assertIn(
-            "output postprocessing",
+            "applies activation, dropout",
             adaptive_fields["halting_stack_apply_output_postprocessing_flag"][
                 "description"
             ],
@@ -821,8 +832,16 @@ class InspectorSchemaTests(unittest.TestCase):
             fields = _fields_by_key(config_schema(model_name))
 
             with self.subTest(model_name=model_name):
-                for field_key in expected_sections:
-                    self.assertNotIn(field_key, fields)
+                visible_fields = (
+                    {"ff_bias_flag"} if model_name.endswith("_adaptive") else set()
+                )
+                self.assertEqual(
+                    expected_sections.keys() & fields.keys(), visible_fields
+                )
+                for field_key in visible_fields:
+                    self.assertEqual(
+                        fields[field_key]["section"], expected_sections[field_key]
+                    )
 
     def test_transformer_schemas_expose_attention_projection_controller_sections(
         self,
@@ -899,8 +918,16 @@ class InspectorSchemaTests(unittest.TestCase):
             fields = _fields_by_key(config_schema(model_name))
 
             with self.subTest(model_name=model_name):
-                for field_key in expected_sections:
-                    self.assertNotIn(field_key, fields)
+                visible_fields = (
+                    {"attn_bias_flag"} if model_name.endswith("_adaptive") else set()
+                )
+                self.assertEqual(
+                    expected_sections.keys() & fields.keys(), visible_fields
+                )
+                for field_key in visible_fields:
+                    self.assertEqual(
+                        fields[field_key]["section"], expected_sections[field_key]
+                    )
 
     def test_transformer_schemas_and_search_axes_cover_translation_backends(
         self,
