@@ -124,6 +124,9 @@ def module_configuration(
     module: GraphModule,
     limits: InspectionCaptureLimits,
 ) -> GraphConfiguration | None:
+    policy = SEMANTIC_TYPE_CATALOG.policy_for(type(module))
+    if policy is not None and policy.shares_layer_configuration:
+        return None
     config = _module_config_instance(module)
     if config is None:
         return None
