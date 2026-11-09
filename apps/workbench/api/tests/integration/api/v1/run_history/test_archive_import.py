@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import os
 import stat
 import tempfile
 import threading
@@ -179,6 +180,94 @@ async def post_streaming_multipart_body(
 
 
 class LogArchiveImportApiTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "descriptor commits require POSIX")
+    def test_partial_import_replays_only_the_same_multipart_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            logs_root = root / "logs"
+            app = create_app(
+                WorkbenchApiSettings(
+                    logs_root=str(logs_root),
+                    state_root=str(root / "state"),
+                    allow_unsafe_local_mutations=True,
+                    allow_log_imports=True,
+                )
+            )
+            archive = zip_bytes(
+                {"exp_a/first.json": "first", "exp_a/second.json": "second"}
+            )
+            mutation_key = uuid.uuid4().hex
+
+            async def import_and_replay() -> tuple[httpx.Response, ...]:
+                async with lifespan_client(app) as client:
+
+                    async def post(
+                        boundary: str, archive_bytes: bytes
+                    ) -> httpx.Response:
+                        header = (
+                            f"--{boundary}\r\n"
+                            'Content-Disposition: form-data; name="archive"; '
+                            'filename="résumé%22.zip"\r\n'
+                            "Content-Type: application/zip\r\n\r\n"
+                        ).encode()
+                        return await client.post(
+                            "/logs/import",
+                            content=header
+                            + archive_bytes
+                            + f"\r\n--{boundary}--\r\n".encode(),
+                            headers={
+                                "Content-Type": (
+                                    f"multipart/form-data; boundary={boundary}"
+                                ),
+                                MUTATION_HEADER_NAME: MUTATION_HEADER_VALUE,
+                                "Idempotency-Key": mutation_key,
+                            },
+                        )
+
+                    return (
+                        await post("same-boundary", archive),
+                        await post("different-boundary", archive),
+                        await post("same-boundary", archive),
+                        await post(
+                            "same-boundary", zip_bytes({"exp_a/first.json": "new"})
+                        ),
+                    )
+
+            original_rename = os.rename
+            attempted_members = []
+
+            def fail_second_member(source, target, *, src_dir_fd=None, dst_dir_fd=None):
+                if (
+                    src_dir_fd is not None
+                    and dst_dir_fd is not None
+                    and source == target
+                    and source in {"first.json", "second.json"}
+                ):
+                    attempted_members.append(source)
+                    if source == "second.json":
+                        raise OSError("forced second member commit failure")
+                return original_rename(
+                    source, target, src_dir_fd=src_dir_fd, dst_dir_fd=dst_dir_fd
+                )
+
+            with patch.object(os, "rename", side_effect=fail_second_member):
+                first, changed_boundary, replay, changed_archive = asyncio.run(
+                    import_and_replay()
+                )
+
+            self.assertEqual(first.status_code, 400, first.text)
+            self.assertIn("Could not commit archive member", first.json()["detail"])
+            self.assertEqual(changed_boundary.status_code, 409, changed_boundary.text)
+            self.assertEqual(replay.status_code, first.status_code)
+            self.assertEqual(replay.content, first.content)
+            self.assertEqual(changed_archive.status_code, 409, changed_archive.text)
+            self.assertEqual(attempted_members, ["first.json", "second.json"])
+            self.assertEqual(
+                (logs_root / "exp_a" / "first.json").read_text(encoding="utf-8"),
+                "first",
+            )
+            self.assertFalse((logs_root / "exp_a" / "second.json").exists())
+
     def test_default_settings_disable_log_imports(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             logs_root = Path(tmp) / "logs"
