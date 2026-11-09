@@ -179,8 +179,9 @@ class InspectionContractFreezeTests(unittest.TestCase):
         )
 
         self.assertEqual(completed.returncode, 0, completed.stderr)
+        cli_graph = InspectResponse.model_validate_json(completed.stdout)
         self.assertEqual(
-            json.loads(completed.stdout),
+            cli_graph.model_dump(mode="json"),
             inspect_model(
                 "linears/linear",
                 "baseline",
