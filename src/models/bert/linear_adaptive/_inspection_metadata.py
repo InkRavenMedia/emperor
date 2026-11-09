@@ -522,7 +522,7 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG', 744, (744,)),
         ('ATTN_HALTING_STACK_BIAS_FLAG', 745, (745,)),
     )),
-    RuntimeDefaultsSection(('Attention Projection Adaptive Parameter Options', 'Attention Projection Adaptive Weight Options', 'Attention Projection Memory Options'), (
+    RuntimeDefaultsSection(('Attention Projection Adaptive Parameter Options', 'Attention Projection Adaptive Weight Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 750, (750,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 751, (751,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 752, (752,)),
@@ -531,6 +531,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG', 755, (755,)),
         ('ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION', 756, (756,)),
         ('ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON', 759, (759,)),
+    )),
+    RuntimeDefaultsSection(('Attention Projection Adaptive Parameter Options', 'Attention Projection Adaptive Weight Options', 'Attention Projection Memory Options'), (
         ('ATTN_MEMORY_FLAG', 761, (761,)),
         ('ATTN_MEMORY_OPTION', 762, (762,)),
         ('ATTN_MEMORY_POSITION_OPTION', 763, (763,)),
@@ -1135,6 +1137,13 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SOFT_MOE_SCORING_NORMALIZATION', 847, (847, 8)),
         ('SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 847, (847, 9)),
         ('SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 847, (847, 10)),
+    )),
+    RuntimeDefaultsSection(('Attention Projection Adaptive Parameter Options', 'Attention Projection Adaptive Weight Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 752, (752, 11)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 752, (752, 12)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 752, (752, 13)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 752, (752, 14)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 752, (752, 15)),
     )),
 )
 

@@ -351,6 +351,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     RuntimeDefaultsSection(('Attention Options',), (
         ('ATTN_NUM_HEADS', 483, (483,)),
         ('ATTN_ADD_KEY_VALUE_BIAS_FLAG', 484, (484,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 487, (487,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 488, (488,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 489, (489,)),
@@ -1123,6 +1125,13 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SOFT_MOE_SCORING_NORMALIZATION', 820, (820, 8)),
         ('SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 820, (820, 9)),
         ('SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 820, (820, 10)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 489, (489, 11)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 489, (489, 12)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 489, (489, 13)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 489, (489, 14)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 489, (489, 15)),
     )),
 )
 

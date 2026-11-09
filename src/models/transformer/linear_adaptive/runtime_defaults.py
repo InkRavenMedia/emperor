@@ -925,17 +925,23 @@ def resolve_transformer_path_options(
 
     encoder_attention = _apply_path_updates(
         encoder_attention,
-        _pop_updates(values, "encoder_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "encoder_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     decoder_self_attention = _apply_path_updates(
         decoder_self_attention,
-        _pop_updates(values, "decoder_self_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "decoder_self_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     decoder_cross_attention = _apply_path_updates(
         decoder_cross_attention,
-        _pop_updates(values, "decoder_cross_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "decoder_cross_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     encoder_feed_forward = _apply_path_updates(

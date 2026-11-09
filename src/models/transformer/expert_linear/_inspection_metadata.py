@@ -24,6 +24,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_NUM_HEADS', 74, (74,)),
         ('ATTN_ADD_KEY_VALUE_BIAS_FLAG', 75, (75,)),
         ('ATTN_ZERO_ATTENTION_FLAG', 76, (76,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 79, (79,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 80, (80,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 81, (81,)),
@@ -452,6 +454,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     RuntimeDefaultsSection(('Attention Options',), (
         ('ENCODER_ATTN_ADD_KEY_VALUE_BIAS_FLAG', 75, (75, 1)),
         ('ENCODER_ATTN_ZERO_ATTENTION_FLAG', 76, (76, 2)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('ENCODER_ATTN_SOURCE_MEMORY_FLAG', 79, (79, 3)),
         ('ENCODER_ATTN_SOURCE_MEMORY_CONFIG', 80, (80, 4)),
         ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_CONFIG', 81, (81, 5)),
@@ -597,6 +601,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     RuntimeDefaultsSection(('Attention Options',), (
         ('DECODER_SELF_ATTN_ADD_KEY_VALUE_BIAS_FLAG', 75, (75, 121)),
         ('DECODER_SELF_ATTN_ZERO_ATTENTION_FLAG', 76, (76, 122)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('DECODER_SELF_ATTN_SOURCE_MEMORY_FLAG', 79, (79, 123)),
         ('DECODER_SELF_ATTN_SOURCE_MEMORY_CONFIG', 80, (80, 124)),
         ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_CONFIG', 81, (81, 125)),
@@ -742,6 +748,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     RuntimeDefaultsSection(('Attention Options',), (
         ('DECODER_CROSS_ATTN_ADD_KEY_VALUE_BIAS_FLAG', 75, (75, 241)),
         ('DECODER_CROSS_ATTN_ZERO_ATTENTION_FLAG', 76, (76, 242)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('DECODER_CROSS_ATTN_SOURCE_MEMORY_FLAG', 79, (79, 243)),
         ('DECODER_CROSS_ATTN_SOURCE_MEMORY_CONFIG', 80, (80, 244)),
         ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_CONFIG', 81, (81, 245)),
@@ -1407,6 +1415,28 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('EXPERT_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION', 381, (381, 793)),
         ('EXPERT_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG', 382, (382, 794)),
         ('EXPERT_RECURRENT_HALTING_STACK_BIAS_FLAG', 383, (383, 795)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 81, (81, 796)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 81, (81, 797)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 81, (81, 798)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 81, (81, 799)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 81, (81, 800)),
+        ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_OPTION', 81, (81, 5, 801)),
+        ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 81, (81, 5, 802)),
+        ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 81, (81, 5, 803)),
+        ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 81, (81, 5, 804)),
+        ('ENCODER_ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 81, (81, 5, 805)),
+        ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_OPTION', 81, (81, 125, 806)),
+        ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 81, (81, 125, 807)),
+        ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 81, (81, 125, 808)),
+        ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 81, (81, 125, 809)),
+        ('DECODER_SELF_ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 81, (81, 125, 810)),
+        ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_OPTION', 81, (81, 245, 811)),
+        ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 81, (81, 245, 812)),
+        ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 81, (81, 245, 813)),
+        ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 81, (81, 245, 814)),
+        ('DECODER_CROSS_ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 81, (81, 245, 815)),
     )),
 )
 

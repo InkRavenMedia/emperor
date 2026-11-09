@@ -243,6 +243,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTENTION_SOFT_MOE_CONFIG', 323, (323,)),
         ('ATTN_NUM_HEADS', 324, (324,)),
         ('ATTN_ADD_KEY_VALUE_BIAS_FLAG', 325, (325,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 328, (328,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 329, (329,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 330, (330,)),
@@ -734,6 +736,13 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTENTION_SOFT_MOE_SCORING_NORMALIZATION', 323, (323, 19)),
         ('ATTENTION_SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 323, (323, 20)),
         ('ATTENTION_SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 323, (323, 21)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 330, (330, 22)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 330, (330, 23)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 330, (330, 24)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 330, (330, 25)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 330, (330, 26)),
     )),
 )
 

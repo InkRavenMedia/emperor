@@ -4,6 +4,17 @@ from dataclasses import dataclass
 from typing import Any
 
 EXPLICIT_FIELD_DESCRIPTIONS = {
+    "ATTN_SOURCE_MEMORY_FLAG": (
+        "Enables memory embeddings generated from grouped source chunks. "
+        "Set a chunk size to control how many source tokens each embedding summarizes."
+    ),
+    "ATTN_SOURCE_MEMORY_MODEL_OPTION": (
+        "Selects the generator that turns each grouped source chunk into a memory "
+        "embedding. Choose a linear projection, a linear stack, or a recurrent linear layer."
+    ),
+    "ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG": (
+        "Sets whether the linear source-memory generator includes a bias term."
+    ),
     "SEQUENCE_EXPANSION_FLAG": (
         "Enables count prediction and latent-token expansion before each transformer "
         "block invocation, including supported recurrent passes. Defaults to false."
@@ -501,9 +512,12 @@ def config_field_description(
     """Return practical help text for a public config field."""
 
     description_key = key
-    for prefix in ("ENCODER_", "DECODER_"):
-        if key.startswith(f"{prefix}SEQUENCE_EXPANSION_"):
-            description_key = key.removeprefix(prefix)
+    for prefix in ("ENCODER_", "DECODER_", "DECODER_SELF_", "DECODER_CROSS_"):
+        unscoped_key = key.removeprefix(prefix)
+        if key != unscoped_key and unscoped_key.startswith(
+            ("SEQUENCE_EXPANSION_", "ATTN_SOURCE_MEMORY_")
+        ):
+            description_key = unscoped_key
             break
     explicit_description = EXPLICIT_FIELD_DESCRIPTIONS.get(description_key)
     if explicit_description is not None:

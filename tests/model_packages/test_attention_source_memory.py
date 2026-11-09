@@ -4,6 +4,7 @@ import pytest
 import torch
 
 from emperor.attention._base import MultiHeadAttentionAbstract
+from emperor.layers import LayerStackConfig, RecurrentLayerConfig
 from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
 from models.catalog import model_package
@@ -75,6 +76,42 @@ def run_model(model, package_name, inputs=None):
         return model(inputs, torch.ones_like(inputs), torch.zeros_like(inputs))
     result = model(inputs)
     return result if isinstance(result, tuple) else (result,)
+
+
+@pytest.mark.parametrize(
+    ("option", "field", "config_type"),
+    [
+        ("LINEAR_STACK", "STACK_NUM_LAYERS", LayerStackConfig),
+        ("RECURRENT_LINEAR", "RECURRENT_MAX_STEPS", RecurrentLayerConfig),
+    ],
+)
+def test_source_memory_composed_generators_have_flat_runtime_options(
+    option, field, config_type
+):
+    package_name = "gpt/linear"
+    package = model_package(package_name)
+    prefix = "ATTN_SOURCE_MEMORY_MODEL_"
+    controls = {
+        prefix + "OPTION": option,
+        prefix + "BIAS_FLAG": "false",
+        prefix + field: "3",
+    }
+    overrides = {
+        key.lower(): package.runtime_defaults_spec.parse_value(key, value)
+        for key, value in controls.items()
+    }
+    model = package.build_model(configuration(package_name, **overrides)).eval()
+    memory = next(
+        attention.projector.source_memory
+        for attention in model.modules()
+        if isinstance(attention, MultiHeadAttentionAbstract)
+    )
+    assert isinstance(memory.generator_model_config, config_type)
+    if field == "STACK_NUM_LAYERS":
+        assert memory.model.num_layers == 3
+    else:
+        assert memory.model.max_steps == 3
+    assert torch.isfinite(run_model(model, package_name)[0]).all()
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)

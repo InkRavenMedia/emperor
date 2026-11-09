@@ -314,7 +314,7 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG', 408, (408,)),
         ('ATTN_HALTING_STACK_BIAS_FLAG', 409, (409,)),
     )),
-    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 414, (414,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 415, (415,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 416, (416,)),
@@ -323,6 +323,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG', 419, (419,)),
         ('ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION', 420, (420,)),
         ('ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON', 423, (423,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
         ('ATTN_MEMORY_FLAG', 425, (425,)),
         ('ATTN_MEMORY_OPTION', 426, (426,)),
         ('ATTN_MEMORY_POSITION_OPTION', 427, (427,)),
@@ -550,6 +552,13 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SOFT_MOE_SCORING_NORMALIZATION', 511, (511, 8)),
         ('SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 511, (511, 9)),
         ('SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 511, (511, 10)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 416, (416, 11)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 416, (416, 12)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 416, (416, 13)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 416, (416, 14)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 416, (416, 15)),
     )),
 )
 

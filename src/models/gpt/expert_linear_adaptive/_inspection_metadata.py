@@ -309,7 +309,7 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG', 438, (438,)),
         ('ATTN_HALTING_STACK_BIAS_FLAG', 439, (439,)),
     )),
-    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 444, (444,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 445, (445,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 446, (446,)),
@@ -318,6 +318,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG', 449, (449,)),
         ('ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION', 450, (450,)),
         ('ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON', 453, (453,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
         ('ATTN_MEMORY_FLAG', 455, (455,)),
         ('ATTN_MEMORY_OPTION', 456, (456,)),
         ('ATTN_MEMORY_POSITION_OPTION', 457, (457,)),
@@ -1273,6 +1275,13 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTENTION_SOFT_MOE_SCORING_NORMALIZATION', 366, (366, 19)),
         ('ATTENTION_SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 366, (366, 20)),
         ('ATTENTION_SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 366, (366, 21)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 446, (446, 22)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 446, (446, 23)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 446, (446, 24)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 446, (446, 25)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 446, (446, 26)),
     )),
 )
 

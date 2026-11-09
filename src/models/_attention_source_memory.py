@@ -15,12 +15,22 @@ from emperor.augmentations.adaptive_parameters import (
     SummaryNormalizationOptions,
 )
 from emperor.config import ConfigBase
+from models._projection_model import (
+    ProjectionModelOptions,
+    prefer_scoped_projection_model,
+    resolve_projection_model,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class AttentionSourceMemoryOptions:
     source_memory_config: AttentionSourceMemoryConfig | None = None
     source_memory_model_config: ConfigBase | None = None
+    source_memory_model_option: ProjectionModelOptions | None = None
+    source_memory_model_bias_flag: bool | None = None
+    source_memory_model_stack_num_layers: int | None = None
+    source_memory_model_stack_hidden_dim: int | None = None
+    source_memory_model_recurrent_max_steps: int | None = None
     source_memory_chunk_size: int | None = None
     source_memory_grouping_method: type[GroupingConfig] | None = None
     source_memory_grouping_model_config: ConfigBase | None = None
@@ -56,11 +66,35 @@ def build_source_memory_config(
     generator_config = options.source_memory_model_config
     if generator_config is None:
         generator_config = memory_config.model_config
+    generator_config = resolve_projection_model(
+        generator_config,
+        options.source_memory_model_option,
+        options.source_memory_model_bias_flag,
+        stack_num_layers=options.source_memory_model_stack_num_layers,
+        stack_hidden_dim=options.source_memory_model_stack_hidden_dim,
+        recurrent_max_steps=options.source_memory_model_recurrent_max_steps,
+    )
     return replace(
         memory_config,
         grouping_config=grouping_config,
         model_config=generator_config,
     )
+
+
+def scoped_source_memory_updates(updates: dict[str, Any]) -> dict[str, Any]:
+    resolved = dict(updates)
+    config = resolved.get("source_memory_config")
+    has_config_model = (
+        isinstance(config, AttentionSourceMemoryConfig)
+        and config.model_config is not None
+    )
+    prefer_scoped_projection_model(
+        resolved,
+        "source_memory",
+        has_scoped_model=resolved.get("source_memory_model_config") is not None
+        or has_config_model,
+    )
+    return resolved
 
 
 def _copy_memory_config(
