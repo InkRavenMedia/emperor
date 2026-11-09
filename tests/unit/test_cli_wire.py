@@ -691,7 +691,7 @@ class CliWireRoundTripTests(unittest.TestCase):
         inspection = _inspection_result()
         oversized_graph = replace(
             inspection,
-            nodes=(inspection.nodes[0],) * 8_193,
+            nodes=(inspection.nodes[0],) * 20_001,
         )
         cases = (
             (
@@ -707,7 +707,7 @@ class CliWireRoundTripTests(unittest.TestCase):
             (
                 inspection_result_to_wire,
                 oversized_graph,
-                r"\$\.nodes must contain at most 8192 items",
+                r"\$\.nodes must contain at most 20000 items",
             ),
         )
 
@@ -967,16 +967,16 @@ class CliWireRoundTripTests(unittest.TestCase):
         self,
     ) -> None:
         default_limits = InspectionWireLimits()
-        self.assertEqual(default_limits.maximum_graph_nodes, 8_192)
-        self.assertEqual(default_limits.maximum_graph_edges, 8_192)
-        self.assertEqual(default_limits.maximum_output_bytes, 16 * 1024**2)
+        self.assertEqual(default_limits.maximum_graph_nodes, 20_000)
+        self.assertEqual(default_limits.maximum_graph_edges, 20_000)
+        self.assertEqual(default_limits.maximum_output_bytes, 32 * 1024**2)
 
         result_payload = inspection_result_to_wire(_inspection_result())
         with self.assertRaisesRegex(
             WireCodecError,
-            r"\$\.nodes must contain at most 8192 items",
+            r"\$\.nodes must contain at most 20000 items",
         ):
-            inspection_result_from_wire({**result_payload, "nodes": [None] * 8_193})
+            inspection_result_from_wire({**result_payload, "nodes": [None] * 20_001})
 
         with (
             patch(

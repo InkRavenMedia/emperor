@@ -7,16 +7,19 @@ from typing import Any, cast
 
 from model_runtime.inspection.errors import InspectionError
 
+# The default expert ViT presets contain over 17,000 registered modules.
+_DEFAULT_GRAPH_ITEM_LIMIT = 20_000
+
 
 @dataclass(frozen=True, slots=True)
 class InspectionCaptureLimits:
     """Finite limits for graph and executed shape-trace capture."""
 
-    maximum_graph_modules: int = 8_192
-    maximum_graph_relationships: int = 8_192
+    maximum_graph_modules: int = _DEFAULT_GRAPH_ITEM_LIMIT
+    maximum_graph_relationships: int = _DEFAULT_GRAPH_ITEM_LIMIT
     maximum_graph_depth: int = 512
-    maximum_graph_nodes: int = 8_192
-    maximum_graph_edges: int = 8_192
+    maximum_graph_nodes: int = _DEFAULT_GRAPH_ITEM_LIMIT
+    maximum_graph_edges: int = _DEFAULT_GRAPH_ITEM_LIMIT
     maximum_configuration_fields: int = 512
     maximum_neuron_coordinates: int = 512
     maximum_terminal_connections: int = 1_024
@@ -28,7 +31,7 @@ class InspectionCaptureLimits:
     maximum_variable_events: int = 16_384
     maximum_tensor_observations: int = 65_536
     maximum_tensor_nesting_depth: int = 64
-    maximum_output_bytes: int = 16 * 1024**2
+    maximum_output_bytes: int = 32 * 1024**2
 
     def __post_init__(self) -> None:
         for limit_field in fields(self):

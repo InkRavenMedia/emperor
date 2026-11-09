@@ -434,9 +434,9 @@ assert semantic_module not in sys.modules
                 self.assertEqual(_estimated_output_bytes(value, 1_000), expected)
 
         default_limits = InspectionCaptureLimits()
-        self.assertEqual(default_limits.maximum_graph_nodes, 8_192)
-        self.assertEqual(default_limits.maximum_graph_edges, 8_192)
-        self.assertEqual(default_limits.maximum_output_bytes, 16 * 1024**2)
+        self.assertEqual(default_limits.maximum_graph_nodes, 20_000)
+        self.assertEqual(default_limits.maximum_graph_edges, 20_000)
+        self.assertEqual(default_limits.maximum_output_bytes, 32 * 1024**2)
 
         exact_capture = InspectionCapture(
             InspectionCaptureLimits(maximum_output_bytes=6)
