@@ -1442,12 +1442,11 @@ describe("WorkbenchApp Full Config", () => {
       "border",
       "border-line",
       "bg-panel-2/70",
-      "px-0",
-      "py-0",
       "shadow-card",
       "focus-within:z-30",
     );
     expect(layerSection).not.toHaveClass("overflow-hidden");
+    expect(layerSection).not.toHaveClass("px-panel");
     expect(layerSection).not.toHaveClass("rounded-[12px]", "bg-panel/80");
     expect(gateSection).toHaveClass(
       "grid",
@@ -1460,12 +1459,11 @@ describe("WorkbenchApp Full Config", () => {
       "border",
       "border-line-soft",
       "bg-white/[0.012]",
-      "px-0",
-      "py-0",
       "shadow-card-subtle",
       "focus-within:z-30",
     );
     expect(gateSection).not.toHaveClass("overflow-hidden");
+    expect(gateSection).not.toHaveClass("px-panel");
     expect(gateSection).not.toHaveClass("rounded-[12px]", "bg-panel/70");
     const sectionNav = within(dialog).getByRole("navigation", {
       name: /full config sections/i,

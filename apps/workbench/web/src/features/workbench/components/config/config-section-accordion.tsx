@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ConfigFieldControl } from "@/features/workbench/components/config/config-field-control";
 import { ConfigMetricBadge } from "@/features/workbench/components/config/config-metric-badge";
-import { surfacePanelClassName } from "@/components/ui/surface-panel";
+import { surfacePanelBaseClassName } from "@/components/ui/surface-panel";
 
 function sectionCountLabel(
   count: number,
@@ -395,8 +395,8 @@ export function ConfigSectionAccordion({
     <section
       ref={refCallback}
       className={cn(
-        surfacePanelClassName,
-        "relative overflow-visible px-0 py-0 shadow-card transition duration-150 hover:-translate-y-px hover:border-line hover:shadow-card-hover focus-within:z-30 focus-within:-translate-y-px focus-within:ring-2 focus-within:ring-focus motion-reduce:transform-none",
+        surfacePanelBaseClassName,
+        "relative gap-2 overflow-visible shadow-card transition duration-150 hover:-translate-y-px hover:border-line hover:shadow-card-hover focus-within:z-30 focus-within:-translate-y-px focus-within:ring-2 focus-within:ring-focus motion-reduce:transform-none",
         !isOpen &&
           "border-line-soft bg-white/[0.012] shadow-card-subtle",
         isDisabled && "hover:translate-y-0",
@@ -407,8 +407,8 @@ export function ConfigSectionAccordion({
         className={cn(
           "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-stretch overflow-hidden transition",
           isOpen
-            ? "bg-white/[0.055] hover:bg-white/[0.075]"
-            : "bg-white/[0.025] hover:bg-white/[0.055]",
+            ? "rounded-t-panel bg-white/[0.055] hover:bg-white/[0.075]"
+            : "rounded-panel bg-white/[0.025] hover:bg-white/[0.055]",
           isDisabled && "hover:bg-white/[0.025]",
           stateHeaderClass,
         )}
@@ -505,7 +505,7 @@ export function ConfigSectionAccordion({
         hidden={!isOpen}
         className={
           isOpen
-            ? "grid gap-3 border-t border-line-soft bg-black/[0.08] px-3 py-3"
+            ? "grid gap-3 rounded-b-panel border-t border-line-soft bg-black/[0.08] px-3 py-3"
             : "hidden"
         }
       >
