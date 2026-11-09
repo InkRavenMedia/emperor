@@ -393,27 +393,29 @@ export function LogsSidebar({ browser, deletion }: LogsSidebarProps) {
                 onAll={selectAllTags}
                 onNone={selectNoTags}
                 beforeDropdown={
-                  pagination.scalarTags.canLoadMore ? (
+                  pagination.scalarTags.loadedRuns < pagination.scalarTags.totalRuns ? (
                     <div className="grid gap-2 rounded-panel border border-line-soft bg-panel-2/70 p-panel">
                       <div className="text-xs text-ink-faint">
                         Scalar tags scanned for {pagination.scalarTags.loadedRuns} of{" "}
                         {pagination.scalarTags.totalRuns} visible runs
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-touch border border-line bg-panel-2/80 type-compact md:h-control"
-                        onClick={actions.loadMoreScalarTags}
-                        disabled={pagination.scalarTags.isLoadingMore}
-                      >
-                        {pagination.scalarTags.isLoadingMore && (
-                          <Loader2
-                            className="mr-2 h-3.5 w-3.5 animate-spin"
-                            aria-hidden
-                          />
-                        )}
-                        Load More Scalar Tags
-                      </Button>
+                      {(pagination.scalarTags.canLoadMore || pagination.scalarTags.isLoadingMore) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-touch border border-line bg-panel-2/80 type-compact md:h-control"
+                          onClick={actions.loadMoreScalarTags}
+                          disabled={pagination.scalarTags.isLoadingMore}
+                        >
+                          {pagination.scalarTags.isLoadingMore && (
+                            <Loader2
+                              className="mr-2 h-3.5 w-3.5 animate-spin"
+                              aria-hidden
+                            />
+                          )}
+                          Load More Scalar Tags
+                        </Button>
+                      )}
                     </div>
                   ) : undefined
                 }

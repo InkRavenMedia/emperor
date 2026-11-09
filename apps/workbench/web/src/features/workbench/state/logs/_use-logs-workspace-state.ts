@@ -984,6 +984,18 @@ function useLogsWorkspaceImplementation({
     [scalarTagRunIds, tagsEnabled],
   );
   const scalarTagWindowQueries = useLogTagQueries(scalarTagWindowInputs);
+  const scannedScalarTagRunIds = new Set<string>();
+  scalarTagWindowQueries.forEach((query, index) => {
+    if (!query.data || query.isPlaceholderData) {
+      return;
+    }
+    const requestedRunIds = new Set(scalarTagWindowInputs[index].runIds);
+    for (const run of query.data.runs) {
+      if (requestedRunIds.has(run.runId)) {
+        scannedScalarTagRunIds.add(run.runId);
+      }
+    }
+  });
   const scalarTagWindowPages = scalarTagWindowQueries
     .map((query) => query.data)
     .filter((page): page is NonNullable<typeof page> => Boolean(page));
@@ -1363,6 +1375,7 @@ function useLogsWorkspaceImplementation({
       void runPagesQuery.fetchNextPage();
     },
     loadedScalarTagRunCount: scalarTagRunIds.length,
+    scannedScalarTagRunCount: scannedScalarTagRunIds.size,
     totalScalarTagRunCount: visibleRunIds.length,
     canLoadMoreScalarTags:
       enabled && scalarTagRunIds.length < visibleRunIds.length,
@@ -1648,7 +1661,7 @@ function logsBrowserProjection(state: LogsWorkspaceImplementation): LogsBrowser 
         isLoadingMore: state.isLoadingMoreRuns,
       },
       scalarTags: {
-        loadedRuns: state.loadedScalarTagRunCount,
+        loadedRuns: state.scannedScalarTagRunCount,
         totalRuns: state.totalScalarTagRunCount,
         canLoadMore: state.canLoadMoreScalarTags,
         isLoadingMore: state.isLoadingMoreScalarTags,

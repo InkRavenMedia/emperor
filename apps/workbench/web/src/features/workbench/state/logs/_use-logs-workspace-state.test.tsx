@@ -456,16 +456,13 @@ describe("Logs workspace state", () => {
         });
       },
     );
+    const nextTagWindow = deferred<{ runs: LogRunTags[] }>();
     mocks.fetchLogTags.mockImplementation(({ runIds }: { runIds: string[] }) =>
-      Promise.resolve({
-        runs: runIds.map((runId) => ({
-          runId,
-          scalarTags: ["train/loss"],
-          histogramTags: [],
-          imageTags: [],
-          textTags: [],
-        })),
-      }),
+      runIds.includes(runs[100].id)
+        ? nextTagWindow.promise
+        : Promise.resolve({
+            runs: runIds.map((runId) => logRunTags(runId, ["train/loss"])),
+          }),
     );
 
     const { result } = renderLogsWorkspaceState();
@@ -530,7 +527,9 @@ describe("Logs workspace state", () => {
         expect.any(Object),
       );
     });
-    expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    await waitFor(() => {
+      expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    });
     expect(result.current.browser.pagination.scalarTags.totalRuns).toBe(105);
     expect(result.current.browser.pagination.scalarTags.canLoadMore).toBe(true);
 
@@ -553,6 +552,13 @@ describe("Logs workspace state", () => {
         { runIds: runs.slice(100).map((run) => run.id) },
         expect.any(Object),
       );
+      expect(result.current.browser.pagination.scalarTags.isLoadingMore).toBe(true);
+    });
+    expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    await act(async () => {
+      nextTagWindow.resolve({
+        runs: runs.slice(100).map((run) => logRunTags(run.id, ["train/loss"])),
+      });
     });
     await waitFor(() => {
       expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(105);
