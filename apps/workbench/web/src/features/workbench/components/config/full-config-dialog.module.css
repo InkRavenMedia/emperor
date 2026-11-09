@@ -1,0 +1,32 @@
+.shell::before {
+  z-index: 20;
+}
+
+.chrome {
+  position: relative;
+  background: var(--gradient-dialog-chrome);
+  box-shadow: var(--elevation-control);
+}
+
+.header::after,
+.footer::before {
+  content: "";
+  position: absolute;
+  right: 1px;
+  left: 1px;
+  height: 1px;
+  pointer-events: none;
+  background: var(--color-line);
+}
+
+.header::after {
+  bottom: 0;
+}
+
+.footer::before {
+  top: 0;
+}
+
+.body {
+  background: var(--gradient-dialog-body);
+}

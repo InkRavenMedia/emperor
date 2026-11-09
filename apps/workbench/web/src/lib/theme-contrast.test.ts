@@ -88,7 +88,9 @@ function productionComponentSources(directory: URL): AuditSource[] {
     if (entry.isDirectory()) {
       return productionComponentSources(resource);
     }
-    if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.")) {
+    const isComponentSource =
+      entry.name.endsWith(".tsx") && !entry.name.includes(".test.");
+    if (!isComponentSource && !entry.name.endsWith(".module.css")) {
       return [];
     }
     return [{ path: fileURLToPath(resource), source: readFileSync(resource, "utf8") }];

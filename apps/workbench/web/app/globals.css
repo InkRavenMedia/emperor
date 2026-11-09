@@ -243,39 +243,6 @@ select option {
   pointer-events: none;
 }
 
-.full-config-dialog-shell::before {
-  z-index: 20;
-}
-
-.full-config-dialog-chrome {
-  position: relative;
-  background: var(--gradient-dialog-chrome);
-  box-shadow: var(--elevation-control);
-}
-
-.full-config-dialog-header::after,
-.full-config-dialog-footer::before {
-  content: "";
-  position: absolute;
-  right: 1px;
-  left: 1px;
-  height: 1px;
-  pointer-events: none;
-  background: var(--color-line);
-}
-
-.full-config-dialog-header::after {
-  bottom: 0;
-}
-
-.full-config-dialog-footer::before {
-  top: 0;
-}
-
-.full-config-dialog-body {
-  background: var(--gradient-dialog-body);
-}
-
 .edge-sel {
   background: var(--gradient-selected);
   border-color: var(--color-accent-line);

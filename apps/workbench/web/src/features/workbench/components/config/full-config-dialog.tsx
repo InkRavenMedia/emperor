@@ -31,6 +31,7 @@ import {
   type FullConfigDialogScope,
 } from "@/features/workbench/state/use-workbench-workspace-shell";
 import { cn } from "@/lib/utils";
+import styles from "./full-config-dialog.module.css";
 
 export function FullConfigDialog({
   mode = "default",
@@ -161,9 +162,15 @@ export function FullConfigDialog({
       panelVariant="surface"
       titleId="full-config-title"
       onClose={closeFullConfig}
-      panelClassName="full-config-dialog-shell"
+      panelClassName={styles.shell}
       header={
-        <header className="full-config-dialog-chrome full-config-dialog-header sticky top-0 z-10 border-b border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell">
+        <header
+          className={cn(
+            styles.chrome,
+            styles.header,
+            "top-0 z-10 border-b border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell",
+          )}
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h2
@@ -220,7 +227,13 @@ export function FullConfigDialog({
         </header>
       }
       footer={
-        <footer className="full-config-dialog-chrome full-config-dialog-footer sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell">
+        <footer
+          className={cn(
+            styles.chrome,
+            styles.footer,
+            "bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell",
+          )}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
@@ -336,7 +349,12 @@ export function FullConfigDialog({
         </>
       }
     >
-      <div className="full-config-dialog-body min-h-0 flex-1 overflow-y-auto p-region sm:px-shell">
+      <div
+        className={cn(
+          styles.body,
+          "min-h-0 flex-1 overflow-y-auto p-region sm:px-shell",
+        )}
+      >
         {isLoading ? (
           <InlineStatus busy>
             {workbenchStatusCopy.loading.configSchema}

@@ -1373,7 +1373,7 @@ describe("WorkbenchApp Full Config", () => {
     await user.click(await waitForOpenFullConfigButton());
     const dialog = await screen.findByRole("dialog", { name: /full configuration/i });
     const dialogHeader = dialog.querySelector("header");
-    const dialogBody = dialog.querySelector(".full-config-dialog-body");
+    const dialogBody = dialogHeader?.nextElementSibling;
     const dialogFooter = dialog.querySelector("footer");
     const layerAccordion = within(dialog).getByRole("button", {
       name: /layer hidden stack options section, 3 fields, 0 overrides/i,
@@ -1399,27 +1399,21 @@ describe("WorkbenchApp Full Config", () => {
     }
 
     expect(dialog).toHaveClass(
-      "full-config-dialog-shell",
       "rounded-dialog",
       "border",
       "border-line-hover",
       "bg-panel",
     );
     expect(dialog).not.toHaveClass("edge", "rounded-card", "bg-white/[0.018]");
-    expect(dialogHeader).toHaveClass(
-      "full-config-dialog-chrome",
-      "full-config-dialog-header",
-      "border-line-soft",
-    );
+    expect(dialogHeader).toHaveClass("border-line-soft");
+    expect(dialogHeader).toContainElement(closeButton);
     expect(dialogHeader).not.toHaveClass("bg-panel/85");
     expect(dialogHeader).not.toHaveClass("border-line");
-    expect(dialogBody).toHaveClass("full-config-dialog-body");
+    expect(dialogBody).toHaveClass("overflow-y-auto");
+    expect(dialogBody).toContainElement(layerAccordion);
+    expect(dialogBody.nextElementSibling).toBe(dialogFooter);
     expect(dialogBody).not.toHaveClass("bg-bg-2/80");
-    expect(dialogFooter).toHaveClass(
-      "full-config-dialog-chrome",
-      "full-config-dialog-footer",
-      "border-line-soft",
-    );
+    expect(dialogFooter).toHaveClass("border-line-soft");
     expect(dialogFooter).not.toHaveClass("bg-panel/85");
     expect(dialogFooter).not.toHaveClass("border-line");
     expect(closeButton).toHaveClass("border-line-soft", "bg-white/[0.025]");
