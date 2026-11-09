@@ -253,7 +253,16 @@ export function useTrainingPlanState({
     ],
   );
   const snapshotPlanQuery = useQuery({
-    queryKey: ["training-config-snapshot-run-plan", snapshotPlanInput],
+    queryKey: [
+      "training-config-snapshot-run-plan",
+      snapshotPlanInput,
+      modelPackage.selectedSnapshots.map(({ id, name, preset, overrides }) => ({
+        id,
+        name,
+        preset,
+        overrides,
+      })),
+    ],
     queryFn: ({ signal }) => {
       if (!snapshotPlanInput) {
         throw new Error("Config Snapshot Run Plan input is not ready.");
