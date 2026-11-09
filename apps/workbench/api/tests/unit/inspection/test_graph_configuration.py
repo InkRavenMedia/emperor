@@ -241,6 +241,17 @@ class InspectionGraphConfigurationTests(unittest.TestCase):
 
         self.assertEqual(root["details"]["gateOption"], "MULTIPLIER")
         self.assertTrue(root["details"]["gate"])
+        self.assertEqual(root["config"]["typeName"], "LayerConfig")
+        node_by_id = nodes_by_id(nodes)
+        for delegate in (
+            "postprocessing",
+            "halting",
+            "memory",
+            "residual",
+            "normalization",
+        ):
+            with self.subTest(delegate=delegate):
+                self.assertIsNone(node_by_id[delegate]["config"])
 
     def test_graph_serializer_reports_recurrent_gate_option_details(self) -> None:
         block_config = LayerConfig(

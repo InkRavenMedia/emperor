@@ -6,8 +6,8 @@
   },
   "graphs": {
     "simple-baseline": {
-      "sha256": "9934a496401da91a94202f1c0aa19b8d566ce7f8559b0fdc5359a8057d0770e5",
-      "bytes": 103773,
+      "sha256": "a9412835ce90f24c069aa071a478fd127868801781ea72ad45fe35dfa1d0cc27",
+      "bytes": 47833,
       "model": "linears/linear",
       "preset": "baseline",
       "dataset": "Mnist",
@@ -16,8 +16,8 @@
       "edgeCount": 64
     },
     "simple-gating": {
-      "sha256": "360a0aa4d2c6743261e2cab624b70d1669f806796e9955f948c4ff1d816703ac",
-      "bytes": 281437,
+      "sha256": "1e1e309096bb2f027cb59368490f1a676af8affcd6b5719e2dcef13d65223234",
+      "bytes": 145297,
       "model": "linears/linear",
       "preset": "gating",
       "dataset": "FashionMNIST",
@@ -26,8 +26,8 @@
       "edgeCount": 154
     },
     "adaptive-full-stack": {
-      "sha256": "6f3420a6b8a973896795407da008d151d146807d234dc07a269c7e1306b6dd9b",
-      "bytes": 1301269,
+      "sha256": "a2e3bf2d6fbbafd24128eef0010bd478e5ae6c61d9fc96715089cdd33ffd70ea",
+      "bytes": 764164,
       "model": "linears/linear_adaptive",
       "preset": "full-stack",
       "dataset": "Cifar10",
@@ -36,8 +36,8 @@
       "edgeCount": 634
     },
     "bert-task": {
-      "sha256": "5efc65d3614681bf5cf6deda4fe86e284af734de5e8ddf8e02e223c7f2f4cbb8",
-      "bytes": 900996,
+      "sha256": "66ae4217c903612201b3c9229a6cce59b586b7848b9a1ed0a31be436091fcf2c",
+      "bytes": 534971,
       "model": "bert/linear",
       "preset": "baseline",
       "dataset": "PennTreebankBertPretraining",
@@ -46,8 +46,8 @@
       "edgeCount": 424
     },
     "gpt-task": {
-      "sha256": "6473045847723ef0f1d5aca8933888a3d644e5961ea8af587850b954a7549b69",
-      "bytes": 913913,
+      "sha256": "f7b49b1fa3bdd254b45eb40f3d80a7187fb9c068583074663c773055ab164298",
+      "bytes": 547663,
       "model": "gpt/linear",
       "preset": "baseline",
       "dataset": "WikiText2",
@@ -56,8 +56,8 @@
       "edgeCount": 442
     },
     "translation-task": {
-      "sha256": "eb5bdcbcce18b32bff47d52f3acb9c29aaf6cc1025bbf07164b79f444af9f0fc",
-      "bytes": 1415435,
+      "sha256": "e70144c347c0aff439e2a31af35084889081d9fb2188b44eba46679f36ce9b62",
+      "bytes": 854780,
       "model": "transformer/linear",
       "preset": "baseline",
       "dataset": "Multi30kDeEn",
