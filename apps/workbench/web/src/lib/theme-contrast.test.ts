@@ -109,6 +109,7 @@ const productionAuditSources = [
     new URL("../features/workbench/components/", import.meta.url),
   ),
   auditSource(new URL("../../app/globals.css", import.meta.url)),
+  auditSource(new URL("../components/ui/control-styles.ts", import.meta.url)),
   auditSource(new URL("../../tailwind.config.ts", import.meta.url)),
   auditSource(new URL("./visual-tokens.ts", import.meta.url)),
   auditSource(new URL("./charts.ts", import.meta.url)),

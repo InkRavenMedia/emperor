@@ -13,6 +13,8 @@ import {
   checkboxUncheckedClassName,
   dropdownOptionClassName,
   dropdownOptionStateClassName,
+  dropdownSearchInputClassName,
+  dropdownSearchLabelClassName,
   multiSelectTriggerClassName,
   selectTriggerActiveClassName,
 } from "@/components/ui/control-styles";
@@ -265,10 +267,7 @@ export function MultiSelectDropdown({
         <DropdownShell
           className="grid max-h-[320px] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
           searchSlot={
-            <label
-              htmlFor={searchId}
-              className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-line-soft px-3 py-2 transition-colors focus-within:bg-control-active focus-within:ring-2 focus-within:ring-inset focus-within:ring-focus"
-            >
+            <label htmlFor={searchId} className={dropdownSearchLabelClassName}>
               <Search className="h-4 w-4 text-ink-faint" aria-hidden />
               <input
                 ref={searchRef}
@@ -288,7 +287,7 @@ export function MultiSelectDropdown({
                 aria-activedescendant={activeOptionId}
                 autoComplete="off"
                 spellCheck={false}
-                className="h-8 min-w-0 bg-transparent font-sans text-sm font-semibold text-ink outline-none placeholder:text-ink-faint"
+                className={dropdownSearchInputClassName}
               />
             </label>
           }
