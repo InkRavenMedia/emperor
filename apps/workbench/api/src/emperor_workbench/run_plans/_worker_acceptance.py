@@ -432,6 +432,51 @@ def _validate_authoritative_metadata(
                 )
 
 
+def _validate_row_projection(
+    raw_row: Mapping[str, Any],
+    expected_row: dict[str, Any],
+    *,
+    index: int,
+) -> None:
+    for field_name in ("snapshotId", "snapshotName"):
+        if field_name in raw_row:
+            raw_value = raw_row.get(field_name)
+            if raw_value is not None and not isinstance(raw_value, str):
+                raise ValueError(
+                    f"Run plan row {index} {field_name} must be a string or null."
+                )
+            expected_row[field_name] = raw_value
+    raw_total_epochs = raw_row.get("totalEpochs")
+    if (
+        isinstance(raw_total_epochs, bool)
+        or not isinstance(raw_total_epochs, int)
+        or raw_total_epochs != expected_row["totalEpochs"]
+    ):
+        raise ValueError(
+            f"Run plan row {index} total epochs do not match its "
+            "accepted Runtime Defaults."
+        )
+    if dict(raw_row) != expected_row:
+        differing_fields = sorted(
+            field_name
+            for field_name in set(raw_row) | set(expected_row)
+            if raw_row.get(field_name) != expected_row.get(field_name)
+            or (field_name in raw_row) != (field_name in expected_row)
+        )
+        command_projection_fields = {
+            "commandArgv",
+            "commands",
+        }
+        if set(differing_fields).issubset(command_projection_fields):
+            raise ValueError(
+                f"Run plan log folder or monitors do not match its row {index} command."
+            )
+        raise ValueError(
+            f"Run plan row {index} projection does not match its "
+            f"accepted Run: {', '.join(differing_fields)}."
+        )
+
+
 def _planning_budget() -> PlanningBudget:
     return PlanningBudget(
         max_axes=MAX_TRAINING_SEARCH_AXES,
@@ -583,45 +628,7 @@ class RunPlanWorkerAcceptance:
                     search=semantic_plan.search_for_preset(semantic_run.preset),
                 )
             )
-            for field_name in ("snapshotId", "snapshotName"):
-                if field_name in raw_row:
-                    raw_value = raw_row.get(field_name)
-                    if raw_value is not None and not isinstance(raw_value, str):
-                        raise ValueError(
-                            f"Run plan row {index} {field_name} must be a string "
-                            "or null."
-                        )
-                    expected_row[field_name] = raw_value
-            raw_total_epochs = raw_row.get("totalEpochs")
-            if (
-                isinstance(raw_total_epochs, bool)
-                or not isinstance(raw_total_epochs, int)
-                or raw_total_epochs != expected_row["totalEpochs"]
-            ):
-                raise ValueError(
-                    f"Run plan row {index} total epochs do not match its "
-                    "accepted Runtime Defaults."
-                )
-            if dict(raw_row) != expected_row:
-                differing_fields = sorted(
-                    field_name
-                    for field_name in set(raw_row) | set(expected_row)
-                    if raw_row.get(field_name) != expected_row.get(field_name)
-                    or (field_name in raw_row) != (field_name in expected_row)
-                )
-                command_projection_fields = {
-                    "commandArgv",
-                    "commands",
-                }
-                if set(differing_fields).issubset(command_projection_fields):
-                    raise ValueError(
-                        "Run plan log folder or monitors do not match its "
-                        f"row {index} command."
-                    )
-                raise ValueError(
-                    f"Run plan row {index} projection does not match its "
-                    f"accepted Run: {', '.join(differing_fields)}."
-                )
+            _validate_row_projection(raw_row, expected_row, index=index)
             expected_rows.append(expected_row)
 
         expected_plan = _plan_to_payload(
