@@ -14,6 +14,7 @@ import {
   type LogRunDeleteResponse,
 } from "@/lib/api/deletion";
 import { type ChecklistOption } from "@/features/workbench/state/logs/logs-selectors";
+import { useLogQueryCache } from "@/features/workbench/state/logs/use-log-query-cache";
 
 type LogsDeletePhase =
   | "planning"
@@ -104,6 +105,7 @@ export function useLogsDeletionState({
   selectedExperiments,
   onExperimentDeleted,
   onRunsDeleted,
+  onMutationFailed,
 }: {
   active: boolean;
   enabled: boolean;
@@ -113,7 +115,9 @@ export function useLogsDeletionState({
     result: LogRunDeleteResponse,
     target: LogsSubsetDeleteTarget,
   ) => void;
+  onMutationFailed: (experiment: string) => void;
 }): LogsDeletionImplementation {
+  const { refreshLogs } = useLogQueryCache();
   const [operation, setOperation] = useState<InternalOperation | null>(null);
   const operationRef = useRef<InternalOperation | null>(null);
   const revisionRef = useRef(0);
@@ -171,6 +175,8 @@ export function useLogsDeletionState({
     const current = operationRef.current;
     if (
       current?.kind !== "preset" ||
+      current.phase === "mutating" ||
+      current.phase === "mutationFailed" ||
       current.target.experiment === presetTargetExperiment
     ) {
       return;
@@ -317,6 +323,13 @@ export function useLogsDeletionState({
         publish(null);
       }
     } catch (error) {
+      if (connectionGenerationRef.current === connectionGeneration) {
+        // A filesystem failure can arrive after some Runs have been removed.
+        onMutationFailed(
+          current.kind === "experiment" ? current.option.value : current.target.experiment,
+        );
+        void refreshLogs();
+      }
       if (
         revisionRef.current === revision &&
         connectionGenerationRef.current === connectionGeneration
@@ -325,7 +338,16 @@ export function useLogsDeletionState({
       }
       throw error;
     }
-  }, [enabled, experimentMutation, onExperimentDeleted, onRunsDeleted, publish, subsetMutation]);
+  }, [
+    enabled,
+    experimentMutation,
+    onExperimentDeleted,
+    onMutationFailed,
+    onRunsDeleted,
+    publish,
+    refreshLogs,
+    subsetMutation,
+  ]);
 
   const publicOperation: LogsDeletionOperation | null = operation
     ? operation.kind === "preset"

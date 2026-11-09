@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LogRun } from "@/lib/api/logs";
+import { logQueryKeys, monitorQueryKeys } from "@/lib/query-keys";
 
 const mocks = vi.hoisted(() => ({
   createMutationRequestOptions: vi.fn(),
@@ -87,6 +88,7 @@ function renderDeletion(
 ) {
   const onExperimentDeleted = vi.fn();
   const onRunsDeleted = vi.fn();
+  const onMutationFailed = vi.fn();
   const props = {
     active: true,
     enabled: true,
@@ -102,6 +104,7 @@ function renderDeletion(
         ...currentProps,
         onExperimentDeleted,
         onRunsDeleted,
+        onMutationFailed,
       }),
     {
       initialProps: props,
@@ -109,7 +112,7 @@ function renderDeletion(
         createElement(QueryClientProvider, { client }, children),
     },
   );
-  return { ...rendered, onExperimentDeleted, onRunsDeleted };
+  return { ...rendered, client, onExperimentDeleted, onRunsDeleted, onMutationFailed };
 }
 
 beforeEach(() => {
@@ -213,11 +216,21 @@ describe("Logs deletion lifecycle", () => {
   });
 
   it("retains a frozen plan across mutation failure and retry", async () => {
+    const partialError = new Error("Could not delete the second Run");
     mocks.createPlan.mockResolvedValue(plan);
     mocks.deleteRuns
-      .mockRejectedValueOnce(new Error("delete unavailable"))
+      .mockRejectedValueOnce(partialError)
       .mockResolvedValueOnce(deleteResult);
-    const { result, onRunsDeleted } = renderDeletion();
+    const { result, client, onRunsDeleted, onMutationFailed } = renderDeletion();
+    const historicalKeys = [
+      logQueryKeys.runs(),
+      logQueryKeys.artifactsForRun(run.id),
+      monitorQueryKeys.historicalRun(run.id, "model.layer"),
+      monitorQueryKeys.historicalParameterStatus([run.id]),
+    ];
+    for (const key of historicalKeys) {
+      client.setQueryData(key, "before delete");
+    }
 
     act(() => {
       result.current.actions.openPreset({
@@ -236,8 +249,14 @@ describe("Logs deletion lifecycle", () => {
         failure = error;
       }
     });
-    expect(failure).toEqual(expect.objectContaining({ message: "delete unavailable" }));
+    expect(failure).toBe(partialError);
     expect(result.current.operation?.phase).toBe("mutationFailed");
+    expect(result.current.operation?.error).toBe(partialError);
+    expect(onRunsDeleted).not.toHaveBeenCalled();
+    expect(onMutationFailed).toHaveBeenCalledWith("exp_a");
+    for (const key of historicalKeys) {
+      expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+    }
 
     await act(async () => result.current.actions.confirm());
 
@@ -289,7 +308,7 @@ describe("Logs deletion lifecycle", () => {
     expect(rendered.onRunsDeleted).toHaveBeenCalledTimes(1);
   });
 
-  it("quarantines an issued mutation result after the connection changes", async () => {
+  it.each(["success", "failure"] as const)("quarantines late deletion %s after the connection changes", async (outcome) => {
     const pendingDelete = deferred<typeof deleteResult>();
     mocks.createPlan.mockResolvedValue(plan);
     mocks.deleteRuns.mockReturnValue(pendingDelete.promise);
@@ -313,11 +332,23 @@ describe("Logs deletion lifecycle", () => {
 
     act(() => rendered.result.current.clearForConnectionChange());
     expect(rendered.result.current.operation).toBeNull();
+    const newConnectionKey = monitorQueryKeys.historicalParameterStatus([run.id]);
+    rendered.client.setQueryData(newConnectionKey, "new backend data");
 
-    await act(async () => pendingDelete.resolve(deleteResult));
-    await mutation;
+    await act(async () => {
+      if (outcome === "success") {
+        pendingDelete.resolve(deleteResult);
+        await mutation;
+      } else {
+        const failure = new Error("old backend partial mutation");
+        pendingDelete.reject(failure);
+        await expect(mutation).rejects.toBe(failure);
+      }
+    });
     expect(rendered.onRunsDeleted).not.toHaveBeenCalled();
     expect(rendered.onExperimentDeleted).not.toHaveBeenCalled();
+    expect(rendered.onMutationFailed).not.toHaveBeenCalled();
     expect(rendered.result.current.operation).toBeNull();
+    expect(rendered.client.getQueryState(newConnectionKey)?.isInvalidated).toBe(false);
   });
 });
