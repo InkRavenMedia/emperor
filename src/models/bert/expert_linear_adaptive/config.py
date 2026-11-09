@@ -94,7 +94,7 @@ from emperor.memory import (
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory as _source_memory
+from models import _attention_source_memory, _bert_embedding, _component_defaults
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -172,13 +172,6 @@ EMBEDDING_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
 EMBEDDING_DROPOUT_PROBABILITY: float = STACK_DROPOUT_PROBABILITY
 HIERARCHICAL_EMBEDDING_CONFIG: HierarchicalByteEmbeddingConfig | None = None
 CONTEXTUAL_EMBEDDING_CONFIG: ByteContextualEmbeddingConfig | None = None
-# Build the standard byte encoder when no explicit embedding config is supplied.
-HIERARCHICAL_EMBEDDING_FLAG: bool = False
-HIERARCHICAL_BYTE_EMBEDDING_DIM: int = 32
-HIERARCHICAL_BYTE_ENCODER_NUM_LAYERS: int = 1
-HIERARCHICAL_BYTE_FEED_FORWARD_DIM: int = 64
-HIERARCHICAL_BYTE_NUM_HEADS: int = 4
-HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
 
 #########################################################################
 # MASKED-LANGUAGE-MODELING HEAD
@@ -457,19 +450,19 @@ ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
 ATTN_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 #########################################################################
-### Attention Projection Memory Options
+### Attention Source Memory Options
 # Temporary memory tokens appended to attention keys and values.
 ATTN_SOURCE_MEMORY_FLAG: bool = False
-ATTN_SOURCE_MEMORY_CONFIG: _source_memory.AttentionSourceMemoryConfig | None = None
-ATTN_SOURCE_MEMORY_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_CONFIG: _attention_source_memory.AttentionSourceMemoryConfig | None = None
+ATTN_SOURCE_MEMORY_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
 ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
-ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_source_memory.GroupingConfig] | None = None
-ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_attention_source_memory.GroupingConfig] | None = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
 ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
-    _source_memory.SummaryNormalizationOptions | None
+    _attention_source_memory.SummaryNormalizationOptions | None
 ) = None
 ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: float | None = None
-
+### Attention Projection Memory Options
 ATTN_MEMORY_FLAG: bool = False
 ATTN_MEMORY_OPTION: type[DynamicMemoryConfig] = MEMORY_OPTION
 ATTN_MEMORY_POSITION_OPTION: MemoryPositionOptions = MEMORY_POSITION_OPTION
@@ -1363,11 +1356,6 @@ ROUTER_MASK_GENERATOR_STACK_BIAS_FLAG: bool | None = None
 
 RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields(
     "HIDDEN_DIM",
-    "HIERARCHICAL_BYTE_EMBEDDING_DIM",
-    "HIERARCHICAL_BYTE_ENCODER_NUM_LAYERS",
-    "HIERARCHICAL_BYTE_FEED_FORWARD_DIM",
-    "HIERARCHICAL_BYTE_NUM_HEADS",
-    "HIERARCHICAL_MAX_TOKEN_BYTES",
     "SOFT_MOE_SLOTS_PER_EXPERT",
     "SOFT_MOE_SCORING_HIDDEN_DIM",
     "SOFT_MOE_SCORING_NUM_LAYERS",
@@ -1682,6 +1670,7 @@ FF_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 FF_GROUPING_RMS_NORM_EPSILON: float | None = None
 
 declare_soft_moe_runtime_defaults(globals())
+_bert_embedding.declare_runtime_defaults(globals())
 
 
 # Sequence Expansion
@@ -1694,3 +1683,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | TextSinusoidalPositionalEmbeddingConfig
     | None
 ) = None
+
+_component_defaults.declare_component_defaults(globals())

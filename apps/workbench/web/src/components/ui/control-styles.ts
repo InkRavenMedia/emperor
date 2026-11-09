@@ -48,6 +48,12 @@ export const multiSelectTriggerClassName = [
 export const selectTriggerActiveClassName =
   "border-violet/55 bg-accent-soft shadow-control-selected";
 
+export const dropdownSearchLabelClassName =
+  "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 border-b border-line-soft px-3 py-2 transition-colors focus-within:bg-control-active focus-within:ring-2 focus-within:ring-inset focus-within:ring-focus";
+
+export const dropdownSearchInputClassName =
+  "h-8 min-w-0 bg-transparent font-sans text-sm font-semibold text-ink outline-none placeholder:text-ink-faint";
+
 export const dropdownOptionClassName = [
   "min-h-touch w-full min-w-0 border-b border-line-soft px-3 py-2.5 text-left type-body font-semibold [content-visibility:auto] [contain-intrinsic-size:44px] md:min-h-control-lg",
   "transition-colors duration-150 last:border-b-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus",

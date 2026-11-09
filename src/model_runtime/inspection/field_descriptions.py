@@ -4,6 +4,21 @@ from dataclasses import dataclass
 from typing import Any
 
 EXPLICIT_FIELD_DESCRIPTIONS = {
+    "ATTN_SOURCE_MEMORY_FLAG": (
+        "Enables memory embeddings generated from grouped source chunks. "
+        "Set a chunk size to control how many source tokens each embedding summarizes."
+    ),
+    "ATTN_SOURCE_MEMORY_MODEL_OPTION": (
+        "Selects the generator that turns each grouped source chunk into a memory "
+        "embedding. Choose a linear projection, a linear stack, or a recurrent linear layer."
+    ),
+    "ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG": (
+        "Sets whether the linear source-memory generator includes a bias term."
+    ),
+    "ATTN_SOURCE_MEMORY_GROUPING_MODEL_OPTION": (
+        "Selects the scorer for attention grouping or the statistics projection for "
+        "mean/std grouping. Choose LINEAR for either learned grouping method."
+    ),
     "SEQUENCE_EXPANSION_FLAG": (
         "Enables count prediction and latent-token expansion before each transformer "
         "block invocation, including supported recurrent passes. Defaults to false."
@@ -17,13 +32,35 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
         "from 1 through this value; it is not an overall sequence-length limit."
     ),
     "SEQUENCE_EXPANSION_MODEL_CONFIG": (
-        "Supplies the required count-predictor configuration as structured JSON. "
-        "Input width and output count are inferred from the block and per-call maximum."
+        "Preserves a structured count-predictor configuration from an existing setup. "
+        "Use the model option and bias flag to configure a linear predictor."
+    ),
+    "SEQUENCE_EXPANSION_MODEL_OPTION": (
+        "Selects the count predictor. Linear and adaptive predictors can use one layer "
+        "or a stack. The block supplies the input width and output count."
+    ),
+    "SEQUENCE_EXPANSION_MODEL_BIAS_FLAG": (
+        "Sets whether the count predictor includes bias. Adaptive predictors require bias."
     ),
     "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG": (
         "Optionally supplies learned or sinusoidal text positions for generated tokens "
         "as structured JSON. None leaves positions disabled unless the complete "
         "expansion configuration supplies them."
+    ),
+    "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_OPTION": (
+        "Selects learned or sinusoidal positions for newly generated tokens. "
+        "Choose DISABLED to override inherited positions on a stack."
+    ),
+    "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS": (
+        "Sets the initial positional table capacity for generated tokens."
+    ),
+    "HIERARCHICAL_EMBEDDING_FLAG": (
+        "Enables the hierarchical byte encoder. For BERT, turn off MLM decoder "
+        "weight tying to use this embedding."
+    ),
+    "CONTEXTUAL_EMBEDDING_FLAG": (
+        "Enables contextual byte embeddings. For BERT, turn off MLM decoder "
+        "weight tying to use this embedding."
     ),
     "BATCH_SIZE": (
         "Sets the number of examples processed in each training batch. Larger "
@@ -501,9 +538,12 @@ def config_field_description(
     """Return practical help text for a public config field."""
 
     description_key = key
-    for prefix in ("ENCODER_", "DECODER_"):
-        if key.startswith(f"{prefix}SEQUENCE_EXPANSION_"):
-            description_key = key.removeprefix(prefix)
+    for prefix in ("ENCODER_", "DECODER_", "DECODER_SELF_", "DECODER_CROSS_"):
+        unscoped_key = key.removeprefix(prefix)
+        if key != unscoped_key and unscoped_key.startswith(
+            ("SEQUENCE_EXPANSION_", "ATTN_SOURCE_MEMORY_")
+        ):
+            description_key = unscoped_key
             break
     explicit_description = EXPLICIT_FIELD_DESCRIPTIONS.get(description_key)
     if explicit_description is not None:

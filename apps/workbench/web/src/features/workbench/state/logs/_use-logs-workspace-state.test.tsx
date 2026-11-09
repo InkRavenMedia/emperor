@@ -456,16 +456,13 @@ describe("Logs workspace state", () => {
         });
       },
     );
+    const nextTagWindow = deferred<{ runs: LogRunTags[] }>();
     mocks.fetchLogTags.mockImplementation(({ runIds }: { runIds: string[] }) =>
-      Promise.resolve({
-        runs: runIds.map((runId) => ({
-          runId,
-          scalarTags: ["train/loss"],
-          histogramTags: [],
-          imageTags: [],
-          textTags: [],
-        })),
-      }),
+      runIds.includes(runs[100].id)
+        ? nextTagWindow.promise
+        : Promise.resolve({
+            runs: runIds.map((runId) => logRunTags(runId, ["train/loss"])),
+          }),
     );
 
     const { result } = renderLogsWorkspaceState();
@@ -530,7 +527,9 @@ describe("Logs workspace state", () => {
         expect.any(Object),
       );
     });
-    expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    await waitFor(() => {
+      expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    });
     expect(result.current.browser.pagination.scalarTags.totalRuns).toBe(105);
     expect(result.current.browser.pagination.scalarTags.canLoadMore).toBe(true);
 
@@ -553,6 +552,13 @@ describe("Logs workspace state", () => {
         { runIds: runs.slice(100).map((run) => run.id) },
         expect.any(Object),
       );
+      expect(result.current.browser.pagination.scalarTags.isLoadingMore).toBe(true);
+    });
+    expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(100);
+    await act(async () => {
+      nextTagWindow.resolve({
+        runs: runs.slice(100).map((run) => logRunTags(run.id, ["train/loss"])),
+      });
     });
     await waitFor(() => {
       expect(result.current.browser.pagination.scalarTags.loadedRuns).toBe(105);
@@ -909,6 +915,50 @@ describe("Logs workspace state", () => {
       expect(result.current.charts.visibleRunIds).toEqual([]);
       expect(result.current.detail.run).toBeUndefined();
     });
+  });
+
+  it("reconciles a missing Experiment after an uncertain deletion while keeping the retry", async () => {
+    const removed = logRun({ id: "removed", experiment: "exp_a" });
+    const remaining = logRun({ id: "remaining", experiment: "exp_b" });
+    let deleted = false;
+    mocks.fetchLogExperiments.mockImplementation(async () => ({
+      experiments: (deleted ? [remaining] : [removed, remaining]).map((run) => ({
+        experiment: run.experiment,
+        runCount: 1,
+        relativePath: run.experiment,
+      })),
+    }));
+    mocks.fetchLogRuns.mockImplementation(async ({ filters } = {}) => ({
+      runs: (deleted ? [remaining] : [removed, remaining]).filter((run) =>
+        filters?.experiment ? filters.experiment.includes(run.experiment) : true,
+      ),
+    }));
+    const failure = new Error("Response lost after deletion");
+    mocks.deleteLogPreset.mockImplementationOnce(async () => {
+      deleted = true;
+      throw failure;
+    }).mockResolvedValueOnce({ deletedRunIds: [removed.id] });
+    const { result } = renderLogsWorkspaceState();
+
+    await waitFor(() => expect(result.current.browser.filters.experiments.options).toHaveLength(2));
+    act(() => result.current.browser.actions.toggleFilter("experiments", "exp_a"));
+    await waitFor(() => expect(result.current.detail.run?.id).toBe(removed.id));
+    act(() => result.current.deletion.actions.openPreset({ value: "baseline", label: "Baseline" }));
+    await waitFor(() => expect(result.current.deletion.operation?.phase).toBe("ready"));
+
+    await act(async () => {
+      await expect(result.current.deletion.actions.confirm()).rejects.toBe(failure);
+    });
+
+    await waitFor(() => {
+      expect(result.current.browser.filters.experiments.options.map(({ value }) => value)).toEqual(["exp_b"]);
+      expect(result.current.deletion.presetTargetExperiment).toBeNull();
+      expect(result.current.detail.run).toBeUndefined();
+    });
+    expect(result.current.deletion.operation).toMatchObject({ phase: "mutationFailed", error: failure });
+    await act(async () => result.current.deletion.actions.confirm());
+    expect(result.current.deletion.operation).toBeNull();
+    expect(mocks.deleteLogPreset.mock.calls[0][1]).toEqual(mocks.deleteLogPreset.mock.calls[1][1]);
   });
 
   it("reconciles a last-Run deletion only after a hidden experiment list refetch succeeds", async () => {

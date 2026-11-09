@@ -150,7 +150,7 @@ class SnapshotResolver:
         model: str,
         snapshot_ids: list[str],
         submitted_revisions: tuple[ConfigSnapshotRevision, ...],
-    ) -> tuple[ConfigSnapshotRecord, ...]:
+    ) -> tuple[tuple[ConfigSnapshotRecord, ...], tuple[ConfigSnapshotRevision, ...]]:
         records = self.resolve_records(
             snapshot_ids,
             model=model,
@@ -173,7 +173,7 @@ class SnapshotResolver:
                     "Refresh the Run Plan before starting Training.",
                     kind=FailureKind.CONFLICT,
                 )
-        return records
+        return records, current_revisions
 
 
 __all__ = ["SnapshotResolver"]

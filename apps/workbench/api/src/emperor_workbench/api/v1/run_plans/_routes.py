@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 
 from emperor_workbench.api._blocking import run_blocking_io
 from emperor_workbench.api._dependencies import (
-    get_project_adapter_client,
+    ProjectAdapterDep,
     get_training_run_plan_service,
 )
 from emperor_workbench.api._mutations import (
@@ -22,7 +22,6 @@ from emperor_workbench.api.v1.run_plans._contracts import (
     TrainingRunPlanResponse,
 )
 from emperor_workbench.api.v1.run_plans._mapping import run_plan_to_payload
-from emperor_workbench.project_adapter import ProjectAdapterClient
 from emperor_workbench.run_plans import RunPlanService
 
 router = APIRouter(
@@ -45,10 +44,7 @@ async def create_training_run_plan(
         RunPlanService,
         Depends(get_training_run_plan_service),
     ],
-    project_adapter: Annotated[
-        ProjectAdapterClient,
-        Depends(get_project_adapter_client),
-    ],
+    project_adapter: ProjectAdapterDep,
 ) -> TrainingRunPlanResponse:
     command = await run_blocking_io(
         create_run_plan_command,

@@ -6,8 +6,10 @@ import {
   type OverrideValues,
   boundaryModelFieldGroups,
   configFieldSelectOptions,
+  configKeyToken,
   configSearchOptionMatchesQuery,
   configSectionFields,
+  configSectionKey,
   configSectionsFields,
   concreteConfigOptionChoice,
   controlledSectionState,
@@ -23,11 +25,13 @@ import {
   hasOverride,
   inheritedHiddenModelFieldHint,
   inheritedStackSectionHint,
+  isEnabledConfigValue,
+  isPresentConfigOptionValue,
+  overrideValue,
   sectionElementId,
 } from "@/lib/config";
 import {
   applicableConfigFields,
-  isEnabledRuntimeDefaultValue,
   runtimeDefaultsMetrics,
   type RuntimeDefaultsMetrics,
 } from "@/features/workbench/state/runtime-defaults/runtime-defaults";
@@ -71,6 +75,7 @@ export type RuntimeDefaultsFieldGroupPresentation = {
 
 export type RuntimeDefaultsSectionPresentation = {
   id: string;
+  key: string;
   title: string;
   displayTitle: string;
   displayDescription?: string;
@@ -85,14 +90,14 @@ export type RuntimeDefaultsSectionPresentation = {
   treeMetrics: RuntimeDefaultsMetrics;
   stackInheritanceHint?: InheritedStackSectionHint;
   inheritedField?: RuntimeDefaultsInheritedFieldPresentation;
-  childTitleSignature: string;
+  childKeySignature: string;
   groupTitleSignature: string;
   enabledGroupTitleSignature: string;
 };
 
 export type RuntimeDefaultsSearchOptionPresentation = {
   sectionTitle: string;
-  rootSectionTitle: string;
+  rootSectionKey: string;
   field: RuntimeDefaultsFieldPresentation;
   key: string;
   label: string;
@@ -106,7 +111,7 @@ export type RuntimeDefaultsSchemaPresentation = {
   fieldCount: number;
   presetOwnedFieldCount: number;
   sections: RuntimeDefaultsSectionPresentation[];
-  defaultOpenSectionTitles: string[];
+  defaultOpenSectionKeys: string[];
   searchOpenKey: string;
   isSearchActive: boolean;
   search: {
@@ -118,11 +123,23 @@ export type RuntimeDefaultsSchemaPresentation = {
   };
 };
 
+function shouldPresentConfigField(field: ConfigField, overrides: OverrideValues) {
+  if (field.type !== "json" || field.legacyJson !== true) {
+    return true;
+  }
+  return (
+    isPresentConfigOptionValue(String(field.default ?? "")) ||
+    (field.locked === true &&
+      isPresentConfigOptionValue(String(field.lockedValue ?? ""))) ||
+    isPresentConfigOptionValue(overrideValue(overrides, field.key))
+  );
+}
+
 function attentionModeValueLabel(field: ConfigField, value: string) {
-  if (field.key.trim().replace(/-/g, "_").toLowerCase() !== "expert_attention_flag") {
+  if (configKeyToken(field.key) !== "expert_attention_flag") {
     return undefined;
   }
-  return isEnabledRuntimeDefaultValue(value)
+  return isEnabledConfigValue(value)
     ? "MixtureOfAttentionHeads"
     : "SelfAttention";
 }
@@ -142,41 +159,10 @@ function presentField(
     selectOptions: configFieldSelectOptions(field, overrides),
     isModified: hasOverride(overrides, field.key),
     isPresetOwned: field.locked === true,
-    isEnabledValue: isEnabledRuntimeDefaultValue(value),
+    isEnabledValue: isEnabledConfigValue(value),
     modeLabel: attentionModeValueLabel(field, value),
     disabledReason,
   };
-}
-
-function indexSectionsByTitle(sections: ConfigSection[]) {
-  const sectionsByTitle = new Map<string, ConfigSection>();
-  function indexSectionAndDescendants(section: ConfigSection) {
-    sectionsByTitle.set(section.title, section);
-    for (const child of section.children ?? []) {
-      indexSectionAndDescendants(child);
-    }
-  }
-  for (const section of sections) {
-    indexSectionAndDescendants(section);
-  }
-  return sectionsByTitle;
-}
-
-function indexRootTitlesBySectionTitle(sections: ConfigSection[]) {
-  const rootTitlesBySectionTitle = new Map<string, string>();
-  function indexSectionAndDescendants(
-    section: ConfigSection,
-    rootTitle: string,
-  ) {
-    rootTitlesBySectionTitle.set(section.title, rootTitle);
-    for (const child of section.children ?? []) {
-      indexSectionAndDescendants(child, rootTitle);
-    }
-  }
-  for (const section of sections) {
-    indexSectionAndDescendants(section, section.title);
-  }
-  return rootTitlesBySectionTitle;
 }
 
 function descendantFieldKeys(sections: ConfigSection[]) {
@@ -189,7 +175,7 @@ function descendantFieldKeys(sections: ConfigSection[]) {
 
 function presentSection({
   section,
-  sourceSectionsByTitle,
+  sourceSection,
   allFields,
   disabledFieldReasonByKey,
   overrides,
@@ -199,7 +185,7 @@ function presentSection({
   idPrefix,
 }: {
   section: ConfigSection;
-  sourceSectionsByTitle: Map<string, ConfigSection>;
+  sourceSection: ConfigSection;
   allFields: ConfigField[];
   disabledFieldReasonByKey: Map<string, string>;
   overrides: OverrideValues;
@@ -208,15 +194,17 @@ function presentSection({
   index: number;
   idPrefix?: string;
 }): RuntimeDefaultsSectionPresentation {
-  const id = sectionElementId(index, section.title, idPrefix);
-  const sourceSection = sourceSectionsByTitle.get(section.title) ?? section;
+  const key = configSectionKey(section);
+  const id = section.idPath
+    ? `full-config-section-${key}`
+    : sectionElementId(index, section.title, idPrefix);
   const controlState = controlledSectionState(sourceSection, overrides);
   const disabledReason = inheritedDisabledReason ?? controlState.disabledReason;
   const controlField = controlState.controlField
     ? presentField(
         controlState.controlField,
         overrides,
-        displayConfigFieldLabel(controlState.controlField, section.title),
+        displayConfigFieldLabel(controlState.controlField, sourceSection),
         disabledFieldReasonByKey.get(controlState.controlField.key),
       )
     : undefined;
@@ -225,7 +213,7 @@ function presentSection({
     (field) => field.key !== controlField?.key && !childFieldKeys.has(field.key),
   );
   const boundaryFieldGroups = boundaryModelFieldGroups(
-    section.title,
+    section,
     bodySchemas,
     overrides,
   );
@@ -234,7 +222,7 @@ function presentSection({
       ? presentField(
           group.controlField,
           overrides,
-          displayConfigFieldLabel(group.controlField, section.title, group.title),
+          displayConfigFieldLabel(group.controlField, section, group.title),
           disabledFieldReasonByKey.get(group.controlField.key),
         )
       : undefined;
@@ -249,7 +237,7 @@ function presentSection({
         presentField(
           field,
           overrides,
-          displayConfigFieldLabel(field, section.title, group.title),
+          displayConfigFieldLabel(field, section, group.title),
           disabledFieldReasonByKey.get(field.key),
         ),
       ),
@@ -269,14 +257,16 @@ function presentSection({
     presentField(
       field,
       overrides,
-      displayConfigFieldLabel(field, section.title),
+      displayConfigFieldLabel(field, section),
       disabledFieldReasonByKey.get(field.key),
     ),
   );
   const children = (section.children ?? []).map((child, childIndex) =>
     presentSection({
       section: child,
-      sourceSectionsByTitle,
+      sourceSection: sourceSection.children?.find(
+        (candidate) => configSectionKey(candidate) === configSectionKey(child),
+      ) ?? child,
       allFields,
       disabledFieldReasonByKey,
       overrides,
@@ -288,7 +278,7 @@ function presentSection({
   );
   const inheritedHint = showInheritedFields
     ? inheritedHiddenModelFieldHint(
-        { title: section.title, fields: section.fields },
+        section,
         allFields,
       )
     : undefined;
@@ -312,6 +302,7 @@ function presentSection({
 
   return {
     id,
+    key,
     title: section.title,
     displayTitle: displayConfigSectionTitle(section.title),
     displayDescription,
@@ -319,7 +310,7 @@ function presentSection({
       presentField(
         field,
         overrides,
-        displayConfigFieldLabel(field, section.title),
+        displayConfigFieldLabel(field, section),
         disabledFieldReasonByKey.get(field.key),
       ),
     ),
@@ -335,15 +326,11 @@ function presentSection({
       overrides,
     ),
     stackInheritanceHint: inheritedStackSectionHint(
-      {
-        title: section.title,
-        fields: section.fields,
-        controlFieldKey: controlField?.key,
-      },
+      sourceSection,
       overrides,
     ),
     inheritedField,
-    childTitleSignature: children.map((child) => child.title).join("\u0000"),
+    childKeySignature: children.map((child) => child.key).join("\u0000"),
     groupTitleSignature: (fieldGroups ?? []).map((group) => group.title).join("\u0000"),
     enabledGroupTitleSignature: (fieldGroups ?? [])
       .filter((group) => group.isEnabled)
@@ -370,31 +357,32 @@ export function presentRuntimeDefaultsSchema({
 }): RuntimeDefaultsSchemaPresentation {
   const allSchemaFields = configSectionsFields(sections);
   const schemaFields = applicableConfigFields(allSchemaFields, overrides);
-  const applicableSections = deriveNestedConfigSections(
-    groupConfigFieldsBySectionPath(schemaFields),
+  const displayFields = schemaFields.filter((field) => shouldPresentConfigField(field, overrides));
+  const displaySections = deriveNestedConfigSections(
+    groupConfigFieldsBySectionPath(displayFields),
   );
-  const schemaMetrics = runtimeDefaultsMetrics(schemaFields, overrides);
-  const sourceSections = applicableSections;
-  const sourceSectionsByTitle = indexSectionsByTitle(sourceSections);
-  const rootTitleBySectionTitle = indexRootTitlesBySectionTitle(sourceSections);
+  const schemaMetrics = runtimeDefaultsMetrics(displayFields, overrides);
+  const sourceSections = new Map(
+    displaySections.map((section) => [configSectionKey(section), section]),
+  );
   const disabledFieldReasonByKey = disabledConfigFieldReasons(
-    applicableSections,
+    displaySections,
     overrides,
   );
   const selectedFieldKey = search.selectedFieldKey ?? null;
   const isSearchActive = search.query.trim().length > 0 || selectedFieldKey !== null;
-  const filteredSections = filterConfigSectionsForSearch(applicableSections, {
+  const filteredSections = filterConfigSectionsForSearch(displaySections, {
     query: search.query,
     selectedFieldKey,
   });
   const visibleSections = deriveNestedConfigSections(
     filteredSections,
-    applicableSections,
+    displaySections,
   );
   const sectionPresentations = visibleSections.map((section, index) =>
     presentSection({
       section,
-      sourceSectionsByTitle,
+      sourceSection: sourceSections.get(configSectionKey(section)) ?? section,
       allFields: schemaFields,
       disabledFieldReasonByKey,
       overrides,
@@ -402,15 +390,14 @@ export function presentRuntimeDefaultsSchema({
       index,
     }),
   );
-  const defaultOpenSectionTitles = isSearchActive
-    ? sectionPresentations.map((section) => section.title)
+  const defaultOpenSectionKeys = isSearchActive
+    ? sectionPresentations.map((section) => section.key)
     : sectionPresentations
         .filter((section, index) => index === 0 || section.treeMetrics.overrideCount > 0)
-        .map((section) => section.title);
-  const searchOptions = flattenConfigSearchOptions(applicableSections).map((option) => ({
+        .map((section) => section.key);
+  const searchOptions = flattenConfigSearchOptions(displaySections).map((option) => ({
     sectionTitle: option.sectionTitle,
-    rootSectionTitle:
-      rootTitleBySectionTitle.get(option.sectionTitle) ?? option.sectionTitle,
+    rootSectionKey: option.rootSectionKey,
     field: presentField(
       option.field,
       overrides,
@@ -429,7 +416,7 @@ export function presentRuntimeDefaultsSchema({
     fieldCount: schemaMetrics.fieldCount,
     presetOwnedFieldCount: schemaMetrics.presetCount,
     sections: sectionPresentations,
-    defaultOpenSectionTitles,
+    defaultOpenSectionKeys,
     searchOpenKey: isSearchActive
       ? `${selectedFieldKey ?? ""}\u0000${search.query.trim()}`
       : "all",

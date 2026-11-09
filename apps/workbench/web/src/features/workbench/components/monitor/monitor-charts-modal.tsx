@@ -45,6 +45,7 @@ import { SelectOnlyDropdown } from "@/features/workbench/components/screen/selec
 import { DialogShell } from "@/features/workbench/components/shared/dialog-shell";
 import { InlineStatus } from "@/features/workbench/components/shared/inline-status";
 import { workbenchStatusCopy } from "@/features/workbench/components/shared/status-copy";
+import type { MonitorRequestFailure } from "@/features/workbench/state/graph-monitor/use-monitor-chart-queries";
 import {
   emptyMonitorComparisonCandidateGroups,
   useMonitorChartsModalState,
@@ -71,6 +72,11 @@ type ChartGridItem = {
 
 type ComparisonPairItem = {
   render: (index: number) => ReactNode;
+};
+
+type MonitorSideStatus = {
+  busy: boolean;
+  failed: boolean;
 };
 
 const LARGE_MONITOR_COLLAPSE_THRESHOLD = 24;
@@ -199,6 +205,32 @@ function HistoricalMonitorProgressRow({
       {label}: loaded {progress.loaded} of {progress.total} historical runs
       {failedCopy}. {remaining} remaining.
     </InlineStatus>
+  );
+}
+
+function MonitorFailureNotice({
+  label,
+  failure,
+}: {
+  label: "Primary" | "Comparison";
+  failure: MonitorRequestFailure | null;
+}) {
+  if (!failure) {
+    return null;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <InlineStatus
+        compact
+        role="alert"
+        tone={failure.failed === failure.total ? "danger" : "warning"}
+      >
+        {label}: {failure.failed} of {failure.total} monitor requests failed.
+      </InlineStatus>
+      <Button onClick={failure.retry} disabled={failure.isRetrying}>
+        Retry failed {label.toLowerCase()} monitor requests
+      </Button>
+    </div>
   );
 }
 
@@ -406,13 +438,15 @@ function ComparisonCharts({
   comparisonNode,
   primaryData,
   comparisonData,
-  comparisonLoading,
+  primaryStatus,
+  comparisonStatus,
 }: {
   primaryNode: GraphNode;
   comparisonNode: GraphNode;
   primaryData: MonitorData | undefined;
   comparisonData: MonitorData | undefined;
-  comparisonLoading: boolean;
+  primaryStatus: MonitorSideStatus;
+  comparisonStatus: MonitorSideStatus;
 }) {
   const scalarPairs = useMemo(
     () =>
@@ -491,7 +525,11 @@ function ComparisonCharts({
                     pair.primary ? (
                       <ScalarChart series={pair.primary} domain={domain} />
                     ) : (
-                      <MissingMetricCard metric={pair.key} nodePath={primaryNode.path} />
+                      <MissingMetricCard
+                        metric={pair.key}
+                        nodePath={primaryNode.path}
+                        {...primaryStatus}
+                      />
                     )
                   }
                 />
@@ -506,7 +544,7 @@ function ComparisonCharts({
                       <MissingMetricCard
                         metric={pair.key}
                         nodePath={comparisonNode.path}
-                        busy={comparisonLoading}
+                        {...comparisonStatus}
                       />
                     )
                   }
@@ -530,7 +568,11 @@ function ComparisonCharts({
                     pair.primary ? (
                       <HistogramChart histogram={pair.primary} maxCount={maxCount} />
                     ) : (
-                      <MissingMetricCard metric={pair.key} nodePath={primaryNode.path} />
+                      <MissingMetricCard
+                        metric={pair.key}
+                        nodePath={primaryNode.path}
+                        {...primaryStatus}
+                      />
                     )
                   }
                 />
@@ -545,7 +587,7 @@ function ComparisonCharts({
                       <MissingMetricCard
                         metric={pair.key}
                         nodePath={comparisonNode.path}
-                        busy={comparisonLoading}
+                        {...comparisonStatus}
                       />
                     )
                   }
@@ -567,7 +609,11 @@ function ComparisonCharts({
                   pair.primary ? (
                     <MonitorImage image={pair.primary} />
                   ) : (
-                    <MissingMetricCard metric={pair.key} nodePath={primaryNode.path} />
+                    <MissingMetricCard
+                      metric={pair.key}
+                      nodePath={primaryNode.path}
+                      {...primaryStatus}
+                    />
                   )
                 }
               />
@@ -582,7 +628,7 @@ function ComparisonCharts({
                     <MissingMetricCard
                       metric={pair.key}
                       nodePath={comparisonNode.path}
-                      busy={comparisonLoading}
+                      {...comparisonStatus}
                     />
                   )
                 }
@@ -643,18 +689,67 @@ function ComparisonCharts({
   );
 }
 
+function HistoricalComparisonSide({
+  label,
+  nodePath,
+  results,
+  status: { busy, failed },
+}: {
+  label: "Primary" | "Comparison";
+  nodePath: string;
+  results: HistoricalMonitorRunData[] | undefined;
+  status: MonitorSideStatus;
+}) {
+  const source = label.toLowerCase();
+  return (
+    <div className="grid min-w-0 content-start gap-3">
+      <div className="text-xs font-bold uppercase tracking-label text-ink-dim">
+        {label} overlays
+      </div>
+      {results && hasHistoricalMonitorData(results) ? (
+        <MultiRunMonitorCharts
+          results={results}
+          idPrefix={`historical-${source}-monitor`}
+        />
+      ) : (
+        <MonitorEmptyState
+          title={
+            busy
+              ? `Loading ${source} monitor data…`
+              : failed
+                ? `Could not load ${source} monitor data`
+                : label === "Comparison"
+                  ? workbenchStatusCopy.empty.comparisonData
+                  : "No primary data"
+          }
+          detail={
+            busy
+              ? `Reading TensorBoard event files for ${nodePath}.`
+              : failed
+                ? `Retry the failed ${source} monitor requests.`
+                : `No scalar, histogram, or image tags matched ${nodePath} in these historical runs.`
+          }
+          busy={busy}
+        />
+      )}
+    </div>
+  );
+}
+
 function MultiRunComparisonCharts({
   primaryNode,
   comparisonNode,
   primaryResults,
   comparisonResults,
-  comparisonLoading,
+  primaryStatus,
+  comparisonStatus,
 }: {
   primaryNode: GraphNode;
   comparisonNode: GraphNode;
   primaryResults: HistoricalMonitorRunData[];
   comparisonResults: HistoricalMonitorRunData[] | undefined;
-  comparisonLoading: boolean;
+  primaryStatus: MonitorSideStatus;
+  comparisonStatus: MonitorSideStatus;
 }) {
   return (
     <div className="grid gap-4">
@@ -676,36 +771,18 @@ function MultiRunComparisonCharts({
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <div className="grid min-w-0 content-start gap-3">
-          <div className="text-xs font-bold uppercase tracking-label text-ink-dim">
-            Primary overlays
-          </div>
-          <MultiRunMonitorCharts
-            results={primaryResults}
-            idPrefix="historical-primary-monitor"
-          />
-        </div>
-        <div className="grid min-w-0 content-start gap-3">
-          <div className="text-xs font-bold uppercase tracking-label text-ink-dim">
-            Comparison overlays
-          </div>
-          {comparisonResults && hasHistoricalMonitorData(comparisonResults) ? (
-            <MultiRunMonitorCharts
-              results={comparisonResults}
-              idPrefix="historical-comparison-monitor"
-            />
-          ) : (
-            <MonitorEmptyState
-              title={
-                comparisonLoading
-                  ? workbenchStatusCopy.loading.comparisonData
-                  : workbenchStatusCopy.empty.comparisonData
-              }
-              detail={`No scalar, histogram, or image tags matched ${comparisonNode.path} in these historical runs.`}
-              busy={comparisonLoading}
-            />
-          )}
-        </div>
+        <HistoricalComparisonSide
+          label="Primary"
+          nodePath={primaryNode.path}
+          results={primaryResults}
+          status={primaryStatus}
+        />
+        <HistoricalComparisonSide
+          label="Comparison"
+          nodePath={comparisonNode.path}
+          results={comparisonResults}
+          status={comparisonStatus}
+        />
       </div>
     </div>
   );
@@ -757,12 +834,20 @@ export function MonitorChartsModal({
     isComparing,
     isFetching,
     isLoading,
+    primaryLoading,
     comparisonLoading,
     historicalProgress,
     historicalComparisonProgress,
     emptyMessage,
+    primaryFailure,
+    comparisonFailure,
     refetch: refreshMonitorData,
   } = query;
+  const primaryStatus = { busy: primaryLoading, failed: Boolean(primaryFailure) };
+  const comparisonStatus = {
+    busy: comparisonLoading,
+    failed: Boolean(comparisonFailure),
+  };
   const comparisonScopeSelectOptions = comparisonScopeOptions.map((option) => ({
     value: option.value,
     label: option.label,
@@ -922,6 +1007,12 @@ export function MonitorChartsModal({
       </div>
 
       <div className="min-h-0 overflow-y-auto bg-bg-2/80 p-region">
+        {(primaryFailure || comparisonFailure) && (
+          <div className="mb-3 grid gap-2">
+            <MonitorFailureNotice label="Primary" failure={primaryFailure} />
+            <MonitorFailureNotice label="Comparison" failure={comparisonFailure} />
+          </div>
+        )}
         {hasData && historicalRunGroup && (
           <div className="mb-3 grid gap-2">
             <HistoricalMonitorProgressRow
@@ -951,7 +1042,8 @@ export function MonitorChartsModal({
             comparisonNode={comparisonNode}
             primaryResults={historicalData}
             comparisonResults={historicalComparisonData}
-            comparisonLoading={comparisonLoading}
+            primaryStatus={primaryStatus}
+            comparisonStatus={comparisonStatus}
           />
         ) : historicalRunGroup && historicalData ? (
           <MultiRunMonitorCharts
@@ -964,7 +1056,8 @@ export function MonitorChartsModal({
             comparisonNode={comparisonNode}
             primaryData={primaryData}
             comparisonData={comparisonData}
-            comparisonLoading={comparisonLoading}
+            primaryStatus={primaryStatus}
+            comparisonStatus={comparisonStatus}
           />
         ) : (
           primaryData && <SingleNodeCharts data={primaryData} />

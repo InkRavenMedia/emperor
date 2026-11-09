@@ -88,7 +88,9 @@ function productionComponentSources(directory: URL): AuditSource[] {
     if (entry.isDirectory()) {
       return productionComponentSources(resource);
     }
-    if (!entry.name.endsWith(".tsx") || entry.name.includes(".test.")) {
+    const isComponentSource =
+      entry.name.endsWith(".tsx") && !entry.name.includes(".test.");
+    if (!isComponentSource && !entry.name.endsWith(".module.css")) {
       return [];
     }
     return [{ path: fileURLToPath(resource), source: readFileSync(resource, "utf8") }];
@@ -109,6 +111,7 @@ const productionAuditSources = [
     new URL("../features/workbench/components/", import.meta.url),
   ),
   auditSource(new URL("../../app/globals.css", import.meta.url)),
+  auditSource(new URL("../components/ui/control-styles.ts", import.meta.url)),
   auditSource(new URL("../../tailwind.config.ts", import.meta.url)),
   auditSource(new URL("./visual-tokens.ts", import.meta.url)),
   auditSource(new URL("./charts.ts", import.meta.url)),

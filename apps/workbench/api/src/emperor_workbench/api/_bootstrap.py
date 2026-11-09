@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import ExitStack
 from pathlib import Path
 from threading import Lock
 
@@ -55,10 +56,9 @@ def acquire_container(
 ) -> WorkbenchContainer:
     """Acquire every app-scoped resource inside the lifespan phase."""
 
-    project_adapter_client = project_adapter or ProjectAdapterClient()
-    blocking_work: BlockingWorkRuntime | None = None
-    mutation_execution: MutationExecutionRuntime | None = None
-    try:
+    with ExitStack() as cleanup:
+        project_adapter_client = project_adapter or ProjectAdapterClient()
+        cleanup.callback(project_adapter_client.close)
         model_packages = ModelPackageCatalog(project_adapter_client)
         mutation_coordinator = (
             log_experiment_mutations or LogExperimentMutationCoordinator()
@@ -110,8 +110,10 @@ def acquire_container(
                 ),
             )
         blocking_work = BlockingWorkRuntime()
+        cleanup.callback(blocking_work.close)
         mutation_execution = MutationExecutionRuntime(Path(settings.state_root))
-        return WorkbenchContainer(
+        cleanup.callback(mutation_execution.close_executor)
+        container = WorkbenchContainer(
             settings=settings,
             project_adapter=project_adapter_client,
             config_snapshots=config_snapshots,
@@ -132,13 +134,8 @@ def acquire_container(
             blocking_work=blocking_work,
             mutation_execution=mutation_execution,
         )
-    except BaseException:
-        if mutation_execution is not None:
-            mutation_execution.close_executor()
-        if blocking_work is not None:
-            blocking_work.close()
-        project_adapter_client.close()
-        raise
+        cleanup.pop_all()
+        return container
 
 
 __all__ = ["acquire_container"]

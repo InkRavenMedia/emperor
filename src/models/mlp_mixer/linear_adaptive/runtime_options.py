@@ -34,7 +34,7 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
-from models import _sequence_expansion
+from models import _learned_grouping, _sequence_expansion
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +54,8 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     channel_mixer_grouping_method: type[GroupingConfig] | None
     channel_mixer_grouping_summary_normalization: SummaryNormalizationOptions | None
     channel_mixer_grouping_model_config: ConfigBase | None
+    channel_mixer_grouping_model_option: _learned_grouping.GroupingModelOptions | None
+    channel_mixer_grouping_model_bias_flag: bool | None
     channel_mixer_grouping_attention_hidden_dim: int | None
     channel_mixer_grouping_rms_norm_epsilon: float | None
     weight_input_factor_source: LowRankFactorSourceOptions | None
@@ -202,6 +204,8 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     grouping_method: type[GroupingConfig] | None
     grouping_summary_normalization: SummaryNormalizationOptions | None
     grouping_model_config: ConfigBase | None
+    grouping_model_option: _learned_grouping.GroupingModelOptions | None
+    grouping_model_bias_flag: bool | None
     grouping_attention_hidden_dim: int | None
     grouping_rms_norm_epsilon: float | None
     batch_size: int

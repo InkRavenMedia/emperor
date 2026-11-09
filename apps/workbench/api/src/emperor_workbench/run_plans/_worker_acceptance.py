@@ -189,16 +189,15 @@ def _preset_search_payloads(
     return payloads
 
 
-def _preset_searches_from_payload(
-    run_plan: Mapping[str, Any],
+def _preset_searches_from_payloads(
+    payloads: Mapping[str, object],
 ) -> tuple[PresetSearch, ...]:
-    payloads = _preset_search_payloads(run_plan)
     return tuple(
         PresetSearch(
             preset=preset,
-            search=_search_spec(payloads[preset], allow_empty=True),
+            search=_search_spec(search, allow_empty=True),
         )
-        for preset in run_plan["presets"]
+        for preset, search in payloads.items()
     )
 
 
@@ -294,7 +293,7 @@ def _submitted_runs(
 def _validate_envelope(
     model_id: str,
     payload: Mapping[str, Any],
-) -> Mapping[str, Any]:
+) -> tuple[Mapping[str, Any], dict[str, object]]:
     run_plan = payload.get("runPlan")
     if not isinstance(run_plan, Mapping):
         raise ValueError("Training payload runPlan must be an object.")
@@ -344,7 +343,7 @@ def _validate_envelope(
     if run_plan["search"] is not None and not isinstance(run_plan["search"], Mapping):
         raise ValueError("Run plan search must be an object or null.")
     _search_spec(run_plan["search"])
-    _preset_search_payloads(run_plan)
+    preset_searches = _preset_search_payloads(run_plan)
     if not isinstance(run_plan["logFolder"], str):
         raise ValueError("Run plan log folder must be a string.")
     plan_identity = ModelPackageIdentity.from_mapping(run_plan)
@@ -356,18 +355,18 @@ def _validate_envelope(
             f"Run plan model '{plan_model_id}' does not match selected model "
             f"'{model_id}'."
         )
-    return run_plan
+    return run_plan, preset_searches
 
 
 def _validate_authoritative_metadata(
     run_plan: Mapping[str, Any],
     rows: list[Any],
+    preset_searches: Mapping[str, object],
 ) -> None:
     presets = set(run_plan["presets"])
     datasets = set(run_plan["datasets"])
     envelope_overrides = dict(run_plan["overrides"])
     raw_search = run_plan["search"]
-    preset_searches = _preset_search_payloads(run_plan)
     expected_search = next(
         (
             preset_searches[str(preset)]
@@ -431,6 +430,51 @@ def _validate_authoritative_metadata(
                 raise ValueError(
                     f"Run plan search does not match row {index} overrides."
                 )
+
+
+def _validate_row_projection(
+    raw_row: Mapping[str, Any],
+    expected_row: dict[str, Any],
+    *,
+    index: int,
+) -> None:
+    for field_name in ("snapshotId", "snapshotName"):
+        if field_name in raw_row:
+            raw_value = raw_row.get(field_name)
+            if raw_value is not None and not isinstance(raw_value, str):
+                raise ValueError(
+                    f"Run plan row {index} {field_name} must be a string or null."
+                )
+            expected_row[field_name] = raw_value
+    raw_total_epochs = raw_row.get("totalEpochs")
+    if (
+        isinstance(raw_total_epochs, bool)
+        or not isinstance(raw_total_epochs, int)
+        or raw_total_epochs != expected_row["totalEpochs"]
+    ):
+        raise ValueError(
+            f"Run plan row {index} total epochs do not match its "
+            "accepted Runtime Defaults."
+        )
+    if dict(raw_row) != expected_row:
+        differing_fields = sorted(
+            field_name
+            for field_name in set(raw_row) | set(expected_row)
+            if raw_row.get(field_name) != expected_row.get(field_name)
+            or (field_name in raw_row) != (field_name in expected_row)
+        )
+        command_projection_fields = {
+            "commandArgv",
+            "commands",
+        }
+        if set(differing_fields).issubset(command_projection_fields):
+            raise ValueError(
+                f"Run plan log folder or monitors do not match its row {index} command."
+            )
+        raise ValueError(
+            f"Run plan row {index} projection does not match its "
+            f"accepted Run: {', '.join(differing_fields)}."
+        )
 
 
 def _planning_budget() -> PlanningBudget:
@@ -522,7 +566,7 @@ class RunPlanWorkerAcceptance:
             raise ValueError(
                 "Training payload does not include a valid model identity."
             )
-        persisted_plan = _validate_envelope(identity.catalog_key, payload)
+        persisted_plan, _ = _validate_envelope(identity.catalog_key, payload)
         datasets, monitors = RunPlanWorkerAcceptance.payload_names(payload)
         return TrainingWorkerPlanContext(
             model_id=identity.catalog_key,
@@ -542,11 +586,13 @@ class RunPlanWorkerAcceptance:
         payload: Mapping[str, Any],
     ) -> RunPlan:
         rows = _plan_rows(payload)
-        persisted_plan = _validate_envelope(package.catalog_key, payload)
+        persisted_plan, preset_searches = _validate_envelope(
+            package.catalog_key, payload
+        )
         _validate_summary_payload(persisted_plan.get("summary"))
         _datasets, monitors = RunPlanWorkerAcceptance.payload_names(payload)
         request = _run_request(persisted_plan)
-        _validate_authoritative_metadata(persisted_plan, rows)
+        _validate_authoritative_metadata(persisted_plan, rows, preset_searches)
         submitted_runs = _submitted_runs(persisted_plan, rows)
         try:
             semantic_plan = package.client.accept_run_plan(
@@ -560,7 +606,7 @@ class RunPlanWorkerAcceptance:
 
         semantic_plan = replace(
             semantic_plan,
-            preset_searches=_preset_searches_from_payload(persisted_plan),
+            preset_searches=_preset_searches_from_payloads(preset_searches),
         )
 
         model_packages = ModelPackageCatalog(package.client)
@@ -582,45 +628,7 @@ class RunPlanWorkerAcceptance:
                     search=semantic_plan.search_for_preset(semantic_run.preset),
                 )
             )
-            for field_name in ("snapshotId", "snapshotName"):
-                if field_name in raw_row:
-                    raw_value = raw_row.get(field_name)
-                    if raw_value is not None and not isinstance(raw_value, str):
-                        raise ValueError(
-                            f"Run plan row {index} {field_name} must be a string "
-                            "or null."
-                        )
-                    expected_row[field_name] = raw_value
-            raw_total_epochs = raw_row.get("totalEpochs")
-            if (
-                isinstance(raw_total_epochs, bool)
-                or not isinstance(raw_total_epochs, int)
-                or raw_total_epochs != expected_row["totalEpochs"]
-            ):
-                raise ValueError(
-                    f"Run plan row {index} total epochs do not match its "
-                    "accepted Runtime Defaults."
-                )
-            if dict(raw_row) != expected_row:
-                differing_fields = sorted(
-                    field_name
-                    for field_name in set(raw_row) | set(expected_row)
-                    if raw_row.get(field_name) != expected_row.get(field_name)
-                    or (field_name in raw_row) != (field_name in expected_row)
-                )
-                command_projection_fields = {
-                    "commandArgv",
-                    "commands",
-                }
-                if set(differing_fields).issubset(command_projection_fields):
-                    raise ValueError(
-                        "Run plan log folder or monitors do not match its "
-                        f"row {index} command."
-                    )
-                raise ValueError(
-                    f"Run plan row {index} projection does not match its "
-                    f"accepted Run: {', '.join(differing_fields)}."
-                )
+            _validate_row_projection(raw_row, expected_row, index=index)
             expected_rows.append(expected_row)
 
         expected_plan = _plan_to_payload(

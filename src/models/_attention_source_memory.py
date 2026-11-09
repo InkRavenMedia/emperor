@@ -15,15 +15,32 @@ from emperor.augmentations.adaptive_parameters import (
     SummaryNormalizationOptions,
 )
 from emperor.config import ConfigBase
+from models._learned_grouping import (
+    GroupingModelOptions,
+    prefer_scoped_grouping_model,
+    resolve_grouping_model,
+)
+from models._projection_model import (
+    ProjectionModelOptions,
+    prefer_scoped_projection_model,
+    resolve_projection_model,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
 class AttentionSourceMemoryOptions:
     source_memory_config: AttentionSourceMemoryConfig | None = None
     source_memory_model_config: ConfigBase | None = None
+    source_memory_model_option: ProjectionModelOptions | None = None
+    source_memory_model_bias_flag: bool | None = None
+    source_memory_model_stack_num_layers: int | None = None
+    source_memory_model_stack_hidden_dim: int | None = None
+    source_memory_model_recurrent_max_steps: int | None = None
     source_memory_chunk_size: int | None = None
     source_memory_grouping_method: type[GroupingConfig] | None = None
     source_memory_grouping_model_config: ConfigBase | None = None
+    source_memory_grouping_model_option: GroupingModelOptions | None = None
+    source_memory_grouping_model_bias_flag: bool | None = None
     source_memory_summary_normalization: SummaryNormalizationOptions | None = None
     source_memory_rms_norm_epsilon: float | None = None
 
@@ -56,11 +73,44 @@ def build_source_memory_config(
     generator_config = options.source_memory_model_config
     if generator_config is None:
         generator_config = memory_config.model_config
+    generator_config = resolve_projection_model(
+        generator_config,
+        options.source_memory_model_option,
+        options.source_memory_model_bias_flag,
+        stack_num_layers=options.source_memory_model_stack_num_layers,
+        stack_hidden_dim=options.source_memory_model_stack_hidden_dim,
+        recurrent_max_steps=options.source_memory_model_recurrent_max_steps,
+    )
     return replace(
         memory_config,
         grouping_config=grouping_config,
         model_config=generator_config,
     )
+
+
+def scoped_source_memory_updates(updates: dict[str, Any]) -> dict[str, Any]:
+    resolved = dict(updates)
+    config = resolved.get("source_memory_config")
+    has_config_model = (
+        isinstance(config, AttentionSourceMemoryConfig)
+        and config.model_config is not None
+    )
+    prefer_scoped_projection_model(
+        resolved,
+        "source_memory",
+        has_scoped_model=resolved.get("source_memory_model_config") is not None
+        or has_config_model,
+    )
+    prefer_scoped_grouping_model(
+        resolved,
+        prefix="source_memory_grouping",
+        has_config_model=isinstance(config, AttentionSourceMemoryConfig)
+        and isinstance(
+            config.grouping_config, (AttentionGroupingConfig, MeanStdGroupingConfig)
+        )
+        and config.grouping_config.model_config is not None,
+    )
+    return resolved
 
 
 def _copy_memory_config(
@@ -104,13 +154,18 @@ def _apply_grouping_overrides(
         if override_value is not None:
             grouping_overrides[field_name] = override_value
     grouping_model_config = options.source_memory_grouping_model_config
+    if grouping_model_config is None and isinstance(
+        grouping_config, (AttentionGroupingConfig, MeanStdGroupingConfig)
+    ):
+        grouping_model_config = grouping_config.model_config
+    grouping_model_config = resolve_grouping_model(
+        type(grouping_config),
+        grouping_model_config,
+        options.source_memory_grouping_model_option,
+        options.source_memory_grouping_model_bias_flag,
+        field_prefix="source_memory_grouping",
+    )
     if grouping_model_config is not None:
-        if not isinstance(
-            grouping_config, (AttentionGroupingConfig, MeanStdGroupingConfig)
-        ):
-            raise ValueError(
-                "source_memory_grouping_model_config requires attention or mean/std grouping."
-            )
         grouping_overrides["model_config"] = grouping_model_config
     resolved_grouping = replace(grouping_config, **grouping_overrides)
     if resolved_grouping.chunk_size is None:

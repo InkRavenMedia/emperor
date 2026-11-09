@@ -7,21 +7,11 @@ import {
   type RuntimeDefaultsInheritedFieldPresentation,
   type RuntimeDefaultsSectionPresentation,
 } from "@/features/workbench/state/runtime-defaults/runtime-defaults-presentation";
+import { sectionCountLabel, splitSectionSignature } from "@/lib/config";
 import { cn } from "@/lib/utils";
 import { ConfigFieldControl } from "@/features/workbench/components/config/config-field-control";
 import { ConfigMetricBadge } from "@/features/workbench/components/config/config-metric-badge";
-import { surfacePanelClassName } from "@/components/ui/surface-panel";
-
-function sectionCountLabel(
-  count: number,
-  noun: "field" | "override" | "preset",
-) {
-  return `${count} ${noun}${count === 1 ? "" : "s"}`;
-}
-
-function titlesFromSignature(signature: string) {
-  return signature ? signature.split("\u0000") : [];
-}
+import { surfacePanelBaseClassName } from "@/components/ui/surface-panel";
 
 function SectionHeaderControl({
   presentation,
@@ -277,24 +267,24 @@ export function ConfigSectionAccordion({
     directMetrics,
     stackInheritanceHint,
     inheritedField,
-    childTitleSignature,
+    childKeySignature,
     groupTitleSignature,
     enabledGroupTitleSignature,
   } = section;
-  const childSectionTitles = titlesFromSignature(childTitleSignature);
-  const childExpansionKey = `${autoOpenKey ?? ""}\u0001${childTitleSignature}`;
-  const defaultOpenChildSectionTitles = new Set(childSectionTitles);
+  const childSectionKeys = splitSectionSignature(childKeySignature);
+  const childExpansionKey = `${autoOpenKey ?? ""}\u0001${childKeySignature}`;
+  const defaultOpenChildSectionKeys = new Set(childSectionKeys);
   const [childExpansion, setChildExpansion] = useState(() => ({
     key: childExpansionKey,
-    openTitles: defaultOpenChildSectionTitles,
+    openTitles: defaultOpenChildSectionKeys,
   }));
-  const openChildSectionTitles =
+  const openChildSectionKeys =
     childExpansion.key === childExpansionKey
       ? childExpansion.openTitles
-      : defaultOpenChildSectionTitles;
+      : defaultOpenChildSectionKeys;
   const boundaryExpansionKey = `${groupTitleSignature}\u0001${enabledGroupTitleSignature}`;
   const defaultOpenBoundaryGroupTitles = new Set(
-    titlesFromSignature(enabledGroupTitleSignature),
+    splitSectionSignature(enabledGroupTitleSignature),
   );
   const [boundaryExpansion, setBoundaryExpansion] = useState(() => ({
     key: boundaryExpansionKey,
@@ -330,7 +320,7 @@ export function ConfigSectionAccordion({
       const next = new Set(
         current.key === childExpansionKey
           ? current.openTitles
-          : defaultOpenChildSectionTitles,
+          : defaultOpenChildSectionKeys,
       );
       if (next.has(childTitle)) {
         next.delete(childTitle);
@@ -395,8 +385,8 @@ export function ConfigSectionAccordion({
     <section
       ref={refCallback}
       className={cn(
-        surfacePanelClassName,
-        "relative overflow-visible px-0 py-0 shadow-card transition duration-150 hover:-translate-y-px hover:border-line hover:shadow-card-hover focus-within:z-30 focus-within:-translate-y-px focus-within:ring-2 focus-within:ring-focus motion-reduce:transform-none",
+        surfacePanelBaseClassName,
+        "relative gap-2 overflow-visible shadow-card transition duration-150 hover:-translate-y-px hover:border-line hover:shadow-card-hover focus-within:z-30 focus-within:-translate-y-px focus-within:ring-2 focus-within:ring-focus motion-reduce:transform-none",
         !isOpen &&
           "border-line-soft bg-white/[0.012] shadow-card-subtle",
         isDisabled && "hover:translate-y-0",
@@ -407,8 +397,8 @@ export function ConfigSectionAccordion({
         className={cn(
           "grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-stretch overflow-hidden transition",
           isOpen
-            ? "bg-white/[0.055] hover:bg-white/[0.075]"
-            : "bg-white/[0.025] hover:bg-white/[0.055]",
+            ? "rounded-t-panel bg-white/[0.055] hover:bg-white/[0.075]"
+            : "rounded-panel bg-white/[0.025] hover:bg-white/[0.055]",
           isDisabled && "hover:bg-white/[0.025]",
           stateHeaderClass,
         )}
@@ -505,7 +495,7 @@ export function ConfigSectionAccordion({
         hidden={!isOpen}
         className={
           isOpen
-            ? "grid gap-3 border-t border-line-soft bg-black/[0.08] px-3 py-3"
+            ? "grid gap-3 rounded-b-panel border-t border-line-soft bg-black/[0.08] px-3 py-3"
             : "hidden"
         }
       >
@@ -547,15 +537,15 @@ export function ConfigSectionAccordion({
             {children.map((childSection) => {
               const isChildOpen =
                 !childSection.isDisabled &&
-                openChildSectionTitles.has(childSection.title);
+                openChildSectionKeys.has(childSection.key);
               return (
                 <ConfigSectionAccordion
-                  key={childSection.title}
+                  key={childSection.key}
                   section={childSection}
                   refCallback={() => undefined}
                   isOpen={isChildOpen}
                   autoOpenKey={autoOpenKey}
-                  onToggle={() => toggleChildSection(childSection.title)}
+                  onToggle={() => toggleChildSection(childSection.key)}
                   onFieldChange={onFieldChange}
                   onFieldReset={onFieldReset}
                 />

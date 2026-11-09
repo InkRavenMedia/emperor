@@ -16,7 +16,7 @@ function option(index: number): RuntimeDefaultsSearchOptionPresentation {
     flag: `--${key.replaceAll("_", "-")}`,
     type: "int",
     sectionTitle: "Model",
-    rootSectionTitle: "Model",
+    rootSectionKey: "Model",
     field: {
       schema: {
         key,
@@ -148,6 +148,49 @@ describe("ConfigFieldSearch", () => {
     expect(
       screen.queryByRole("dialog", { name: "Matching config fields" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("dismisses a select before dismissing its enclosing search results", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const result = option(1);
+    const choices = ["LAYER_NORM", "RMS_NORM"];
+    const selectOption = {
+      ...result,
+      type: "enum",
+      field: {
+        ...result.field,
+        schema: { ...result.field.schema, type: "enum", choices },
+        value: "LAYER_NORM",
+        selectOptions: choices.map((value) => ({ value, label: value })),
+      },
+    };
+    render(
+      <DialogShell ariaLabel="Parent config dialog" onClose={onClose}>
+        <Harness source={[selectOption]} />
+      </DialogShell>,
+    );
+
+    const search = screen.getByRole("combobox", { name: "Search config fields" });
+    await user.type(search, "field");
+    const results = screen.getByRole("dialog", { name: "Matching config fields" });
+    const trigger = within(results).getByRole("button", {
+      name: "Field 1 current value",
+    });
+    await user.click(trigger);
+    expect(within(results).getByRole("listbox")).toBeVisible();
+
+    await user.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(within(results).queryByRole("listbox")).not.toBeInTheDocument();
+    expect(results).toBeVisible();
+    expect(trigger).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(results).not.toBeInTheDocument();
+    expect(search).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("reveals distant virtual results while retaining combobox focus", async () => {

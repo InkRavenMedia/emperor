@@ -2,7 +2,10 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LogConfusionMatrixHeatmaps } from "@/features/workbench/components/logs/log-confusion-matrix-heatmap";
-import { type ConfusionMatrixHeatmap } from "@/features/workbench/state/logs/log-diagnostics";
+import {
+  buildConfusionMatrixHeatmaps,
+  type ConfusionMatrixHeatmap,
+} from "@/features/workbench/state/logs/log-diagnostics";
 
 function heatmap(overrides: Partial<ConfusionMatrixHeatmap> = {}) {
   return {
@@ -56,6 +59,42 @@ afterEach(() => {
 });
 
 describe("LogConfusionMatrixHeatmaps", () => {
+  it("omits oversized matrices derived from imported tags without hiding other runs", () => {
+    const tag =
+      "validation/confusion_matrix/true_class_100000000000/predicted_class_0/rate";
+    const importedHeatmaps = buildConfusionMatrixHeatmaps({
+      matrixTagList: [tag],
+      seriesByTag: new Map([
+        [tag, [{
+          runId: "imported-run",
+          tag,
+          points: [{ step: 1, wallTime: 100, value: 0.2 }],
+        }]],
+      ]),
+      runsById: new Map(),
+      runOrder: ["imported-run"],
+    });
+    const { container } = render(
+      <LogConfusionMatrixHeatmaps heatmaps={[...importedHeatmaps, heatmap()]} />,
+    );
+
+    expect(screen.getByText(/validation confusion matrix · imported-run/i)).toBeInTheDocument();
+    expect(screen.getByText(/heatmaps support up to 100 classes/i)).toBeInTheDocument();
+    expect(container.querySelectorAll("canvas")).toHaveLength(1);
+  });
+
+  it("preserves a 100-class matrix with a bounded canvas backing store", () => {
+    const { container } = render(
+      <LogConfusionMatrixHeatmaps heatmaps={[heatmap({ classCount: 100 })]} />,
+    );
+
+    expect(screen.getByRole("button", { name: /100 classes data/i })).toBeInTheDocument();
+    const canvas = container.querySelector("canvas");
+    expect(canvas?.width).toBe(2048);
+    expect(canvas?.height).toBe(2048);
+    expect(canvas?.style.width).toBe("3430px");
+  });
+
   it("renders large matrices as one canvas instead of one DOM node per cell", () => {
     const { container } = render(
       <LogConfusionMatrixHeatmaps heatmaps={[largeHeatmap()]} />,

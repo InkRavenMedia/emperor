@@ -8,7 +8,7 @@ import { surfacePanelClassName } from "@/components/ui/surface-panel";
 
 export function SectionNavigation({
   sections,
-  openSectionTitles,
+  openSectionKeys,
   areAllSectionsOpen,
   emptyMessage,
   variant = "sidebar",
@@ -19,14 +19,14 @@ export function SectionNavigation({
   onToggleAllSections,
 }: {
   sections: RuntimeDefaultsSectionPresentation[];
-  openSectionTitles: Set<string>;
+  openSectionKeys: Set<string>;
   areAllSectionsOpen: boolean;
   emptyMessage?: string;
   variant?: "sidebar" | "inline";
   ariaLabel?: string;
   title?: string;
-  onJumpToSection: (title: string) => void;
-  onToggleSection: (title: string) => void;
+  onJumpToSection: (key: string) => void;
+  onToggleSection: (key: string) => void;
   onToggleAllSections: () => void;
 }) {
   const isInline = variant === "inline";
@@ -95,10 +95,10 @@ export function SectionNavigation({
           const panelId = `${sectionId}-fields`;
           const isSectionDisabled = section.isDisabled;
           const isSectionOpen =
-            !isSectionDisabled && openSectionTitles.has(section.title);
+            !isSectionDisabled && openSectionKeys.has(section.key);
           return (
             <div
-              key={section.title}
+              key={section.key}
               className={cn(
                 "group/section-row grid min-h-11 min-w-[13rem] grid-cols-[minmax(0,1fr)_2.25rem] border-b border-line-soft transition focus-within:ring-2 focus-within:ring-focus hover:bg-violet/10 last:border-b-0",
                 isInline
@@ -112,7 +112,7 @@ export function SectionNavigation({
                 <button
                   type="button"
                   aria-label={`Jump to ${displayTitle}`}
-                  onClick={() => onJumpToSection(section.title)}
+                  onClick={() => onJumpToSection(section.key)}
                   className="min-h-11 min-w-0 px-2.5 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
                 >
                   <span className="block min-w-0 truncate text-sm font-semibold text-ink transition-opacity group-hover/section-row:opacity-0 group-focus-within/section-row:opacity-0">
@@ -155,7 +155,7 @@ export function SectionNavigation({
                 aria-expanded={isSectionOpen}
                 aria-controls={panelId}
                 disabled={isSectionDisabled}
-                onClick={() => onToggleSection(section.title)}
+                onClick={() => onToggleSection(section.key)}
                 className="flex min-h-full items-center justify-center border-l border-line-soft text-ink-faint transition-colors hover:bg-control-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink-faint"
               >
                 <ChevronDown

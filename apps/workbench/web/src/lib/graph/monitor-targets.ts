@@ -241,7 +241,12 @@ export function buildMonitorComparisonCandidates(
   node: GraphNode | undefined,
   monitorName?: MonitorName,
 ) {
-  if (!graph) {
+  if (!graph || !node) {
+    return [];
+  }
+
+  const primary = resolveMonitorTarget(graph, node, monitorName);
+  if (!primary) {
     return [];
   }
 
@@ -250,19 +255,14 @@ export function buildMonitorComparisonCandidates(
   const parentIdByChildId = new Map<string, string>();
 
   for (const edge of graph.edges) {
-    childIdsByParentId.set(edge.source, [
-      ...(childIdsByParentId.get(edge.source) ?? []),
-      edge.target,
-    ]);
+    const childIds = childIdsByParentId.get(edge.source) ?? [];
+    childIds.push(edge.target);
+    childIdsByParentId.set(edge.source, childIds);
     if (!parentIdByChildId.has(edge.target)) {
       parentIdByChildId.set(edge.target, edge.source);
     }
   }
 
-  const primary = resolveMonitorTarget(graph, node, monitorName);
-  if (!primary) {
-    return [];
-  }
   const resolveTarget = createMonitorTargetResolver(
     graph,
     (target) => target.monitorName === primary.monitorName,
@@ -326,7 +326,12 @@ function buildAllMonitorComparisonCandidates(
   node: GraphNode | undefined,
   monitorName?: MonitorName,
 ) {
-  if (!graph) {
+  if (!graph || !node) {
+    return [];
+  }
+
+  const primary = resolveMonitorTarget(graph, node, monitorName);
+  if (!primary) {
     return [];
   }
 
@@ -338,10 +343,6 @@ function buildAllMonitorComparisonCandidates(
     }
   }
 
-  const primary = resolveMonitorTarget(graph, node, monitorName);
-  if (!primary) {
-    return [];
-  }
   const resolveTarget = createMonitorTargetResolver(
     graph,
     (target) => target.monitorName === primary.monitorName,
@@ -372,17 +373,20 @@ export function buildMonitorComparisonCandidateGroups(
   node: GraphNode | undefined,
   monitorName?: MonitorName,
 ): MonitorComparisonCandidateGroups {
-  const primary = resolveMonitorTarget(graph, node, monitorName);
+  const primary = node && resolveMonitorTarget(graph, node, monitorName);
+  if (!primary) {
+    return { "same-stack": [], "all-layers": [] };
+  }
   return {
     "same-stack": buildMonitorComparisonCandidates(
       graph,
-      primary?.node ?? node,
-      primary?.monitorName ?? monitorName,
+      primary.node,
+      primary.monitorName,
     ),
     "all-layers": buildAllMonitorComparisonCandidates(
       graph,
-      primary?.node ?? node,
-      primary?.monitorName ?? monitorName,
+      primary.node,
+      primary.monitorName,
     ),
   };
 }

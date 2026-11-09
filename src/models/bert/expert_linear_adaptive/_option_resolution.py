@@ -11,10 +11,7 @@ from emperor.layers import (
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
-from models.bert.expert_linear_adaptive._component_config import (
-    build_hierarchical_embedding_config,
-)
+from models import _bert_embedding, _sequence_expansion
 from models.bert.expert_linear_adaptive._expert_adapter_support import (
     _SUBMODULE_STACK_FIELD_MAP,
     _controller_stack_source,
@@ -346,7 +343,8 @@ def expert_linear_builder_kwargs_from_flat(
 def expert_linear_adaptive_builder_kwargs_from_flat(
     flat_kwargs: dict[str, Any], config_module: ModuleType
 ) -> dict[str, Any]:
-    flat_kwargs = _resolve_component_configs(flat_kwargs, config_module)
+    flat_kwargs = resolve_soft_moe_runtime_defaults(flat_kwargs, config_module)
+    flat_kwargs = _bert_embedding.resolve_runtime_defaults(flat_kwargs, config_module)
     generation_values = dict(flat_kwargs)
     generation_fields = generation_keys(config_module) | grouping_keys(config_module)
     flat_kwargs = {
@@ -446,64 +444,6 @@ def expert_linear_adaptive_builder_kwargs_from_flat(
         builder_kwargs, generation_values, config_module
     )
     return apply_grouping_options(builder_kwargs, generation_values, config_module)
-
-
-def _resolve_component_configs(
-    flat_kwargs: dict[str, Any], config_module: ModuleType
-) -> dict[str, Any]:
-    kwargs = resolve_soft_moe_runtime_defaults(flat_kwargs, config_module)
-    component_keys = (
-        "hierarchical_embedding_flag",
-        "hierarchical_byte_embedding_dim",
-        "hierarchical_byte_encoder_num_layers",
-        "hierarchical_byte_feed_forward_dim",
-        "hierarchical_byte_num_heads",
-        "hierarchical_max_token_bytes",
-    )
-    component_values = {
-        key: kwargs.pop(key, getattr(config_module, key.upper()))
-        for key in component_keys
-    }
-    if component_values["hierarchical_embedding_flag"]:
-        existing_embedding = _configured_component(
-            kwargs, config_module, "hierarchical_embedding_config", "embedding_options"
-        )
-        if existing_embedding is None:
-            encoder_options = kwargs.get("encoder_options")
-            hidden_dim = kwargs.get(
-                "hidden_dim",
-                getattr(encoder_options, "hidden_dim", config_module.HIDDEN_DIM),
-            )
-            kwargs["hierarchical_embedding_config"] = (
-                build_hierarchical_embedding_config(
-                    batch_size=kwargs.get("batch_size", config_module.BATCH_SIZE),
-                    sequence_length=kwargs.get(
-                        "sequence_length", config_module.SEQUENCE_LENGTH
-                    ),
-                    hidden_dim=hidden_dim,
-                    byte_embedding_dim=component_values[
-                        "hierarchical_byte_embedding_dim"
-                    ],
-                    byte_encoder_num_layers=component_values[
-                        "hierarchical_byte_encoder_num_layers"
-                    ],
-                    byte_feed_forward_dim=component_values[
-                        "hierarchical_byte_feed_forward_dim"
-                    ],
-                    byte_num_heads=component_values["hierarchical_byte_num_heads"],
-                    max_token_bytes=component_values["hierarchical_max_token_bytes"],
-                )
-            )
-    return kwargs
-
-
-def _configured_component(
-    kwargs: dict[str, Any], config_module: ModuleType, config_key: str, options_key: str
-) -> object:
-    options = kwargs.get(options_key)
-    default_config = getattr(config_module, config_key.upper())
-    configured_default = getattr(options, config_key, default_config)
-    return kwargs.get(config_key, configured_default)
 
 
 def _attach_residual_stack_options(

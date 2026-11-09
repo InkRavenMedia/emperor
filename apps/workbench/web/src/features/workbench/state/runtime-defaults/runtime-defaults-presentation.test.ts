@@ -14,8 +14,11 @@ function field(
     label: overrides.label ?? overrides.key,
     section: overrides.section,
     sectionPath: overrides.sectionPath,
+    sectionIdPath: overrides.sectionIdPath,
+    sectionControlFieldKey: overrides.sectionControlFieldKey,
     description: overrides.description,
     type: overrides.type ?? "int",
+    legacyJson: overrides.legacyJson,
     default: Object.prototype.hasOwnProperty.call(overrides, "default")
       ? (overrides.default ?? null)
       : 0,
@@ -113,6 +116,152 @@ function schemaSections(): ConfigSection[] {
 }
 
 describe("Runtime Defaults schema presentation", () => {
+  it("hides empty legacy model objects while preserving their schema and concrete values", () => {
+    const legacyField = (
+      key: string,
+      values: Partial<ConfigField> = {},
+    ) => field({
+      key,
+      section: "Model Options",
+      sectionPath: ["Model Options"],
+      type: "json",
+      legacyJson: true,
+      default: null,
+      nullable: true,
+      ...values,
+    });
+    const concrete = '{"type":"LinearLayerConfig","bias_flag":true}';
+    const fields = [
+      legacyField("ATTN_SOURCE_MEMORY_MODEL_CONFIG"),
+      legacyField("ENCODER_ATTN_SOURCE_MEMORY_MODEL_CONFIG", { default: "null" }),
+      legacyField("SEQUENCE_EXPANSION_MODEL_CONFIG", { default: concrete }),
+      legacyField("ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG", {
+        locked: true,
+        lockedValue: concrete,
+      }),
+      legacyField("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG"),
+      legacyField("ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG", { legacyJson: undefined }),
+    ];
+    const input = {
+      sections: [{ title: "Model Options", fields }],
+      search: { query: "" },
+    };
+    const presentation = presentRuntimeDefaultsSchema({
+      ...input,
+      overrides: { decoder_sequence_expansion_model_config: concrete },
+    });
+
+    const visibleFields = fields.slice(2).map(({ key }) => key);
+    expect(presentation.schemaFields.map(({ key }) => key)).toEqual(fields.map(({ key }) => key));
+    expect(presentation.fieldCount).toBe(visibleFields.length);
+    expect(presentation.sections[0]?.bodyFields.map(({ key }) => key)).toEqual(visibleFields);
+    expect(presentation.search.options.map(({ key }) => key)).toEqual(visibleFields);
+    expect(presentation.search.options.find(({ key }) => key === "DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG")?.field)
+      .toMatchObject({ value: concrete, isModified: true });
+
+    const reset = presentRuntimeDefaultsSchema({ ...input, overrides: {} });
+    expect(reset.schemaFields).toHaveLength(fields.length);
+    expect(reset.search.options.map(({ key }) => key))
+      .not.toContain("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG");
+  });
+
+  it("preserves controls, inheritance and search identity after heading renames", () => {
+    const metadata = {
+      Global: { id: "hidden_dim", control: null },
+      "Layer Stack Options": { id: "stack_num_layers", control: null },
+      "Gate Options": { id: "stack_gate_flag", control: "stack_gate_flag" },
+      "Gate Stack Options": {
+        id: "gate_stack_independent_flag",
+        control: "gate_stack_independent_flag",
+      },
+      "Input Boundary Model Options": { id: "input_layer_weight_option", control: null },
+    };
+    const sections = schemaSections().map((section) => ({
+      ...section,
+      fields: section.fields.map((field) => ({
+        ...field,
+        section: `Renamed ${field.section}`,
+        sectionPath: field.sectionPath.map((title) => `Renamed ${title}`),
+        sectionIdPath: field.sectionPath.map((title) => metadata[title as keyof typeof metadata].id),
+        sectionControlFieldKey: metadata[field.section as keyof typeof metadata].control,
+      })),
+    }));
+    const presentation = presentRuntimeDefaultsSchema({
+      sections,
+      overrides: { stack_gate_flag: "true" },
+      search: { query: "" },
+    });
+
+    expect(presentation.sections[1]).toMatchObject({
+      title: "Renamed Layer Stack Options",
+      inheritedField: { sourceTitle: "Renamed Global", field: { key: "hidden_dim" } },
+    });
+    expect(presentation.sections[2]).toMatchObject({
+      key: "stack_gate_flag",
+      controlField: { key: "stack_gate_flag", label: "Enabled" },
+      isDisabled: false,
+      children: [{
+        key: "stack_gate_flag/gate_stack_independent_flag",
+        isDisabled: true,
+        stackInheritanceHint: { label: "Inherits Layer Stack Submodule" },
+      }],
+    });
+    expect(presentation.sections[3]?.fieldGroups?.[0]).toMatchObject({
+      isEnabled: false,
+      controlField: { key: "input_layer_weight_option" },
+    });
+    const filtered = presentRuntimeDefaultsSchema({
+      sections,
+      overrides: {},
+      search: { query: "", selectedFieldKey: "gate_stack_depth" },
+    });
+    expect(filtered.sections[0]).toMatchObject({
+      id: presentation.sections[2]?.id,
+      controlField: { key: "stack_gate_flag" },
+      children: [{ controlField: { key: "gate_stack_independent_flag" } }],
+    });
+    expect(filtered.search.options.find(({ key }) => key === "gate_stack_depth"))
+      .toMatchObject({ rootSectionKey: "stack_gate_flag" });
+  });
+
+  it("keeps repeated section titles independent in search and control lookup", () => {
+    const sections = [{
+      title: "Settings",
+      fields: [
+        field({
+          key: "stack_gate_flag",
+          section: "Details",
+          sectionPath: ["Settings", "Details"],
+          sectionIdPath: ["gate", "gate_details"],
+          sectionControlFieldKey: "stack_gate_flag",
+          type: "bool",
+          default: false,
+        }),
+        field({
+          key: "memory_slots",
+          section: "Details",
+          sectionPath: ["Settings", "Details"],
+          sectionIdPath: ["memory", "memory_details"],
+          sectionControlFieldKey: null,
+        }),
+      ],
+    }];
+    const presentation = presentRuntimeDefaultsSchema({
+      sections,
+      overrides: {},
+      search: { query: "" },
+    });
+
+    expect(presentation.sections.map(({ key, title }) => ({ key, title }))).toEqual([
+      { key: "gate", title: "Settings" },
+      { key: "memory", title: "Settings" },
+    ]);
+    expect(presentation.sections[0]?.children[0]).toMatchObject({ isDisabled: true });
+    expect(presentation.sections[1]?.children[0]).toMatchObject({ isDisabled: false });
+    expect(presentation.search.options.map(({ rootSectionKey }) => rootSectionKey))
+      .toEqual(["gate", "memory"]);
+  });
+
   it("removes inapplicable fields, empty sections, search entries, and counts", () => {
     const selector = field({
       key: "recurrent_composition_option",
@@ -211,7 +360,7 @@ describe("Runtime Defaults schema presentation", () => {
       "Gate Options",
       "Input Boundary Model Options",
     ]);
-    expect(presentation.defaultOpenSectionTitles).toEqual([
+    expect(presentation.defaultOpenSectionKeys).toEqual([
       "Global",
       "Layer Stack Options",
     ]);
@@ -280,7 +429,7 @@ describe("Runtime Defaults schema presentation", () => {
 
     expect(presentation.isSearchActive).toBe(true);
     expect(presentation.searchOpenKey).toBe("gate_stack_depth\u0000");
-    expect(presentation.defaultOpenSectionTitles).toEqual(["Gate Options"]);
+    expect(presentation.defaultOpenSectionKeys).toEqual(["Gate Options"]);
     expect(presentation.sections).toHaveLength(1);
 
     const gate = presentation.sections[0]!;
@@ -296,7 +445,7 @@ describe("Runtime Defaults schema presentation", () => {
     );
     expect(searchOption).toMatchObject({
       sectionTitle: "Gate Stack Options",
-      rootSectionTitle: "Gate Options",
+      rootSectionKey: "Gate Options",
       field: {
         key: "gate_stack_depth",
         value: "2",
@@ -339,6 +488,6 @@ describe("Runtime Defaults schema presentation", () => {
         sourceTitle: "Layer Stack Submodule Options",
       },
     });
-    expect(presentation.defaultOpenSectionTitles).toEqual(["Global", "Gate Options"]);
+    expect(presentation.defaultOpenSectionKeys).toEqual(["Global", "Gate Options"]);
   });
 });

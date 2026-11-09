@@ -1,91 +1,16 @@
 """Package-owned scalar grouping resolution."""
 
-from dataclasses import dataclass, fields, replace
-from typing import Any
+from dataclasses import dataclass
 
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveParameterAugmentationConfig,
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
-    AttentionGroupingConfig,
     GroupingConfig,
-    MeanStdGroupingConfig,
-    SumGroupingConfig,
     SummaryNormalizationOptions,
 )
 from emperor.config import ConfigBase
+from models import _learned_grouping
 from models.experts.linear_adaptive import config
-
-GROUPING_FIELDS = (
-    "grouping_scope",
-    "group_count",
-    "chunk_size",
-    "grouping_sequence_length",
-    "grouping_input_order",
-    "grouping_method",
-    "grouping_model_config",
-    "grouping_summary_normalization",
-    "grouping_attention_hidden_dim",
-    "grouping_rms_norm_epsilon",
-)
-
-
-def grouping_from_fields(
-    values: dict[str, Any], *, prefix: str
-) -> GroupingConfig | None:
-    if all(values.get(field) is None for field in GROUPING_FIELDS):
-        return None
-    grouping_values = {
-        "summary_normalization": values.get("grouping_summary_normalization"),
-        "rms_norm_epsilon": values.get("grouping_rms_norm_epsilon"),
-    }
-    model_config = values.get("grouping_model_config")
-    hidden_dim = values.get("grouping_attention_hidden_dim")
-    method = values.get("grouping_method")
-    config_type = SumGroupingConfig if method is None else method
-    if not isinstance(config_type, type) or not issubclass(config_type, GroupingConfig):
-        raise ValueError(
-            "grouping_method must be a concrete grouping configuration class."
-        )
-    if hidden_dim is not None:
-        if not issubclass(config_type, AttentionGroupingConfig):
-            raise ValueError(
-                "grouping_attention_hidden_dim requires attention grouping."
-            )
-        if not isinstance(model_config, ConfigBase):
-            raise ValueError(
-                "grouping_attention_hidden_dim requires a supplied grouping_model_config."
-            )
-        if "hidden_dim" not in {field.name for field in fields(model_config)}:
-            raise ValueError(
-                "grouping_attention_hidden_dim requires a model config with a hidden_dim field."
-            )
-        model_config = replace(model_config, hidden_dim=hidden_dim)
-    if model_config is not None:
-        if not issubclass(
-            config_type, (AttentionGroupingConfig, MeanStdGroupingConfig)
-        ):
-            raise ValueError(
-                "grouping_model_config requires attention or mean/std grouping."
-            )
-        grouping_values["model_config"] = model_config
-    grouping = config_type(
-        **grouping_values,
-        scope=values.get("grouping_scope"),
-        group_count=values.get("group_count"),
-        chunk_size=values.get("chunk_size"),
-        sequence_length=values.get("grouping_sequence_length"),
-        input_order=values.get("grouping_input_order"),
-    )
-    validator = AdaptiveParameterAugmentationConfig().registry_owner().VALIDATOR
-    try:
-        validator.validate_grouping_value(grouping)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{prefix} grouping requires complete scope-specific settings; "
-            "set all grouping fields to None to disable it. " + str(exc)
-        ) from exc
-    return grouping
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -102,6 +27,8 @@ class GroupingDefaultValues:
         config.GROUPING_SUMMARY_NORMALIZATION
     )
     grouping_model_config: ConfigBase | None = config.GROUPING_MODEL_CONFIG
+    grouping_model_option: _learned_grouping.GroupingModelOptions | None = None
+    grouping_model_bias_flag: bool | None = None
     grouping_attention_hidden_dim: int | None = config.GROUPING_ATTENTION_HIDDEN_DIM
     grouping_rms_norm_epsilon: float | None = config.GROUPING_RMS_NORM_EPSILON
     router_grouping_scope: AdaptiveParameterGroupingScopeOptions | None = (
@@ -120,6 +47,8 @@ class GroupingDefaultValues:
     router_grouping_model_config: ConfigBase | None = (
         config.ROUTER_GROUPING_MODEL_CONFIG
     )
+    router_grouping_model_option: _learned_grouping.GroupingModelOptions | None = None
+    router_grouping_model_bias_flag: bool | None = None
     router_grouping_attention_hidden_dim: int | None = (
         config.ROUTER_GROUPING_ATTENTION_HIDDEN_DIM
     )
@@ -146,6 +75,10 @@ class GroupingDefaultValues:
     input_layer_grouping_model_config: ConfigBase | None = (
         config.INPUT_LAYER_GROUPING_MODEL_CONFIG
     )
+    input_layer_grouping_model_option: _learned_grouping.GroupingModelOptions | None = (
+        None
+    )
+    input_layer_grouping_model_bias_flag: bool | None = None
     input_layer_grouping_attention_hidden_dim: int | None = (
         config.INPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM
     )
@@ -172,6 +105,10 @@ class GroupingDefaultValues:
     output_layer_grouping_model_config: ConfigBase | None = (
         config.OUTPUT_LAYER_GROUPING_MODEL_CONFIG
     )
+    output_layer_grouping_model_option: (
+        _learned_grouping.GroupingModelOptions | None
+    ) = None
+    output_layer_grouping_model_bias_flag: bool | None = None
     output_layer_grouping_attention_hidden_dim: int | None = (
         config.OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM
     )

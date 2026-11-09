@@ -78,9 +78,9 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from models import _component_defaults
 
-# Package-local trainer defaults. Model packages intentionally do not import the
-# repository-level trainer configuration so they remain independently loadable.
+# Package-local defaults keep each model package independently loadable.
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
 TRAINER_DEVICES: int = 1
@@ -1670,3 +1670,5 @@ OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLA
 ) = None
 OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
 OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+
+_component_defaults.declare_component_defaults(globals())

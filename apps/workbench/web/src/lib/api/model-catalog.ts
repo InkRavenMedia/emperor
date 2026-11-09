@@ -1,14 +1,16 @@
-import { z } from "zod";
+import { array, object, regex, string } from "zod/v4-mini";
 
 import { requestJson } from "@/lib/api/client";
-import {
-  modelIdentitySchema,
-  type ModelIdentity,
-} from "@/lib/api/model-identity-schema";
+import { MODEL_IDENTITY_SEGMENT_PATTERN } from "@/lib/api/model-identity-pattern";
 
-const modelsSchema = z.object({ models: z.array(modelIdentitySchema) });
+const modelIdentitySegmentSchema = string().check(regex(MODEL_IDENTITY_SEGMENT_PATTERN));
+const modelIdentitySchema = object({
+  modelType: modelIdentitySegmentSchema,
+  model: modelIdentitySegmentSchema,
+});
+const modelsSchema = object({ models: array(modelIdentitySchema) });
 
-export type { ModelIdentity };
+export type { ModelIdentity } from "@/lib/api/model-identity-schema";
 
 type ApiRequestOptions = {
   signal?: AbortSignal;

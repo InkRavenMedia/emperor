@@ -5,6 +5,7 @@ from typing import Final
 
 import models.experts.linear_adaptive.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_value_types
+from models import _learned_grouping
 from models.experts.linear_adaptive._config_implementation import (
     _RuntimeDefaultsResolver,
     _RuntimeDefaultValues,
@@ -13,10 +14,6 @@ from models.experts.linear_adaptive._config_implementation import (
 from models.experts.linear_adaptive._generation import (
     apply_generation_options,
     generation_keys,
-)
-from models.experts.linear_adaptive._grouping import (
-    GROUPING_FIELDS,
-    grouping_from_fields,
 )
 from models.experts.linear_adaptive.runtime_options import RuntimeOptions
 
@@ -110,8 +107,11 @@ def runtime_from_flat(
         **apply_generation_options(runtime_values, generation_values, config_module),
     )
     grouping = {
-        prefix: grouping_from_fields(
-            {name: getattr(values, prefix + name) for name in GROUPING_FIELDS},
+        prefix: _learned_grouping.grouping_from_fields(
+            {
+                name: getattr(values, prefix + name)
+                for name in _learned_grouping.GROUPING_FIELDS
+            },
             prefix=prefix or "main",
         )
         for prefix in ("", "router_", "input_layer_", "output_layer_")

@@ -1,8 +1,9 @@
 import { z } from "zod";
+import { MODEL_IDENTITY_SEGMENT_PATTERN } from "@/lib/api/model-identity-pattern";
 
 export const modelIdentitySegmentSchema = z
   .string()
-  .regex(/^[A-Za-z_][A-Za-z0-9_]*$/);
+  .regex(MODEL_IDENTITY_SEGMENT_PATTERN);
 
 export const modelIdentitySchema = z.object({
   modelType: modelIdentitySegmentSchema,

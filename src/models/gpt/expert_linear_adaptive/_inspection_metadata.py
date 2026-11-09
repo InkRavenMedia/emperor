@@ -309,7 +309,7 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG', 438, (438,)),
         ('ATTN_HALTING_STACK_BIAS_FLAG', 439, (439,)),
     )),
-    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 444, (444,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 445, (445,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 446, (446,)),
@@ -318,6 +318,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG', 449, (449,)),
         ('ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION', 450, (450,)),
         ('ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON', 453, (453,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Projection Memory Options'), (
         ('ATTN_MEMORY_FLAG', 455, (455,)),
         ('ATTN_MEMORY_OPTION', 456, (456,)),
         ('ATTN_MEMORY_POSITION_OPTION', 457, (457,)),
@@ -1273,6 +1275,43 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('ATTENTION_SOFT_MOE_SCORING_NORMALIZATION', 366, (366, 19)),
         ('ATTENTION_SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 366, (366, 20)),
         ('ATTENTION_SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 366, (366, 21)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Projection Stack Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 446, (446, 22)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 446, (446, 23)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 446, (446, 24)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 446, (446, 25)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 446, (446, 26)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_OPTION', 449, (449, 27)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_BIAS_FLAG', 449, (449, 28)),
+    )),
+    RuntimeDefaultsSection(('Main Grouping',), (
+        ('GROUPING_MODEL_OPTION', 1468, (1468, 29)),
+        ('GROUPING_MODEL_BIAS_FLAG', 1468, (1468, 30)),
+    )),
+    RuntimeDefaultsSection(('Router Grouping',), (
+        ('ROUTER_GROUPING_MODEL_OPTION', 1621, (1621, 31)),
+        ('ROUTER_GROUPING_MODEL_BIAS_FLAG', 1621, (1621, 32)),
+    )),
+    RuntimeDefaultsSection(('Attn Grouping',), (
+        ('ATTN_GROUPING_MODEL_OPTION', 1634, (1634, 33)),
+        ('ATTN_GROUPING_MODEL_BIAS_FLAG', 1634, (1634, 34)),
+    )),
+    RuntimeDefaultsSection(('Ff Grouping',), (
+        ('FF_GROUPING_MODEL_OPTION', 1647, (1647, 35)),
+        ('FF_GROUPING_MODEL_BIAS_FLAG', 1647, (1647, 36)),
+    )),
+    RuntimeDefaultsSection(('Sequence Expansion',), (
+        ('SEQUENCE_EXPANSION_MODEL_OPTION', 1667, (1667, 37)),
+        ('SEQUENCE_EXPANSION_MODEL_BIAS_FLAG', 1667, (1667, 38)),
+        ('SEQUENCE_EXPANSION_MODEL_STACK_NUM_LAYERS', 1667, (1667, 39)),
+        ('SEQUENCE_EXPANSION_MODEL_STACK_HIDDEN_DIM', 1667, (1667, 40)),
+        ('SEQUENCE_EXPANSION_MODEL_ADAPTIVE_BIAS_GENERATOR_NUM_LAYERS', 1667, (1667, 41)),
+        ('SEQUENCE_EXPANSION_MODEL_ADAPTIVE_BIAS_GENERATOR_HIDDEN_DIM', 1667, (1667, 42)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_OPTION', 1668, (1668, 43)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS', 1668, (1668, 44)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_PADDING_IDX', 1668, (1668, 45)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_AUTO_EXPAND_FLAG', 1668, (1668, 46)),
     )),
 )
 

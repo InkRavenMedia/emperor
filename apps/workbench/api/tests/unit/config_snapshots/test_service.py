@@ -227,20 +227,15 @@ class ConfigSnapshotServiceAdaptiveValidationTests(unittest.TestCase):
 
     def test_snapshot_persists_canonical_adapter_serialization(self) -> None:
         with patch(
-            "emperor_workbench.model_packages.SelectedModelPackage."
-            "serialize_overrides",
-            return_value={
-                "STACK_RESIDUAL_CONNECTION_OPTION": "WeightedResidualConfig"
-            },
+            "emperor_workbench.model_packages.SelectedModelPackage.serialize_overrides",
+            return_value={"STACK_RESIDUAL_CONNECTION_OPTION": "WeightedResidualConfig"},
         ) as serialize_overrides:
             snapshot = self.service.create_snapshot(
                 model="linears/linear",
                 preset="baseline",
                 name="canonical residual spelling",
                 overrides={
-                    "stack_residual_connection_option": (
-                        "AdditiveResidualConfig"
-                    ),
+                    "stack_residual_connection_option": "AdditiveResidualConfig",
                 },
             )
 

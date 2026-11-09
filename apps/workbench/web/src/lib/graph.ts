@@ -70,6 +70,7 @@ export {
 } from "@/lib/graph/navigation";
 export { filterGraphByDetail, filterGraphByExpansion } from "@/lib/graph/filtering";
 export {
+  decorateGraphParameterActivity,
   decorateGraphSelection,
   deriveGraphDisplayModel,
   projectGraphDisplay,

@@ -335,10 +335,11 @@ describe("useMonitorChartsModalState", () => {
     expect(result.current.query.historicalComparisonData).toHaveLength(0);
   });
 
-  it("does not discard successful historical runs when one run fails", async () => {
+  it("retries only the failed historical run and keeps successful charts", async () => {
     const runs = [logRun({ id: "run-ok" }), logRun({ id: "run-failed" })];
+    let failedRequests = 0;
     apiMocks.fetchLogRunMonitorData.mockImplementation(({ runId, nodePath }) => {
-      if (runId === "run-failed") {
+      if (runId === "run-failed" && failedRequests++ === 0) {
         return Promise.reject(new Error("event read failed"));
       }
       return Promise.resolve(monitorData(nodePath));
@@ -362,5 +363,53 @@ describe("useMonitorChartsModalState", () => {
       });
     });
     expect(result.current.query.hasData).toBe(true);
+    expect(result.current.query.primaryFailure).toMatchObject({
+      failed: 1,
+      total: 2,
+    });
+
+    act(() => result.current.query.primaryFailure?.retry());
+    await waitFor(() => {
+      expect(result.current.query.historicalData).toHaveLength(2);
+      expect(result.current.query.primaryFailure).toBeNull();
+    });
+    expect(apiMocks.fetchLogRunMonitorData.mock.calls.map(([input]) => input.runId))
+      .toEqual(["run-ok", "run-failed", "run-failed"]);
+  });
+
+  it.each([
+    ["live job", { kind: "active-job", job: trainingJob() }, apiMocks.fetchMonitorData],
+    [
+      "single historical run",
+      { kind: "historical-run", run: logRun({ id: "run-failed" }) },
+      apiMocks.fetchLogRunMonitorData,
+    ],
+  ] as const)("distinguishes failure from a successful empty response for a %s", async (
+    _label,
+    source,
+    fetchData,
+  ) => {
+    fetchData
+      .mockRejectedValueOnce(new Error("event read failed"))
+      .mockResolvedValueOnce({
+        ...monitorData("main_model.layers.0"),
+        scalarSeries: [],
+      });
+    const { result } = renderMonitorModalState({ source });
+
+    await waitFor(() => {
+      expect(result.current.query.emptyMessage.title).toBe("Could not load monitor data");
+    });
+    expect(result.current.query.hasData).toBe(false);
+    expect(result.current.query.isLoading).toBe(false);
+
+    act(() => result.current.query.primaryFailure?.retry());
+    await waitFor(() => {
+      expect(result.current.query.primaryFailure).toBeNull();
+      expect(result.current.query.emptyMessage.title).toBe(
+        source.kind === "active-job" ? "No data yet" : "No tags for this node",
+      );
+    });
+    expect(fetchData).toHaveBeenCalledTimes(2);
   });
 });

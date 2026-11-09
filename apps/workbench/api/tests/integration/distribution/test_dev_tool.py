@@ -24,7 +24,10 @@ class PortableLauncherTests(unittest.TestCase):
     def test_workbench_cli_launches_the_canonical_asgi_target(self) -> None:
         from emperor_workbench.cli import main
 
-        with patch("uvicorn.run") as run:
+        with (
+            patch.dict(os.environ, {"WORKBENCH_BACKEND_PORT": "invalid"}),
+            patch("uvicorn.run") as run,
+        ):
             main(
                 [
                     "--host",

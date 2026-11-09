@@ -6,16 +6,13 @@ from types import ModuleType
 from typing import Any, Final
 
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveParameterAugmentationConfig,
     AttentionGroupingConfig,
     GroupingConfig,
     MeanStdGroupingConfig,
-    SumGroupingConfig,
 )
-from emperor.config import ConfigBase
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models import _learned_grouping, _sequence_expansion
 
 from . import config
 from .runtime_options import (
@@ -282,104 +279,25 @@ def feed_forward_options_from_config(
     )
 
 
-_GROUPING_FIELDS = (
-    "grouping_scope",
-    "group_count",
-    "chunk_size",
-    "grouping_sequence_length",
-    "grouping_input_order",
-    "grouping_method",
-    "grouping_model_config",
-    "grouping_summary_normalization",
-    "grouping_attention_hidden_dim",
-    "grouping_rms_norm_epsilon",
-)
-
-
-def _grouping_from_fields(
-    values: dict[str, Any], *, prefix: str
-) -> GroupingConfig | None:
-    if all(values.get(field) is None for field in _GROUPING_FIELDS):
-        return None
-    grouping_values = {
-        "summary_normalization": values.get("grouping_summary_normalization"),
-        "rms_norm_epsilon": values.get("grouping_rms_norm_epsilon"),
-    }
-    model_config = values.get("grouping_model_config")
-    hidden_dim = values.get("grouping_attention_hidden_dim")
-    method = values.get("grouping_method")
-    config_type = SumGroupingConfig if method is None else method
-    if not isinstance(config_type, type) or not issubclass(config_type, GroupingConfig):
-        raise ValueError(
-            "grouping_method must be a concrete grouping configuration class."
-        )
-    if hidden_dim is not None:
-        if not issubclass(config_type, AttentionGroupingConfig):
-            raise ValueError(
-                "grouping_attention_hidden_dim requires attention grouping."
-            )
-        if not isinstance(model_config, ConfigBase):
-            raise ValueError(
-                "grouping_attention_hidden_dim requires a supplied grouping_model_config."
-            )
-        if "hidden_dim" not in {field.name for field in fields(model_config)}:
-            raise ValueError(
-                "grouping_attention_hidden_dim requires a model config with a hidden_dim field."
-            )
-        model_config = replace(model_config, hidden_dim=hidden_dim)
-    if model_config is not None:
-        if not issubclass(
-            config_type, (AttentionGroupingConfig, MeanStdGroupingConfig)
-        ):
-            raise ValueError(
-                "grouping_model_config requires attention or mean/std grouping."
-            )
-        grouping_values["model_config"] = model_config
-    grouping = config_type(
-        **grouping_values,
-        scope=values.get("grouping_scope"),
-        group_count=values.get("group_count"),
-        chunk_size=values.get("chunk_size"),
-        sequence_length=values.get("grouping_sequence_length"),
-        input_order=values.get("grouping_input_order"),
-    )
-    validator = AdaptiveParameterAugmentationConfig().registry_owner().VALIDATOR
-    try:
-        validator.validate_grouping_value(grouping)
-    except (TypeError, ValueError) as exc:
-        raise ValueError(
-            f"{prefix} grouping requires complete scope-specific settings; "
-            "set all grouping fields to None to disable it. " + str(exc)
-        ) from exc
-    return grouping
-
-
 def _grouping_fields(
     grouping: GroupingConfig | None,
 ) -> dict[str, Any]:
     if grouping is None:
-        return dict.fromkeys(_GROUPING_FIELDS)
+        return dict.fromkeys(_learned_grouping.GROUPING_FIELDS)
     model_config = None
     if isinstance(grouping, (AttentionGroupingConfig, MeanStdGroupingConfig)):
         model_config = grouping.model_config
-    return dict(
-        zip(
-            _GROUPING_FIELDS,
-            (
-                grouping.scope,
-                grouping.group_count,
-                grouping.chunk_size,
-                grouping.sequence_length,
-                grouping.input_order,
-                type(grouping),
-                model_config,
-                grouping.summary_normalization,
-                None,
-                grouping.rms_norm_epsilon,
-            ),
-            strict=True,
-        )
-    )
+    return {
+        "grouping_scope": grouping.scope,
+        "group_count": grouping.group_count,
+        "chunk_size": grouping.chunk_size,
+        "grouping_sequence_length": grouping.sequence_length,
+        "grouping_input_order": grouping.input_order,
+        "grouping_method": type(grouping),
+        "grouping_model_config": model_config,
+        "grouping_summary_normalization": grouping.summary_normalization,
+        "grouping_rms_norm_epsilon": grouping.rms_norm_epsilon,
+    }
 
 
 def adaptive_options_from_config(
@@ -422,10 +340,10 @@ def adaptive_options_from_config(
         bias_mixture_router_generator_stack_options=_controller_stack_from_config(
             config_module, f"{prefix}_BIAS_MIXTURE_ROUTER_GENERATOR_STACK"
         ),
-        grouping_config=_grouping_from_fields(
+        grouping_config=_learned_grouping.grouping_from_fields(
             {
                 field: getattr(config_module, f"{prefix}_{field.upper()}")
-                for field in _GROUPING_FIELDS
+                for field in _learned_grouping.GROUPING_FIELDS
             },
             prefix=prefix,
         ),
@@ -791,10 +709,14 @@ def _pop_adaptive_options(
     current: AdaptiveParameterOptions,
     grouping_fields: dict[str, Any],
 ) -> AdaptiveParameterOptions:
-    for field in _GROUPING_FIELDS:
-        key = f"{prefix}{field}"
-        if key in values:
-            grouping_fields[field] = values.pop(key)
+    grouping_updates = {
+        field: values.pop(f"{prefix}{field}")
+        for field in _learned_grouping.GROUPING_FIELDS
+        if f"{prefix}{field}" in values
+    }
+    if prefix:
+        _learned_grouping.prefer_scoped_grouping_model(grouping_updates)
+    grouping_fields.update(grouping_updates)
     updates = {}
     for field_name in _ADAPTIVE_VALUE_FIELDS:
         key = f"{prefix}{field_name}"
@@ -925,17 +847,23 @@ def resolve_transformer_path_options(
 
     encoder_attention = _apply_path_updates(
         encoder_attention,
-        _pop_updates(values, "encoder_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "encoder_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     decoder_self_attention = _apply_path_updates(
         decoder_self_attention,
-        _pop_updates(values, "decoder_self_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "decoder_self_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     decoder_cross_attention = _apply_path_updates(
         decoder_cross_attention,
-        _pop_updates(values, "decoder_cross_attn_", _ATTENTION_FIELD_MAP),
+        _source_memory.scoped_source_memory_updates(
+            _pop_updates(values, "decoder_cross_attn_", _ATTENTION_FIELD_MAP)
+        ),
         attention=True,
     )
     encoder_feed_forward = _apply_path_updates(
@@ -1243,7 +1171,9 @@ def _resolve_adaptive_groups(
     return {
         name: replace(
             options,
-            grouping_config=_grouping_from_fields(grouping_fields[name], prefix=name),
+            grouping_config=_learned_grouping.grouping_from_fields(
+                grouping_fields[name], prefix=name
+            ),
         )
         for name, options in groups.items()
     }

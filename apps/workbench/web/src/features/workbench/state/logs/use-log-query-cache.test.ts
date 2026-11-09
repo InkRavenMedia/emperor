@@ -11,6 +11,7 @@ import {
   LOG_RUNS_QUERY_KEY,
   LOG_SCALARS_QUERY_KEY,
   LOG_TAGS_QUERY_KEY,
+  monitorQueryKeys,
 } from "@/lib/query-keys";
 
 function renderLogQueryCache() {
@@ -41,7 +42,7 @@ describe("useLogQueryCache", () => {
       await result.current.refreshAfterMutation({ runId: "run-1" });
     });
 
-    expect(invalidateSpy).toHaveBeenCalledTimes(2);
+    expect(invalidateSpy).toHaveBeenCalledTimes(3);
     expect(invalidateSpy).toHaveBeenNthCalledWith(1, {
       queryKey: LOG_EXPERIMENTS_QUERY_KEY,
     });
@@ -99,6 +100,7 @@ describe("useLogQueryCache", () => {
       { queryKey: LOG_MEDIA_QUERY_KEY },
       { queryKey: LOG_CHECKPOINTS_QUERY_KEY },
       { queryKey: LOG_ARTIFACTS_QUERY_KEY },
+      { predicate: expect.any(Function) },
     ]);
     expect(removeSpy).not.toHaveBeenCalled();
   });
@@ -124,4 +126,49 @@ describe("useLogQueryCache", () => {
     );
     expect(client.getQueryData([...LOG_TAGS_QUERY_KEY, ["run-3"]])).toBe("tags");
   });
+
+  it.each(["import", "manual refresh", "targeted mutation"] as const)(
+    "refreshes historical monitor caches after %s while preserving live data",
+    async (action) => {
+      const { client, result } = renderLogQueryCache();
+      const historicalKeys = [
+        monitorQueryKeys.historicalRun("run-1", "root.layer"),
+        monitorQueryKeys.historicalRunGroup(["run-1", "run-2"], "root.layer"),
+        monitorQueryKeys.historicalParameterStatus(["run-1", "run-2"]),
+      ];
+      const unrelatedKeys = [
+        monitorQueryKeys.historicalRun("run-3", "run-1"),
+        monitorQueryKeys.historicalParameterStatus(["run-3"]),
+      ];
+      const liveKeys = [
+        monitorQueryKeys.activeJob("run-1", "root.layer", "baseline", "mnist"),
+        monitorQueryKeys.activeJobParameterStatus("run-1", "baseline", "mnist"),
+      ];
+      for (const key of [...historicalKeys, ...unrelatedKeys, ...liveKeys]) {
+        client.setQueryData(key, "cached data");
+      }
+
+      await act(async () => {
+        if (action === "import") {
+          await result.current.refreshAfterMutation();
+        } else if (action === "manual refresh") {
+          await result.current.refreshLogs();
+        } else {
+          await result.current.refreshAfterMutation({ runIds: ["run-1"] });
+        }
+      });
+
+      for (const key of historicalKeys) {
+        expect(client.getQueryState(key)?.isInvalidated).toBe(true);
+      }
+      for (const key of unrelatedKeys) {
+        expect(client.getQueryState(key)?.isInvalidated).toBe(
+          action !== "targeted mutation",
+        );
+      }
+      for (const key of liveKeys) {
+        expect(client.getQueryState(key)?.isInvalidated).toBe(false);
+      }
+    },
+  );
 });

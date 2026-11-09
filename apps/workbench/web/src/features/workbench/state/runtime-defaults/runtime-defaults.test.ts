@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { type ConfigField } from "@/lib/api/models";
+import { isEnabledConfigValue } from "@/lib/config";
 import {
   applicableConfigFields,
   effectivePresetOverrides,
   inactivePresetOwnedOverrideKeys,
-  isEnabledRuntimeDefaultValue,
   runtimeDefaultsEditor,
   runtimeDefaultsMetrics,
 } from "@/features/workbench/state/runtime-defaults/runtime-defaults";
@@ -366,9 +366,7 @@ describe("Runtime Defaults", () => {
       presetCount: 1,
       state: "override-and-preset",
     });
-    expect(["true", "1", "yes", "on"].every(isEnabledRuntimeDefaultValue)).toBe(
-      true,
-    );
-    expect(isEnabledRuntimeDefaultValue("false")).toBe(false);
+    expect(["true", "1", "yes", "on"].every(isEnabledConfigValue)).toBe(true);
+    expect(isEnabledConfigValue("false")).toBe(false);
   });
 });

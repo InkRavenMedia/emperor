@@ -294,8 +294,9 @@ class TrainingWorkerLauncher:
         ready_path: Path | None = None
         launched_command = command
         if self.cancellation_mode == "strict-cgroup":
-            cgroup = self.cancellation.create_job_cgroup(str(payload["id"]))
             ready_path = job_root / "cgroup.ready"
+            ready_path.unlink(missing_ok=True)
+            cgroup = self.cancellation.create_job_cgroup(str(payload["id"]))
             launched_command = self._wrap_strict_cgroup_command(
                 command,
                 cgroup=cgroup,

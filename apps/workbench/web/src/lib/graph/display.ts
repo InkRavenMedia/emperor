@@ -101,14 +101,8 @@ export function deriveGraphDisplayModel(
 function decorateChildSummaries(
   summaries: ChildSummary[],
   model: GraphDisplayModel,
-  parameterActivityForNode:
-    | ((node: GraphNode) => GraphParameterActivity | undefined)
-    | undefined,
+  parameterActivityForNode: (node: GraphNode) => GraphParameterActivity | undefined,
 ) {
-  if (!parameterActivityForNode) {
-    return summaries;
-  }
-
   let hasChanges = false;
   const decoratedSummaries = summaries.map((summary) => {
     const sourceNode = summary.sourceNodeId
@@ -128,6 +122,35 @@ function decorateChildSummaries(
   return hasChanges ? decoratedSummaries : summaries;
 }
 
+export function decorateGraphParameterActivity<
+  Card extends Pick<GraphDisplayCard, "id" | "data">,
+>(
+  cards: Card[],
+  model: GraphDisplayModel,
+  parameterActivityForNode: ProjectGraphDisplayOptions["parameterActivityForNode"],
+): Card[] {
+  if (!parameterActivityForNode) {
+    return cards;
+  }
+
+  return cards.map((card) => {
+    const node = model.sourceNodesById.get(card.id);
+    const parameterActivity = node ? parameterActivityForNode(node) : undefined;
+    const childSummaries = decorateChildSummaries(
+      card.data.childSummaries,
+      model,
+      parameterActivityForNode,
+    );
+    if (
+      parameterActivity === card.data.parameterActivity &&
+      childSummaries === card.data.childSummaries
+    ) {
+      return card;
+    }
+    return { ...card, data: { ...card.data, childSummaries, parameterActivity } };
+  });
+}
+
 function graphDisplayCard(
   node: GraphNode,
   model: GraphDisplayModel,
@@ -135,11 +158,7 @@ function graphDisplayCard(
 ): GraphDisplayCard {
   const childCount =
     model.detailNavigation.childrenById.get(node.id)?.length ?? 0;
-  const childSummaries = decorateChildSummaries(
-    model.childSummariesById.get(node.id) ?? [],
-    model,
-    options.parameterActivityForNode,
-  );
+  const childSummaries = model.childSummariesById.get(node.id) ?? [];
   const expertDiagram = model.expertDiagramsById.get(node.id);
   const stackDiagram = model.stackDiagramsById.get(node.id);
   const clusterDiagram = model.clusterDiagramsById.get(node.id);
@@ -192,7 +211,6 @@ function graphDisplayCard(
       isExpanded,
       canToggleExpansion,
       canOpenMonitor,
-      parameterActivity: options.parameterActivityForNode?.(node),
       isDetailsExpanded,
       onActivateNode: () => options.onActivateNode(node.id),
       onToggleExpansion: () => options.onToggleExpansion(node.id),
@@ -217,8 +235,10 @@ export function projectGraphDisplay(
 
   return {
     graph,
-    cards: (graph?.nodes ?? []).map((node) =>
-      graphDisplayCard(node, model, options),
+    cards: decorateGraphParameterActivity(
+      (graph?.nodes ?? []).map((node) => graphDisplayCard(node, model, options)),
+      model,
+      options.parameterActivityForNode,
     ),
     edges: graph?.edges ?? [],
   };

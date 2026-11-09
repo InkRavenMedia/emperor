@@ -309,6 +309,49 @@ describe("useTrainingPlanState", () => {
     expect(launch.mock.calls[0][0]).not.toHaveProperty("runPlan");
   });
 
+  it("refreshes the plan when a selected snapshot is edited under the same ID", async () => {
+    const launch = vi.fn();
+    const originalPlan = runPlan();
+    originalPlan.snapshotRevisions = [
+      { id: "wide", semanticRevision: "a".repeat(64) },
+    ];
+    const editedPlan = runPlan();
+    editedPlan.snapshotRevisions = [
+      { id: "wide", semanticRevision: "b".repeat(64) },
+    ];
+    mocks.fetchTrainingRunPlan
+      .mockResolvedValueOnce(originalPlan)
+      .mockResolvedValueOnce(editedPlan);
+
+    const rendered = renderPlan(planInput({ selectedSnapshots: snapshots, launch }));
+    await waitFor(() => expect(rendered.result.current.canStart).toBe(true));
+    expect(rendered.result.current.displayRunPlan).toBe(originalPlan);
+
+    rendered.rerender({
+      value: planInput({
+        selectedSnapshots: [
+          { ...snapshots[0]!, overrides: { hidden_dim: "256", num_epochs: "4" } },
+        ],
+        launch,
+      }),
+    });
+    expect(rendered.result.current.canStart).toBe(false);
+    act(() => rendered.result.current.actions.start());
+    expect(launch).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(rendered.result.current.displayRunPlan).toEqual(editedPlan));
+    expect(rendered.result.current.canStart).toBe(true);
+    expect(mocks.fetchTrainingRunPlan).toHaveBeenCalledTimes(2);
+    expect(mocks.fetchTrainingRunPlan.mock.calls[1][0]).toEqual(
+      mocks.fetchTrainingRunPlan.mock.calls[0][0],
+    );
+
+    act(() => rendered.result.current.actions.start());
+    expect(launch).toHaveBeenCalledWith(
+      expect.objectContaining({ snapshotRevisions: editedPlan.snapshotRevisions }),
+    );
+  });
+
   it("uses the backend-authoritative normal plan and keeps folder validity in start readiness", async () => {
     const authoritativePlan = runPlan();
     const launch = vi.fn();

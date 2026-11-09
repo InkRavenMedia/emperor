@@ -68,6 +68,9 @@ class LogRunScanner:
             if state_root is not None
             else None
         )
+        self._scan_generation = 0
+        # Matching fingerprints advance the accepted scan without republishing.
+        self._accepted_scan_generation = 0
         self._persistent_generation = 0
         self._runs_cache: list[LogRun] | None = None
         self._runs_cache_fingerprint: LogRunCatalogFingerprint | None = None
@@ -99,7 +102,8 @@ class LogRunScanner:
         cached_runs: list[LogRun] | None = None
         cached_observations: dict[str, RunArtifactObservation] = {}
         with self._cache_lock:
-            generation = self._cache_generation
+            cache_generation = self._cache_generation
+            load_persistent = self._runs_cache is None
             if (
                 self._runs_cache is not None
                 and now < self._runs_cache_deadline
@@ -114,17 +118,24 @@ class LogRunScanner:
                 result_projection=result_projection,
             )
 
-        if self._runs_cache is None:
+        if load_persistent:
             persisted = self._load_persistent_catalog(root)
             if persisted is not None:
                 persisted_runs, persisted_generation = persisted
                 with self._cache_lock:
-                    if generation == self._cache_generation:
+                    if (
+                        cache_generation == self._cache_generation
+                        and self._runs_cache is None
+                    ):
                         self._runs_cache = persisted_runs
                         self._runs_cache_fingerprint = None
                         self._runs_cache_catalog_generation = catalog_generation
                         self._artifact_observations = {}
                         self._runs_cache_deadline = now + self.cache_ttl_seconds
+                        self._scan_generation = max(
+                            self._scan_generation, persisted_generation
+                        )
+                        self._accepted_scan_generation = persisted_generation
                         self._persistent_generation = persisted_generation
                 return self._project_runs(
                     persisted_runs,
@@ -132,24 +143,21 @@ class LogRunScanner:
                     result_projection=result_projection,
                 )
 
-        if not root.exists():
-            with self._cache_lock:
-                if generation == self._cache_generation:
-                    self._runs_cache = []
-                    self._runs_cache_fingerprint = ()
-                    self._runs_cache_catalog_generation = catalog_generation
-                    self._artifact_observations = {}
-                    self._runs_cache_deadline = now + self.cache_ttl_seconds
-                    self._publish_persistent_catalog([], generation=1)
-            return []
-
-        observations, fingerprint = self._version_dirs_and_fingerprint(root)
+        # Assign the revision before observing disk so late scans keep their order.
+        with self._cache_lock:
+            self._scan_generation += 1
+            scan_generation = self._scan_generation
+        observations, fingerprint = (
+            self._version_dirs_and_fingerprint(root) if root.exists() else ([], ())
+        )
         with self._cache_lock:
             if (
-                generation == self._cache_generation
+                cache_generation == self._cache_generation
+                and scan_generation > self._accepted_scan_generation
                 and self._runs_cache is not None
                 and self._runs_cache_fingerprint == fingerprint
             ):
+                self._accepted_scan_generation = scan_generation
                 self._runs_cache_deadline = now + self.cache_ttl_seconds
                 self._runs_cache_catalog_generation = catalog_generation
                 cached_runs = list(self._runs_cache)
@@ -188,20 +196,23 @@ class LogRunScanner:
             reverse=True,
         )
         with self._cache_lock:
-            if generation == self._cache_generation:
+            accepted = (
+                cache_generation == self._cache_generation
+                and scan_generation > self._accepted_scan_generation
+            )
+            if accepted:
                 self._runs_cache = list(sorted_runs)
                 self._runs_cache_fingerprint = fingerprint
                 self._runs_cache_catalog_generation = catalog_generation
                 self._artifact_observations = observations_by_path
                 self._runs_cache_deadline = now + self.cache_ttl_seconds
-                self._persistent_generation += 1
-                persistent_generation = self._persistent_generation
-            else:
-                persistent_generation = None
-        if persistent_generation is not None:
+                self._accepted_scan_generation = scan_generation
+                self._persistent_generation = scan_generation
+        if accepted:
             self._publish_persistent_catalog(
                 sorted_runs,
-                generation=persistent_generation,
+                cache_generation=cache_generation,
+                generation=scan_generation,
             )
         return self._project_runs(
             sorted_runs,
@@ -244,14 +255,8 @@ class LogRunScanner:
 
     def clear_cache(self) -> None:
         with self._cache_lock:
-            self._cache_generation += 1
-            self._runs_cache = None
-            self._runs_cache_fingerprint = None
-            self._runs_cache_catalog_generation = None
             self._artifact_observations = {}
-            self._runs_cache_deadline = 0.0
-        if self._persistent_catalog is not None:
-            self._persistent_catalog.invalidate()
+            self._invalidate_catalog()
 
     def reconcile_catalog(self) -> None:
         """Force one bounded reconciliation before an authoritative mutation."""
@@ -273,14 +278,18 @@ class LogRunScanner:
             affected_keys = {path.as_posix() for path in affected_paths}
             for key in affected_keys:
                 self._artifact_observations.pop(key, None)
-            self._cache_generation += 1
-            self._runs_cache = None
-            self._runs_cache_fingerprint = None
-            self._runs_cache_catalog_generation = None
-            self._runs_cache_deadline = 0.0
+            self._invalidate_catalog()
+        return affected_paths
+
+    def _invalidate_catalog(self) -> None:
+        """Invalidate memory and disk while holding the scanner lock."""
+        self._cache_generation += 1
+        self._runs_cache = None
+        self._runs_cache_fingerprint = None
+        self._runs_cache_catalog_generation = None
+        self._runs_cache_deadline = 0.0
         if self._persistent_catalog is not None:
             self._persistent_catalog.invalidate()
-        return affected_paths
 
     def _catalog_generation(self, root: Path) -> LogRunCatalogGeneration:
         if not root.exists():
@@ -340,16 +349,21 @@ class LogRunScanner:
         self,
         runs: list[LogRun],
         *,
+        cache_generation: int,
         generation: int,
     ) -> None:
         catalog = self._persistent_catalog
         if catalog is None:
             return
-        catalog.publish(
-            kind="run-history",
-            generation=generation,
-            entries=[self._run_catalog_entry(run) for run in runs],
-        )
+        entries = [self._run_catalog_entry(run) for run in runs]
+        with self._cache_lock:
+            if (
+                cache_generation == self._cache_generation
+                and generation == self._persistent_generation
+            ):
+                catalog.publish(
+                    kind="run-history", generation=generation, entries=entries
+                )
 
     @staticmethod
     def _run_catalog_entry(run: LogRun) -> dict[str, Any]:

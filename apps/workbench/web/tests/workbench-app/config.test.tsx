@@ -283,6 +283,7 @@ function configFixtureField({
   sectionPath,
   description,
   type,
+  legacyJson,
   default: defaultValue,
   nullable,
   choices,
@@ -299,6 +300,7 @@ function configFixtureField({
     sectionPath: sectionPath ?? fixtureSectionPath(section),
     description: description ?? "",
     type,
+    legacyJson,
     default: defaultValue,
     nullable: nullable ?? defaultValue === null,
     choices: choices ?? [],
@@ -1373,7 +1375,7 @@ describe("WorkbenchApp Full Config", () => {
     await user.click(await waitForOpenFullConfigButton());
     const dialog = await screen.findByRole("dialog", { name: /full configuration/i });
     const dialogHeader = dialog.querySelector("header");
-    const dialogBody = dialog.querySelector(".full-config-dialog-body");
+    const dialogBody = dialogHeader?.nextElementSibling;
     const dialogFooter = dialog.querySelector("footer");
     const layerAccordion = within(dialog).getByRole("button", {
       name: /layer hidden stack options section, 3 fields, 0 overrides/i,
@@ -1399,27 +1401,21 @@ describe("WorkbenchApp Full Config", () => {
     }
 
     expect(dialog).toHaveClass(
-      "full-config-dialog-shell",
       "rounded-dialog",
       "border",
       "border-line-hover",
       "bg-panel",
     );
     expect(dialog).not.toHaveClass("edge", "rounded-card", "bg-white/[0.018]");
-    expect(dialogHeader).toHaveClass(
-      "full-config-dialog-chrome",
-      "full-config-dialog-header",
-      "border-line-soft",
-    );
+    expect(dialogHeader).toHaveClass("border-line-soft");
+    expect(dialogHeader).toContainElement(closeButton);
     expect(dialogHeader).not.toHaveClass("bg-panel/85");
     expect(dialogHeader).not.toHaveClass("border-line");
-    expect(dialogBody).toHaveClass("full-config-dialog-body");
+    expect(dialogBody).toHaveClass("overflow-y-auto");
+    expect(dialogBody).toContainElement(layerAccordion);
+    expect(dialogBody.nextElementSibling).toBe(dialogFooter);
     expect(dialogBody).not.toHaveClass("bg-bg-2/80");
-    expect(dialogFooter).toHaveClass(
-      "full-config-dialog-chrome",
-      "full-config-dialog-footer",
-      "border-line-soft",
-    );
+    expect(dialogFooter).toHaveClass("border-line-soft");
     expect(dialogFooter).not.toHaveClass("bg-panel/85");
     expect(dialogFooter).not.toHaveClass("border-line");
     expect(closeButton).toHaveClass("border-line-soft", "bg-white/[0.025]");
@@ -1448,12 +1444,11 @@ describe("WorkbenchApp Full Config", () => {
       "border",
       "border-line",
       "bg-panel-2/70",
-      "px-0",
-      "py-0",
       "shadow-card",
       "focus-within:z-30",
     );
     expect(layerSection).not.toHaveClass("overflow-hidden");
+    expect(layerSection).not.toHaveClass("px-panel");
     expect(layerSection).not.toHaveClass("rounded-[12px]", "bg-panel/80");
     expect(gateSection).toHaveClass(
       "grid",
@@ -1466,12 +1461,11 @@ describe("WorkbenchApp Full Config", () => {
       "border",
       "border-line-soft",
       "bg-white/[0.012]",
-      "px-0",
-      "py-0",
       "shadow-card-subtle",
       "focus-within:z-30",
     );
     expect(gateSection).not.toHaveClass("overflow-hidden");
+    expect(gateSection).not.toHaveClass("px-panel");
     expect(gateSection).not.toHaveClass("rounded-[12px]", "bg-panel/70");
     const sectionNav = within(dialog).getByRole("navigation", {
       name: /full config sections/i,
@@ -2859,7 +2853,13 @@ describe("WorkbenchApp Full Config", () => {
     expect(pipelineNone).toBeChecked();
     expect(pipelineOff).not.toBeChecked();
 
-    await user.click(pipelineOn);
+    await user.click(pipelineNone);
+    await user.tab({ shift: true });
+    expect(gatePipeline.getAllByRole("radio")).not.toContain(document.activeElement);
+    await user.tab();
+    expect(pipelineNone).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(pipelineOn).toHaveFocus();
     expect(pipelineOn).toBeChecked();
     let commandDialog = await openTrainingCommand(user, dialog);
     expect(commandField(commandDialog)).toHaveValue(
@@ -4022,6 +4022,71 @@ describe("WorkbenchApp Full Config", () => {
     expect(commandField(commandDialog)).toHaveValue(
       "mise run experiment -- --model-type linears --model linear --preset baseline",
     );
+  });
+
+  it("copies native sequence expansion options without an empty legacy JSON field", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const section = "Sequence Expansion";
+    setupConfigScenario({
+      schemaResponse: {
+        ...schemaResponse,
+        fields: [
+          ...schemaResponse.fields,
+          configFixtureField({
+            key: "sequence_expansion_model_option",
+            section,
+            type: "enum",
+            default: null,
+            choices: ["LINEAR"],
+          }),
+          configFixtureField({
+            key: "sequence_expansion_model_bias_flag",
+            section,
+            type: "bool",
+            default: true,
+            choices: [true, false],
+          }),
+          configFixtureField({
+            key: "sequence_expansion_model_config",
+            section,
+            type: "json",
+            legacyJson: true,
+            default: null,
+          }),
+        ],
+      },
+    });
+    renderWorkbench();
+
+    const dialog = await openFullConfig(user);
+    await user.type(
+      within(dialog).getByRole("combobox", { name: /search config fields/i }),
+      "sequence expansion model",
+    );
+    const results = fullConfigSearchPopup(dialog);
+    expect(within(results).queryByRole("button", { name: /model config/i }))
+      .not.toBeInTheDocument();
+
+    const selector = fullConfigSearchResultRow(results, /model option/i);
+    await selectSearchableDropdownOption(
+      user,
+      within(selector).getByRole("button", { name: /current value/i }),
+      "LINEAR",
+      "LINEAR",
+    );
+    const bias = fullConfigSearchResultRow(results, /model bias flag/i);
+    await user.click(within(bias).getByRole("radio", { name: "Off" }));
+
+    const commandDialog = await openTrainingCommand(user, dialog);
+    const command = "mise run experiment -- --model-type linears --model linear --preset baseline --config --sequence-expansion-model-option LINEAR --sequence-expansion-model-bias-flag false";
+    expect(commandField(commandDialog)).toHaveValue(command);
+    await user.click(within(commandDialog).getByRole("button", { name: /copy command/i }));
+    expect(writeText).toHaveBeenCalledWith(command);
   });
 
   it("copies the exact training command to the clipboard", async () => {

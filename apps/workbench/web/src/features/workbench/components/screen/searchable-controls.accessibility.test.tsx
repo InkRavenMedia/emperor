@@ -15,7 +15,7 @@ const configOption: RuntimeDefaultsSearchOptionPresentation = {
   flag: "--hidden-dim",
   type: "int",
   sectionTitle: "Model",
-  rootSectionTitle: "Model",
+  rootSectionKey: "Model",
   field: {
     schema: {
       key: "hidden_dim",

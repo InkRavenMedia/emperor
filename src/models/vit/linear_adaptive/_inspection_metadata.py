@@ -351,6 +351,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
     RuntimeDefaultsSection(('Attention Options',), (
         ('ATTN_NUM_HEADS', 483, (483,)),
         ('ATTN_ADD_KEY_VALUE_BIAS_FLAG', 484, (484,)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
         ('ATTN_SOURCE_MEMORY_FLAG', 487, (487,)),
         ('ATTN_SOURCE_MEMORY_CONFIG', 488, (488,)),
         ('ATTN_SOURCE_MEMORY_MODEL_CONFIG', 489, (489,)),
@@ -1123,6 +1125,39 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SOFT_MOE_SCORING_NORMALIZATION', 820, (820, 8)),
         ('SOFT_MOE_SCORING_LAST_LAYER_BIAS_OPTION', 820, (820, 9)),
         ('SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 820, (820, 10)),
+    )),
+    RuntimeDefaultsSection(('Attention Options', 'Attention Source Memory Options'), (
+        ('ATTN_SOURCE_MEMORY_MODEL_OPTION', 489, (489, 11)),
+        ('ATTN_SOURCE_MEMORY_MODEL_BIAS_FLAG', 489, (489, 12)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 489, (489, 13)),
+        ('ATTN_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 489, (489, 14)),
+        ('ATTN_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 489, (489, 15)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_OPTION', 492, (492, 16)),
+        ('ATTN_SOURCE_MEMORY_GROUPING_MODEL_BIAS_FLAG', 492, (492, 17)),
+    )),
+    RuntimeDefaultsSection(('Main Grouping',), (
+        ('GROUPING_MODEL_OPTION', 1257, (1257, 18)),
+        ('GROUPING_MODEL_BIAS_FLAG', 1257, (1257, 19)),
+    )),
+    RuntimeDefaultsSection(('Ff Grouping',), (
+        ('FF_GROUPING_MODEL_OPTION', 1396, (1396, 20)),
+        ('FF_GROUPING_MODEL_BIAS_FLAG', 1396, (1396, 21)),
+    )),
+    RuntimeDefaultsSection(('Attn Grouping',), (
+        ('ATTN_GROUPING_MODEL_OPTION', 1543, (1543, 22)),
+        ('ATTN_GROUPING_MODEL_BIAS_FLAG', 1543, (1543, 23)),
+    )),
+    RuntimeDefaultsSection(('Sequence Expansion',), (
+        ('SEQUENCE_EXPANSION_MODEL_OPTION', 1624, (1624, 24)),
+        ('SEQUENCE_EXPANSION_MODEL_BIAS_FLAG', 1624, (1624, 25)),
+        ('SEQUENCE_EXPANSION_MODEL_STACK_NUM_LAYERS', 1624, (1624, 26)),
+        ('SEQUENCE_EXPANSION_MODEL_STACK_HIDDEN_DIM', 1624, (1624, 27)),
+        ('SEQUENCE_EXPANSION_MODEL_ADAPTIVE_BIAS_GENERATOR_NUM_LAYERS', 1624, (1624, 28)),
+        ('SEQUENCE_EXPANSION_MODEL_ADAPTIVE_BIAS_GENERATOR_HIDDEN_DIM', 1624, (1624, 29)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_OPTION', 1625, (1625, 30)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS', 1625, (1625, 31)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_PADDING_IDX', 1625, (1625, 32)),
+        ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_AUTO_EXPAND_FLAG', 1625, (1625, 33)),
     )),
 )
 

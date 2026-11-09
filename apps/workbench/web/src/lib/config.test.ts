@@ -1708,10 +1708,10 @@ describe("config section controls", () => {
       disabledReasonsWhenOff.get("expert_attention_use_kv_expert_models_flag"),
     ).toMatch(/enable expert attention flag/i);
     expect(
-      displayConfigFieldLabel(attentionModeSection!.fields[0]!, "Attention Mode"),
+      displayConfigFieldLabel(attentionModeSection!.fields[0]!, attentionModeSection!),
     ).toBe("Use MixtureOfAttentionHeads");
     expect(
-      displayConfigFieldLabel(attentionModeSection!.fields[1]!, "Attention Mode"),
+      displayConfigFieldLabel(attentionModeSection!.fields[1]!, attentionModeSection!),
     ).toBe("Expert K/V projections");
   });
 
@@ -2667,7 +2667,7 @@ describe("config section controls", () => {
 
     const [inputSection, outputSection] = deriveNestedConfigSections(sections);
     const groups = boundaryModelFieldGroups(
-      inputSection.title,
+      inputSection,
       inputSection.fields,
     );
 
@@ -2697,7 +2697,7 @@ describe("config section controls", () => {
     }
 
     const outputGroups = boundaryModelFieldGroups(
-      outputSection.title,
+      outputSection,
       outputSection.fields,
     );
     expect(outputGroups?.[0]?.stackHint).toMatchObject({
@@ -2713,7 +2713,7 @@ describe("config section controls", () => {
     expect(disabledByDefault.has("output_layer_weight_option")).toBe(false);
 
     const enabledGroups = boundaryModelFieldGroups(
-      inputSection.title,
+      inputSection,
       inputSection.fields,
       { input_layer_weight_option: "DualModelDynamicWeightConfig" },
     );

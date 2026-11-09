@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import math
 import os
-import shutil
 import stat
 import sys
 import tempfile
@@ -452,19 +451,9 @@ def _copy_observed_event_file(
                 path,
                 trusted_root=trusted_root,
             ) as source_fd:
-                observed = os.fstat(source_fd)
-                if (
-                    not stat.S_ISREG(observed.st_mode)
-                    or int(observed.st_size) != expected_size
-                    or int(observed.st_mtime_ns) != expected_modified_at
-                ):
-                    return False
-                with (
-                    os.fdopen(os.dup(source_fd), "rb") as source,
-                    destination.open("xb") as out,
-                ):
-                    shutil.copyfileobj(source, out, length=1024 * 1024)
-                return True
+                return _copy_event_file_descriptor(
+                    source_fd, expected_size, expected_modified_at, destination
+                )
         except (OSError, ValueError):
             return False
     directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -478,19 +467,9 @@ def _copy_observed_event_file(
             directory_fd = os.open(part, directory_flags, dir_fd=directory_fd)
             opened.append(directory_fd)
         source_fd = os.open(relative.parts[-1], file_flags, dir_fd=directory_fd)
-        observed = os.fstat(source_fd)
-        if (
-            not stat.S_ISREG(observed.st_mode)
-            or int(observed.st_size) != expected_size
-            or int(observed.st_mtime_ns) != expected_modified_at
-        ):
-            return False
-        with (
-            os.fdopen(os.dup(source_fd), "rb") as source,
-            destination.open("xb") as out,
-        ):
-            shutil.copyfileobj(source, out, length=1024 * 1024)
-        return True
+        return _copy_event_file_descriptor(
+            source_fd, expected_size, expected_modified_at, destination
+        )
     except OSError:
         return False
     finally:
@@ -498,6 +477,30 @@ def _copy_observed_event_file(
             os.close(source_fd)
         for directory_fd in reversed(opened):
             os.close(directory_fd)
+
+
+def _copy_event_file_descriptor(
+    source_fd: int, expected_size: int, expected_modified_at: int, destination: Path
+) -> bool:
+    observed = os.fstat(source_fd)
+    if (
+        not stat.S_ISREG(observed.st_mode)
+        or observed.st_size != expected_size
+        or observed.st_mtime_ns != expected_modified_at
+    ):
+        return False
+    with destination.open("xb") as out:
+        remaining = expected_size
+        while remaining > 0:
+            chunk = os.read(source_fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                return False
+            out.write(chunk)
+            remaining -= len(chunk)
+    copied = os.fstat(source_fd)
+    return (
+        copied.st_size == expected_size and copied.st_mtime_ns == expected_modified_at
+    )
 
 
 def exact_scalar_tails(

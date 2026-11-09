@@ -236,6 +236,49 @@ class TrainingRunPlanTests(unittest.TestCase):
 
         self.assertEqual(deleted.exception.kind, FailureKind.CONFLICT)
 
+    def test_snapshot_plan_rejects_an_edit_during_materialization(self) -> None:
+        snapshots = _snapshot_service()
+        snapshot = snapshots.create_snapshot(
+            model="linears/linear",
+            preset="baseline",
+            name="wide model",
+            overrides={"HIDDEN_DIM": "128"},
+        )
+        service = _run_plan_service(config_snapshots=snapshots)
+        preview_command = CreateTrainingRunPlanCommand(
+            model=snapshot.model,
+            preset=snapshot.preset,
+            presets=[],
+            datasets=["Mnist"],
+            overrides={},
+            log_folder="snapshot_authority",
+            snapshot_ids=[snapshot.id],
+        )
+        preview = service.preview(preview_command)
+        edited = snapshots.update_snapshot(snapshot.id, overrides={"HIDDEN_DIM": "64"})
+
+        with (
+            patch.object(
+                snapshots, "get_snapshot", side_effect=(snapshot, edited, edited)
+            ),
+            self.assertRaisesRegex(RunPlanFailure, "changed semantically") as stale,
+        ):
+            service.materialize(
+                MaterializeTrainingRunPlanCommand(
+                    model=preview_command.model,
+                    preset=preview_command.preset,
+                    presets=preview_command.presets,
+                    datasets=preview_command.datasets,
+                    overrides=preview_command.overrides,
+                    log_folder=preview_command.log_folder,
+                    snapshot_ids=preview_command.snapshot_ids,
+                    snapshot_revisions=preview.snapshot_revisions,
+                ),
+                validated_log_folder=preview_command.log_folder,
+            )
+
+        self.assertEqual(stale.exception.kind, FailureKind.CONFLICT)
+
     def test_snapshot_plan_rejects_missing_and_foreign_snapshot_ids(self) -> None:
         snapshots = _snapshot_service()
         snapshots.create_snapshot(

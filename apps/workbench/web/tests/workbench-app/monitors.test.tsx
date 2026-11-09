@@ -1309,6 +1309,59 @@ describe("WorkbenchApp Monitor Charts And Errors", () => {
     expect(within(dialog).getByText("Comparison layer")).toBeInTheDocument();
   });
 
+  it("reports a failed historical comparison and retries only that source", async () => {
+    const fixture = buildHistoricalMonitorFixture(2);
+    const comparisonPath = "main_model.layers.1.model";
+    let comparisonFailed = false;
+    const { logRunMonitorDataRequests } = setupMonitorScenario({
+      inspectResponse: repeatedLayersInspectResponse,
+      ...fixture,
+      logRunMonitorDataResponse: ({ jobId, nodePath }) => {
+        if (nodePath === comparisonPath && jobId === "historical-01" && !comparisonFailed) {
+          comparisonFailed = true;
+          return Promise.reject(new Error("Monitor read failed"));
+        }
+        return defaultLogRunMonitorPayload(nodePath);
+      },
+    });
+    renderWorkbench();
+    const user = userEvent.setup();
+
+    await selectHistoricalMonitorGroup(user);
+    await user.click(
+      await screen.findByRole("button", { name: /select and expand main_model\.layers\.0/i }),
+    );
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^monitor charts$/i })).toBeEnabled();
+    });
+    await user.click(screen.getByRole("button", { name: /^monitor charts$/i }));
+    const dialog = await screen.findByRole("dialog", { name: /monitor charts/i }, { timeout: 5000 });
+    await selectSearchableDropdownOption(
+      user,
+      within(dialog).getByLabelText(/^compare$/i),
+      comparisonPath,
+      comparisonPath,
+    );
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Comparison: 1 of 2 monitor requests failed.",
+    );
+    const charts = await within(dialog).findAllByRole("img", {
+      name: /output\/mean multi-run scalar chart/i,
+    });
+    expect(charts.length).toBeGreaterThan(0);
+
+    const previousRequests = logRunMonitorDataRequests.length;
+    await user.click(within(dialog).getByRole("button", {
+      name: "Retry failed comparison monitor requests",
+    }));
+    await waitFor(() => {
+      expect(within(dialog).queryByRole("alert")).not.toBeInTheDocument();
+      expect(logRunMonitorDataRequests.slice(previousRequests)).toEqual([
+        { runId: "historical-01", nodePath: comparisonPath },
+      ]);
+    });
+  });
+
   it("prefers an active linear training job over filtered historical monitor runs", async () => {
     const fixture = buildHistoricalMonitorFixture(2);
     const { monitorDataRequests, logRunMonitorDataRequests } = setupMonitorScenario({

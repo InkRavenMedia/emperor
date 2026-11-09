@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { useConfigDialogSections } from "@/features/workbench/components/config/use-config-dialog-sections";
 
 const originalMatchMedia = window.matchMedia;
-const sections = [{ title: "Optimization" }];
+const sections = [{ key: "Optimization" }];
 
 afterEach(() => {
   Object.defineProperty(window, "matchMedia", {
@@ -20,6 +20,18 @@ function installMotionPreference(reduced: boolean) {
 }
 
 describe("useConfigDialogSections", () => {
+  it("keeps a section collapsed when its display title changes", () => {
+    const { result, rerender } = renderHook(
+      ({ section }) => useConfigDialogSections([section]),
+      { initialProps: { section: { key: "learning_rate", title: "Optimization" } } },
+    );
+
+    act(() => result.current.toggleSection("learning_rate"));
+    rerender({ section: { key: "learning_rate", title: "Optimizer Settings" } });
+
+    expect(result.current.openSectionKeys.has("learning_rate")).toBe(false);
+  });
+
   it.each([
     { reduced: false, behavior: "smooth" as const },
     { reduced: true, behavior: "auto" as const },

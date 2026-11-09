@@ -12,7 +12,10 @@ from emperor.augmentations.adaptive_parameters import (
     WeightDecayScheduleOptions,
 )
 from emperor.datasets.image.classification import Mnist
-from emperor.embedding.absolute import TextSinusoidalPositionalEmbeddingConfig
+from emperor.embedding.absolute import (
+    TextLearnedPositionalEmbeddingConfig,
+    TextSinusoidalPositionalEmbeddingConfig,
+)
 from emperor.experiments import ExperimentTask
 from emperor.linears import LinearLayerConfig
 from emperor.transformer import (
@@ -53,8 +56,13 @@ ENABLE_ARGUMENTS = (
     "true",
     "--sequence-expansion-max-new-tokens",
     "2",
-    "--sequence-expansion-model-config",
-    '{"type":"LinearLayerConfig","bias_flag":true}',
+)
+LINEAR_ARGUMENTS = (
+    *ENABLE_ARGUMENTS,
+    "--sequence-expansion-model-option",
+    "LINEAR",
+    "--sequence-expansion-model-bias-flag",
+    "true",
 )
 
 
@@ -104,6 +112,20 @@ def test_flags_are_discoverable_and_disabled_preserves_initialization(
     for key in sorted(key for key in keys if key.endswith("_CONFIG")):
         assert schema[key].value_type == "json", key
         assert not schema[key].choices, key
+    for prefix in prefixes:
+        model_option = schema[f"{prefix}SEQUENCE_EXPANSION_MODEL_OPTION"]
+        bias_flag = schema[f"{prefix}SEQUENCE_EXPANSION_MODEL_BIAS_FLAG"]
+        positions = schema[f"{prefix}SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_OPTION"]
+        assert model_option.value_type == "enum"
+        assert set(model_option.choices) == {
+            "LINEAR",
+            "LINEAR_STACK",
+            "ADAPTIVE_LINEAR",
+            "ADAPTIVE_LINEAR_STACK",
+        }
+        assert bias_flag.value_type == "bool" and bias_flag.choices == (True, False)
+        assert positions.value_type == "enum"
+        assert set(positions.choices) == {"LEARNED", "SINUSOIDAL", "DISABLED"}
     help_text = get_experiment_parser(package).format_help()
     print_config_options(package_name)
     listed = capsys.readouterr().out
@@ -149,7 +171,7 @@ def test_flags_are_discoverable_and_disabled_preserves_initialization(
 def test_cli_reaches_blocks_and_backpropagates_through_repeated_expansion(
     package_name, recurrent
 ):
-    overrides = parse_overrides(package_name, *ENABLE_ARGUMENTS)
+    overrides = parse_overrides(package_name, *LINEAR_ARGUMENTS)
     overrides.update(
         recurrent_flag=recurrent, recurrent_max_steps=3, recurrent_initial_iterations=3
     )
@@ -242,13 +264,23 @@ def test_structured_config_round_trip_overrides_and_copying(package_name):
 def test_transformer_path_overrides_and_explicit_false(variant):
     name = f"transformer/{variant}"
     branch_config = SequenceExpansionConfig(
-        max_new_tokens=4, model_config=LinearLayerConfig(bias_flag=True)
+        max_new_tokens=4,
+        model_config=LinearLayerConfig(bias_flag=False),
+        positional_embedding_config=TextSinusoidalPositionalEmbeddingConfig(
+            num_embeddings=1, auto_expand_flag=True
+        ),
     )
     overrides = parse_overrides(
         name,
-        *ENABLE_ARGUMENTS,
+        *LINEAR_ARGUMENTS,
+        "--sequence-expansion-positional-embedding-option",
+        "LEARNED",
+        "--sequence-expansion-positional-embedding-num-embeddings",
+        "16",
         "--encoder-sequence-expansion-max-new-tokens",
         "None",
+        "--encoder-sequence-expansion-model-bias-flag",
+        "false",
         "--decoder-sequence-expansion-config",
         serialize_config_value(branch_config),
     )
@@ -258,6 +290,15 @@ def test_transformer_path_overrides_and_explicit_false(variant):
     encoder = build_sequence_expansion_config(runtime.encoder_options, 8)
     decoder = build_sequence_expansion_config(runtime.decoder_options, 8)
     assert encoder.max_new_tokens == 2 and decoder.max_new_tokens == 4
+    assert encoder.model_config.bias_flag is False
+    assert decoder.model_config.bias_flag is False
+    assert isinstance(
+        encoder.positional_embedding_config, TextLearnedPositionalEmbeddingConfig
+    )
+    assert encoder.positional_embedding_config.num_embeddings == 16
+    assert (
+        decoder.positional_embedding_config == branch_config.positional_embedding_config
+    )
     for disabled_side in ("encoder", "decoder"):
         runtime = model_package(name).bind_runtime_defaults(
             {**overrides, f"{disabled_side}_sequence_expansion_flag": False}
@@ -280,12 +321,39 @@ def test_transformer_path_overrides_and_explicit_false(variant):
         assert [block.sequence_expansion.max_new_tokens for block in blocks] == [2, 4]
 
 
+def test_scoped_flat_positions_override_and_disable_common_positions():
+    name = "transformer/linear"
+    overrides = parse_overrides(
+        name,
+        *LINEAR_ARGUMENTS,
+        "--sequence-expansion-positional-embedding-option",
+        "LEARNED",
+        "--sequence-expansion-positional-embedding-num-embeddings",
+        "2",
+        "--encoder-sequence-expansion-positional-embedding-option",
+        "SINUSOIDAL",
+        "--encoder-sequence-expansion-positional-embedding-auto-expand-flag",
+        "true",
+        "--decoder-sequence-expansion-positional-embedding-option",
+        "DISABLED",
+    )
+    model = model_package(name).build_model(configuration(name, overrides)).eval()
+    encoder, decoder = expansions(model)
+    assert isinstance(
+        encoder.positional_embedding_config, TextSinusoidalPositionalEmbeddingConfig
+    )
+    assert encoder.position_embedding.auto_expand_flag
+    assert decoder.position_embedding is None
+    assert torch.isfinite(execute(model, name)[0]).all()
+
+
 @pytest.mark.parametrize(
     "name", ["vit/linear", "mlp_mixer/linear", "mlp_mixer/expert_linear_adaptive"]
 )
 @pytest.mark.parametrize("adaptive", [False, True])
 @pytest.mark.parametrize("stacked", [False, True])
-def test_predictor_json_accepts_linear_and_adaptive_stacks(name, adaptive, stacked):
+@pytest.mark.parametrize("flat", [False, True], ids=["legacy-json", "flat-flags"])
+def test_linear_and_adaptive_predictors(name, adaptive, stacked, flat):
     predictor = LinearLayerConfig(bias_flag=True)
     if adaptive:
         predictor = AdaptiveLinearLayerConfig(
@@ -303,19 +371,64 @@ def test_predictor_json_accepts_linear_and_adaptive_stacks(name, adaptive, stack
         stack = linear_stack(8, 2, num_layers=2)
         stack.layer_config.layer_model_config = predictor
         predictor = stack
-    overrides = parse_overrides(
-        name,
-        *ENABLE_ARGUMENTS,
+    arguments = [
         "--sequence-expansion-model-config",
         serialize_config_value(predictor),
         "--sequence-expansion-positional-embedding-config",
         '{"type":"TextLearnedPositionalEmbeddingConfig","num_embeddings":16}',
-    )
+    ]
+    if flat:
+        option = "ADAPTIVE_LINEAR" if adaptive else "LINEAR"
+        arguments = [
+            "--sequence-expansion-model-option",
+            f"{option}_STACK" if stacked else option,
+            "--sequence-expansion-positional-embedding-option",
+            "LEARNED",
+            "--sequence-expansion-positional-embedding-num-embeddings",
+            "16",
+            "--sequence-expansion-positional-embedding-padding-idx",
+            "1",
+        ]
+        if stacked:
+            arguments.extend(
+                [
+                    "--sequence-expansion-model-stack-num-layers",
+                    "2",
+                    "--sequence-expansion-model-stack-hidden-dim",
+                    "6",
+                ]
+            )
+        if adaptive:
+            arguments.extend(
+                [
+                    "--sequence-expansion-model-adaptive-bias-generator-num-layers",
+                    "2",
+                    "--sequence-expansion-model-adaptive-bias-generator-hidden-dim",
+                    "5",
+                ]
+            )
+    overrides = parse_overrides(name, *ENABLE_ARGUMENTS, *arguments)
     model = model_package(name).build_model(configuration(name, overrides))
     outputs = execute(model, name)
     loss = sum(output.square().mean() for output in outputs)
     loss.backward()
-    predictor_model = expansions(model)[0].count_predictor
+    expansion = expansions(model)[0]
+    assert expansion.position_embedding.cfg.num_embeddings == 16
+    predictor_model = expansion.count_predictor
+    if flat:
+        assert expansion.position_embedding.cfg.padding_idx == 1
+        if stacked:
+            assert predictor_model.cfg.num_layers == 2
+            assert predictor_model.cfg.hidden_dim == 6
+        if adaptive:
+            predictor_config = predictor_model.cfg
+            if stacked:
+                predictor_config = predictor_config.layer_config.layer_model_config
+            generator = (
+                predictor_config.adaptive_augmentation_config.bias_config.model_config
+            )
+            assert generator.num_layers == 2
+            assert generator.hidden_dim == 5
     assert any(parameter.grad is not None for parameter in predictor_model.parameters())
     if adaptive:
         assert any(
@@ -339,7 +452,7 @@ def test_text_tasks_align_supervision_and_generation_after_recurrent_expansion(
     family, task, variant
 ):
     name = f"{family}/{variant}"
-    overrides = parse_overrides(name, *ENABLE_ARGUMENTS)
+    overrides = parse_overrides(name, *LINEAR_ARGUMENTS)
     overrides.update(
         recurrent_flag=True, recurrent_max_steps=2, recurrent_initial_iterations=2
     )
@@ -414,7 +527,7 @@ def test_encoder_only_translation_preserves_source_masks_and_supervised_loss(
     name = "transformer/linear"
     overrides = parse_overrides(
         name,
-        *ENABLE_ARGUMENTS,
+        *LINEAR_ARGUMENTS,
         "--decoder-sequence-expansion-flag",
         "false",
         "--recurrent-flag",
@@ -459,8 +572,10 @@ def test_readme_vit_command_configuration_runs_offline():
         "true",
         "--sequence-expansion-max-new-tokens",
         "3",
-        "--sequence-expansion-model-config",
-        '{"type":"LinearLayerConfig","bias_flag":true}',
+        "--sequence-expansion-model-option",
+        "LINEAR",
+        "--sequence-expansion-model-bias-flag",
+        "true",
     )
     package = model_package(name)
     config = package.build_configuration(dataset=Mnist, config_overrides=overrides)
@@ -477,7 +592,7 @@ def test_readme_vit_command_configuration_runs_offline():
 def test_nonpositive_per_call_counts_fail_during_configuration(maximum):
     overrides = parse_overrides(
         "vit/linear",
-        *ENABLE_ARGUMENTS,
+        *LINEAR_ARGUMENTS,
         "--sequence-expansion-max-new-tokens",
         str(maximum),
     )
@@ -505,7 +620,7 @@ def test_nested_recurrent_variants_have_capacity_for_all_expansion_calls(variant
     name = "transformer/linear"
     overrides = parse_overrides(
         name,
-        *ENABLE_ARGUMENTS,
+        *LINEAR_ARGUMENTS,
         "--recurrent-flag",
         "true",
         "--recurrent-composition-option",
@@ -539,7 +654,7 @@ def test_nested_recurrent_variants_have_capacity_for_all_expansion_calls(variant
 @pytest.mark.parametrize("name", MIXER_PACKAGES)
 @pytest.mark.parametrize("source_memory", [False, True])
 def test_mixer_ragged_recurrence_masks_pooling_and_reloads(name, source_memory):
-    overrides = parse_overrides(name, *ENABLE_ARGUMENTS)
+    overrides = parse_overrides(name, *LINEAR_ARGUMENTS)
     overrides.update(
         stack_num_layers=2,
         recurrent_flag=True,
@@ -608,7 +723,7 @@ def test_mixer_ragged_recurrence_masks_pooling_and_reloads(name, source_memory):
 
 @pytest.mark.parametrize("name", [name for name in PACKAGES if "adaptive" in name])
 def test_expansion_with_active_adaptive_backbone_parameters(name):
-    overrides = parse_overrides(name, *ENABLE_ARGUMENTS)
+    overrides = parse_overrides(name, *LINEAR_ARGUMENTS)
     overrides.update(
         bias_option_flag=True,
         bias_option=AdditiveDynamicBiasConfig,
@@ -639,7 +754,7 @@ def test_expansion_with_active_adaptive_backbone_parameters(name):
     "name", [*MIXER_PACKAGES, "bert/expert_linear", "gpt/expert_linear"]
 )
 def test_expansion_with_soft_expert_routing(name):
-    overrides = parse_overrides(name, *ENABLE_ARGUMENTS)
+    overrides = parse_overrides(name, *LINEAR_ARGUMENTS)
     overrides.update(
         soft_moe_flag=True, soft_moe_num_experts=2, soft_moe_slots_per_expert=2
     )

@@ -1,9 +1,59 @@
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import type { LogRun, LogTextSummary } from "@/lib/api/logs";
 import { type LogValidationExampleImage } from "@/features/workbench/state/logs/log-diagnostics";
 import { cn } from "@/lib/utils";
+
+function ValidationExampleCard({
+  runName,
+  step,
+  tag,
+  children,
+}: {
+  runName: string;
+  step: number;
+  tag: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="grid gap-3 rounded-control-md border border-line bg-white/[0.018] p-3">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-ink">{runName}</div>
+        <div className="truncate font-mono type-meta text-ink-faint">
+          step {step} · {tag}
+        </div>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ValidationExampleText({ summary }: { summary: LogTextSummary }) {
+  return (
+    <>
+      {summary.text && (
+        <pre
+          className={cn(
+            "max-h-36 overflow-auto rounded-chip border border-line-soft",
+            "bg-black/25 p-2 font-mono type-meta leading-5 text-ink-faint",
+          )}
+        >
+          {summary.text}
+        </pre>
+      )}
+      {summary.truncated && (
+        <div className="rounded-chip border border-line-soft bg-white/[0.018] px-2 py-1 text-xs text-ink-faint">
+          {summary.truncationReason ?? "Text summary truncated for display."}
+        </div>
+      )}
+    </>
+  );
+}
+
+function textSummaryKey(summary: LogTextSummary) {
+  return `${summary.runId}\u0000${summary.tag}`;
+}
 
 export function LogValidationExamplesPanel({
   images,
@@ -70,6 +120,9 @@ export function LogValidationExamplesPanel({
   if (images.length === 0 && texts.length === 0) {
     return null;
   }
+  const pairedTexts = new Set(images.flatMap((image) =>
+    image.textSummary ? [textSummaryKey(image.textSummary)] : [],
+  ));
 
   return (
     <section ref={sectionRef} className="grid gap-3">
@@ -78,22 +131,14 @@ export function LogValidationExamplesPanel({
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         {images.map((image) => {
-          const run = runsById.get(image.runId);
-          const text = image.textSummary?.text;
-          const runName = run?.runName ?? image.runId;
+          const runName = runsById.get(image.runId)?.runName ?? image.runId;
           return (
-            <div
+            <ValidationExampleCard
               key={`${image.runId}:${image.tag}`}
-              className="grid gap-3 rounded-control-md border border-line bg-white/[0.018] p-3"
+              runName={runName}
+              step={image.step}
+              tag={image.tag}
             >
-              <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-ink">
-                  {run?.runName ?? image.runId}
-                </div>
-                <div className="truncate font-mono type-meta text-ink-faint">
-                  step {image.step} · {image.tag}
-                </div>
-              </div>
               {image.truncated || !image.dataUrl ? (
                 <div className="grid min-h-44 place-items-center rounded-chip border border-line-soft bg-black/20 p-4 text-center">
                   <div className="grid gap-1">
@@ -115,25 +160,22 @@ export function LogValidationExamplesPanel({
                   className="w-full rounded-chip border border-line-soft bg-black/20 object-contain"
                 />
               )}
-              {text && (
-                <pre
-                  className={cn(
-                    "max-h-36 overflow-auto rounded-chip border border-line-soft",
-                    "bg-black/25 p-2 font-mono type-meta leading-5 text-ink-faint",
-                  )}
-                >
-                  {text}
-                </pre>
+              {image.textSummary && (
+                <ValidationExampleText summary={image.textSummary} />
               )}
-              {image.textSummary?.truncated && (
-                <div className="rounded-chip border border-line-soft bg-white/[0.018] px-2 py-1 text-xs text-ink-faint">
-                  {image.textSummary.truncationReason ??
-                    "Text summary truncated for display."}
-                </div>
-              )}
-            </div>
+            </ValidationExampleCard>
           );
         })}
+        {texts.filter((text) => !pairedTexts.has(textSummaryKey(text))).map((text) => (
+          <ValidationExampleCard
+            key={textSummaryKey(text)}
+            runName={runsById.get(text.runId)?.runName ?? text.runId}
+            step={text.step}
+            tag={text.tag}
+          >
+            <ValidationExampleText summary={text} />
+          </ValidationExampleCard>
+        ))}
       </div>
     </section>
   );

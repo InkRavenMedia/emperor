@@ -52,7 +52,7 @@ from emperor.memory import (
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages.runtime_values import positive_runtime_fields
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory as _source_memory
+from models import _attention_source_memory, _component_defaults
 
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
@@ -316,15 +316,15 @@ RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 ATTN_NUM_HEADS: int = 4
 ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
-# Temporary memory sources, independently selectable from projection memory.
+## Attention Source Memory Options
 ATTN_SOURCE_MEMORY_FLAG: bool = False
-ATTN_SOURCE_MEMORY_CONFIG: _source_memory.AttentionSourceMemoryConfig | None = None
-ATTN_SOURCE_MEMORY_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_CONFIG: _attention_source_memory.AttentionSourceMemoryConfig | None = None
+ATTN_SOURCE_MEMORY_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
 ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
-ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_source_memory.GroupingConfig] | None = None
-ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_attention_source_memory.GroupingConfig] | None = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
 ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
-    _source_memory.SummaryNormalizationOptions | None
+    _attention_source_memory.SummaryNormalizationOptions | None
 ) = None
 ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: float | None = None
 
@@ -693,3 +693,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | TextSinusoidalPositionalEmbeddingConfig
     | None
 ) = None
+
+_component_defaults.declare_component_defaults(globals())

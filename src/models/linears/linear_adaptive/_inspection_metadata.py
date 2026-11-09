@@ -648,6 +648,18 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM', 993, (993,)),
         ('OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON', 994, (994,)),
     )),
+    RuntimeDefaultsSection(('Main Adaptive Parameter Grouping',), (
+        ('GROUPING_MODEL_OPTION', 964, (964, 0)),
+        ('GROUPING_MODEL_BIAS_FLAG', 964, (964, 1)),
+    )),
+    RuntimeDefaultsSection(('Input Layer Adaptive Parameter Grouping',), (
+        ('INPUT_LAYER_GROUPING_MODEL_OPTION', 978, (978, 2)),
+        ('INPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 978, (978, 3)),
+    )),
+    RuntimeDefaultsSection(('Output Layer Adaptive Parameter Grouping',), (
+        ('OUTPUT_LAYER_GROUPING_MODEL_OPTION', 992, (992, 4)),
+        ('OUTPUT_LAYER_GROUPING_MODEL_BIAS_FLAG', 992, (992, 5)),
+    )),
 )
 
 SEARCH_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (

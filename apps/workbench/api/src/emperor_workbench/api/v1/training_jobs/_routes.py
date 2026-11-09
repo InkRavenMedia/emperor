@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query
 
 from emperor_workbench.api._blocking import run_blocking_io
 from emperor_workbench.api._dependencies import (
-    get_project_adapter_client,
-    get_training_job_service,
-    get_workbench_settings,
+    ProjectAdapterDep,
+    TrainingJobServiceDep,
+    WorkbenchSettingsDep,
 )
 from emperor_workbench.api._mutations import (
     HttpOperationPolicy,
@@ -37,9 +37,6 @@ from emperor_workbench.api.v1.training_jobs._mapping import (
     training_events_page_to_payload,
     training_job_to_payload,
 )
-from emperor_workbench.project_adapter import ProjectAdapterClient
-from emperor_workbench.settings import WorkbenchApiSettings
-from emperor_workbench.training_jobs import TrainingJobService
 
 router = APIRouter(
     prefix="/training",
@@ -57,12 +54,9 @@ router = APIRouter(
 @declare_http_operation(HttpOperationPolicy.LOCAL_MUTATION)
 async def create_training_job(
     request: TrainingJobCreateRequest,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
-    settings: Annotated[WorkbenchApiSettings, Depends(get_workbench_settings)],
-    project_adapter: Annotated[
-        ProjectAdapterClient,
-        Depends(get_project_adapter_client),
-    ],
+    service: TrainingJobServiceDep,
+    settings: WorkbenchSettingsDep,
+    project_adapter: ProjectAdapterDep,
 ) -> TrainingJobResponse:
     command = await run_blocking_io(
         create_training_job_command,
@@ -87,7 +81,7 @@ async def create_training_job(
 )
 async def training_job(
     job_id: str,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
+    service: TrainingJobServiceDep,
 ) -> TrainingJobResponse:
     return TrainingJobResponse.model_validate(
         training_job_to_payload(await run_blocking_io(service.get_job, job_id))
@@ -102,7 +96,7 @@ async def training_job(
 )
 async def training_job_events(
     job_id: str,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
+    service: TrainingJobServiceDep,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=5000)] = 500,
 ) -> TrainingProgressEventsResponse:
@@ -126,7 +120,7 @@ async def training_job_events(
 )
 async def training_job_monitor_data(
     job_id: str,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
+    service: TrainingJobServiceDep,
     node_path: Annotated[str, Query(alias="nodePath")],
     dataset: str | None = None,
     preset: str | None = None,
@@ -152,7 +146,7 @@ async def training_job_monitor_data(
 )
 async def training_job_monitor_parameter_status(
     job_id: str,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
+    service: TrainingJobServiceDep,
     dataset: str | None = None,
     preset: str | None = None,
 ) -> ParameterStatusResponse:
@@ -177,8 +171,8 @@ async def training_job_monitor_parameter_status(
 @declare_http_operation(HttpOperationPolicy.LOCAL_MUTATION)
 async def cancel_training_job(
     job_id: str,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
-    settings: Annotated[WorkbenchApiSettings, Depends(get_workbench_settings)],
+    service: TrainingJobServiceDep,
+    settings: WorkbenchSettingsDep,
 ) -> TrainingJobResponse:
     return TrainingJobResponse.model_validate(
         training_job_to_payload(await run_mutation_io(service.cancel_job, job_id))
@@ -195,8 +189,8 @@ async def cancel_training_job(
 async def reconcile_training_job(
     job_id: str,
     request: TrainingJobReconcileRequest,
-    service: Annotated[TrainingJobService, Depends(get_training_job_service)],
-    settings: Annotated[WorkbenchApiSettings, Depends(get_workbench_settings)],
+    service: TrainingJobServiceDep,
+    settings: WorkbenchSettingsDep,
 ) -> TrainingJobResponse:
     return TrainingJobResponse.model_validate(
         training_job_to_payload(

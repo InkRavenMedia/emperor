@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from model_runtime.inspection import ConfigurationSchema, SearchSpace
 
+from emperor_workbench.api.v1.model_packages._config_sections import (
+    configuration_section_metadata,
+)
 from emperor_workbench.api.v1.model_packages._contracts import (
     ConfigFieldConditionResponse,
     ConfigFieldResponse,
@@ -17,6 +20,9 @@ from emperor_workbench.api.v1.model_packages._contracts import (
     PresetsResponse,
     SearchAxisResponse,
     SearchSpaceResponse,
+)
+from emperor_workbench.api.v1.model_packages._legacy_config import (
+    has_flat_config_controls,
 )
 from emperor_workbench.model_packages import (
     ModelMetadata,
@@ -104,6 +110,10 @@ def monitors_response(
 
 
 def config_schema_response(schema: ConfigurationSchema) -> ConfigSchemaResponse:
+    section_metadata = configuration_section_metadata(
+        schema.fields, model_type=schema.identity.model_type
+    )
+    fields_by_key = {field.key: field for field in schema.fields}
     return ConfigSchemaResponse(
         modelType=schema.identity.model_type,
         model=schema.identity.model,
@@ -115,8 +125,11 @@ def config_schema_response(schema: ConfigurationSchema) -> ConfigSchemaResponse:
                 label=field.key.lower().replace("_", " "),
                 section=field.section_path[-1],
                 sectionPath=list(field.section_path),
+                sectionIdPath=section_metadata[field.section_path][0],
+                sectionControlFieldKey=section_metadata[field.section_path][1],
                 description=field.description,
                 type=field.value_type,
+                legacyJson=has_flat_config_controls(field, fields_by_key),
                 default=field.default,
                 nullable=field.nullable,
                 choices=list(field.choices),

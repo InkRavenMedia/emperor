@@ -86,6 +86,7 @@ function BooleanSegmentedControl({
             type="button"
             role="radio"
             aria-checked={isSelected}
+            tabIndex={isSelected ? 0 : -1}
             disabled={disabled}
             onClick={() => onChange(option.value)}
             className={cn(

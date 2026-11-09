@@ -145,9 +145,19 @@ def _selected(model_name: str) -> SelectedModelPackage:
         raise InspectionFailure(exc.detail, kind=exc.kind) from exc
 
 
+def legacy_config_schema_payload(response: ConfigSchemaResponse) -> dict[str, Any]:
+    return response.model_dump(
+        exclude={
+            "fields": {
+                "__all__": {"sectionIdPath", "sectionControlFieldKey", "legacyJson"}
+            }
+        },
+    )
+
+
 def config_schema(model_name: str, preset_name: str | None = None) -> dict[str, Any]:
     schema = _selected(model_name).configuration(preset_name)
-    return ConfigSchemaResponse(
+    response = ConfigSchemaResponse(
         modelType=schema.identity.model_type,
         model=schema.identity.model,
         fields=[
@@ -177,7 +187,8 @@ def config_schema(model_name: str, preset_name: str | None = None) -> dict[str, 
             )
             for field in schema.fields
         ],
-    ).model_dump()
+    )
+    return legacy_config_schema_payload(response)
 
 
 def search_space_schema(

@@ -31,6 +31,7 @@ import {
   type FullConfigDialogScope,
 } from "@/features/workbench/state/use-workbench-workspace-shell";
 import { cn } from "@/lib/utils";
+import styles from "./full-config-dialog.module.css";
 
 export function FullConfigDialog({
   mode = "default",
@@ -49,7 +50,6 @@ export function FullConfigDialog({
   const { modelType, model, preset } = session.identity;
   const {
     sections,
-    fieldCount,
     overrides: dialogOverrides,
     overrideCount: dialogOverrideCount,
     lockedOverrideCount,
@@ -84,15 +84,16 @@ export function FullConfigDialog({
   );
   const {
     schemaFields: configFields,
+    fieldCount,
     presetOwnedFieldCount,
     sections: visibleRenderSections,
-    defaultOpenSectionTitles,
+    defaultOpenSectionKeys,
     searchOpenKey,
     isSearchActive,
     search,
   } = schemaPresentation;
   const {
-    openSectionTitles,
+    openSectionKeys,
     sectionRefs,
     toggleSection,
     setOpenSections,
@@ -100,18 +101,18 @@ export function FullConfigDialog({
   } = useConfigDialogSections(
     visibleRenderSections,
     searchOpenKey,
-    defaultOpenSectionTitles,
+    defaultOpenSectionKeys,
   );
-  const effectiveOpenSectionTitles = useMemo(() => {
-    const titles = new Set<string>();
-    for (const title of openSectionTitles) {
-      const section = visibleRenderSections.find((candidate) => candidate.title === title);
+  const effectiveOpenSectionKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const key of openSectionKeys) {
+      const section = visibleRenderSections.find((candidate) => candidate.key === key);
       if (section && !section.isDisabled) {
-        titles.add(title);
+        keys.add(key);
       }
     }
-    return titles;
-  }, [openSectionTitles, visibleRenderSections]);
+    return keys;
+  }, [openSectionKeys, visibleRenderSections]);
   const enabledVisibleSections = useMemo(
     () =>
       visibleRenderSections.filter(
@@ -122,14 +123,14 @@ export function FullConfigDialog({
   const areAllEnabledSectionsOpen =
     enabledVisibleSections.length > 0 &&
     enabledVisibleSections.every((section) =>
-      effectiveOpenSectionTitles.has(section.title),
+      effectiveOpenSectionKeys.has(section.key),
     );
   const trainingCommand = session.trainingCommand;
   const handleToggleAllSections = useCallback(() => {
     setOpenSections(
       areAllEnabledSectionsOpen
         ? []
-        : enabledVisibleSections.map((section) => section.title),
+        : enabledVisibleSections.map((section) => section.key),
     );
   }, [areAllEnabledSectionsOpen, enabledVisibleSections, setOpenSections]);
   const { status: copyStatus, copy: copyTrainingCommand } =
@@ -152,7 +153,7 @@ export function FullConfigDialog({
   function handleSearchSelect(option: RuntimeDefaultsSearchOptionPresentation) {
     setSearchQuery(option.label);
     setSelectedFieldKey(option.key);
-    jumpToSection(option.rootSectionTitle);
+    jumpToSection(option.rootSectionKey);
   }
 
   return (
@@ -161,9 +162,15 @@ export function FullConfigDialog({
       panelVariant="surface"
       titleId="full-config-title"
       onClose={closeFullConfig}
-      panelClassName="full-config-dialog-shell"
+      panelClassName={styles.shell}
       header={
-        <header className="full-config-dialog-chrome full-config-dialog-header sticky top-0 z-10 border-b border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell">
+        <header
+          className={cn(
+            styles.chrome,
+            styles.header,
+            "top-0 z-10 border-b border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell",
+          )}
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <h2
@@ -220,7 +227,13 @@ export function FullConfigDialog({
         </header>
       }
       footer={
-        <footer className="full-config-dialog-chrome full-config-dialog-footer sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell">
+        <footer
+          className={cn(
+            styles.chrome,
+            styles.footer,
+            "bottom-0 z-10 flex flex-wrap items-center justify-between gap-2 border-t border-line-soft px-region py-panel backdrop-blur-xl sm:px-shell",
+          )}
+        >
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="secondary"
@@ -336,7 +349,12 @@ export function FullConfigDialog({
         </>
       }
     >
-      <div className="full-config-dialog-body min-h-0 flex-1 overflow-y-auto p-region sm:px-shell">
+      <div
+        className={cn(
+          styles.body,
+          "min-h-0 flex-1 overflow-y-auto p-region sm:px-shell",
+        )}
+      >
         {isLoading ? (
           <InlineStatus busy>
             {workbenchStatusCopy.loading.configSchema}
@@ -380,7 +398,7 @@ export function FullConfigDialog({
             </div>
             <SectionNavigation
               sections={visibleRenderSections}
-              openSectionTitles={effectiveOpenSectionTitles}
+              openSectionKeys={effectiveOpenSectionKeys}
               areAllSectionsOpen={areAllEnabledSectionsOpen}
               emptyMessage={isSearchActive ? "No matching sections" : undefined}
               onJumpToSection={jumpToSection}
@@ -390,17 +408,17 @@ export function FullConfigDialog({
             <div className="grid auto-rows-max items-start gap-3">
               {visibleRenderSections.length > 0 ? (
                 visibleRenderSections.map((section) => {
-                  const isSectionOpen = effectiveOpenSectionTitles.has(section.title);
+                  const isSectionOpen = effectiveOpenSectionKeys.has(section.key);
                   return (
                     <ConfigSectionAccordion
-                      key={section.title}
+                      key={section.key}
                       section={section}
                       refCallback={(element) => {
-                        sectionRefs.current[section.title] = element;
+                        sectionRefs.current[section.key] = element;
                       }}
                       isOpen={isSectionOpen}
                       autoOpenKey={searchOpenKey}
-                      onToggle={() => toggleSection(section.title)}
+                      onToggle={() => toggleSection(section.key)}
                       onFieldChange={handleFieldChange}
                       onFieldReset={handleFieldReset}
                     />

@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { type MonitorData } from "@/lib/api/monitor-data";
 import { hasHistoricalMonitorData, hasMonitorData } from "@/lib/monitor/grouping";
 import { monitorQueryKeys } from "@/lib/query-keys";
@@ -31,12 +31,38 @@ type QueryProgress = {
   isLoading: boolean;
 };
 
-type ProgressQuery = {
-  isSuccess: boolean;
-  isError: boolean;
-  isFetching: boolean;
-  isLoading: boolean;
+type MonitorRequest = Pick<
+  UseQueryResult<MonitorData>,
+  "isSuccess" | "isError" | "isFetching" | "isLoading" | "refetch"
+>;
+
+export type MonitorRequestFailure = {
+  failed: number;
+  total: number;
+  isRetrying: boolean;
+  retry: () => void;
 };
+
+function monitorRequestFailure(
+  requests: MonitorRequest[],
+): MonitorRequestFailure | null {
+  const failedRequests = requests.filter((request) => request.isError);
+  if (failedRequests.length === 0) {
+    return null;
+  }
+  return {
+    failed: failedRequests.length,
+    total: requests.length,
+    isRetrying: failedRequests.some((request) => request.isFetching),
+    retry: () => {
+      for (const request of failedRequests) {
+        if (!request.isFetching) {
+          void request.refetch();
+        }
+      }
+    },
+  };
+}
 
 function createConcurrencyLimiter(limit: number, scopeKey: string) {
   void scopeKey;
@@ -73,7 +99,7 @@ function queryProgress({
   queries,
   total,
 }: {
-  queries: ProgressQuery[];
+  queries: MonitorRequest[];
   total: number;
 }): QueryProgress {
   const loaded = queries.filter((query) => query.isSuccess).length;
@@ -168,6 +194,10 @@ export function useMonitorChartQueries({
   );
   const historicalComparisonEnabled =
     historicalRunGroupEnabled && Boolean(comparisonNodePath);
+  const singleMonitorEnabled =
+    enabled &&
+    (activeJob ? activeJob.monitors.length > 0 : Boolean(historicalRun));
+  const singleComparisonEnabled = singleMonitorEnabled && isComparing;
   const historicalRequest = useMemo(
     () =>
       createConcurrencyLimiter(
@@ -209,11 +239,7 @@ export function useMonitorChartQueries({
         { signal },
       );
     },
-    enabled:
-      enabled &&
-      (activeJob
-        ? activeJob.monitors.length > 0
-        : !historicalRunGroup && Boolean(historicalRun)),
+    enabled: singleMonitorEnabled,
     retry: false,
     refetchInterval: isRunning ? RUNNING_MONITOR_REFETCH_INTERVAL_MS : false,
   });
@@ -268,12 +294,7 @@ export function useMonitorChartQueries({
         { signal },
       );
     },
-    enabled:
-      enabled &&
-      Boolean(comparisonNodePath) &&
-      (activeJob
-        ? activeJob.monitors.length > 0
-        : !historicalRunGroup && Boolean(historicalRun)),
+    enabled: singleComparisonEnabled,
     retry: false,
     refetchInterval: isRunning ? RUNNING_MONITOR_REFETCH_INTERVAL_MS : false,
   });
@@ -315,6 +336,15 @@ export function useMonitorChartQueries({
   const comparisonData: MonitorData | undefined = historicalRunGroup
     ? undefined
     : comparisonQuery.data;
+  const primaryRequests = historicalRunGroupEnabled
+    ? historicalMonitorQueries
+    : singleMonitorEnabled ? [monitorQuery] : [];
+  const comparisonRequests = historicalComparisonEnabled
+    ? historicalComparisonQueries
+    : singleComparisonEnabled ? [comparisonQuery] : [];
+  const primaryFailure = monitorRequestFailure(primaryRequests);
+  const comparisonFailure = monitorRequestFailure(comparisonRequests);
+  const hasFailure = Boolean(primaryFailure || comparisonFailure);
   const historicalProgress = historicalRunGroup
     ? queryProgress({
         queries: historicalMonitorQueries,
@@ -336,25 +366,15 @@ export function useMonitorChartQueries({
     : isComparing
       ? hasMonitorData(data) || hasMonitorData(comparisonData)
       : hasMonitorData(data);
-  const historicalFetching = Boolean(
-    historicalProgress?.isLoading ||
-      historicalMonitorQueries.some((query) => query.isFetching),
-  );
-  const historicalComparisonFetching = Boolean(
-    historicalComparisonProgress?.isLoading ||
-      historicalComparisonQueries.some((query) => query.isFetching),
-  );
-  const isFetching = historicalRunGroup
-    ? historicalFetching || (isComparing && historicalComparisonFetching)
-    : monitorQuery.isFetching || (isComparing && comparisonQuery.isFetching);
-  const isLoading = !hasData
-    ? historicalRunGroup
-      ? historicalFetching || (isComparing && historicalComparisonFetching)
-      : monitorQuery.isLoading || (isComparing && comparisonQuery.isLoading)
-    : false;
-  const comparisonLoading = historicalRunGroup
-    ? historicalComparisonFetching
-    : comparisonQuery.isLoading || comparisonQuery.isFetching;
+  const primaryLoading = primaryRequests.some((query) => query.isFetching);
+  const comparisonLoading = comparisonRequests.some((query) => query.isFetching);
+  const isFetching = primaryLoading || comparisonLoading;
+  const isLoading =
+    !hasData &&
+    (historicalRunGroup
+      ? isFetching
+      : primaryRequests.some((query) => query.isLoading) ||
+        comparisonRequests.some((query) => query.isLoading));
   const emptyMessage = useMemo(() => {
     if (monitorCount === 0) {
       return {
@@ -366,6 +386,12 @@ export function useMonitorChartQueries({
       return {
         title: "Loading monitor data…",
         detail: "Reading TensorBoard event files for the selected node.",
+      };
+    }
+    if (hasFailure) {
+      return {
+        title: "Could not load monitor data",
+        detail: "Retry the failed monitor requests to check for matching tags.",
       };
     }
     if (isRunning) {
@@ -415,28 +441,16 @@ export function useMonitorChartQueries({
     historicalData,
     historicalRunGroup,
     historicalRun,
+    hasFailure,
     isLoading,
     isRunning,
     monitorCount,
   ]);
 
   const refetch = () => {
-    if (!enabled) {
-      return;
-    }
-    if (historicalRunGroup) {
-      historicalMonitorQueries.forEach((query) => {
-        void query.refetch();
-      });
-      if (isComparing) {
-        historicalComparisonQueries.forEach((query) => {
-          void query.refetch();
-        });
-      }
-    } else {
-      void monitorQuery.refetch();
-      if (isComparing) {
-        void comparisonQuery.refetch();
+    for (const request of [...primaryRequests, ...comparisonRequests]) {
+      if (!request.isFetching) {
+        void request.refetch();
       }
     }
   };
@@ -450,17 +464,13 @@ export function useMonitorChartQueries({
     isComparing,
     isFetching,
     isLoading,
+    primaryLoading,
     comparisonLoading,
     historicalProgress,
     historicalComparisonProgress,
     emptyMessage,
-    error:
-      monitorQuery.error ??
-      historicalMonitorQueries.find((query) => query.error)?.error ??
-      (isComparing
-        ? comparisonQuery.error ??
-          historicalComparisonQueries.find((query) => query.error)?.error
-        : null),
+    primaryFailure,
+    comparisonFailure,
     refetch,
   };
 }

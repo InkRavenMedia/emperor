@@ -956,10 +956,16 @@ export function LogsChartPanel({ charts }: { charts: LogsCharts }) {
                   message={errorMessage(checkpointError)}
                 />
               )}
-              <div className={ACCORDION_SECTION_GRID_CLASSES[accordionGridMode]}>
-                {orderedLogChartSections.map(renderLogChartSection)}
-              </div>
             </>
+          )}
+          {(!emptyState || hasValidationExampleMedia) && (
+            <div className={ACCORDION_SECTION_GRID_CLASSES[accordionGridMode]}>
+              {orderedLogChartSections.map((section) =>
+                !emptyState || section.kind === "validationExamples"
+                  ? renderLogChartSection(section)
+                  : null,
+              )}
+            </div>
           )}
         </div>
       </div>

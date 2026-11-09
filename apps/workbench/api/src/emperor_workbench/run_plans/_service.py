@@ -11,7 +11,10 @@ from model_runtime.runs import (
     SubmittedRun,
 )
 
-from emperor_workbench.config_snapshots import ConfigSnapshotService
+from emperor_workbench.config_snapshots import (
+    ConfigSnapshotRecord,
+    ConfigSnapshotService,
+)
 from emperor_workbench.failures import FailureKind
 from emperor_workbench.model_packages import ModelPackageCatalog
 from emperor_workbench.project_adapter import (
@@ -30,6 +33,7 @@ from emperor_workbench.run_plans._progress_projection import (
     RunPlanProgressProjector,
 )
 from emperor_workbench.run_plans._records import (
+    ConfigSnapshotRevision,
     CreateTrainingRunPlanCommand,
     MaterializedTrainingRunPlan,
     MaterializeTrainingRunPlanCommand,
@@ -113,7 +117,7 @@ class RunPlanService:
                     "Snapshot Training Jobs do not accept a submitted exact Run Plan.",
                     kind=FailureKind.CONFLICT,
                 )
-            self._snapshots.require_current_revisions(
+            checked_snapshots = self._snapshots.require_current_revisions(
                 model=command.model,
                 snapshot_ids=command.snapshot_ids,
                 submitted_revisions=command.snapshot_revisions,
@@ -129,6 +133,7 @@ class RunPlanService:
                 monitors=command.monitors,
                 search=command.search,
                 snapshot_ids=command.snapshot_ids,
+                checked_snapshots=checked_snapshots,
             )
             package = require_package(self._model_packages, command.model)
             monitor_names = resolve_monitor_names(package, command.monitors)
@@ -206,12 +211,20 @@ class RunPlanService:
         monitors: list[str] | None,
         search: object,
         snapshot_ids: list[str],
+        checked_snapshots: tuple[
+            tuple[ConfigSnapshotRecord, ...], tuple[ConfigSnapshotRevision, ...]
+        ]
+        | None = None,
     ) -> TrainingRunPlanView:
         if search is not None:
             raise RunPlanFailure(
                 "Config Snapshot Run Plans cannot be combined with a search."
             )
-        records = self._snapshots.resolve_records(snapshot_ids, model=model)
+        if checked_snapshots is None:
+            records = self._snapshots.resolve_records(snapshot_ids, model=model)
+            revisions = self._snapshots.revisions(records)
+        else:
+            records, revisions = checked_snapshots
         regular_presets = list(presets) if presets is not None else [preset]
         combined_presets = [
             *regular_presets,
@@ -265,7 +278,7 @@ class RunPlanService:
         monitor_names = resolve_monitor_names(selected.package, monitors)
         plan = SubmittedTrainingRunPlan(
             runs=submitted_runs,
-            snapshot_revisions=self._snapshots.revisions(records),
+            snapshot_revisions=revisions,
         )
         return self._from_submitted(
             model=model,

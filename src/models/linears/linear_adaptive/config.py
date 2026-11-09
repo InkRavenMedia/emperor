@@ -70,9 +70,9 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from model_runtime.packages.runtime_values import positive_runtime_fields
+from models import _component_defaults
 
-# Shared training defaults are deliberately copied into each Model Package.  They
-# are runtime identity, not a construction dependency shared across packages.
+# Package-local defaults keep each model package independently loadable.
 # Trainer
 TRAINER_ACCELERATOR: str = "cpu"
 TRAINER_DEVICES: int = 1
@@ -992,3 +992,5 @@ OUTPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None 
 OUTPUT_LAYER_GROUPING_MODEL_CONFIG: ConfigBase | None = None
 OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
 OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: float | None = None
+
+_component_defaults.declare_component_defaults(globals())

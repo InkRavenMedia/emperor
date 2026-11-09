@@ -92,8 +92,8 @@ function normalizeWorkbenchApiBaseUrl(url: string) {
     if (
       parsedUrl.username ||
       parsedUrl.password ||
-      parsedUrl.search ||
-      parsedUrl.hash
+      parsedUrl.href.includes("?") ||
+      parsedUrl.href.includes("#")
     ) {
       return null;
     }

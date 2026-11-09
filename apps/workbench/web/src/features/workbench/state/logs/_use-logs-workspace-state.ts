@@ -630,7 +630,7 @@ function useLogsWorkspaceImplementation({
     runIds: Set<string>;
     requestedAt: number;
   }>(() => ({ runIds: new Set(), requestedAt: 0 }));
-  const [subsetExperimentReconciliation, setSubsetExperimentReconciliation] =
+  const [experimentsAwaitingRefresh, setExperimentsAwaitingRefresh] =
     useState<Map<string, number>>(new Map());
   const [collapsedMetricGroups, setCollapsedMetricGroups] = useState<
     Set<LogMetricGroupKey>
@@ -639,7 +639,7 @@ function useLogsWorkspaceImplementation({
   const experimentsQuery = useLogExperimentsQuery({ enabled, includeLegacy: true });
   const reconciledMissingExperiments = useMemo(() => {
     if (
-      subsetExperimentReconciliation.size === 0 ||
+      experimentsAwaitingRefresh.size === 0 ||
       experimentsQuery.isFetching ||
       experimentsQuery.error ||
       !experimentsQuery.data
@@ -652,7 +652,7 @@ function useLogsWorkspaceImplementation({
       ),
     );
     return new Set(
-      Array.from(subsetExperimentReconciliation.entries())
+      Array.from(experimentsAwaitingRefresh.entries())
         .filter(
           ([experiment, requestedAt]) =>
             experimentsQuery.dataUpdatedAt > requestedAt &&
@@ -665,7 +665,7 @@ function useLogsWorkspaceImplementation({
     experimentsQuery.dataUpdatedAt,
     experimentsQuery.error,
     experimentsQuery.isFetching,
-    subsetExperimentReconciliation,
+    experimentsAwaitingRefresh,
   ]);
   const reconciledSelectedExperiments = useMemo(() => {
     if (selectedExperiments === null || reconciledMissingExperiments.size === 0) {
@@ -984,6 +984,18 @@ function useLogsWorkspaceImplementation({
     [scalarTagRunIds, tagsEnabled],
   );
   const scalarTagWindowQueries = useLogTagQueries(scalarTagWindowInputs);
+  const scannedScalarTagRunIds = new Set<string>();
+  scalarTagWindowQueries.forEach((query, index) => {
+    if (!query.data || query.isPlaceholderData) {
+      return;
+    }
+    const requestedRunIds = new Set(scalarTagWindowInputs[index].runIds);
+    for (const run of query.data.runs) {
+      if (requestedRunIds.has(run.runId)) {
+        scannedScalarTagRunIds.add(run.runId);
+      }
+    }
+  });
   const scalarTagWindowPages = scalarTagWindowQueries
     .map((query) => query.data)
     .filter((page): page is NonNullable<typeof page> => Boolean(page));
@@ -1254,6 +1266,16 @@ function useLogsWorkspaceImplementation({
     },
     [experimentOptions, refreshAfterMutation, runsQuery.dataUpdatedAt],
   );
+  const reconcileExperimentAfterRefresh = useCallback((experiment: string) => {
+    setExperimentsAwaitingRefresh((previous) => {
+      const next = new Map(previous);
+      next.set(
+        experiment,
+        Math.max(experimentsQuery.dataUpdatedAt, previous.get(experiment) ?? 0),
+      );
+      return next;
+    });
+  }, [experimentsQuery.dataUpdatedAt]);
   const onRunsDeleted = useCallback(
     (result: LogRunDeleteResponse, target: LogsSubsetDeleteTarget) => {
       const deletedRunIds = new Set(result.deletedRunIds);
@@ -1270,21 +1292,11 @@ function useLogsWorkspaceImplementation({
           deletedRunIds,
         }),
       );
-      setSubsetExperimentReconciliation((previous) => {
-        const next = new Map(previous);
-        next.set(
-          target.experiment,
-          Math.max(
-            experimentsQuery.dataUpdatedAt,
-            next.get(target.experiment) ?? 0,
-          ),
-        );
-        return next;
-      });
+      reconcileExperimentAfterRefresh(target.experiment);
       void refreshAfterMutation({ runIds: result.deletedRunIds });
     },
     [
-      experimentsQuery.dataUpdatedAt,
+      reconcileExperimentAfterRefresh,
       refreshAfterMutation,
       runsQuery.dataUpdatedAt,
     ],
@@ -1295,6 +1307,7 @@ function useLogsWorkspaceImplementation({
     selectedExperiments: experimentSet,
     onExperimentDeleted,
     onRunsDeleted,
+    onMutationFailed: reconcileExperimentAfterRefresh,
   });
   const clearDeletionForConnectionChange = deletion.clearForConnectionChange;
   const clearForConnectionChange = useCallback(() => {
@@ -1308,7 +1321,7 @@ function useLogsWorkspaceImplementation({
       runIds: new Set(),
       requestedAt: 0,
     });
-    setSubsetExperimentReconciliation(new Map());
+    setExperimentsAwaitingRefresh(new Map());
     clearDeletionForConnectionChange();
   }, [clearDeletionForConnectionChange, resetLogSelections]);
 
@@ -1363,6 +1376,7 @@ function useLogsWorkspaceImplementation({
       void runPagesQuery.fetchNextPage();
     },
     loadedScalarTagRunCount: scalarTagRunIds.length,
+    scannedScalarTagRunCount: scannedScalarTagRunIds.size,
     totalScalarTagRunCount: visibleRunIds.length,
     canLoadMoreScalarTags:
       enabled && scalarTagRunIds.length < visibleRunIds.length,
@@ -1648,7 +1662,7 @@ function logsBrowserProjection(state: LogsWorkspaceImplementation): LogsBrowser 
         isLoadingMore: state.isLoadingMoreRuns,
       },
       scalarTags: {
-        loadedRuns: state.loadedScalarTagRunCount,
+        loadedRuns: state.scannedScalarTagRunCount,
         totalRuns: state.totalScalarTagRunCount,
         canLoadMore: state.canLoadMoreScalarTags,
         isLoadingMore: state.isLoadingMoreScalarTags,

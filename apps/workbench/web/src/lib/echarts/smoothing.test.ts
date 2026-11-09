@@ -34,6 +34,18 @@ describe("applyEmaSmoothing", () => {
     expect(result[2].value).toBeGreaterThan(0);
   });
 
+  it("uses the debiased running mean at weight 1", () => {
+    const input = [
+      { value: 4 },
+      { value: Number.NaN },
+      { value: 8 },
+      { value: 12 },
+    ];
+    expect(applyEmaSmoothing(input, 1).map((point) => point.value)).toEqual([
+      4, Number.NaN, 6, 8,
+    ]);
+  });
+
   it("preserves non-value fields", () => {
     const result = applyEmaSmoothing(points, 0.5);
     expect(result.map((point) => point.step)).toEqual([0, 1, 2, 3]);

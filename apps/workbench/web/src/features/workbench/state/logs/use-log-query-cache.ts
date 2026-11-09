@@ -59,6 +59,23 @@ function runScopedRemovalFilter({
   };
 }
 
+function historicalMonitorFilter(runIds?: RunIdInput) {
+  const runIdSet = new Set((normalizeRunIds(runIds) ?? []).filter(Boolean));
+  return {
+    predicate: ({ queryKey }: { queryKey: readonly unknown[] }) => {
+      const [family, scope, runIdentity] = queryKey;
+      const isHistoricalMonitor =
+        (family === "monitor-data" &&
+          (scope === "historical-run" || scope === "historical-run-group")) ||
+        (family === "monitor-parameter-status" && scope === "historical-run-group");
+      return (
+        isHistoricalMonitor &&
+        (runIdSet.size === 0 || queryKeyContainsRunId(runIdentity, runIdSet))
+      );
+    },
+  };
+}
+
 export function useLogQueryCache() {
   const queryClient = useQueryClient();
 
@@ -73,8 +90,8 @@ export function useLogQueryCache() {
 
   const refreshLogs = useCallback(
     () =>
-      Promise.all(
-        [
+      Promise.all([
+        ...[
           LOG_EXPERIMENTS_QUERY_KEY,
           LOG_RUNS_QUERY_KEY,
           LOG_TAGS_QUERY_KEY,
@@ -83,7 +100,8 @@ export function useLogQueryCache() {
           LOG_CHECKPOINTS_QUERY_KEY,
           LOG_ARTIFACTS_QUERY_KEY,
         ].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
-      ).then(() => undefined),
+        queryClient.invalidateQueries(historicalMonitorFilter()),
+      ]).then(() => undefined),
     [queryClient],
   );
 
@@ -121,9 +139,12 @@ export function useLogQueryCache() {
       const listInvalidation = invalidateLogLists();
       void invalidateRunDetails(affectedRunIds);
       removeRunScalars(affectedRunIds);
-      await listInvalidation;
+      await Promise.all([
+        listInvalidation,
+        queryClient.invalidateQueries(historicalMonitorFilter(affectedRunIds)),
+      ]);
     },
-    [invalidateLogLists, invalidateRunDetails, removeRunScalars],
+    [invalidateLogLists, invalidateRunDetails, queryClient, removeRunScalars],
   );
 
   return {

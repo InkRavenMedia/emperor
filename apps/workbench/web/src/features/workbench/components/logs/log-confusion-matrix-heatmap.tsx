@@ -23,6 +23,9 @@ const CELL_DRAW_SIZE = 28;
 const CELL_GAP = 4;
 const CELL_RADIUS = 4;
 const INTERSECTION_ROOT_MARGIN = "640px 0px";
+// Keep CIFAR-100 displayable while bounding the dense table and canvas allocation.
+const MAX_MATRIX_CLASSES = 100;
+const MAX_MATRIX_CANVAS_EDGE = 2048;
 
 const MONO_FONT = workbenchFontTokens.mono;
 
@@ -119,9 +122,13 @@ function drawConfusionMatrix(
     return;
   }
 
-  const pixelRatio = Math.max(1, window.devicePixelRatio || 1);
-  const pixelWidth = Math.ceil(renderData.dimensions.width * pixelRatio);
-  const pixelHeight = Math.ceil(renderData.dimensions.height * pixelRatio);
+  const { width, height } = renderData.dimensions;
+  const pixelRatio = Math.min(
+    Math.max(1, window.devicePixelRatio || 1),
+    MAX_MATRIX_CANVAS_EDGE / Math.max(width, height),
+  );
+  const pixelWidth = Math.min(MAX_MATRIX_CANVAS_EDGE, Math.ceil(width * pixelRatio));
+  const pixelHeight = Math.min(MAX_MATRIX_CANVAS_EDGE, Math.ceil(height * pixelRatio));
   if (canvas.width !== pixelWidth) {
     canvas.width = pixelWidth;
   }
@@ -500,9 +507,23 @@ export function LogConfusionMatrixHeatmaps({
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      {heatmaps.map((heatmap) => (
-        <LogConfusionMatrixCard key={heatmap.key} heatmap={heatmap} />
-      ))}
+      {heatmaps.map((heatmap) =>
+        Number.isSafeInteger(heatmap.classCount) && heatmap.classCount <= MAX_MATRIX_CLASSES ? (
+          <LogConfusionMatrixCard key={heatmap.key} heatmap={heatmap} />
+        ) : (
+          <div
+            key={heatmap.key}
+            className="grid gap-2 rounded-control-md border border-line bg-white/[0.018] p-3"
+          >
+            <div className="text-sm font-semibold text-ink">
+              {heatmap.split} confusion matrix · {heatmap.runLabel}
+            </div>
+            <div className="text-xs text-ink-faint">
+              Heatmaps support up to {MAX_MATRIX_CLASSES} classes. This matrix is too large to display.
+            </div>
+          </div>
+        ),
+      )}
     </div>
   );
 }

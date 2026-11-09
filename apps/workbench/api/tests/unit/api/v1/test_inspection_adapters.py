@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import os
 import unittest
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from unittest.mock import Mock
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
-from model_runtime.inspection import InspectionResult
+from model_runtime.inspection import (
+    InspectionResult,
+    configuration_schema,
+    search_space_schema,
+)
+from models.catalog import discover_model_packages
 
 from emperor_workbench.api.v1.inspection._mapping import inspection_response
 from emperor_workbench.api.v1.model_packages._mapping import (
@@ -36,6 +41,9 @@ from emperor_workbench.project_adapter import (
 )
 from tests.support.inspection import config_schema as support_config_schema
 from tests.support.inspection import inspect_model as support_inspect_model
+from tests.support.inspection import (
+    legacy_config_schema_payload,
+)
 from tests.support.inspection import (
     search_space_schema as support_search_space_schema,
 )
@@ -96,6 +104,46 @@ def _selected_with_metadata(payload: object) -> SelectedModelPackage:
 
 
 class InspectionAdapterEquivalenceTests(unittest.TestCase):
+    def test_json_fields_have_flat_workbench_controls(self) -> None:
+        for package in discover_model_packages():
+            response = config_schema_response(configuration_schema(package))
+            search_axes = search_space_schema(package).axes
+            self.assertFalse(
+                any(axis.value_type == "json" for axis in search_axes),
+                f"{package.catalog_key} must expose flat search axes.",
+            )
+            for field in response.fields:
+                if field.type == "json":
+                    with self.subTest(model=package.catalog_key, field=field.key):
+                        self.assertTrue(
+                            field.legacyJson,
+                            "Expose flat controls before adding a JSON field.",
+                        )
+
+    def test_json_editor_is_preserved_when_flat_controls_are_unavailable(self) -> None:
+        package = next(
+            package
+            for package in discover_model_packages()
+            if package.catalog_key == "bert/linear"
+        )
+        schema = configuration_schema(package)
+        response = config_schema_response(
+            replace(
+                schema,
+                fields=tuple(
+                    field
+                    for field in schema.fields
+                    if field.key != "ATTN_SOURCE_MEMORY_MODEL_OPTION"
+                ),
+            )
+        )
+        legacy = next(
+            field
+            for field in response.fields
+            if field.key == "ATTN_SOURCE_MEMORY_MODEL_CONFIG"
+        )
+        self.assertFalse(legacy.legacyJson)
+
     def catalog(self) -> ModelPackageCatalog:
         return ModelPackageCatalog(project_adapter_client())
 
@@ -194,7 +242,9 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             with self.subTest(model=model_id, preset=preset, presets=presets):
                 selected = self.catalog().select(model_id)
                 self.assertEqual(
-                    config_schema_response(selected.configuration(preset)).model_dump(),
+                    legacy_config_schema_payload(
+                        config_schema_response(selected.configuration(preset))
+                    ),
                     support_config_schema(model_id, preset),
                 )
                 self.assertEqual(
@@ -203,6 +253,42 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                     ).model_dump(),
                     support_search_space_schema(model_id, preset, presets),
                 )
+
+    def test_configuration_section_metadata_survives_heading_renames(self) -> None:
+        schema = (
+            self.catalog().select("linears/linear_adaptive").configuration("baseline")
+        )
+        original = config_schema_response(schema)
+        renamed = config_schema_response(
+            replace(
+                schema,
+                fields=tuple(
+                    replace(
+                        field,
+                        section_path=tuple(
+                            f"Renamed {title}" for title in field.section_path
+                        ),
+                    )
+                    for field in schema.fields
+                ),
+            )
+        )
+
+        for before, after in zip(original.fields, renamed.fields, strict=True):
+            self.assertEqual(len(before.sectionIdPath), len(before.sectionPath))
+            self.assertEqual(after.sectionIdPath, before.sectionIdPath)
+            self.assertEqual(
+                after.sectionControlFieldKey, before.sectionControlFieldKey
+            )
+            self.assertNotEqual(after.sectionPath, before.sectionPath)
+        fields = {field.key: field for field in renamed.fields}
+        self.assertEqual(
+            fields["STACK_GATE_FLAG"].sectionControlFieldKey, "stack_gate_flag"
+        )
+        self.assertEqual(
+            fields["GATE_STACK_INDEPENDENT_FLAG"].sectionControlFieldKey,
+            "gate_stack_independent_flag",
+        )
 
     def test_model_package_metadata_is_frozen_and_semantic(self) -> None:
         selected = self.catalog().select("linears/linear")
@@ -341,7 +427,7 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            config_schema_response(configuration).model_dump(),
+            legacy_config_schema_payload(config_schema_response(configuration)),
             support_config_schema("linears/linear", "baseline"),
         )
         self.assertEqual(

@@ -2,10 +2,12 @@ import { type ConfigField } from "@/lib/api/models";
 import {
   ADAPTIVE_OPTION_PAIRS,
   concreteConfigOptionChoice,
+  configFieldByKey,
   configKeyToken,
   defaultConfigFieldValue,
   fieldValue,
   hasOverride,
+  isEnabledConfigValue,
   isPresentConfigOptionValue,
   normalizeConfigFieldValue,
   overrideValue,
@@ -24,18 +26,6 @@ export type RuntimeDefaultsMetrics = {
   presetCount: number;
   state: RuntimeDefaultsMetricState;
 };
-
-function fieldMatchesKey(field: ConfigField, key: string) {
-  const token = configKeyToken(key);
-  return (
-    configKeyToken(field.key) === token ||
-    configKeyToken(field.configKey) === token
-  );
-}
-
-function fieldByKey(fields: ConfigField[], key: string) {
-  return fields.find((field) => fieldMatchesKey(field, key));
-}
 
 function createApplicabilityEvaluator(
   fields: ConfigField[],
@@ -115,10 +105,6 @@ function deleteOverrideByKey(overrides: OverrideValues, key: string) {
   }
 }
 
-export function isEnabledRuntimeDefaultValue(value: string) {
-  return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
-}
-
 function normalizeAdaptiveOptionOverrides(
   fields: ConfigField[],
   overrides: OverrideValues,
@@ -126,14 +112,14 @@ function normalizeAdaptiveOptionOverrides(
   const next = { ...overrides };
 
   for (const { flagKey, optionKey } of ADAPTIVE_OPTION_PAIRS) {
-    const flagField = fieldByKey(fields, flagKey);
-    const optionField = fieldByKey(fields, optionKey);
+    const flagField = configFieldByKey(fields, flagKey);
+    const optionField = configFieldByKey(fields, optionKey);
     if (!flagField || !optionField) {
       continue;
     }
 
     const flagValue = fieldValue(flagField, next);
-    if (isEnabledRuntimeDefaultValue(flagValue)) {
+    if (isEnabledConfigValue(flagValue)) {
       if (!isPresentConfigOptionValue(overrideValue(next, optionField.key))) {
         const optionChoice = concreteConfigOptionChoice(optionField);
         if (optionChoice !== undefined) {
@@ -213,7 +199,7 @@ export const runtimeDefaultsEditor = {
     key: string,
     value: string,
   ) {
-    const field = fieldByKey(fields, key);
+    const field = configFieldByKey(fields, key);
     const token = configKeyToken(key);
     const existingKey = Object.keys(current).find(
       (overrideKey) => configKeyToken(overrideKey) === token,
