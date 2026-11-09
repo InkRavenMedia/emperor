@@ -620,7 +620,8 @@ describe("WorkbenchApp Overview", () => {
       ),
     ).toBe(true);
     const request = logImportRequests[0];
-    expect(request.body).toBeInstanceOf(FormData);
+    expect(request.body).toBeInstanceOf(Blob);
+    expect((request.body as Blob).type).toMatch(/^multipart\/form-data; boundary=workbench-/);
     const headers = new Headers(request.headers);
     expect(headers.has("content-type")).toBe(false);
     expect(within(dialog).getByRole("status")).toHaveTextContent(

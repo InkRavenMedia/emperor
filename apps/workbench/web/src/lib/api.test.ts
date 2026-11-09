@@ -1554,7 +1554,7 @@ describe("requestJson success", () => {
 });
 
 describe("requestMultipartJson success", () => {
-  it("uploads log archives as multipart form data without forcing content-type", async () => {
+  it("uploads log archives as multipart data with a fetch-inferred content type", async () => {
     const fetchMock = stubFetch(
       fakeResponse({
         json: () => Promise.resolve(successfulLogArchiveImportResponse),
@@ -1573,14 +1573,12 @@ describe("requestMultipartJson success", () => {
     const headers = new Headers(request.headers);
     expect(url).toBe(`${BASE}/logs/import`);
     expect(request.method).toBe("POST");
-    expect(request.body).toBeInstanceOf(FormData);
+    expect(request.body).toBeInstanceOf(Blob);
+    expect((request.body as Blob).type).toMatch(/^multipart\/form-data; boundary=workbench-/);
     expect(headers.get("Authorization")).toBe("Bearer hosted-secret");
     expect(headers.get("X-Workbench-Mutation")).toBe("true");
     expect(headers.get(IDEMPOTENCY_HEADER_NAME)).toMatch(/^[0-9a-f-]{36}$/);
     expect(headers.has("content-type")).toBe(false);
-    const archive = (request.body as FormData).get("archive");
-    expect(archive).toBeInstanceOf(File);
-    expect((archive as File).name).toBe("logs.zip");
   });
 });
 

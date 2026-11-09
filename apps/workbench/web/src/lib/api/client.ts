@@ -265,7 +265,7 @@ type RequestExecution =
     }>
   | Readonly<{
       bodyKind: "multipart";
-      formData: FormData;
+      body: FormData | Blob;
       init?: Omit<RequestInit, "body">;
       mutation?: MutationRequestOptions;
     }>;
@@ -294,7 +294,7 @@ async function executeRequest<T>(
         ? {
             ...execution.init,
             method,
-            body: execution.formData,
+            body: execution.body,
             headers: requestHeaders(
               method,
               connection.authToken,
@@ -365,13 +365,13 @@ export function requestJson<T>(
 export function requestMultipartJson<T>(
   path: string,
   schema: ResponseSchema<T>,
-  formData: FormData,
+  body: FormData | Blob,
   init?: Omit<RequestInit, "body">,
   policy: { mutation?: MutationRequestOptions } = {},
 ): Promise<T> {
   return executeRequest(path, schema, {
     bodyKind: "multipart",
-    formData,
+    body,
     init,
     ...policy,
   });
