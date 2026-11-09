@@ -50,7 +50,6 @@ export function FullConfigDialog({
   const { modelType, model, preset } = session.identity;
   const {
     sections,
-    fieldCount,
     overrides: dialogOverrides,
     overrideCount: dialogOverrideCount,
     lockedOverrideCount,
@@ -85,6 +84,7 @@ export function FullConfigDialog({
   );
   const {
     schemaFields: configFields,
+    fieldCount,
     presetOwnedFieldCount,
     sections: visibleRenderSections,
     defaultOpenSectionKeys,

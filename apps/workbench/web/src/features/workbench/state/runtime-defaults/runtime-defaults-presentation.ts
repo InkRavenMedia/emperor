@@ -26,6 +26,8 @@ import {
   inheritedHiddenModelFieldHint,
   inheritedStackSectionHint,
   isEnabledConfigValue,
+  isPresentConfigOptionValue,
+  overrideValue,
   sectionElementId,
 } from "@/lib/config";
 import {
@@ -120,6 +122,18 @@ export type RuntimeDefaultsSchemaPresentation = {
     ) => boolean;
   };
 };
+
+function shouldPresentConfigField(field: ConfigField, overrides: OverrideValues) {
+  if (field.type !== "json" || field.legacyJson !== true) {
+    return true;
+  }
+  return (
+    isPresentConfigOptionValue(String(field.default ?? "")) ||
+    (field.locked === true &&
+      isPresentConfigOptionValue(String(field.lockedValue ?? ""))) ||
+    isPresentConfigOptionValue(overrideValue(overrides, field.key))
+  );
+}
 
 function attentionModeValueLabel(field: ConfigField, value: string) {
   if (configKeyToken(field.key) !== "expert_attention_flag") {
@@ -343,10 +357,11 @@ export function presentRuntimeDefaultsSchema({
 }): RuntimeDefaultsSchemaPresentation {
   const allSchemaFields = configSectionsFields(sections);
   const schemaFields = applicableConfigFields(allSchemaFields, overrides);
+  const displayFields = schemaFields.filter((field) => shouldPresentConfigField(field, overrides));
   const displaySections = deriveNestedConfigSections(
-    groupConfigFieldsBySectionPath(schemaFields),
+    groupConfigFieldsBySectionPath(displayFields),
   );
-  const schemaMetrics = runtimeDefaultsMetrics(schemaFields, overrides);
+  const schemaMetrics = runtimeDefaultsMetrics(displayFields, overrides);
   const sourceSections = new Map(
     displaySections.map((section) => [configSectionKey(section), section]),
   );

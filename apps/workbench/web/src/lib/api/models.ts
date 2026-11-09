@@ -48,6 +48,7 @@ export const configFieldSchema = z.object({
   sectionControlFieldKey: z.string().min(1).nullable().optional(),
   description: z.string().default(""),
   type: z.string(),
+  legacyJson: z.boolean().optional(),
   default: configValueSchema,
   nullable: z.boolean(),
   choices: z.array(configValueSchema),

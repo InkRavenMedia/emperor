@@ -18,6 +18,7 @@ function field(
     sectionControlFieldKey: overrides.sectionControlFieldKey,
     description: overrides.description,
     type: overrides.type ?? "int",
+    legacyJson: overrides.legacyJson,
     default: Object.prototype.hasOwnProperty.call(overrides, "default")
       ? (overrides.default ?? null)
       : 0,
@@ -115,6 +116,55 @@ function schemaSections(): ConfigSection[] {
 }
 
 describe("Runtime Defaults schema presentation", () => {
+  it("hides empty legacy model objects while preserving their schema and concrete values", () => {
+    const legacyField = (
+      key: string,
+      values: Partial<ConfigField> = {},
+    ) => field({
+      key,
+      section: "Model Options",
+      sectionPath: ["Model Options"],
+      type: "json",
+      legacyJson: true,
+      default: null,
+      nullable: true,
+      ...values,
+    });
+    const concrete = '{"type":"LinearLayerConfig","bias_flag":true}';
+    const fields = [
+      legacyField("ATTN_SOURCE_MEMORY_MODEL_CONFIG"),
+      legacyField("ENCODER_ATTN_SOURCE_MEMORY_MODEL_CONFIG", { default: "null" }),
+      legacyField("SEQUENCE_EXPANSION_MODEL_CONFIG", { default: concrete }),
+      legacyField("ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG", {
+        locked: true,
+        lockedValue: concrete,
+      }),
+      legacyField("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG"),
+      legacyField("ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG", { legacyJson: undefined }),
+    ];
+    const input = {
+      sections: [{ title: "Model Options", fields }],
+      search: { query: "" },
+    };
+    const presentation = presentRuntimeDefaultsSchema({
+      ...input,
+      overrides: { decoder_sequence_expansion_model_config: concrete },
+    });
+
+    const visibleFields = fields.slice(2).map(({ key }) => key);
+    expect(presentation.schemaFields.map(({ key }) => key)).toEqual(fields.map(({ key }) => key));
+    expect(presentation.fieldCount).toBe(visibleFields.length);
+    expect(presentation.sections[0]?.bodyFields.map(({ key }) => key)).toEqual(visibleFields);
+    expect(presentation.search.options.map(({ key }) => key)).toEqual(visibleFields);
+    expect(presentation.search.options.find(({ key }) => key === "DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG")?.field)
+      .toMatchObject({ value: concrete, isModified: true });
+
+    const reset = presentRuntimeDefaultsSchema({ ...input, overrides: {} });
+    expect(reset.schemaFields).toHaveLength(fields.length);
+    expect(reset.search.options.map(({ key }) => key))
+      .not.toContain("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG");
+  });
+
   it("preserves controls, inheritance and search identity after heading renames", () => {
     const metadata = {
       Global: { id: "hidden_dim", control: null },

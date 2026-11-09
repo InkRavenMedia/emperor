@@ -283,6 +283,7 @@ function configFixtureField({
   sectionPath,
   description,
   type,
+  legacyJson,
   default: defaultValue,
   nullable,
   choices,
@@ -299,6 +300,7 @@ function configFixtureField({
     sectionPath: sectionPath ?? fixtureSectionPath(section),
     description: description ?? "",
     type,
+    legacyJson,
     default: defaultValue,
     nullable: nullable ?? defaultValue === null,
     choices: choices ?? [],
@@ -4020,6 +4022,71 @@ describe("WorkbenchApp Full Config", () => {
     expect(commandField(commandDialog)).toHaveValue(
       "mise run experiment -- --model-type linears --model linear --preset baseline",
     );
+  });
+
+  it("copies native sequence expansion options without an empty legacy JSON field", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const section = "Sequence Expansion";
+    setupConfigScenario({
+      schemaResponse: {
+        ...schemaResponse,
+        fields: [
+          ...schemaResponse.fields,
+          configFixtureField({
+            key: "sequence_expansion_model_option",
+            section,
+            type: "enum",
+            default: null,
+            choices: ["LINEAR"],
+          }),
+          configFixtureField({
+            key: "sequence_expansion_model_bias_flag",
+            section,
+            type: "bool",
+            default: true,
+            choices: [true, false],
+          }),
+          configFixtureField({
+            key: "sequence_expansion_model_config",
+            section,
+            type: "json",
+            legacyJson: true,
+            default: null,
+          }),
+        ],
+      },
+    });
+    renderWorkbench();
+
+    const dialog = await openFullConfig(user);
+    await user.type(
+      within(dialog).getByRole("combobox", { name: /search config fields/i }),
+      "sequence expansion model",
+    );
+    const results = fullConfigSearchPopup(dialog);
+    expect(within(results).queryByRole("button", { name: /model config/i }))
+      .not.toBeInTheDocument();
+
+    const selector = fullConfigSearchResultRow(results, /model option/i);
+    await selectSearchableDropdownOption(
+      user,
+      within(selector).getByRole("button", { name: /current value/i }),
+      "LINEAR",
+      "LINEAR",
+    );
+    const bias = fullConfigSearchResultRow(results, /model bias flag/i);
+    await user.click(within(bias).getByRole("radio", { name: "Off" }));
+
+    const commandDialog = await openTrainingCommand(user, dialog);
+    const command = "mise run experiment -- --model-type linears --model linear --preset baseline --config --sequence-expansion-model-option LINEAR --sequence-expansion-model-bias-flag false";
+    expect(commandField(commandDialog)).toHaveValue(command);
+    await user.click(within(commandDialog).getByRole("button", { name: /copy command/i }));
+    expect(writeText).toHaveBeenCalledWith(command);
   });
 
   it("copies the exact training command to the clipboard", async () => {
