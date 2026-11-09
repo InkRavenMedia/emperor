@@ -32,13 +32,27 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
         "from 1 through this value; it is not an overall sequence-length limit."
     ),
     "SEQUENCE_EXPANSION_MODEL_CONFIG": (
-        "Supplies the required count-predictor configuration as structured JSON. "
-        "Input width and output count are inferred from the block and per-call maximum."
+        "Preserves a structured count-predictor configuration from an existing setup. "
+        "Use the model option and bias flag to configure a linear predictor."
+    ),
+    "SEQUENCE_EXPANSION_MODEL_OPTION": (
+        "Selects the count predictor. Linear and adaptive predictors can use one layer "
+        "or a stack. The block supplies the input width and output count."
+    ),
+    "SEQUENCE_EXPANSION_MODEL_BIAS_FLAG": (
+        "Sets whether the count predictor includes bias. Adaptive predictors require bias."
     ),
     "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG": (
         "Optionally supplies learned or sinusoidal text positions for generated tokens "
         "as structured JSON. None leaves positions disabled unless the complete "
         "expansion configuration supplies them."
+    ),
+    "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_OPTION": (
+        "Selects learned or sinusoidal positions for newly generated tokens. "
+        "Choose DISABLED to override inherited positions on a stack."
+    ),
+    "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS": (
+        "Sets the initial positional table capacity for generated tokens."
     ),
     "BATCH_SIZE": (
         "Sets the number of examples processed in each training batch. Larger "

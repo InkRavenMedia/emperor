@@ -203,6 +203,9 @@ class _InspectionPreflight:
             1,
             sum(_positive_ints_ending_with(self._effective, "num_layers")),
         )
+        expansion_position_counts = _positive_ints_ending_with(
+            self._effective, "sequence_expansion_positional_embedding_num_embeddings"
+        )
         expert_count = max(
             (1, *_positive_ints_ending_with(self._effective, "num_experts"))
         )
@@ -212,6 +215,7 @@ class _InspectionPreflight:
                 *output_dimensions,
                 *vocabulary_sizes,
                 *sequence_lengths,
+                layer_count * sum(expansion_position_counts),
             )
         )
         shared_estimate = hidden_dimension * embedding_and_io_width

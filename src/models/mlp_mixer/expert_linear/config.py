@@ -44,15 +44,15 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
-from model_runtime.packages.runtime_values import positive_runtime_fields
-from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
+from model_runtime.packages import runtime_values, soft_moe
+from models import _component_defaults
 
 #########################################################################
 # Global
 BATCH_SIZE: int = 64
 INPUT_DIM: int = 224 * 224 * 3
 HIDDEN_DIM: int = 32
-RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
+RUNTIME_VALUE_CONSTRAINTS = runtime_values.positive_runtime_fields("HIDDEN_DIM")
 OUTPUT_DIM: int = 10
 LEARNING_RATE: float = 1e-3
 NUM_EPOCHS: int = 10
@@ -893,7 +893,7 @@ EXPERT_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | No
 EXPERT_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
 EXPERT_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 
-declare_soft_moe_runtime_defaults(globals())
+soft_moe.declare_soft_moe_runtime_defaults(globals())
 
 
 # Optional Sequence Expansion
@@ -906,3 +906,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | TextSinusoidalPositionalEmbeddingConfig
     | None
 ) = None
+
+_component_defaults.declare_component_defaults(globals())

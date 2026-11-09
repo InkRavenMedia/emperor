@@ -23,7 +23,14 @@ _FIELD_MAXIMUM_RULES: tuple[
         None,
     ),
     (("INPUT_DIM", "OUTPUT_DIM", "VOCAB_SIZE"), "maximum_io_dimension", None),
-    ("SEQUENCE_LENGTH", "maximum_sequence_length", None),
+    (
+        (
+            "SEQUENCE_LENGTH",
+            "SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_NUM_EMBEDDINGS",
+        ),
+        "maximum_sequence_length",
+        None,
+    ),
     ("NUM_LAYERS", "maximum_layer_count", None),
     ("NUM_EXPERTS", "maximum_expert_count", None),
     ("NUM_HEADS", "maximum_attention_head_count", None),

@@ -22,10 +22,16 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
 )
 from emperor.transformer.sequence_expansion import SequenceExpansion
+from models._sequence_expansion_controls import (
+    SequenceExpansionFlatOptions,
+    prefer_scoped_sequence_controls,
+    resolve_sequence_expansion_model,
+    resolve_sequence_expansion_positions,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
-class SequenceExpansionOptions:
+class SequenceExpansionOptions(SequenceExpansionFlatOptions):
     sequence_expansion_flag: bool = False
     sequence_expansion_config: SequenceExpansionConfig | None = None
     sequence_expansion_max_new_tokens: int | None = None
@@ -62,10 +68,21 @@ def scoped_sequence_expansion_updates(updates: dict[str, object]) -> dict[str, o
         if name not in SEQUENCE_EXPANSION_FIELDS or value is not None
     }
     config = resolved.get("sequence_expansion_config")
+    has_scoped_model = resolved.get("sequence_expansion_model_config") is not None
+    has_scoped_positions = (
+        resolved.get("sequence_expansion_positional_embedding_config") is not None
+    )
     if isinstance(config, SequenceExpansionConfig):
         for name in ("max_new_tokens", "model_config", "positional_embedding_config"):
             if getattr(config, name) is not None:
                 resolved.setdefault(f"sequence_expansion_{name}", None)
+        has_scoped_model |= config.model_config is not None
+        has_scoped_positions |= config.positional_embedding_config is not None
+    prefer_scoped_sequence_controls(
+        resolved,
+        has_model_config=has_scoped_model,
+        has_position_config=has_scoped_positions,
+    )
     return resolved
 
 
@@ -78,12 +95,30 @@ def build_sequence_expansion_config(
     if config is not None and not isinstance(config, SequenceExpansionConfig):
         raise TypeError("sequence_expansion_config must be SequenceExpansionConfig.")
     config = deepcopy(config) if config is not None else SequenceExpansionConfig()
-    overrides: dict[str, object] = {"embedding_dim": embedding_dim}
-    for name in ("max_new_tokens", "model_config", "positional_embedding_config"):
-        value = getattr(options, f"sequence_expansion_{name}")
-        if value is not None:
-            overrides[name] = deepcopy(value)
-    resolved = replace(config, **overrides)
+    max_new_tokens = options.sequence_expansion_max_new_tokens
+    model_config = options.sequence_expansion_model_config
+    if model_config is None:
+        model_config = config.model_config
+    else:
+        model_config = deepcopy(model_config)
+    position_config = options.sequence_expansion_positional_embedding_config
+    if position_config is None:
+        position_config = config.positional_embedding_config
+    else:
+        position_config = deepcopy(position_config)
+    resolved = replace(
+        config,
+        embedding_dim=embedding_dim,
+        max_new_tokens=config.max_new_tokens
+        if max_new_tokens is None
+        else max_new_tokens,
+        model_config=resolve_sequence_expansion_model(
+            model_config, options, embedding_dim
+        ),
+        positional_embedding_config=resolve_sequence_expansion_positions(
+            position_config, options
+        ),
+    )
     SequenceExpansion.VALIDATOR.validate_config(resolved)
     return resolved
 
