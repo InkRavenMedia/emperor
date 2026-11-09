@@ -94,6 +94,46 @@ describe("SelectOnlyDropdown", () => {
     expect(onChange).toHaveBeenCalledWith("neuron");
   });
 
+  it("opens a top-layer menu above a trigger near the viewport bottom", async () => {
+    const user = userEvent.setup();
+    const showPopover = vi.fn();
+    const prototype = HTMLElement.prototype;
+    const previous = Object.getOwnPropertyDescriptor(prototype, "showPopover");
+    Object.defineProperty(prototype, "showPopover", { configurable: true, value: showPopover });
+    try {
+      render(
+        <div style={{ overflow: "hidden" }}>
+          <SelectOnlyDropdown label="Model" value="linear" options={options} onChange={vi.fn()} />
+        </div>,
+      );
+      const trigger = screen.getByRole("button", { name: "Model" });
+      const triggerTop = window.innerHeight - 80;
+      vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue(
+        DOMRect.fromRect({ x: 100, y: triggerTop, width: 240, height: 40 }),
+      );
+
+      await user.click(trigger);
+
+      const popup = screen.getByRole("listbox", { name: "Model options" })
+        .closest("[popover='manual']");
+      expect(popup).toBeInTheDocument();
+      expect(showPopover.mock.contexts).toEqual([popup]);
+      expect(popup).toHaveStyle({
+        position: "fixed",
+        top: `${triggerTop - 8}px`,
+        left: "100px",
+        width: "240px",
+        transform: "translateY(-100%)",
+      });
+    } finally {
+      if (previous) {
+        Object.defineProperty(prototype, "showPopover", previous);
+      } else {
+        Reflect.deleteProperty(prototype, "showPopover");
+      }
+    }
+  });
+
   it("keeps keyboard focus separate from the selected option", async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();

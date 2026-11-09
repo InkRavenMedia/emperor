@@ -18,6 +18,7 @@ export type DropdownShellProps = {
   className?: string;
   onScroll?: UIEventHandler<HTMLDivElement>;
   onKeyDown?: KeyboardEventHandler<HTMLDivElement>;
+  popover?: "manual";
   style?: CSSProperties;
 };
 
@@ -36,6 +37,7 @@ export const DropdownShell = forwardRef<HTMLDivElement, DropdownShellProps>(
       className,
       onScroll,
       onKeyDown,
+      popover,
       style,
     },
     ref,
@@ -48,6 +50,7 @@ export const DropdownShell = forwardRef<HTMLDivElement, DropdownShellProps>(
       aria-label={ariaLabel}
       onScroll={onScroll}
       onKeyDown={onKeyDown}
+      popover={popover}
       style={style}
       className={cn(dropdownShellClassName, className)}
     >
