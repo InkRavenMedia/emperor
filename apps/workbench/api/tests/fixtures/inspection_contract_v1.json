@@ -6,64 +6,64 @@
   },
   "graphs": {
     "simple-baseline": {
-      "sha256": "9339ad3254634ca19574a54e8afbc6e3a0aa0d8595ba46d5c0e60ca3d6058b26",
-      "bytes": 25706,
+      "sha256": "c772638c051433b1f24c70ae81e1d76076baeb7969b4098c65e394d7782ded57",
+      "bytes": 104236,
       "model": "linears/linear",
       "preset": "baseline",
       "dataset": "Mnist",
       "experimentTask": "image-classification",
-      "nodeCount": 29,
-      "edgeCount": 28
+      "nodeCount": 66,
+      "edgeCount": 65
     },
     "simple-gating": {
-      "sha256": "90417046c305dae678938197a20426604757512411cf87c6a59ad2510c6dd421",
-      "bytes": 70930,
+      "sha256": "909412f8e20b95f1156d7369f434a9afad76a207e5175b67ee8892ed1c0727cf",
+      "bytes": 285051,
       "model": "linears/linear",
       "preset": "gating",
       "dataset": "FashionMNIST",
       "experimentTask": "image-classification",
-      "nodeCount": 64,
-      "edgeCount": 63
+      "nodeCount": 161,
+      "edgeCount": 160
     },
     "adaptive-full-stack": {
-      "sha256": "afc344edbb6512ce4cd081f83964ac2d82294c7e90577a0eead4e9393b7cba90",
-      "bytes": 364942,
+      "sha256": "23c82783e5ecbfed4a3582ac13fc9f501a7847c5817f382a58013f6d0da9b8e9",
+      "bytes": 1325685,
       "model": "linears/linear_adaptive",
       "preset": "full-stack",
       "dataset": "Cifar10",
       "experimentTask": "image-classification",
-      "nodeCount": 254,
-      "edgeCount": 253
+      "nodeCount": 666,
+      "edgeCount": 665
     },
     "bert-task": {
-      "sha256": "e695b2538766e00a5f6c01ba518bb6f1baaa1d25f5e0adcfa61f0ea8c33e8854",
-      "bytes": 272918,
+      "sha256": "cce39a57dbc7567d7849309ddbd3c9d18c5f7d82371fea9cc8cd7b4e34c94566",
+      "bytes": 917357,
       "model": "bert/linear",
       "preset": "baseline",
       "dataset": "PennTreebankBertPretraining",
       "experimentTask": "bert-pretraining",
-      "nodeCount": 174,
-      "edgeCount": 173
+      "nodeCount": 446,
+      "edgeCount": 445
     },
     "gpt-task": {
-      "sha256": "3aae57f8e6cb1e26b6227af899fae0bf2ba9a39d84c670f487375b76cd65c5e6",
-      "bytes": 270914,
+      "sha256": "99a7ea81086c28314490fbb3d539e415e65740e4e8be704ba08621d2bb3c7f01",
+      "bytes": 930274,
       "model": "gpt/linear",
       "preset": "baseline",
       "dataset": "WikiText2",
       "experimentTask": "causal-language-modeling",
-      "nodeCount": 166,
-      "edgeCount": 165
+      "nodeCount": 464,
+      "edgeCount": 463
     },
     "translation-task": {
-      "sha256": "4a1f6d4ea478460113cf6110bcae267c2d0ab53b0fd0ffd2c94a2d66a3bcbd13",
-      "bytes": 444712,
+      "sha256": "1abe9e2d61cfa73edd22dec8941be044d582dd138e712056df9888f9551cfa66",
+      "bytes": 1444159,
       "model": "transformer/linear",
       "preset": "baseline",
       "dataset": "Multi30kDeEn",
       "experimentTask": "text-translation",
-      "nodeCount": 276,
-      "edgeCount": 275
+      "nodeCount": 703,
+      "edgeCount": 702
     }
   },
   "schemas": {
