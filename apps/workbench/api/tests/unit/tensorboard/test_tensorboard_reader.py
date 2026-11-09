@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import tempfile
 import unittest
 from dataclasses import FrozenInstanceError, dataclass
@@ -204,6 +205,39 @@ class TensorBoardReaderTests(unittest.TestCase):
         self.assertEqual(missing.dirs, ())
         self.assertEqual(missing.fingerprint, ())
         self.assertEqual(missing.total_size, 0)
+
+    def test_event_copy_rejects_growth_after_size_validation(self) -> None:
+        assert tensorboard_reader is not None
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            source = root / "events.out.tfevents.live"
+            destination = root / "event-copy"
+            source.write_bytes(b"observed")
+            observed = source.stat()
+            stat_descriptor = os.fstat
+            appended = False
+
+            def append_after_first_stat(descriptor: int):
+                nonlocal appended
+                metadata = stat_descriptor(descriptor)
+                if not appended:
+                    with source.open("ab") as file:
+                        file.write(b"new event")
+                    appended = True
+                return metadata
+
+            with patch.object(os, "fstat", append_after_first_stat):
+                copied = tensorboard_reader._copy_observed_event_file(
+                    source,
+                    trusted_root=root,
+                    expected_size=observed.st_size,
+                    expected_modified_at=observed.st_mtime_ns,
+                    destination=destination,
+                )
+
+            self.assertTrue(appended)
+            self.assertFalse(copied)
+            self.assertLessEqual(destination.stat().st_size, observed.st_size)
 
     def test_event_file_index_excludes_an_entire_mixed_escape_directory(
         self,
