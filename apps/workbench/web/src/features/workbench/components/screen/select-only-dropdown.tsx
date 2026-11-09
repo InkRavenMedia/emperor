@@ -1,4 +1,5 @@
 import { ChevronDown, Search } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 import {
   dropdownOptionClassName,
   dropdownOptionStateClassName,
@@ -15,6 +16,9 @@ export type SelectOnlyDropdownOption = {
   description?: string;
   disabled?: boolean;
 };
+
+const popupGap = 8;
+const popupMaxHeight = 300;
 
 function optionSearchText(option: SelectOnlyDropdownOption) {
   return [option.label, option.value, option.description ?? ""].join(" ");
@@ -99,6 +103,60 @@ export function SelectOnlyDropdown({
     handleOptionMouseEnter,
     handleOptionClick,
   } = interaction;
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    const popup = popupRef.current;
+    if (!isOpen || !trigger || typeof popup?.showPopover !== "function") {
+      return;
+    }
+
+    const viewport = window.visualViewport;
+    const positionPopup = () => {
+      const { left, top, bottom, width } = trigger.getBoundingClientRect();
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportBottom = viewportTop + (viewport?.height ?? window.innerHeight);
+      const spaceAbove = top - viewportTop - 2 * popupGap;
+      const spaceBelow = viewportBottom - bottom - 2 * popupGap;
+      const opensAbove = spaceBelow < popupMaxHeight && spaceAbove > spaceBelow;
+      const availableHeight = opensAbove ? spaceAbove : spaceBelow;
+
+      Object.assign(popup.style, {
+        position: "fixed",
+        inset: "auto",
+        margin: "0",
+        left: `${left}px`,
+        top: `${opensAbove ? top - popupGap : bottom + popupGap}px`,
+        width: `${width}px`,
+        maxHeight: `${Math.max(0, Math.min(popupMaxHeight, availableHeight))}px`,
+        transform: opensAbove ? "translateY(-100%)" : "none",
+      });
+    };
+
+    const handleScroll = (event: Event) => {
+      if (event.target instanceof Node && event.target.contains(trigger)) {
+        positionPopup();
+      }
+    };
+
+    positionPopup();
+    // The browser paints the menu above clipped fields while keeping it inside the dialog's focus scope.
+    popup.showPopover();
+    const observer = new ResizeObserver(positionPopup);
+    observer.observe(trigger);
+    window.addEventListener("scroll", handleScroll, true);
+    window.addEventListener("resize", positionPopup);
+    viewport?.addEventListener("resize", positionPopup);
+    viewport?.addEventListener("scroll", positionPopup);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", handleScroll, true);
+      window.removeEventListener("resize", positionPopup);
+      viewport?.removeEventListener("resize", positionPopup);
+      viewport?.removeEventListener("scroll", positionPopup);
+    };
+  }, [isOpen, triggerRef]);
 
   return (
     <div
@@ -137,6 +195,8 @@ export function SelectOnlyDropdown({
 
       {isOpen && (
         <DropdownShell
+          ref={popupRef}
+          popover="manual"
           className="grid max-h-[300px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden"
           searchSlot={
             <label
