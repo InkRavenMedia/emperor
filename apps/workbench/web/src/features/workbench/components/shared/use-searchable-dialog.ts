@@ -204,7 +204,7 @@ export function useSearchableDialogInteraction<Option>({
 
   const handlePopupKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
-      if (event.key !== "Escape") {
+      if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
       event.preventDefault();

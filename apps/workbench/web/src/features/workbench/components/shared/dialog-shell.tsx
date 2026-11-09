@@ -159,7 +159,7 @@ export function DialogShell({
     }
 
     function handleKeyDown(event: KeyboardEvent) {
-      if (!isTopDialog(dialogElement)) {
+      if (event.defaultPrevented || !isTopDialog(dialogElement)) {
         return;
       }
 
@@ -215,11 +215,12 @@ export function DialogShell({
       }
     }
 
-    document.addEventListener("keydown", handleKeyDown, true);
+    // Let nested controls consume Escape before the containing dialog.
+    document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("focusin", handleFocusIn);
 
     return () => {
-      document.removeEventListener("keydown", handleKeyDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("focusin", handleFocusIn);
       const activeIndex = activeDialogs.indexOf(activeDialog);
       if (activeIndex >= 0) {

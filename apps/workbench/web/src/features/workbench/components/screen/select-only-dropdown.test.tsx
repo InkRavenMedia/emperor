@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SelectOnlyDropdown } from "@/features/workbench/components/screen/select-only-dropdown";
+import { DialogShell } from "@/features/workbench/components/shared/dialog-shell";
 
 const options = [
   { value: "linear", label: "Linear" },
@@ -10,6 +11,34 @@ const options = [
 ];
 
 describe("SelectOnlyDropdown", () => {
+  it("dismisses the listbox before its containing dialog on Escape", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <DialogShell ariaLabel="Configuration" onClose={onClose}>
+        <SelectOnlyDropdown
+          label="Model"
+          value="linear"
+          options={options}
+          onChange={vi.fn()}
+        />
+      </DialogShell>,
+    );
+
+    const trigger = screen.getByRole("button", { name: "Model" });
+    await user.click(trigger);
+    expect(screen.getByRole("combobox", { name: "Search Model" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("only references popup descendants while they are mounted", async () => {
     const user = userEvent.setup();
 
