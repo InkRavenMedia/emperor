@@ -750,7 +750,7 @@ export const ADAPTIVE_OPTION_PAIRS = [
   { flagKey: "router_mask_option_flag", optionKey: "router_row_mask_option" },
 ] as const;
 
-function configFieldByKey(fields: ConfigField[], key: string) {
+export function configFieldByKey(fields: ConfigField[], key: string) {
   return fields.find((field) => configFieldMatchesKey(field, key));
 }
 

@@ -2,6 +2,7 @@ import { type ConfigField } from "@/lib/api/models";
 import {
   ADAPTIVE_OPTION_PAIRS,
   concreteConfigOptionChoice,
+  configFieldByKey,
   configKeyToken,
   defaultConfigFieldValue,
   fieldValue,
@@ -24,18 +25,6 @@ export type RuntimeDefaultsMetrics = {
   presetCount: number;
   state: RuntimeDefaultsMetricState;
 };
-
-function fieldMatchesKey(field: ConfigField, key: string) {
-  const token = configKeyToken(key);
-  return (
-    configKeyToken(field.key) === token ||
-    configKeyToken(field.configKey) === token
-  );
-}
-
-function fieldByKey(fields: ConfigField[], key: string) {
-  return fields.find((field) => fieldMatchesKey(field, key));
-}
 
 function createApplicabilityEvaluator(
   fields: ConfigField[],
@@ -126,8 +115,8 @@ function normalizeAdaptiveOptionOverrides(
   const next = { ...overrides };
 
   for (const { flagKey, optionKey } of ADAPTIVE_OPTION_PAIRS) {
-    const flagField = fieldByKey(fields, flagKey);
-    const optionField = fieldByKey(fields, optionKey);
+    const flagField = configFieldByKey(fields, flagKey);
+    const optionField = configFieldByKey(fields, optionKey);
     if (!flagField || !optionField) {
       continue;
     }
@@ -213,7 +202,7 @@ export const runtimeDefaultsEditor = {
     key: string,
     value: string,
   ) {
-    const field = fieldByKey(fields, key);
+    const field = configFieldByKey(fields, key);
     const token = configKeyToken(key);
     const existingKey = Object.keys(current).find(
       (overrideKey) => configKeyToken(overrideKey) === token,
