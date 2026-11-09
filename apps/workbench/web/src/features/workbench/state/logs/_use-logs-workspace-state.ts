@@ -636,7 +636,7 @@ function useLogsWorkspaceImplementation({
     Set<LogMetricGroupKey>
   >(new Set(DEFAULT_COLLAPSED_METRIC_GROUPS));
 
-  const experimentsQuery = useLogExperimentsQuery({ enabled });
+  const experimentsQuery = useLogExperimentsQuery({ enabled, includeLegacy: true });
   const reconciledMissingExperiments = useMemo(() => {
     if (
       subsetExperimentReconciliation.size === 0 ||

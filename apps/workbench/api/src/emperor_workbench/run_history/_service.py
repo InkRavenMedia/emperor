@@ -328,8 +328,10 @@ class RunHistoryService:
             facets=facets,
         )
 
-    def list_experiments(self, *, limit: int, offset: int) -> LogExperimentPage:
-        experiments = self._scanner.list_experiments()
+    def list_experiments(
+        self, *, limit: int, offset: int, include_legacy: bool = False
+    ) -> LogExperimentPage:
+        experiments = self._scanner.list_experiments(include_legacy=include_legacy)
         return LogExperimentPage(
             experiments=tuple(experiments[offset : offset + limit]),
             total=len(experiments),
