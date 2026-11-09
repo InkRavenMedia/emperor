@@ -20,6 +20,16 @@ UNTRUSTED_MUTATION_ORIGIN_DETAIL = "Mutation request origin is not trusted"
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def matches_bearer_token(credential: str, configured: str | None) -> bool:
+    if not credential or not configured:
+        return False
+    return (
+        credential.isascii()
+        and configured.isascii()
+        and secrets.compare_digest(credential, configured)
+    )
+
+
 async def require_bearer_auth(
     settings: Annotated[WorkbenchApiSettings, Depends(get_workbench_settings)],
     credentials: Annotated[
@@ -31,14 +41,10 @@ async def require_bearer_auth(
     if settings.auth_mode == "none":
         return
 
-    configured_token = settings.token
-
     if (
         credentials is None
         or credentials.scheme.lower() != "bearer"
-        or not credentials.credentials
-        or configured_token is None
-        or not secrets.compare_digest(credentials.credentials, configured_token)
+        or not matches_bearer_token(credentials.credentials, settings.token)
     ):
         raise HTTPException(
             status_code=401,
@@ -54,5 +60,6 @@ __all__ = [
     "UNTRUSTED_MUTATION_ORIGIN_DETAIL",
     "WWW_AUTHENTICATE_HEADER",
     "bearer_scheme",
+    "matches_bearer_token",
     "require_bearer_auth",
 ]

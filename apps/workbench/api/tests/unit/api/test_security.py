@@ -199,8 +199,8 @@ class RouteAuthIntegrationTests(unittest.TestCase):
         path: str,
         *,
         payload: dict[str, object] | None = None,
-        authorization: str | None = None,
-        headers: dict[str, str] | None = None,
+        authorization: str | bytes | None = None,
+        headers: dict[str, str | bytes] | None = None,
     ):
         request_headers = dict(headers or {})
         if authorization is not None:
@@ -475,6 +475,19 @@ class RouteAuthIntegrationTests(unittest.TestCase):
                             response.json(),
                             {"detail": "Missing or invalid bearer credentials"},
                         )
+
+    def test_bearer_mode_rejects_non_ascii_credentials(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self.create_test_app(Path(tmp), auth_mode="bearer")
+
+            for method, path in (("GET", "/models"), ("POST", "/training/jobs")):
+                with self.subTest(method=method, path=path):
+                    response = asyncio.run(
+                        self.request(app, method, path, authorization=b"Bearer \xff")
+                    )
+
+                    self.assertEqual(response.status_code, 401, response.text)
+                    self.assertEqual(response.headers["www-authenticate"], "Bearer")
 
     def test_bearer_mode_accepts_valid_token_on_non_health_routes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

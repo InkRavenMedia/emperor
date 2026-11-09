@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import hashlib
-import secrets
 import sqlite3
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -35,6 +34,7 @@ from emperor_workbench.api._security import (
     LOCAL_MUTATION_DISABLED_DETAIL,
     UNAUTHORIZED_DETAIL,
     WWW_AUTHENTICATE_HEADER,
+    matches_bearer_token,
 )
 from emperor_workbench.settings import WorkbenchApiSettings
 
@@ -345,12 +345,8 @@ class MutationExecutionMiddleware:
         if self.settings.auth_mode == "bearer":
             authorization = headers.get("authorization", "")
             scheme, _, credential = authorization.partition(" ")
-            configured = self.settings.token or ""
-            if (
-                scheme.casefold() != "bearer"
-                or not credential
-                or not configured
-                or not secrets.compare_digest(credential, configured)
+            if scheme.casefold() != "bearer" or not matches_bearer_token(
+                credential, self.settings.token
             ):
                 await JSONResponse(
                     {"detail": UNAUTHORIZED_DETAIL},
