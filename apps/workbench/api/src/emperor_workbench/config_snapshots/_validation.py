@@ -86,8 +86,7 @@ def _serialized_override_values(
         serialized = model_packages.select(model).serialize_overrides(overrides)
     except ModelPackageFailure as exc:
         raise ConfigSnapshotFailure(
-            "Invalid config snapshot overrides: "
-            f"{_snapshot_config_error_detail(exc)}"
+            f"Invalid config snapshot overrides: {_snapshot_config_error_detail(exc)}"
         ) from exc
 
     fields_by_key = {field.key: field for field in fields}
