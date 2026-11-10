@@ -499,6 +499,7 @@ class WeightValues:
     decay_rate: float
     decay_warmup_batches: int
     normalization_option: WeightNormalizationOptions
+    normalization_learnable_scale_flag: bool
     normalization_position_option: WeightNormalizationPositionOptions
     bank_expansion_factor: BankExpansionFactorOptions
 
@@ -512,6 +513,7 @@ class WeightFields:
     decay_rate: RuntimeField[float]
     decay_warmup_batches: RuntimeField[int]
     normalization_option: RuntimeField[WeightNormalizationOptions]
+    normalization_learnable_scale_flag: RuntimeField[bool]
     normalization_position_option: RuntimeField[WeightNormalizationPositionOptions]
     bank_expansion_factor: RuntimeField[BankExpansionFactorOptions]
 
@@ -578,6 +580,7 @@ class ProjectionValues:
     weight_decay_rate: float
     weight_decay_warmup_batches: int
     weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_learnable_scale_flag: bool
     weight_normalization_position_option: WeightNormalizationPositionOptions
     weight_bank_expansion_factor: BankExpansionFactorOptions
     bias_option: type[DynamicBiasConfig] | None
@@ -602,6 +605,7 @@ class ProjectionFields:
     weight_decay_rate: RuntimeField[float]
     weight_decay_warmup_batches: RuntimeField[int]
     weight_normalization_option: RuntimeField[WeightNormalizationOptions]
+    weight_normalization_learnable_scale_flag: RuntimeField[bool]
     weight_normalization_position_option: RuntimeField[
         WeightNormalizationPositionOptions
     ]
@@ -1562,6 +1566,10 @@ _WEIGHT_FIELDS = WeightFields(
         config.WEIGHT_NORMALIZATION_OPTION,
         WeightNormalizationOptions,
     ),
+    normalization_learnable_scale_flag=_boolean_field(
+        "weight_normalization_learnable_scale_flag",
+        config.WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
+    ),
     normalization_position_option=_enum_field(
         "weight_normalization_position_option",
         config.WEIGHT_NORMALIZATION_POSITION_OPTION,
@@ -1639,6 +1647,10 @@ _INPUT_PROJECTION_FIELDS = ProjectionFields(
         "input_layer_weight_normalization_option",
         config.INPUT_LAYER_WEIGHT_NORMALIZATION_OPTION,
         WeightNormalizationOptions,
+    ),
+    weight_normalization_learnable_scale_flag=_boolean_field(
+        "input_layer_weight_normalization_learnable_scale_flag",
+        config.INPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
     ),
     weight_normalization_position_option=_enum_field(
         "input_layer_weight_normalization_position_option",
@@ -1724,6 +1736,10 @@ _OUTPUT_PROJECTION_FIELDS = ProjectionFields(
         "output_layer_weight_normalization_option",
         config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_OPTION,
         WeightNormalizationOptions,
+    ),
+    weight_normalization_learnable_scale_flag=_boolean_field(
+        "output_layer_weight_normalization_learnable_scale_flag",
+        config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
     ),
     weight_normalization_position_option=_enum_field(
         "output_layer_weight_normalization_position_option",
@@ -1900,6 +1916,9 @@ def _read_weight(reader: RuntimeOverrideReader) -> WeightValues:
         decay_rate=reader.read(fields.decay_rate),
         decay_warmup_batches=reader.read(fields.decay_warmup_batches),
         normalization_option=reader.read(fields.normalization_option),
+        normalization_learnable_scale_flag=reader.read(
+            fields.normalization_learnable_scale_flag
+        ),
         normalization_position_option=reader.read(fields.normalization_position_option),
         bank_expansion_factor=reader.read(fields.bank_expansion_factor),
     )
@@ -1949,6 +1968,9 @@ def _read_projection(
         weight_decay_rate=reader.read(fields.weight_decay_rate),
         weight_decay_warmup_batches=reader.read(fields.weight_decay_warmup_batches),
         weight_normalization_option=reader.read(fields.weight_normalization_option),
+        weight_normalization_learnable_scale_flag=reader.read(
+            fields.weight_normalization_learnable_scale_flag
+        ),
         weight_normalization_position_option=reader.read(
             fields.weight_normalization_position_option
         ),

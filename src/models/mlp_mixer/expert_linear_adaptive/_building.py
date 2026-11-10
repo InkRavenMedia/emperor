@@ -21,6 +21,9 @@ from emperor.augmentations.adaptive_parameters import (
     TopSliceAxisMaskConfig,
     WeightedBankDynamicBiasConfig,
     WeightInformedScoreAxisMaskConfig,
+    WeightNormalizationConfig,
+    WeightNormalizationOptions,
+    WeightNormalizationPositionOptions,
 )
 from emperor.experts import (
     MixtureOfExpertsConfig,
@@ -147,22 +150,31 @@ def _plain_linear_config(*, bias_flag: bool) -> LinearLayerConfig:
 _WEIGHT_OPTION_FIELDS: dict[type[DynamicWeightConfig], tuple[str, ...]] = {
     SingleModelDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "normalization_position_option",
     ),
     DualModelDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "normalization_position_option",
     ),
-    LowRankDynamicWeightConfig: ("normalization_option",),
+    LowRankDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     DiagonallyModulatedLowRankDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "input_factor_source",
         "output_factor_source",
         "input_factor_model_config",
         "output_factor_model_config",
         "coefficient_model_config",
     ),
-    HypernetworkDynamicWeightConfig: ("normalization_option",),
+    HypernetworkDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     LayeredWeightedBankDynamicWeightConfig: ("bank_expansion_factor",),
     SoftWeightedBankDynamicWeightConfig: ("bank_expansion_factor",),
 }
@@ -232,7 +244,23 @@ def _selected_kwargs(
     option: type,
     optional_kwargs: dict[str, object],
 ) -> dict[str, object]:
-    return {name: optional_kwargs[name] for name in field_table.get(option, ())}
+    arguments = {name: optional_kwargs[name] for name in field_table.get(option, ())}
+    if "normalization_option" in arguments:
+        method = arguments.pop("normalization_option")
+        position = arguments.pop(
+            "normalization_position_option", WeightNormalizationPositionOptions.DISABLED
+        )
+        learnable_scale = arguments.pop("normalization_learnable_scale_flag")
+        arguments["normalization_config"] = (
+            None
+            if method is WeightNormalizationOptions.DISABLED
+            else WeightNormalizationConfig(
+                normalization_option=method,
+                normalization_position_option=position,
+                normalization_learnable_scale_flag=learnable_scale,
+            )
+        )
+    return arguments
 
 
 def _component_generator_stack(runtime, prefix, defaults):
@@ -315,6 +343,19 @@ def _weight_config(
             generator_defaults,
         ),
     }
+    if (
+        option
+        in (
+            LayeredWeightedBankDynamicWeightConfig,
+            SoftWeightedBankDynamicWeightConfig,
+            MatrixWeightsMixtureConfig,
+        )
+        and options.normalization_option is not WeightNormalizationOptions.DISABLED
+    ):
+        raise ValueError(
+            f"{option.__name__} does not support weight normalization; "
+            f"normalization_option={options.normalization_option!r} is not a supported combination."
+        )
     if option is MatrixWeightsMixtureConfig:
         kwargs.pop("generator_depth")
         return option(
@@ -323,6 +364,7 @@ def _weight_config(
         )
     optional_kwargs = {
         "normalization_option": options.normalization_option,
+        "normalization_learnable_scale_flag": options.normalization_learnable_scale_flag,
         "normalization_position_option": options.normalization_position_option,
         "bank_expansion_factor": options.bank_expansion_factor,
     }

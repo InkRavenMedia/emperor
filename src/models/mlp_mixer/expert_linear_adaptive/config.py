@@ -787,6 +787,7 @@ WEIGHT_DECAY_WARMUP_BATCHES: int = 0
 WEIGHT_NORMALIZATION_OPTION: WeightNormalizationOptions = (
     WeightNormalizationOptions.DISABLED
 )
+WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: bool = False
 WEIGHT_NORMALIZATION_POSITION_OPTION: WeightNormalizationPositionOptions = (
     WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
 )

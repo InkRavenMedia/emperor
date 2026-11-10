@@ -1,11 +1,16 @@
 import unittest
 
-from emperor.augmentations.adaptive_parameters import DynamicWeightConfig
+from emperor.augmentations.adaptive_parameters import (
+    DynamicWeightConfig,
+    WeightNormalizationConfig,
+    WeightNormalizationPolicy,
+)
 from emperor.augmentations.adaptive_parameters._weights.base import (
     DynamicWeightAbstract,
 )
 from emperor.augmentations.adaptive_parameters._weights.validation import (
     DynamicWeightValidator,
+    WeightNormalizationValidator,
 )
 from emperor.augmentations.adaptive_parameters._weights.variants.dual_model import (
     DualModelDynamicWeight,
@@ -57,6 +62,21 @@ class TestDynamicWeightValidatorAdapter(unittest.TestCase):
             "substituted construction validator was called",
         ):
             TrackingWeight(DynamicWeightConfig())
+
+    def test_normalization_policy_validates_before_reading_required_options(self):
+        class TrackingValidator(WeightNormalizationValidator):
+            @staticmethod
+            def validate_required_fields(cfg):
+                raise RuntimeError("substituted normalization validator was called")
+
+        class TrackingPolicy(WeightNormalizationPolicy):
+            VALIDATOR = TrackingValidator
+
+        self.assertIs(WeightNormalizationPolicy.VALIDATOR, WeightNormalizationValidator)
+        with self.assertRaisesRegex(
+            RuntimeError, "substituted normalization validator was called"
+        ):
+            TrackingPolicy(WeightNormalizationConfig())
 
 
 if __name__ == "__main__":

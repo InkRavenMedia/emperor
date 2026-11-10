@@ -26,6 +26,8 @@ import {
 } from "@/lib/api/config-snapshots";
 import { fetchCapabilities, fetchHealth } from "@/lib/api/health";
 import { fetchModels } from "@/lib/api/model-catalog";
+import { fetchConfigSchema } from "@/lib/api/models";
+import { inspectModel } from "@/lib/api/inspection";
 import {
   createTrainingJob,
   fetchTrainingJob,
@@ -352,5 +354,118 @@ describe.skipIf(!RUN_CONTRACT_E2E)(
       );
       expect(isUnauthorizedApiError(logoutError)).toBe(true);
     }, 30_000);
+
+    it("inspects nested weight normalization through the frontend client", async () => {
+      await setWorkbenchApiBaseUrl(alpha.baseUrl);
+      await setSessionAuthToken(TOKEN);
+      observeWorkbenchAuthMode("bearer");
+      await fetchModels();
+
+      const identity = { modelType: "linears", model: "linear_adaptive" };
+      const schema = await fetchConfigSchema(identity, "baseline");
+      const fields = Object.fromEntries(
+        schema.fields.map((field) => [field.key, field]),
+      );
+      expect(fields.WEIGHT_NORMALIZATION_OPTION.choices).toContain("SOFTSIGN");
+      expect(fields.WEIGHT_NORMALIZATION_POSITION_OPTION.choices).toContain(
+        "AFTER_DEPTH_SUM",
+      );
+      expect(fields.WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG).toMatchObject({
+        type: "bool",
+        default: false,
+      });
+
+      const commonOverrides = {
+        HIDDEN_DIM: "4",
+        STACK_NUM_LAYERS: "1",
+        WEIGHT_OPTION_FLAG: "true",
+        GENERATOR_DEPTH: "3",
+        ADAPTIVE_GENERATOR_STACK_HIDDEN_DIM: "4",
+        ADAPTIVE_GENERATOR_STACK_NUM_LAYERS: "1",
+      };
+      const cases = [
+        ["DualModelDynamicWeight", "DISABLED", "AFTER_OUTER_PRODUCT", false],
+        ["DualModelDynamicWeight", "SOFTSIGN", "BEFORE_OUTER_PRODUCT", true],
+        ["DualModelDynamicWeight", "SOFTSIGN", "AFTER_OUTER_PRODUCT", true],
+        ["DualModelDynamicWeight", "SOFTSIGN", "AFTER_DEPTH_SUM", false],
+        ["SingleModelDynamicWeight", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false],
+      ] as const;
+      for (const [variant, method, position, learnable] of cases) {
+        const overrides = {
+          ...commonOverrides,
+          WEIGHT_OPTION: `${variant}Config`,
+          WEIGHT_NORMALIZATION_OPTION: method,
+          WEIGHT_NORMALIZATION_POSITION_OPTION: position,
+          WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: String(learnable),
+        };
+        const graph = await inspectModel({
+          ...identity,
+          preset: "baseline",
+          dataset: "Mnist",
+          overrides,
+        });
+        const weights = graph.nodes.filter((node) => node.typeName === variant);
+        const policies = graph.nodes.filter(
+          (node) => node.typeName === "WeightNormalizationPolicy",
+        );
+        expect(weights.length).toBeGreaterThan(0);
+        expect(policies.length).toBe(method === "DISABLED" ? 0 : weights.length);
+        for (const weight of weights) {
+          expect(weight.config?.fields).toContainEqual(
+            expect.objectContaining({
+              key: "normalization_config",
+              value: method === "DISABLED" ? null : "WeightNormalizationConfig",
+            }),
+          );
+        }
+        for (const policy of policies) {
+          const options = Object.fromEntries(
+            policy.config!.fields.map((field) => [field.key, field.value]),
+          );
+          expect(options).toMatchObject({
+            generator_depth: 3,
+            normalization_option: method,
+            normalization_position_option: position,
+            normalization_learnable_scale_flag: learnable,
+          });
+        }
+      }
+    }, 120_000);
+
+    it("reports unsupported normalization combinations as actionable errors", async () => {
+      await setWorkbenchApiBaseUrl(alpha.baseUrl);
+      await setSessionAuthToken(TOKEN);
+      observeWorkbenchAuthMode("bearer");
+      await fetchModels();
+      const cases = [
+        ["LayeredWeightedBankDynamicWeightConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
+        ["SoftWeightedBankDynamicWeightConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
+        ["MatrixWeightsMixtureConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
+        ["DualModelDynamicWeightConfig", "SOFTSIGN", "AFTER_DEPTH_SUM", true, "must be False for AFTER_DEPTH_SUM"],
+      ] as const;
+      for (const [variant, method, position, learnable, detail] of cases) {
+        const error = await captureError(() => inspectModel({
+          modelType: "linears",
+          model: "linear_adaptive",
+          preset: "baseline",
+          dataset: "Mnist",
+          overrides: {
+            HIDDEN_DIM: "4",
+            STACK_NUM_LAYERS: "1",
+            WEIGHT_OPTION_FLAG: "true",
+            WEIGHT_OPTION: variant,
+            WEIGHT_NORMALIZATION_OPTION: method,
+            WEIGHT_NORMALIZATION_POSITION_OPTION: position,
+            WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: String(learnable),
+          },
+        }));
+        expect(error).toMatchObject({
+          status: 400,
+          method: "POST",
+          path: "/inspect",
+          detail: expect.stringContaining(detail),
+        });
+      }
+    }, 120_000);
   },
 );

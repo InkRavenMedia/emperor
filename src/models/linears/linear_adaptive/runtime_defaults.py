@@ -519,6 +519,7 @@ def _projection(values: ProjectionValues) -> AdaptiveProjectionOptions:
         weight_decay_rate=values.weight_decay_rate,
         weight_decay_warmup_batches=values.weight_decay_warmup_batches,
         weight_normalization_option=values.weight_normalization_option,
+        weight_normalization_learnable_scale_flag=values.weight_normalization_learnable_scale_flag,
         weight_normalization_position_option=(
             values.weight_normalization_position_option
         ),
@@ -562,6 +563,7 @@ def _resolve_adaptive_defaults(
             option=weight.option,
             generator_depth=weight.generator_depth,
             normalization_option=weight.normalization_option,
+            normalization_learnable_scale_flag=weight.normalization_learnable_scale_flag,
             normalization_position_option=weight.normalization_position_option,
             decay_schedule=weight.decay_schedule,
             decay_rate=weight.decay_rate,

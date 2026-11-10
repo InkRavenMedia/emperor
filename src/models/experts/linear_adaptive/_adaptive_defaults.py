@@ -88,6 +88,9 @@ class AdaptiveDefaultValues:
     weight_normalization_option: WeightNormalizationOptions = (
         config.WEIGHT_NORMALIZATION_OPTION
     )
+    weight_normalization_learnable_scale_flag: bool = (
+        config.WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+    )
     weight_normalization_position_option: WeightNormalizationPositionOptions = (
         config.WEIGHT_NORMALIZATION_POSITION_OPTION
     )
@@ -275,6 +278,9 @@ class AdaptiveDefaultValues:
     input_layer_weight_normalization_option: WeightNormalizationOptions = (
         config.INPUT_LAYER_WEIGHT_NORMALIZATION_OPTION
     )
+    input_layer_weight_normalization_learnable_scale_flag: bool = (
+        config.INPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+    )
     input_layer_weight_normalization_position_option: WeightNormalizationPositionOptions = config.INPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION
     input_layer_weight_bank_expansion_factor: BankExpansionFactorOptions = (
         config.INPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR
@@ -319,6 +325,9 @@ class AdaptiveDefaultValues:
     output_layer_weight_normalization_option: WeightNormalizationOptions = (
         config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_OPTION
     )
+    output_layer_weight_normalization_learnable_scale_flag: bool = (
+        config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+    )
     output_layer_weight_normalization_position_option: WeightNormalizationPositionOptions = config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION
     output_layer_weight_bank_expansion_factor: BankExpansionFactorOptions = (
         config.OUTPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR
@@ -356,6 +365,9 @@ class AdaptiveDefaultValues:
     router_generator_depth: int = config.ROUTER_GENERATOR_DEPTH
     router_weight_normalization_option: WeightNormalizationOptions = (
         config.ROUTER_WEIGHT_NORMALIZATION_OPTION
+    )
+    router_weight_normalization_learnable_scale_flag: bool = (
+        config.ROUTER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
     )
     router_weight_normalization_position_option: WeightNormalizationPositionOptions = (
         config.ROUTER_WEIGHT_NORMALIZATION_POSITION_OPTION
@@ -635,6 +647,7 @@ class _WeightValues:
     option_flag: bool
     option: type[DynamicWeightConfig] | None
     normalization_option: WeightNormalizationOptions
+    normalization_learnable_scale_flag: bool
     normalization_position_option: WeightNormalizationPositionOptions
     decay_schedule: WeightDecayScheduleOptions
     decay_rate: float
@@ -681,6 +694,7 @@ class _BoundaryValues:
     weight_decay_rate: float
     weight_decay_warmup_batches: int
     weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_learnable_scale_flag: bool
     weight_normalization_position_option: WeightNormalizationPositionOptions
     weight_bank_expansion_factor: BankExpansionFactorOptions
     bias_option: type[DynamicBiasConfig] | None
@@ -724,6 +738,7 @@ def _weight_options(values: _WeightValues) -> HiddenAdaptiveWeightOptions:
         option_flag=values.option_flag,
         option=values.option,
         normalization_option=values.normalization_option,
+        normalization_learnable_scale_flag=values.normalization_learnable_scale_flag,
         normalization_position_option=values.normalization_position_option,
         decay_schedule=values.decay_schedule,
         decay_rate=values.decay_rate,
@@ -774,6 +789,7 @@ def _boundary_options(values: _BoundaryValues) -> AdaptiveBoundaryModelOptions:
         weight_decay_rate=values.weight_decay_rate,
         weight_decay_warmup_batches=values.weight_decay_warmup_batches,
         weight_normalization_option=values.weight_normalization_option,
+        weight_normalization_learnable_scale_flag=values.weight_normalization_learnable_scale_flag,
         weight_normalization_position_option=(
             values.weight_normalization_position_option
         ),
@@ -877,6 +893,7 @@ def _hidden_adaptive_defaults(
             ),
             option=values.weight_option,
             normalization_option=values.weight_normalization_option,
+            normalization_learnable_scale_flag=values.weight_normalization_learnable_scale_flag,
             normalization_position_option=(values.weight_normalization_position_option),
             decay_schedule=values.weight_decay_schedule,
             decay_rate=values.weight_decay_rate,
@@ -1053,6 +1070,7 @@ def _boundary_defaults(values: AdaptiveDefaultValues) -> _BoundaryDefaults:
             weight_decay_rate=values.input_layer_weight_decay_rate,
             weight_decay_warmup_batches=values.input_layer_weight_decay_warmup_batches,
             weight_normalization_option=values.input_layer_weight_normalization_option,
+            weight_normalization_learnable_scale_flag=values.input_layer_weight_normalization_learnable_scale_flag,
             weight_normalization_position_option=(
                 values.input_layer_weight_normalization_position_option
             ),
@@ -1079,6 +1097,7 @@ def _boundary_defaults(values: AdaptiveDefaultValues) -> _BoundaryDefaults:
             weight_decay_rate=values.output_layer_weight_decay_rate,
             weight_decay_warmup_batches=values.output_layer_weight_decay_warmup_batches,
             weight_normalization_option=values.output_layer_weight_normalization_option,
+            weight_normalization_learnable_scale_flag=values.output_layer_weight_normalization_learnable_scale_flag,
             weight_normalization_position_option=(
                 values.output_layer_weight_normalization_position_option
             ),
@@ -1129,6 +1148,7 @@ def _router_adaptive_defaults(
             ),
             option=values.router_weight_option,
             normalization_option=values.router_weight_normalization_option,
+            normalization_learnable_scale_flag=values.router_weight_normalization_learnable_scale_flag,
             normalization_position_option=(
                 values.router_weight_normalization_position_option
             ),

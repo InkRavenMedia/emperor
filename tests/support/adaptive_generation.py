@@ -3,7 +3,9 @@
 from emperor.augmentations.adaptive_parameters import (
     DiagonallyModulatedLowRankDynamicWeightConfig,
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
+    WeightNormalizationPositionOptions,
 )
 from emperor.sampler import RouterConfig, SamplerConfig
 from support.adaptive_grouping import linear_stack_config
@@ -81,11 +83,22 @@ def bias_mixture_config(**overrides):
 
 
 def modulated_config(**overrides):
+    method = overrides.pop("normalization_option", WeightNormalizationOptions.DISABLED)
+    learnable = overrides.pop("normalization_learnable_scale_flag", True)
+    normalization = (
+        None
+        if method is WeightNormalizationOptions.DISABLED
+        else WeightNormalizationConfig(
+            normalization_option=method,
+            normalization_learnable_scale_flag=learnable,
+            normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+        )
+    )
     values = dict(
         input_dim=3,
         output_dim=2,
         generator_depth=2,
-        normalization_option=WeightNormalizationOptions.DISABLED,
+        normalization_config=normalization,
         decay_schedule=WeightDecayScheduleOptions.DISABLED,
         decay_rate=0.0,
         decay_warmup_batches=0,

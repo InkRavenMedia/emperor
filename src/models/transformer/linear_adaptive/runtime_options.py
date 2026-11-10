@@ -319,6 +319,7 @@ class AdaptiveParameterOptions:
     bias_generator_stack_options: ControllerStackOptions = ControllerStackOptions()
     diagonal_generator_stack_options: ControllerStackOptions = ControllerStackOptions()
     mask_generator_stack_options: ControllerStackOptions = ControllerStackOptions()
+    weight_normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True)

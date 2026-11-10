@@ -11,8 +11,18 @@ from emperor.attention import (
 )
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
+    DiagonallyModulatedLowRankDynamicWeightConfig,
+    DualModelDynamicWeightConfig,
+    HypernetworkDynamicWeightConfig,
+    LayeredWeightedBankDynamicWeightConfig,
+    LowRankDynamicWeightConfig,
     MatrixBiasMixtureConfig,
     MatrixWeightsMixtureConfig,
+    SingleModelDynamicWeightConfig,
+    SoftWeightedBankDynamicWeightConfig,
+    WeightNormalizationConfig,
+    WeightNormalizationOptions,
+    WeightNormalizationPositionOptions,
 )
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
 from emperor.layers import (
@@ -90,10 +100,45 @@ def _plain_stack(hidden_dim: int, output_dim: int | None = None) -> LayerStackCo
 def _leaf_config(option: type | None, values: dict):
     if option is None:
         return None
+    if (
+        option
+        in (
+            LayeredWeightedBankDynamicWeightConfig,
+            SoftWeightedBankDynamicWeightConfig,
+            MatrixWeightsMixtureConfig,
+        )
+        and values["normalization_option"] is not WeightNormalizationOptions.DISABLED
+    ):
+        raise ValueError(
+            f"{option.__name__} does not support weight normalization; "
+            f"normalization_option={values['normalization_option']!r} is not a supported combination."
+        )
     accepted = {field.name for field in fields(option)}
     if option in (MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig):
         accepted.discard("generator_depth")
-    return option(**{key: value for key, value in values.items() if key in accepted})
+    arguments = {key: value for key, value in values.items() if key in accepted}
+    if (
+        option
+        in (
+            SingleModelDynamicWeightConfig,
+            DualModelDynamicWeightConfig,
+            LowRankDynamicWeightConfig,
+            DiagonallyModulatedLowRankDynamicWeightConfig,
+            HypernetworkDynamicWeightConfig,
+        )
+        and values["normalization_option"] is not WeightNormalizationOptions.DISABLED
+    ):
+        position = WeightNormalizationPositionOptions.DISABLED
+        if option in (SingleModelDynamicWeightConfig, DualModelDynamicWeightConfig):
+            position = values["normalization_position_option"]
+        arguments["normalization_config"] = WeightNormalizationConfig(
+            normalization_option=values["normalization_option"],
+            normalization_position_option=position,
+            normalization_learnable_scale_flag=values[
+                "normalization_learnable_scale_flag"
+            ],
+        )
+    return option(**arguments)
 
 
 def _generator_stack(stack_options, residual_stack_options):
@@ -202,6 +247,7 @@ def _adaptive_augmentation(
             "decay_rate": options.weight_decay_rate,
             "decay_warmup_batches": options.weight_decay_warmup_batches,
             "normalization_option": options.weight_normalization_option,
+            "normalization_learnable_scale_flag": options.weight_normalization_learnable_scale_flag,
             "normalization_position_option": (
                 options.weight_normalization_position_option
             ),

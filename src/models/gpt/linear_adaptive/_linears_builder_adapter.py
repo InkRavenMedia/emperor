@@ -38,6 +38,7 @@ _HIDDEN_ADAPTIVE_WEIGHT_FIELD_MAP = {
     "weight_option_flag": "option_flag",
     "weight_option": "option",
     "weight_normalization_option": "normalization_option",
+    "weight_normalization_learnable_scale_flag": "normalization_learnable_scale_flag",
     "weight_normalization_position_option": "normalization_position_option",
     "weight_decay_schedule": "decay_schedule",
     "weight_decay_rate": "decay_rate",

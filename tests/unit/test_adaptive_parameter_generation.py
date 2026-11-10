@@ -76,7 +76,10 @@ def test_all_factor_sources_match_dense_diagonal_and_propagate_gradients(
             p
             for name, p in model.named_parameters()
             if name
-            not in ("normalization_policy.scale", "normalization_policy.clamp_limit")
+            not in (
+                "normalization_policy.raw_scale",
+                "normalization_policy.clamp_limit",
+            )
         ),
     )
     actual_gradients = torch.autograd.grad(
@@ -90,7 +93,10 @@ def test_all_factor_sources_match_dense_diagonal_and_propagate_gradients(
     actual.square().sum().backward()
     assert context.grad.abs().sum() > 0
     for name, parameter in model.named_parameters():
-        if name in ("normalization_policy.scale", "normalization_policy.clamp_limit"):
+        if name in (
+            "normalization_policy.raw_scale",
+            "normalization_policy.clamp_limit",
+        ):
             continue
         assert parameter.grad is not None, name
         assert torch.isfinite(parameter.grad).all(), name
@@ -103,7 +109,10 @@ def test_all_factor_sources_match_dense_diagonal_and_propagate_gradients(
     )
 
 
-def normalize_reference(values, option, scale, limit):
+def normalize_reference(values, option, raw_scale, limit):
+    scale = (0.1 + torch.logaddexp(raw_scale, raw_scale.new_zeros(()))).reshape(
+        1, -1, 1
+    )
     if option is WeightNormalizationOptions.DISABLED:
         return values
     if option is WeightNormalizationOptions.CLAMP:
@@ -116,7 +125,11 @@ def normalize_reference(values, option, scale, limit):
         )
     if option is WeightNormalizationOptions.SOFT_CLAMP:
         return limit.abs() * (values / limit.abs()).tanh()
-    return (2 * values.sigmoid() - 1) * scale
+    if option is WeightNormalizationOptions.SOFTSIGN:
+        return values / (1 + values.abs()) * scale
+    if option is WeightNormalizationOptions.SIGMOID_SCALE:
+        return (2 * values.sigmoid() - 1) * scale
+    raise AssertionError(f"Missing normalization reference for {option!r}")
 
 
 @pytest.mark.parametrize(
@@ -144,6 +157,10 @@ def test_normalization_precedes_rank_coefficients_on_feature_axes(
         coefficient_output.bias_params.copy_(
             torch.tensor([0.0] if rank == 1 else [-0.5, 1.7])
         )
+        if model.normalization_policy is not None:
+            model.normalization_policy.raw_scale.copy_(
+                torch.tensor([-0.7] if rank == 1 else [-0.7, 1.7])
+            )
     x = torch.randn(contexts, 3, dtype=torch.float64)
     base = torch.randn(3, 2, dtype=torch.float64)
     u = (
@@ -156,23 +173,37 @@ def test_normalization_precedes_rank_coefficients_on_feature_axes(
         if model.output_model is not None
         else model.output_factor.expand(contexts, -1, -1)
     )
-    u = normalize_reference(
-        u,
-        normalization,
-        model.normalization_policy.scale,
-        model.normalization_policy.clamp_limit,
-    )
-    v = normalize_reference(
-        v,
-        normalization,
-        model.normalization_policy.scale,
-        model.normalization_policy.clamp_limit,
-    )
+    if normalization is WeightNormalizationOptions.DISABLED:
+        assert model.normalization_policy is None
+    else:
+        u = normalize_reference(
+            u,
+            normalization,
+            model.normalization_policy.raw_scale,
+            model.normalization_policy.clamp_limit,
+        )
+        v = normalize_reference(
+            v,
+            normalization,
+            model.normalization_policy.raw_scale,
+            model.normalization_policy.clamp_limit,
+        )
     d = coefficient_output.bias_params
     expected = torch.stack(
         [base + u[c].T @ torch.diag(d) @ v[c] for c in range(contexts)]
     )
-    torch.testing.assert_close(model(base, x), expected)
+    actual = model(base, x)
+    torch.testing.assert_close(actual, expected)
+    if normalization in (
+        WeightNormalizationOptions.L2_SCALE,
+        WeightNormalizationOptions.RMS,
+        WeightNormalizationOptions.SIGMOID_SCALE,
+        WeightNormalizationOptions.SOFTSIGN,
+    ):
+        raw_scale = model.normalization_policy.raw_scale
+        actual_gradient = torch.autograd.grad(actual.square().sum(), raw_scale)[0]
+        expected_gradient = torch.autograd.grad(expected.square().sum(), raw_scale)[0]
+        torch.testing.assert_close(actual_gradient, expected_gradient)
 
 
 @pytest.mark.parametrize("schedule", list(WeightDecayScheduleOptions))

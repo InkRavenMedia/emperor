@@ -1072,6 +1072,7 @@ def hidden_adaptive_weight_options(
             option_flag=config.ATTN_WEIGHT_OPTION_FLAG,
             option=config.ATTN_WEIGHT_OPTION,
             normalization_option=config.ATTN_WEIGHT_NORMALIZATION_OPTION,
+            normalization_learnable_scale_flag=config.ATTN_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
             normalization_position_option=(
                 config.ATTN_WEIGHT_NORMALIZATION_POSITION_OPTION
             ),
@@ -1089,6 +1090,7 @@ def hidden_adaptive_weight_options(
             option_flag=config.FF_WEIGHT_OPTION_FLAG,
             option=config.FF_WEIGHT_OPTION,
             normalization_option=config.FF_WEIGHT_NORMALIZATION_OPTION,
+            normalization_learnable_scale_flag=config.FF_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
             normalization_position_option=(
                 config.FF_WEIGHT_NORMALIZATION_POSITION_OPTION
             ),
@@ -1105,6 +1107,7 @@ def hidden_adaptive_weight_options(
         option_flag=config.WEIGHT_OPTION_FLAG,
         option=config.WEIGHT_OPTION,
         normalization_option=config.WEIGHT_NORMALIZATION_OPTION,
+        normalization_learnable_scale_flag=config.WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
         normalization_position_option=(config.WEIGHT_NORMALIZATION_POSITION_OPTION),
         decay_schedule=config.WEIGHT_DECAY_SCHEDULE,
         decay_rate=config.WEIGHT_DECAY_RATE,

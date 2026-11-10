@@ -66,6 +66,7 @@ class AdaptiveBoundaryModelOptions:
     weight_decay_rate: float
     weight_decay_warmup_batches: int
     weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_learnable_scale_flag: bool
     weight_normalization_position_option: WeightNormalizationPositionOptions
     weight_bank_expansion_factor: BankExpansionFactorOptions
     bias_option: type[DynamicBiasConfig] | None
@@ -143,6 +144,7 @@ class BoundaryModelConfigFactory:
             weight_normalization_option=(
                 config.INPUT_LAYER_WEIGHT_NORMALIZATION_OPTION
             ),
+            weight_normalization_learnable_scale_flag=config.INPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
             weight_normalization_position_option=(
                 config.INPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION
             ),
@@ -180,6 +182,7 @@ class BoundaryModelConfigFactory:
             weight_normalization_option=(
                 config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_OPTION
             ),
+            weight_normalization_learnable_scale_flag=config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
             weight_normalization_position_option=(
                 config.OUTPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION
             ),
@@ -262,6 +265,7 @@ class BoundaryModelConfigFactory:
                 decay_rate=options.weight_decay_rate,
                 decay_warmup_batches=options.weight_decay_warmup_batches,
                 normalization_option=options.weight_normalization_option,
+                normalization_learnable_scale_flag=options.weight_normalization_learnable_scale_flag,
                 normalization_position_option=(
                     options.weight_normalization_position_option
                 ),

@@ -435,7 +435,7 @@ class TestLinearAdaptiveExpertModel(unittest.TestCase):
             generator_depth=3,
             option_flag=True,
             option=LayeredWeightedBankDynamicWeightConfig,
-            normalization_option=WeightNormalizationOptions.RMS,
+            normalization_option=WeightNormalizationOptions.DISABLED,
             normalization_position_option=(
                 WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
             ),
@@ -1766,7 +1766,12 @@ class TestLinearAdaptiveExpertModel(unittest.TestCase):
 
                 self.assertIsInstance(weight_config, DualModelDynamicWeightConfig)
                 for field, expected in expected_values.items():
-                    self.assertEqual(getattr(weight_config, field), expected)
+                    owner = (
+                        weight_config.normalization_config
+                        if field == "normalization_option"
+                        else weight_config
+                    )
+                    self.assertEqual(getattr(owner, field), expected)
 
     def test_linear_adaptive_combination_presets_wire_expert_config(self):
         presets = model_package("experts/linear_adaptive").presets

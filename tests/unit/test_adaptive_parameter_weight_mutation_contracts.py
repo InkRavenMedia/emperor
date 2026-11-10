@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from math import expm1, log
 
 import torch
 import torch.nn.functional as F
@@ -14,6 +15,7 @@ from emperor.augmentations.adaptive_parameters import (
     SingleModelDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -102,8 +104,6 @@ def single_config(
 ) -> SingleModelDynamicWeightConfig:
     return SingleModelDynamicWeightConfig(
         **common_weight_arguments(input_dim, input_dim),
-        normalization_option=WeightNormalizationOptions.DISABLED,
-        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
     )
 
 
@@ -113,8 +113,6 @@ def dual_config(
 ) -> DualModelDynamicWeightConfig:
     return DualModelDynamicWeightConfig(
         **common_weight_arguments(input_dim, output_dim),
-        normalization_option=WeightNormalizationOptions.DISABLED,
-        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
     )
 
 
@@ -124,7 +122,6 @@ def low_rank_config(
 ) -> LowRankDynamicWeightConfig:
     return LowRankDynamicWeightConfig(
         **common_weight_arguments(input_dim, output_dim),
-        normalization_option=WeightNormalizationOptions.DISABLED,
     )
 
 
@@ -134,7 +131,6 @@ def hypernetwork_config(
 ) -> HypernetworkDynamicWeightConfig:
     return HypernetworkDynamicWeightConfig(
         **common_weight_arguments(input_dim, output_dim),
-        normalization_option=WeightNormalizationOptions.DISABLED,
     )
 
 
@@ -304,11 +300,24 @@ class AdaptiveParameterWeightMutationContractTests(unittest.TestCase):
     def test_normalization_defaults_and_every_numeric_transform_are_exact(
         self,
     ) -> None:
-        model = SingleModelDynamicWeight(single_config()).double()
-        self.assertEqual(model.normalization_policy.scale.item(), 1.0)
+        model = SingleModelDynamicWeight(
+            single_config(),
+            SingleModelDynamicWeightConfig(
+                generator_depth=2,
+                normalization_config=WeightNormalizationConfig(
+                    normalization_option=WeightNormalizationOptions.SOFTSIGN,
+                    normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                    normalization_learnable_scale_flag=True,
+                ),
+            ),
+        ).double()
+        torch.testing.assert_close(
+            model.normalization_policy.raw_scale,
+            torch.full((2,), 0.37816455709127766, dtype=torch.float64),
+        )
         self.assertEqual(model.normalization_policy.clamp_limit.item(), 1.0)
         with torch.no_grad():
-            model.normalization_policy.scale.fill_(1.5)
+            model.normalization_policy.raw_scale.fill_(log(expm1(1.4)))
             model.normalization_policy.clamp_limit.fill_(2.0)
         vectors = torch.tensor(
             [
@@ -341,6 +350,10 @@ class AdaptiveParameterWeightMutationContractTests(unittest.TestCase):
                 (torch.sigmoid(vectors) * 2.0 - 1.0) * 1.5,
             ),
             (
+                WeightNormalizationOptions.SOFTSIGN,
+                vectors / (1 + vectors.abs()) * 1.5,
+            ),
+            (
                 WeightNormalizationOptions.DISABLED,
                 vectors,
             ),
@@ -355,7 +368,16 @@ class AdaptiveParameterWeightMutationContractTests(unittest.TestCase):
                 )
 
     def test_unsupported_normalization_and_decay_errors_are_exact(self) -> None:
-        model = SingleModelDynamicWeight(single_config())
+        model = SingleModelDynamicWeight(
+            single_config(),
+            SingleModelDynamicWeightConfig(
+                normalization_config=WeightNormalizationConfig(
+                    normalization_option=WeightNormalizationOptions.SOFTSIGN,
+                    normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                    normalization_learnable_scale_flag=True,
+                ),
+            ),
+        )
         vectors = torch.ones(1, 1, 2)
 
         model.normalization_policy.normalization_position_option = "invalid"
