@@ -238,15 +238,20 @@ class Model(BertPretrainingExperiment):
         attention_mask: Tensor,
     ) -> tuple[Tensor, Tensor]:
         embedding_state = self._build_token_embedding_state(input_ids, attention_mask)
-        token_embedding = embedding_state.hidden
+        return self.__position_and_normalize(
+            embedding_state.hidden, input_ids, token_type_ids
+        ), embedding_state.loss
+
+    def __position_and_normalize(
+        self, token_embedding: Tensor, input_ids: Tensor, token_type_ids: Tensor
+    ) -> Tensor:
         positioned_token_embeddings = self._add_sentence_positions(
             token_embedding, input_ids
         )
         segment_embedding = self.token_type_embedding(token_type_ids)
         hidden = positioned_token_embeddings + segment_embedding
         hidden = self.embedding_layer_norm(hidden)
-        processed_embeddings = self.embedding_dropout(hidden)
-        return processed_embeddings, embedding_state.loss
+        return self.embedding_dropout(hidden)
 
     def __run_encoder(
         self,
