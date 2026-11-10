@@ -1,13 +1,13 @@
 """Raw WikiText article windows cached as memory-mapped Arrow records."""
 
 import hashlib
-import re
 from pathlib import Path
 
 import torch
-from datasets import Dataset, Features, Sequence, Value, load_dataset
+from datasets import Dataset, Features, Sequence, Value
 
 from emperor.datasets._base import DataModule
+from emperor.datasets.text._wikitext103 import is_article_heading, load_raw_wikitext103
 from emperor.transformer.hierarchical import (
     HierarchicalLanguageModelBatch,
     HierarchicalTextCodec,
@@ -19,10 +19,7 @@ def _articles(rows):
     has_content = False
     for row in rows:
         text = row["text"]
-        # WikiText renders subsections as '= = title = ='. Only level one
-        # starts a document. Keep every supplied character, including blanks.
-        heading = re.fullmatch(r"=\s+[^=\s].*?\s+=", text.strip())
-        if heading and has_content:
+        if is_article_heading(text) and has_content:
             yield "".join(pieces)
             pieces = []
             has_content = False
@@ -71,12 +68,7 @@ class WikiText103Hierarchical(DataModule):
         self.seed = seed
 
     def _dataset(self, split):
-        return load_dataset(
-            "Salesforce/wikitext",
-            "wikitext-103-raw-v1",
-            split=split,
-            cache_dir=str(self.root),
-        )
+        return load_raw_wikitext103(split, self.root)
 
     def prepare_data(self):
         for split in ("train", "validation", "test"):
