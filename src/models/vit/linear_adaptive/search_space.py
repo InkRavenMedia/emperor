@@ -52,6 +52,7 @@ SEARCH_SPACE_WEIGHT_NORMALIZATION_POSITION_OPTION: list = [
     WeightNormalizationPositionOptions.DISABLED,
     WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
     WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+    WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
 ]
 SEARCH_SPACE_WEIGHT_BANK_EXPANSION_FACTOR: list = [
     BankExpansionFactorOptions.FACTOR_OF_ONE,

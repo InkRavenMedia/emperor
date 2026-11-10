@@ -16,11 +16,76 @@ if TYPE_CHECKING:
     from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
         DepthMappingLayer,
     )
+    from emperor.augmentations.adaptive_parameters._weights.normalization import (
+        WeightNormalizationPolicy,
+    )
     from emperor.layers import LayerStackConfig
 
 
-class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
-    OPTIONAL_FIELDS = {"bank_expansion_factor"}
+class WeightNormalizationValidator(ValidatorBase):
+    @classmethod
+    def validate(cls, model: "WeightNormalizationPolicy") -> None:
+        cls.validate_config(model.cfg)
+
+    @classmethod
+    def validate_config(cls, cfg) -> None:
+        from emperor.augmentations.adaptive_parameters._options import (
+            WeightNormalizationOptions,
+        )
+
+        from .config import WeightNormalizationConfig
+
+        if not isinstance(cfg, WeightNormalizationConfig):
+            raise TypeError(
+                "WeightNormalizationPolicy requires a WeightNormalizationConfig."
+            )
+        cls.validate_required_fields(cfg)
+        cls.validate_field_types(cfg)
+        DepthMappingValidator.validate_generator_depth(cfg.generator_depth)
+        cls.validate_normalization_option(cfg.normalization_option)
+        cls.validate_normalization_position_option(cfg.normalization_position_option)
+        cls.validate_normalization_learnable_scale_flag(
+            cfg.normalization_learnable_scale_flag
+        )
+        cls.validate_learnable_scale_position(cfg)
+        if cfg.normalization_option is WeightNormalizationOptions.DISABLED:
+            raise ValueError(
+                "Use normalization_config=None to disable normalization; "
+                "a supplied config requires an enabled normalization_option."
+            )
+
+    @staticmethod
+    def validate_learnable_scale_position(cfg) -> None:
+        from emperor.augmentations.adaptive_parameters._options import (
+            WeightNormalizationPositionOptions,
+        )
+
+        if (
+            cfg.normalization_position_option
+            is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+            and cfg.normalization_learnable_scale_flag
+        ):
+            raise ValueError(
+                "normalization_learnable_scale_flag must be False for AFTER_DEPTH_SUM; "
+                "learnable normalization scales apply only before the depth sum."
+            )
+
+    @staticmethod
+    def validate_depth_axis(
+        vectors: Tensor, generator_depth: int, depth_axis: int
+    ) -> None:
+        if vectors.ndim < 2 or vectors.shape[depth_axis] != generator_depth:
+            raise ValueError(
+                f"Normalization expects {generator_depth} depths on axis {depth_axis}, "
+                f"received shape {tuple(vectors.shape)}."
+            )
+
+    @staticmethod
+    def validate_normalization_learnable_scale_flag(flag) -> None:
+        if type(flag) is not bool:
+            raise ValueError(
+                f"Unsupported normalization_learnable_scale_flag value: {flag!r}."
+            )
 
     @staticmethod
     def validate_normalization_option(normalization_option) -> None:
@@ -46,6 +111,10 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
                 "Unsupported normalization_position_option value: "
                 f"{normalization_position_option!r}."
             )
+
+
+class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
+    OPTIONAL_FIELDS = {"bank_expansion_factor", "normalization_config"}
 
     @classmethod
     def validate_generator_stack(cls, config):
@@ -96,6 +165,58 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
         )
         DepthMappingValidator.validate_generator_depth(model.cfg.generator_depth)
         cls.validate_decay_parameters(model.cfg)
+        cls.validate_normalization_config(model.cfg)
+
+    @staticmethod
+    def validate_normalization_config(cfg) -> None:
+        from emperor.augmentations.adaptive_parameters._options import (
+            WeightNormalizationPositionOptions,
+        )
+
+        from .config import (
+            HypernetworkDynamicWeightConfig,
+            LayeredWeightedBankDynamicWeightConfig,
+            LowRankDynamicWeightConfig,
+            MatrixWeightsMixtureConfig,
+            SoftWeightedBankDynamicWeightConfig,
+            WeightNormalizationConfig,
+        )
+
+        normalization = cfg.normalization_config
+        if normalization is None:
+            return
+        if not isinstance(normalization, WeightNormalizationConfig):
+            raise TypeError(
+                "normalization_config must be a WeightNormalizationConfig or None."
+            )
+        if isinstance(
+            cfg,
+            (
+                LayeredWeightedBankDynamicWeightConfig,
+                SoftWeightedBankDynamicWeightConfig,
+                MatrixWeightsMixtureConfig,
+            ),
+        ):
+            raise ValueError(
+                f"{type(cfg).__name__} does not support normalization_config "
+                f"(normalization_option={normalization.normalization_option!r})."
+            )
+        if isinstance(
+            cfg,
+            (
+                LowRankDynamicWeightConfig,
+                HypernetworkDynamicWeightConfig,
+            ),
+        ):
+            position = normalization.normalization_position_option
+            if (
+                position is not None
+                and position is not WeightNormalizationPositionOptions.DISABLED
+            ):
+                raise ValueError(
+                    f"{type(cfg).__name__} uses a fixed normalization stage; "
+                    "normalization_position_option must be DISABLED."
+                )
 
     @classmethod
     def validate_variant_config(cls, model: "DynamicWeightAbstract") -> None:
@@ -152,6 +273,7 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
 
 class ModulatedLowRankValidator(DynamicWeightValidator):
     OPTIONAL_FIELDS = {
+        "normalization_config",
         "model_config",
         "input_factor_model_config",
         "output_factor_model_config",
@@ -297,7 +419,7 @@ class DepthMappingValidator(ValidatorBase):
 
 
 class MatrixWeightsMixtureValidator(DynamicWeightValidator):
-    OPTIONAL_FIELDS = {"model_config"}
+    OPTIONAL_FIELDS = {"model_config", "normalization_config"}
 
     @classmethod
     def validate(cls, model) -> None:
@@ -367,6 +489,7 @@ class MatrixWeightsMixtureValidator(DynamicWeightValidator):
     def validate_initialization_config(cls, cfg) -> None:
         cls.validate_configuration(cfg)
         cls.validate_field_types(cfg)
+        cls.validate_normalization_config(cfg)
         cls.validate_decay_parameters(cfg)
         cls.validate_sampler_config(cfg.sampler_config)
 

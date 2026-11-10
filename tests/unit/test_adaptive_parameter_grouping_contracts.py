@@ -36,8 +36,6 @@ from emperor.augmentations.adaptive_parameters import (
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,
     WeightInformedScoreAxisMaskConfig,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._augmentation import (
     AdaptiveParameterAugmentation,
@@ -536,25 +534,15 @@ class GroupedAdaptiveLinearTests(unittest.TestCase):
         variants = (
             SingleModelDynamicWeightConfig(
                 **square_common,
-                normalization_option=WeightNormalizationOptions.DISABLED,
-                normalization_position_option=(
-                    WeightNormalizationPositionOptions.DISABLED
-                ),
             ),
             DualModelDynamicWeightConfig(
                 **common,
-                normalization_option=WeightNormalizationOptions.DISABLED,
-                normalization_position_option=(
-                    WeightNormalizationPositionOptions.DISABLED
-                ),
             ),
             LowRankDynamicWeightConfig(
                 **common,
-                normalization_option=WeightNormalizationOptions.DISABLED,
             ),
             HypernetworkDynamicWeightConfig(
                 **common,
-                normalization_option=WeightNormalizationOptions.DISABLED,
             ),
             LayeredWeightedBankDynamicWeightConfig(
                 **common,

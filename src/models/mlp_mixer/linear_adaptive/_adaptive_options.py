@@ -103,6 +103,7 @@ class WeightOptions:
     decay_rate: float
     decay_warmup_batches: int
     normalization_option: WeightNormalizationOptions
+    normalization_learnable_scale_flag: bool
     normalization_position_option: WeightNormalizationPositionOptions
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack: GeneratorStackSource
@@ -178,6 +179,7 @@ def adaptive_options(runtime: RuntimeOptions) -> AdaptiveOptions:
             decay_rate=runtime.weight_decay_rate,
             decay_warmup_batches=runtime.weight_decay_warmup_batches,
             normalization_option=runtime.weight_normalization_option,
+            normalization_learnable_scale_flag=runtime.weight_normalization_learnable_scale_flag,
             normalization_position_option=(
                 runtime.weight_normalization_position_option
             ),

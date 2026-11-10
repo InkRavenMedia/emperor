@@ -357,6 +357,7 @@ class HiddenAdaptiveWeightOptions:
     decay_warmup_batches: int
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack_source: AdaptiveGeneratorStackSource
+    normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -416,6 +417,7 @@ class AdaptiveBoundaryModelOptions(Protocol):
     mask_surrogate_scale: float
     mask_floor: float
     mask_transition_width: float
+    weight_normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True, slots=True)

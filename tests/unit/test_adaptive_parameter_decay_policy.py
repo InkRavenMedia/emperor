@@ -29,8 +29,6 @@ from emperor.augmentations.adaptive_parameters import (
     TanhGatedDynamicBiasConfig,
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._biases.base import (
     DynamicBiasAbstract,
@@ -97,8 +95,6 @@ def single_weight_config(
         decay_rate=rate,
         decay_warmup_batches=warmup_batches,
         model_config=linear_stack_config(2, 2),
-        normalization_option=WeightNormalizationOptions.DISABLED,
-        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
     )
 
 
@@ -120,21 +116,15 @@ def weight_configs() -> tuple:
     return (
         SingleModelDynamicWeightConfig(
             **square_common,
-            normalization_option=WeightNormalizationOptions.DISABLED,
-            normalization_position_option=(WeightNormalizationPositionOptions.DISABLED),
         ),
         DualModelDynamicWeightConfig(
             **common,
-            normalization_option=WeightNormalizationOptions.DISABLED,
-            normalization_position_option=(WeightNormalizationPositionOptions.DISABLED),
         ),
         LowRankDynamicWeightConfig(
             **common,
-            normalization_option=WeightNormalizationOptions.DISABLED,
         ),
         HypernetworkDynamicWeightConfig(
             **common,
-            normalization_option=WeightNormalizationOptions.DISABLED,
         ),
         LayeredWeightedBankDynamicWeightConfig(
             **common,

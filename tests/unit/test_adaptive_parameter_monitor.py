@@ -14,8 +14,6 @@ from emperor.augmentations.adaptive_parameters import (
     MultiplicativeDynamicBiasConfig,
     PerAxisScoreMaskConfig,
     WeightDecayScheduleOptions,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._augmentation import (
     AdaptiveParameterAugmentation,
@@ -245,8 +243,6 @@ class TestAdaptiveParameterMonitorCallback(unittest.TestCase):
                 decay_schedule=WeightDecayScheduleOptions.DISABLED,
                 decay_rate=0.0,
                 decay_warmup_batches=0,
-                normalization_option=WeightNormalizationOptions.DISABLED,
-                normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
                 model_config=model_config,
             ),
             diagonal_config=None,

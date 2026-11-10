@@ -11,8 +11,6 @@ from emperor.augmentations.adaptive_parameters import (
     GeneratorDynamicBiasConfig,
     SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.config import ConfigBase, optional_field
 from emperor.experts import (
@@ -794,10 +792,6 @@ class TestRecurrentLayer(unittest.TestCase):
                     input_dim=dim,
                     output_dim=dim,
                     generator_depth=1,
-                    normalization_option=WeightNormalizationOptions.DISABLED,
-                    normalization_position_option=(
-                        WeightNormalizationPositionOptions.DISABLED
-                    ),
                     **decay_config,
                 ),
                 bias_config=GeneratorDynamicBiasConfig(

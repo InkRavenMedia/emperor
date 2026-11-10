@@ -365,6 +365,7 @@ def hidden_adaptive_weight_options(
             option_flag=config.WEIGHT_OPTION_FLAG,
             option=config.WEIGHT_OPTION,
             normalization_option=config.WEIGHT_NORMALIZATION_OPTION,
+            normalization_learnable_scale_flag=config.WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
             normalization_position_option=config.WEIGHT_NORMALIZATION_POSITION_OPTION,
             decay_schedule=config.WEIGHT_DECAY_SCHEDULE,
             decay_rate=config.WEIGHT_DECAY_RATE,
@@ -477,6 +478,7 @@ def router_adaptive_weight_options(
         option_flag=config.ROUTER_WEIGHT_OPTION_FLAG,
         option=config.ROUTER_WEIGHT_OPTION,
         normalization_option=config.ROUTER_WEIGHT_NORMALIZATION_OPTION,
+        normalization_learnable_scale_flag=config.ROUTER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG,
         normalization_position_option=(
             config.ROUTER_WEIGHT_NORMALIZATION_POSITION_OPTION
         ),

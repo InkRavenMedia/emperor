@@ -18,6 +18,28 @@ if TYPE_CHECKING:
 
 
 @dataclass
+class WeightNormalizationConfig(ConfigBase):
+    generator_depth: int | None = optional_field(
+        "Required positive generator depth; scales are per depth before the depth sum."
+    )
+    normalization_option: WeightNormalizationOptions | None = optional_field(
+        "Required enabled weight normalization method; DISABLED is invalid."
+    )
+    normalization_position_option: WeightNormalizationPositionOptions | None = (
+        optional_field("Required normalization position, including explicit DISABLED.")
+    )
+    normalization_learnable_scale_flag: bool | None = optional_field(
+        "Required boolean controlling normalization scales and clamp limits; "
+        "must be False for AFTER_DEPTH_SUM."
+    )
+
+    def _registry_owner(self) -> type:
+        from .normalization import WeightNormalizationPolicy
+
+        return WeightNormalizationPolicy
+
+
+@dataclass
 class DynamicWeightConfig(ConfigBase):
     input_dim: int | None = optional_field("Input feature dimension.")
     output_dim: int | None = optional_field("Output feature dimension.")
@@ -34,6 +56,9 @@ class DynamicWeightConfig(ConfigBase):
     model_config: "LayerStackConfig | None" = optional_field(
         "Internal generator network config."
     )
+    normalization_config: WeightNormalizationConfig | None = optional_field(
+        "Optional normalization policy config; None disables weight normalization."
+    )
 
     def _registry_owner(self) -> type:
         raise ValueError(
@@ -44,13 +69,6 @@ class DynamicWeightConfig(ConfigBase):
 
 @dataclass
 class SingleModelDynamicWeightConfig(DynamicWeightConfig):
-    normalization_option: WeightNormalizationOptions | None = optional_field(
-        "Dynamic weight normalization method."
-    )
-    normalization_position_option: WeightNormalizationPositionOptions | None = (
-        optional_field("Where dynamic weight normalization is applied.")
-    )
-
     def _registry_owner(self) -> type:
         from emperor.augmentations.adaptive_parameters._weights.variants.single_model import (
             SingleModelDynamicWeight,
@@ -61,13 +79,6 @@ class SingleModelDynamicWeightConfig(DynamicWeightConfig):
 
 @dataclass
 class DualModelDynamicWeightConfig(DynamicWeightConfig):
-    normalization_option: WeightNormalizationOptions | None = optional_field(
-        "Dynamic weight normalization method."
-    )
-    normalization_position_option: WeightNormalizationPositionOptions | None = (
-        optional_field("Where dynamic weight normalization is applied.")
-    )
-
     def _registry_owner(self) -> type:
         from emperor.augmentations.adaptive_parameters._weights.variants.dual_model import (
             DualModelDynamicWeight,
@@ -78,10 +89,6 @@ class DualModelDynamicWeightConfig(DynamicWeightConfig):
 
 @dataclass
 class LowRankDynamicWeightConfig(DynamicWeightConfig):
-    normalization_option: WeightNormalizationOptions | None = optional_field(
-        "Dynamic weight normalization method."
-    )
-
     def _registry_owner(self) -> type:
         from emperor.augmentations.adaptive_parameters._weights.variants.low_rank import (
             LowRankDynamicWeight,
@@ -118,10 +125,6 @@ class DiagonallyModulatedLowRankDynamicWeightConfig(LowRankDynamicWeightConfig):
 
 @dataclass
 class HypernetworkDynamicWeightConfig(DynamicWeightConfig):
-    normalization_option: WeightNormalizationOptions | None = optional_field(
-        "Dynamic weight normalization method."
-    )
-
     def _registry_owner(self) -> type:
         from emperor.augmentations.adaptive_parameters._weights.variants.hypernetwork import (
             HypernetworkDynamicWeight,

@@ -8,11 +8,15 @@ import torch.nn.functional as F
 from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
     BankExpansionFactorOptions,
+    DualModelDynamicWeightConfig,
     MaskDimensionOptions,
     MultiplicativeDynamicBiasConfig,
     PerAxisScoreMaskConfig,
     SoftWeightedBankDynamicWeightConfig,
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,
+    WeightNormalizationOptions,
+    WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._biases.variants.additive import (
     AdditiveDynamicBias,
@@ -184,8 +188,7 @@ class AdaptiveParameterMonitorMutationContractTests(unittest.TestCase):
             option.weight_bank.copy_(bank_values)
             option._decay_policy.decay_step.fill_(2.0)
             option._decay_policy.warmup_step.fill_(3.0)
-            option.normalization_policy.scale.fill_(4.0)
-            option.normalization_policy.clamp_limit.fill_(5.0)
+        self.assertIsNone(option.normalization_policy)
         base = torch.tensor([[0.1, 0.2], [0.3, 0.4]])
         requested_delta = torch.tensor(
             [
@@ -231,8 +234,6 @@ class AdaptiveParameterMonitorMutationContractTests(unittest.TestCase):
         internal_expected = {
             "decay_step": torch.tensor(2.0),
             "warmup_step": torch.tensor(3.0),
-            "scale": torch.tensor(4.0),
-            "clamp_limit": torch.tensor(5.0),
             "weight_bank_mean": bank_values.mean(),
             "weight_bank_var": bank_values.var(unbiased=False),
             "weight_bank_l2_norm": bank_values.norm(),
@@ -254,11 +255,41 @@ class AdaptiveParameterMonitorMutationContractTests(unittest.TestCase):
             ],
         )
         for forbidden_suffix in (
+            "scale",
+            "clamp_limit",
             "relative_output_norm",
             "attenuated_fraction",
             "near_zero_fraction",
         ):
             self.assertNotIn(forbidden_suffix, actual)
+
+    def test_enabled_normalization_reports_effective_depth_scale_mean(self) -> None:
+        option = DualModelDynamicWeightConfig(
+            input_dim=2,
+            output_dim=2,
+            generator_depth=2,
+            decay_schedule=WeightDecayScheduleOptions.DISABLED,
+            decay_rate=0.0,
+            decay_warmup_batches=0,
+            normalization_config=WeightNormalizationConfig(
+                normalization_option=WeightNormalizationOptions.SOFTSIGN,
+                normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+                normalization_learnable_scale_flag=True,
+            ),
+            model_config=generator_config(),
+        ).build()
+        with torch.no_grad():
+            option.normalization_policy.raw_scale.copy_(torch.tensor([4.0, 0.0]))
+            option.normalization_policy.clamp_limit.fill_(5.0)
+        base = torch.zeros(2, 2)
+        output = option(base, torch.ones(2, 2))
+        observation = _AdaptiveParameterObservation.from_forward((base,), output)
+        actual = scalar_map(collect_facts("weight", option, observation))
+        torch.testing.assert_close(
+            actual["scale"],
+            torch.tensor((4.118149927917809 + 0.7931471805599453) / 2),
+        )
+        torch.testing.assert_close(actual["clamp_limit"], torch.tensor(5.0))
 
     def test_adaptivity_handles_scalar_rank_one_and_two_sample_boundary(self) -> None:
         option = soft_weight_bank()

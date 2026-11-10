@@ -1123,6 +1123,7 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     expert_recurrent_halting_stack_last_layer_bias_option: LastLayerBiasOptions | None
     expert_recurrent_halting_stack_apply_output_postprocessing_flag: bool | None
     expert_recurrent_halting_stack_bias_flag: bool | None
+    weight_normalization_learnable_scale_flag: bool = False
 
 
 __all__ = ["RuntimeOptions"]

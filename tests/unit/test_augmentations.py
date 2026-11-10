@@ -35,6 +35,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,
     WeightInformedScoreAxisMaskConfig,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -65,6 +66,7 @@ ADAPTIVE_PARAMETER_PUBLIC_EXPORTS = (
     "DepthMappingLayerStack",
     "DecayPolicy",
     "WeightNormalizationPolicy",
+    "WeightNormalizationConfig",
     "MatrixWeightsMixtureConfig",
     "MatrixBiasMixtureConfig",
     "MatrixWeightsMixture",
@@ -178,8 +180,15 @@ class TestAdaptiveParameterAugmentation(unittest.TestCase):
         }:
             return config_cls(
                 **common_kwargs,
-                normalization_option=normalization_option,
-                normalization_position_option=normalization_position_option,
+                normalization_config=(
+                    None
+                    if normalization_option is WeightNormalizationOptions.DISABLED
+                    else WeightNormalizationConfig(
+                        normalization_option=normalization_option,
+                        normalization_position_option=normalization_position_option,
+                        normalization_learnable_scale_flag=False,
+                    )
+                ),
             )
         if config_cls in {
             LowRankDynamicWeightConfig,
@@ -187,7 +196,15 @@ class TestAdaptiveParameterAugmentation(unittest.TestCase):
         }:
             return config_cls(
                 **common_kwargs,
-                normalization_option=normalization_option,
+                normalization_config=(
+                    None
+                    if normalization_option is WeightNormalizationOptions.DISABLED
+                    else WeightNormalizationConfig(
+                        normalization_option=normalization_option,
+                        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                        normalization_learnable_scale_flag=False,
+                    )
+                ),
             )
         if config_cls in {
             LayeredWeightedBankDynamicWeightConfig,

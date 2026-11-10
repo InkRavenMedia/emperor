@@ -1,5 +1,7 @@
 import copy
 import unittest
+from dataclasses import replace
+from math import exp, expm1, log
 
 import pytest
 import torch
@@ -15,6 +17,7 @@ from emperor.augmentations.adaptive_parameters import (
     SingleModelDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPolicy,
     WeightNormalizationPositionOptions,
@@ -52,6 +55,166 @@ from emperor.linears import LinearLayerConfig
 from emperor.nn import Module
 
 
+@pytest.mark.parametrize(
+    "normalization",
+    [
+        WeightNormalizationOptions.L2_SCALE,
+        WeightNormalizationOptions.RMS,
+        WeightNormalizationOptions.SIGMOID_SCALE,
+        WeightNormalizationOptions.SOFTSIGN,
+    ],
+)
+@pytest.mark.parametrize("shape", [(3, 5), (2, 3, 5), (2, 3, 4, 5)])
+def test_each_depth_has_an_independent_positive_normalization_scale(
+    normalization, shape
+):
+    policy = (
+        WeightNormalizationConfig(
+            generator_depth=3,
+            normalization_option=normalization,
+            normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+            normalization_learnable_scale_flag=True,
+        )
+        .build()
+        .double()
+    )
+    assert policy.raw_scale.shape == (3,)
+    torch.testing.assert_close(policy.scale, torch.ones(3, dtype=torch.float64))
+    effective_scales = torch.tensor([0.5, 1.5, 3.0], dtype=torch.float64)
+    with torch.no_grad():
+        policy.raw_scale.copy_(torch.log(torch.expm1(effective_scales - 0.1)))
+    vectors = (
+        torch.tensor([-2.0, -0.5, 0.0, 0.5, 2.0], dtype=torch.float64)
+        .expand(shape)
+        .clone()
+        .requires_grad_()
+    )
+    unscaled = {
+        WeightNormalizationOptions.L2_SCALE: F.normalize(vectors, dim=-1),
+        WeightNormalizationOptions.RMS: vectors
+        / (vectors.square().mean(dim=-1, keepdim=True).sqrt() + 1e-8),
+        WeightNormalizationOptions.SIGMOID_SCALE: 2 * vectors.sigmoid() - 1,
+        WeightNormalizationOptions.SOFTSIGN: vectors / (1 + vectors.abs()),
+    }[normalization]
+    depth_axis = 0 if len(shape) == 2 else 1
+    scale_shape = [1] * len(shape)
+    scale_shape[depth_axis] = 3
+    expected = unscaled * effective_scales.reshape(scale_shape)
+    actual = policy(vectors)
+    torch.testing.assert_close(actual, expected)
+
+    # A loss on one depth must update only that depth's scale.
+    optimizer = torch.optim.SGD(policy.parameters(), lr=0.01)
+    actual.select(depth_axis, 1).square().sum().backward()
+    assert policy.raw_scale.grad[0].item() == 0
+    assert policy.raw_scale.grad[1].item() > 0
+    assert policy.raw_scale.grad[2].item() == 0
+    optimizer.step()
+    torch.testing.assert_close(policy.scale[[0, 2]], effective_scales[[0, 2]])
+    assert 0.1 < policy.scale[1].item() < effective_scales[1].item()
+
+
+@pytest.mark.parametrize("dtype", [torch.float16, torch.bfloat16])
+def test_depth_scales_preserve_low_precision_vector_dtype(dtype):
+    policy = WeightNormalizationConfig(
+        generator_depth=3,
+        normalization_option=WeightNormalizationOptions.SOFTSIGN,
+        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+        normalization_learnable_scale_flag=True,
+    ).build()
+    vectors = torch.ones(2, 3, 4, dtype=dtype, requires_grad=True)
+    result = policy(vectors)
+    assert result.dtype is dtype
+    torch.testing.assert_close(result, torch.full_like(vectors, 0.5))
+    result.sum().backward()
+    assert torch.isfinite(policy.raw_scale.grad).all()
+    assert torch.all(policy.raw_scale.grad > 0)
+
+
+@pytest.mark.parametrize("shape", [(), (3,), (2, 5), (2, 5, 3), (2, 5, 4, 3)])
+def test_depth_scales_reject_shapes_without_the_configured_depth_axis(shape):
+    policy = WeightNormalizationConfig(
+        generator_depth=3,
+        normalization_option=WeightNormalizationOptions.SOFTSIGN,
+        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+        normalization_learnable_scale_flag=True,
+    ).build()
+    with pytest.raises(ValueError, match="Normalization expects 3 depths"):
+        policy(torch.ones(shape))
+
+
+@pytest.mark.parametrize("depth", [0, -1])
+def test_normalization_rejects_nonpositive_generator_depth(depth):
+    with pytest.raises(ValueError, match="generator_depth"):
+        WeightNormalizationConfig(
+            generator_depth=depth,
+            normalization_option=WeightNormalizationOptions.SOFTSIGN,
+            normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+            normalization_learnable_scale_flag=True,
+        ).build()
+
+
+@pytest.mark.parametrize("normalization", list(WeightNormalizationOptions))
+def test_after_depth_sum_rejects_learnable_scales(normalization):
+    config = WeightNormalizationConfig(
+        generator_depth=3,
+        normalization_option=normalization,
+        normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+        normalization_learnable_scale_flag=True,
+    )
+    with pytest.raises(
+        ValueError,
+        match="normalization_learnable_scale_flag must be False for AFTER_DEPTH_SUM",
+    ):
+        config.build()
+
+
+def test_depth_sum_scale_restriction_validates_merged_overrides():
+    config = WeightNormalizationConfig(
+        generator_depth=3,
+        normalization_option=WeightNormalizationOptions.SOFTSIGN,
+        normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+        normalization_learnable_scale_flag=True,
+    )
+    with pytest.raises(ValueError, match="must be False for AFTER_DEPTH_SUM"):
+        config.build(
+            WeightNormalizationConfig(
+                normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+            )
+        )
+    after_sum = config.build(
+        WeightNormalizationConfig(
+            normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+            normalization_learnable_scale_flag=False,
+        )
+    )
+    assert after_sum.raw_scale is None
+    assert after_sum.scale is None
+    assert "raw_scale" not in after_sum.state_dict()
+    assert after_sum.clamp_limit.requires_grad is False
+    matrix = torch.tensor([[[-2.0, 0.5], [1.0, 3.0]]])
+    torch.testing.assert_close(
+        after_sum.normalize_after_depth_sum(matrix), matrix / (1 + matrix.abs())
+    )
+    with pytest.raises(ValueError, match="must be False for AFTER_DEPTH_SUM"):
+        after_sum.cfg.build(
+            WeightNormalizationConfig(normalization_learnable_scale_flag=True)
+        )
+    restored = after_sum.cfg.build(
+        WeightNormalizationConfig(
+            normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+            normalization_learnable_scale_flag=True,
+        )
+    )
+    assert restored.raw_scale.shape == (3,)
+    assert restored.raw_scale.requires_grad
+    assert (
+        config.normalization_position_option
+        is WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT
+    )
+    assert config.normalization_learnable_scale_flag is True
+
+
 class TestWeightHandlerForward(unittest.TestCase):
     def preset(
         self,
@@ -69,6 +232,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         normalization_position_option: WeightNormalizationPositionOptions = (
             WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
         ),
+        normalization_learnable_scale_flag: bool = True,
         stack_activation: ActivationOptions = ActivationOptions.RELU,
         stack_dropout_probability: float = 0.1,
         bank_expansion_factor: BankExpansionFactorOptions | None = None,
@@ -112,19 +276,25 @@ class TestWeightHandlerForward(unittest.TestCase):
         if config_cls in {
             SingleModelDynamicWeightConfig,
             DualModelDynamicWeightConfig,
-        }:
-            return config_cls(
-                **common_kwargs,
-                normalization_option=normalization_option,
-                normalization_position_option=normalization_position_option,
-            )
-        if config_cls in {
             LowRankDynamicWeightConfig,
             HypernetworkDynamicWeightConfig,
         }:
+            normalization_config = None
+            if normalization_option is not WeightNormalizationOptions.DISABLED:
+                position = normalization_position_option
+                if config_cls in (
+                    LowRankDynamicWeightConfig,
+                    HypernetworkDynamicWeightConfig,
+                ):
+                    position = WeightNormalizationPositionOptions.DISABLED
+                normalization_config = WeightNormalizationConfig(
+                    normalization_option=normalization_option,
+                    normalization_learnable_scale_flag=normalization_learnable_scale_flag,
+                    normalization_position_option=position,
+                )
             return config_cls(
                 **common_kwargs,
-                normalization_option=normalization_option,
+                normalization_config=normalization_config,
             )
         if config_cls in {
             LayeredWeightedBankDynamicWeightConfig,
@@ -173,6 +343,165 @@ class TestWeightHandlerForward(unittest.TestCase):
                 output_dim,
             ),
         ]
+
+    def test_disabled_method_has_no_policy_parameters_or_checkpoint_state(self):
+        for config_type, _, _ in self.weight_cases():
+            with self.subTest(config_type=config_type):
+                is_bank = config_type in (
+                    LayeredWeightedBankDynamicWeightConfig,
+                    SoftWeightedBankDynamicWeightConfig,
+                )
+                model = self.preset(
+                    config_cls=config_type,
+                    input_dim=3,
+                    output_dim=3,
+                    generator_depth=2,
+                    normalization_option=WeightNormalizationOptions.DISABLED,
+                    bank_expansion_factor=(
+                        BankExpansionFactorOptions.FACTOR_OF_TWO if is_bank else None
+                    ),
+                ).build()
+                self.assertIsNone(model.normalization_policy)
+                for names in (
+                    dict(model.named_modules()),
+                    dict(model.named_parameters()),
+                    model.state_dict(),
+                ):
+                    self.assertFalse(
+                        any(name.startswith("normalization_policy") for name in names)
+                    )
+                inputs = torch.randn(2, 2, 3, requires_grad=True)
+                outputs = torch.randn(2, 2, 3, requires_grad=True)
+                self.assertIs(model._apply_normalization_transform(inputs), inputs)
+                raw_matrices = inputs.unsqueeze(-1) * outputs.unsqueeze(-2)
+                actual = model._compute_dynamic_weights(
+                    model._compute_outer_product(inputs, outputs)
+                )
+                expected = raw_matrices.sum(dim=1)
+                torch.testing.assert_close(actual, expected)
+                actual_gradients = torch.autograd.grad(
+                    actual.square().sum(), (inputs, outputs)
+                )
+                expected_gradients = torch.autograd.grad(
+                    expected.square().sum(), (inputs, outputs)
+                )
+                for actual_gradient, expected_gradient in zip(
+                    actual_gradients, expected_gradients, strict=True
+                ):
+                    torch.testing.assert_close(actual_gradient, expected_gradient)
+
+    def test_disabled_method_override_omits_policy_without_mutating_config(self):
+        config = self.preset(normalization_option=WeightNormalizationOptions.SOFTSIGN)
+        model = replace(config, normalization_config=None).build()
+        self.assertIsNone(model.normalization_policy)
+        self.assertIs(
+            config.normalization_config.normalization_option,
+            WeightNormalizationOptions.SOFTSIGN,
+        )
+        self.assertIsInstance(
+            config.build().normalization_policy, WeightNormalizationPolicy
+        )
+
+    def test_nested_normalization_config_controls_policy_and_inherits_depth(self):
+        normalization = WeightNormalizationConfig(
+            normalization_option=WeightNormalizationOptions.SOFTSIGN,
+            normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+            normalization_learnable_scale_flag=True,
+        )
+        config = replace(self.preset(), normalization_config=normalization)
+        model = config.build()
+        self.assertIs(model.normalization_config, normalization)
+        self.assertEqual(
+            model.normalization_policy.generator_depth, config.generator_depth
+        )
+        self.assertEqual(
+            model.normalization_policy.raw_scale.shape, (config.generator_depth,)
+        )
+        self.assertIsNone(normalization.generator_depth)
+        disabled = replace(config, normalization_config=None).build()
+        self.assertIsNone(disabled.normalization_config)
+        self.assertIsNone(disabled.normalization_policy)
+        self.assertFalse(
+            any(
+                name.startswith("normalization_policy")
+                for name in disabled.state_dict()
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "normalization_config=None"):
+            replace(
+                config,
+                normalization_config=replace(
+                    normalization,
+                    normalization_option=WeightNormalizationOptions.DISABLED,
+                ),
+            ).build()
+        with self.assertRaisesRegex(TypeError, "normalization_config"):
+            replace(config, normalization_config=object()).build()
+        with self.assertRaisesRegex(
+            ValueError, "normalization_learnable_scale_flag is required"
+        ):
+            replace(
+                config,
+                normalization_config=replace(
+                    normalization, normalization_learnable_scale_flag=None
+                ),
+            ).build()
+
+    def test_unsupported_weight_variants_reject_any_normalization_config(self):
+        from support.adaptive_generation import weight_mixture_config
+
+        configurations = [
+            self.preset(
+                config_cls=variant,
+                bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
+            )
+            for variant in (
+                LayeredWeightedBankDynamicWeightConfig,
+                SoftWeightedBankDynamicWeightConfig,
+            )
+        ]
+        configurations.append(weight_mixture_config())
+        for config in configurations:
+            self.assertIsNone(config.build().normalization_config)
+            for method in WeightNormalizationOptions:
+                with self.subTest(variant=type(config), method=method):
+                    normalization = WeightNormalizationConfig(
+                        normalization_option=method,
+                        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                        normalization_learnable_scale_flag=False,
+                    )
+                    with self.assertRaisesRegex(
+                        ValueError,
+                        type(config).__name__
+                        + " does not support normalization_config",
+                    ):
+                        replace(config, normalization_config=normalization).build()
+
+    def test_fixed_stage_variants_reject_configurable_normalization_positions(self):
+        from support.adaptive_generation import modulated_config
+
+        configurations = [
+            self.preset(config_cls=variant)
+            for variant in (LowRankDynamicWeightConfig, HypernetworkDynamicWeightConfig)
+        ]
+        configurations.append(
+            modulated_config(normalization_option=WeightNormalizationOptions.SOFTSIGN)
+        )
+        for config in configurations:
+            for position in WeightNormalizationPositionOptions:
+                if position is WeightNormalizationPositionOptions.DISABLED:
+                    continue
+                with self.subTest(variant=type(config), position=position):
+                    with self.assertRaisesRegex(
+                        ValueError, "fixed normalization stage"
+                    ):
+                        replace(
+                            config,
+                            normalization_config=replace(
+                                config.normalization_config,
+                                normalization_position_option=position,
+                            ),
+                        ).build()
 
     def test_single_model_handler_forward(self):
         batch_size = 2
@@ -353,6 +682,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                 cfg = self.preset(
                     input_dim=input_dim,
                     output_dim=output_dim,
+                    generator_depth=generator_depth,
                     normalization_option=normalization,
                     normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
                 )
@@ -382,6 +712,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                 cfg = self.preset(
                     input_dim=input_dim,
                     output_dim=output_dim,
+                    generator_depth=generator_depth,
                     normalization_option=normalization,
                     normalization_position_option=WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
                 )
@@ -422,10 +753,7 @@ class TestWeightHandlerForward(unittest.TestCase):
             DualModelDynamicWeightConfig,
         ):
             for position in WeightNormalizationPositionOptions:
-                for normalization in (
-                    WeightNormalizationOptions.SIGMOID_SCALE,
-                    WeightNormalizationOptions.SOFT_CLAMP,
-                ):
+                for normalization in WeightNormalizationOptions:
                     with self.subTest(
                         config_type=config_type,
                         position=position,
@@ -438,17 +766,30 @@ class TestWeightHandlerForward(unittest.TestCase):
                                 output_dim=3,
                                 normalization_option=normalization,
                                 normalization_position_option=position,
+                                normalization_learnable_scale_flag=(
+                                    position
+                                    is not WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+                                ),
                             )
                             .build()
                             .double()
                         )
                         policy = model.normalization_policy
+                        if normalization is WeightNormalizationOptions.DISABLED:
+                            self.assertIsNone(policy)
+                            matrices = torch.randn(2, 2, 3, 3, dtype=torch.float64)
+                            torch.testing.assert_close(
+                                model._compute_dynamic_weights(matrices),
+                                matrices.sum(dim=1),
+                            )
+                            continue
                         self.assertIs(policy.normalization_position_option, position)
                         self.assertFalse(
                             hasattr(model, "normalization_position_option")
                         )
                         with torch.no_grad():
-                            policy.scale.fill_(1.7)
+                            if policy.raw_scale is not None:
+                                policy.raw_scale.copy_(torch.tensor([-0.7, 1.7]))
                             policy.clamp_limit.fill_(1.3)
                         input_vectors = torch.tensor(
                             [[[0.25, -2.0, 1.5], [3.0, -0.5, 0.75]]],
@@ -466,16 +807,53 @@ class TestWeightHandlerForward(unittest.TestCase):
                             )
                             differentiated_vectors = (input_vectors, output_vectors)
 
-                        if normalization is WeightNormalizationOptions.SIGMOID_SCALE:
-                            parameter = policy.scale
+                        parameter = (
+                            policy.clamp_limit
+                            if normalization
+                            in (
+                                WeightNormalizationOptions.CLAMP,
+                                WeightNormalizationOptions.SOFT_CLAMP,
+                            )
+                            else policy.raw_scale
+                        )
+                        scales = None
+                        if policy.raw_scale is not None:
+                            scales = 0.1 + torch.logaddexp(
+                                policy.raw_scale, policy.raw_scale.new_zeros(())
+                            )
 
-                            def normalize(values, parameter=parameter):
-                                return (2 * values.sigmoid() - 1) * parameter
-                        else:
-                            parameter = policy.clamp_limit
-
-                            def normalize(values, parameter=parameter):
+                        def normalize(
+                            values,
+                            apply_scale=True,
+                            normalization=normalization,
+                            parameter=parameter,
+                            scales=scales,
+                        ):
+                            if normalization is WeightNormalizationOptions.DISABLED:
+                                return values
+                            if normalization is WeightNormalizationOptions.CLAMP:
+                                return values.clamp(-parameter.abs(), parameter.abs())
+                            if normalization is WeightNormalizationOptions.SOFT_CLAMP:
                                 return parameter * torch.tanh(values / parameter)
+                            if normalization is WeightNormalizationOptions.SOFTSIGN:
+                                normalized = values / (1 + values.abs())
+                            elif (
+                                normalization
+                                is WeightNormalizationOptions.SIGMOID_SCALE
+                            ):
+                                normalized = 2 * values.sigmoid() - 1
+                            elif normalization is WeightNormalizationOptions.L2_SCALE:
+                                normalized = F.normalize(values, dim=-1)
+                            else:
+                                normalized = values / (
+                                    values.square().mean(dim=-1, keepdim=True).sqrt()
+                                    + 1e-8
+                                )
+                            if apply_scale:
+                                return normalized * scales.reshape(
+                                    (1, 2) + (1,) * (values.ndim - 2)
+                                )
+                            return normalized
 
                         expected_input = input_vectors
                         expected_output = output_vectors
@@ -506,7 +884,21 @@ class TestWeightHandlerForward(unittest.TestCase):
                             input_vectors, output_vectors
                         )
                         torch.testing.assert_close(actual, expected)
-                        differentiated = (*differentiated_vectors, parameter)
+                        actual = model._compute_dynamic_weights(actual)
+                        expected = expected.sum(dim=1)
+                        if (
+                            position
+                            is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+                        ):
+                            expected = normalize(expected, apply_scale=False)
+                        else:
+                            self.assertIs(
+                                policy.normalize_after_depth_sum(expected), expected
+                            )
+                        torch.testing.assert_close(actual, expected)
+                        differentiated = differentiated_vectors
+                        if parameter is not None and parameter.requires_grad:
+                            differentiated = (*differentiated, parameter)
                         actual_gradients = torch.autograd.grad(
                             actual.square().sum(), differentiated, allow_unused=True
                         )
@@ -523,31 +915,184 @@ class TestWeightHandlerForward(unittest.TestCase):
                                     actual_gradient, expected_gradient
                                 )
                                 self.assertTrue(torch.isfinite(actual_gradient).all())
-                                self.assertGreater(
-                                    actual_gradient.abs().sum().item(), 0
-                                )
+
+    def test_after_depth_sum_normalizes_once_before_adding_decayed_base(self):
+        for config_type, output_dim in (
+            (SingleModelDynamicWeightConfig, 2),
+            (DualModelDynamicWeightConfig, 3),
+        ):
+            with self.subTest(config_type=config_type):
+                config = self.preset(
+                    config_cls=config_type,
+                    input_dim=2,
+                    output_dim=output_dim,
+                    generator_depth=2,
+                    apply_output_postprocessing_flag=False,
+                    stack_activation=ActivationOptions.DISABLED,
+                    stack_dropout_probability=0.0,
+                    normalization_option=WeightNormalizationOptions.SOFTSIGN,
+                    normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+                    normalization_learnable_scale_flag=False,
+                    decay_schedule=WeightDecayScheduleOptions.MULTIPLICATIVE,
+                    decay_rate=0.5,
+                )
+                config.model_config.num_layers = 1
+                model = config.build().double().eval()
+                generators = (
+                    (model.model,)
+                    if config_type is SingleModelDynamicWeightConfig
+                    else (model.input_model, model.output_model)
+                )
+                with torch.no_grad():
+                    model._decay_policy.decay_step.fill_(1)
+                    for generator in generators:
+                        mapping = generator.model[0].model
+                        mapping.weight_params.zero_()
+                        mapping.bias_params.fill_(1.0)
+                base = torch.full(
+                    (2, output_dim), 10.0, dtype=torch.float64, requires_grad=True
+                )
+                contexts = torch.tensor([[1.0, 2.0], [-3.0, 0.5]], dtype=torch.float64)
+                observed = []
+                hook = model.normalization_policy.register_forward_hook(
+                    lambda _module, args, _output, observed=observed: observed.append(
+                        args[0].detach().clone()
+                    )
+                )
+                try:
+                    output = model(base, contexts)
+                finally:
+                    hook.remove()
+                # Two unscaled all-one outer products sum to 2; Softsign(2) = 2/3.
+                # The independently decayed base is 5 and is not normalized.
+                expected = torch.full(
+                    (2, 2, output_dim), 5.0 + 2 / 3, dtype=torch.float64
+                )
+                torch.testing.assert_close(output, expected)
+                self.assertEqual(len(observed), 1)
+                torch.testing.assert_close(observed[0], torch.full_like(expected, 2.0))
+                self.assertIsNone(model.normalization_policy.raw_scale)
+                self.assertIsNone(model.normalization_policy.scale)
+                self.assertNotIn("normalization_policy.raw_scale", model.state_dict())
+                torch.testing.assert_close(base, torch.full_like(base, 10.0))
+                output.sum().backward()
+                torch.testing.assert_close(base.grad, torch.ones_like(base))
+                for generator in generators:
+                    gradient = generator.model[0].model.bias_params.grad
+                    self.assertIsNotNone(gradient)
+                    self.assertTrue(torch.isfinite(gradient).all())
+                    self.assertGreater(gradient.abs().sum().item(), 0)
+
+    def test_outer_product_generators_reject_learnable_scales_after_depth_sum(self):
+        for config_type in (
+            SingleModelDynamicWeightConfig,
+            DualModelDynamicWeightConfig,
+        ):
+            for normalization in WeightNormalizationOptions:
+                if normalization is WeightNormalizationOptions.DISABLED:
+                    continue
+                with self.subTest(config_type=config_type, normalization=normalization):
+                    with self.assertRaisesRegex(
+                        ValueError, "must be False for AFTER_DEPTH_SUM"
+                    ):
+                        self.preset(
+                            config_cls=config_type,
+                            input_dim=3,
+                            output_dim=3,
+                            normalization_option=normalization,
+                            normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+                            normalization_learnable_scale_flag=True,
+                        ).build()
 
     def test_normalization_policy_rejects_invalid_positions_at_each_entry(self):
         for position in (None, False, 0, "invalid_position"):
             with self.subTest(position=position):
-                config = DualModelDynamicWeightConfig(
+                config = WeightNormalizationConfig(
+                    generator_depth=2,
                     normalization_option=WeightNormalizationOptions.L2_SCALE,
                     normalization_position_option=position,
+                    normalization_learnable_scale_flag=False,
                 )
                 with self.assertRaisesRegex(
-                    ValueError, "Unsupported normalization_position_option"
+                    (TypeError, ValueError), "normalization_position_option"
                 ):
                     WeightNormalizationPolicy(config)
-                policy = WeightNormalizationPolicy(self.preset())
+                policy = self.preset().build().normalization_policy
                 policy.normalization_position_option = position
                 for stage in (
                     policy.normalize_before_outer_product,
                     policy.normalize_after_outer_product,
+                    policy.normalize_after_depth_sum,
                 ):
                     with self.assertRaisesRegex(
                         ValueError, "Unsupported normalization_position_option"
                     ):
                         stage(torch.ones(1, 1, 3))
+
+    def test_normalization_policy_requires_complete_config(self):
+        required = {
+            "generator_depth": 2,
+            "normalization_option": WeightNormalizationOptions.SOFTSIGN,
+            "normalization_position_option": WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+            "normalization_learnable_scale_flag": False,
+        }
+        for field in required:
+            for omit in (False, True):
+                with self.subTest(field=field, omit=omit):
+                    values = required.copy()
+                    if omit:
+                        del values[field]
+                    else:
+                        values[field] = None
+                    with self.assertRaisesRegex(ValueError, field + " is required"):
+                        WeightNormalizationPolicy(WeightNormalizationConfig(**values))
+
+    def test_normalization_policy_rejects_weight_configs_and_untyped_objects(self):
+        for config in (DynamicWeightConfig(), self.preset(), object(), None):
+            with self.subTest(config_type=type(config).__name__):
+                with self.assertRaisesRegex(TypeError, "WeightNormalizationConfig"):
+                    WeightNormalizationPolicy(config)
+
+    def test_normalization_config_validates_after_overrides_without_mutating_input(
+        self,
+    ):
+        config = WeightNormalizationConfig(
+            generator_depth=2,
+            normalization_option=WeightNormalizationOptions.SOFTSIGN,
+            normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+        )
+        for flag in (False, True):
+            with self.subTest(flag=flag):
+                policy = config.build(
+                    WeightNormalizationConfig(normalization_learnable_scale_flag=flag)
+                )
+                self.assertIsNone(config.normalization_learnable_scale_flag)
+                self.assertIs(policy.cfg.normalization_learnable_scale_flag, flag)
+                self.assertIs(policy.raw_scale.requires_grad, flag)
+                self.assertIs(policy.clamp_limit.requires_grad, flag)
+                self.assertIs(policy.normalization_option, config.normalization_option)
+                self.assertIs(
+                    policy.normalization_position_option,
+                    config.normalization_position_option,
+                )
+
+    def test_normalization_config_rejects_invalid_types(self):
+        valid = {
+            "generator_depth": 2,
+            "normalization_option": WeightNormalizationOptions.SOFTSIGN,
+            "normalization_position_option": WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+            "normalization_learnable_scale_flag": False,
+        }
+        for field, values in (
+            ("generator_depth", (False, 1.5, "2")),
+            ("normalization_option", (False, 0, "SOFTSIGN")),
+            ("normalization_position_option", (False, 0, "AFTER_DEPTH_SUM")),
+            ("normalization_learnable_scale_flag", (0, 1, "false")),
+        ):
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    with self.assertRaisesRegex(TypeError, field):
+                        WeightNormalizationConfig(**(valid | {field: value})).build()
 
     def test_fixed_normalization_stages_preserve_low_rank_and_hypernetwork_math(self):
         for config_type in (
@@ -575,7 +1120,11 @@ class TestWeightHandlerForward(unittest.TestCase):
                     WeightNormalizationPositionOptions.DISABLED,
                 )
                 with torch.no_grad():
-                    policy.scale.fill_(1.7)
+                    policy.raw_scale.copy_(torch.tensor([-0.7, 1.7]))
+                scale = 0.1 + torch.logaddexp(
+                    policy.raw_scale, policy.raw_scale.new_zeros(())
+                )
+                scale = scale.reshape(1, 2, 1)
                 context = torch.tensor(
                     [[-1.5, 0.25, 2.0], [0.5, -3.0, 0.75]],
                     dtype=torch.float64,
@@ -585,19 +1134,17 @@ class TestWeightHandlerForward(unittest.TestCase):
                 if config_type is LowRankDynamicWeightConfig:
                     input_factors = (
                         2 * model.input_model(context).sigmoid() - 1
-                    ) * policy.scale
+                    ) * scale
                     output_factors = (
                         2 * model.output_model(context).sigmoid() - 1
-                    ) * policy.scale
+                    ) * scale
                     expected = base + input_factors.transpose(-1, -2) @ output_factors
                 else:
-                    flat_components = (
-                        2 * model.model(context).sigmoid() - 1
-                    ) * policy.scale
+                    flat_components = (2 * model.model(context).sigmoid() - 1) * scale
                     expected = base + flat_components.sum(dim=1).reshape(2, 3, 4)
                 actual = model(base, context)
                 torch.testing.assert_close(actual, expected)
-                differentiated = (context, base, policy.scale)
+                differentiated = (context, base, policy.raw_scale)
                 actual_gradients = torch.autograd.grad(
                     actual.square().sum(), differentiated
                 )
@@ -758,7 +1305,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                     for name, parameter in model.named_parameters()
                     if name
                     not in {
-                        "normalization_policy.scale",
+                        "normalization_policy.raw_scale",
                         "normalization_policy.clamp_limit",
                     }
                     and parameter.grad is not None
@@ -776,7 +1323,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         config = self.preset(
             input_dim=3,
             output_dim=4,
-            normalization_option=WeightNormalizationOptions.DISABLED,
+            normalization_option=WeightNormalizationOptions.SIGMOID_SCALE,
         )
         model = DualModelDynamicWeight(config).double()
         vectors = torch.tensor(
@@ -786,7 +1333,7 @@ class TestWeightHandlerForward(unittest.TestCase):
         cases = (
             (
                 WeightNormalizationOptions.SIGMOID_SCALE,
-                model.normalization_policy.scale,
+                model.normalization_policy.raw_scale,
             ),
             (
                 WeightNormalizationOptions.SOFT_CLAMP,
@@ -836,11 +1383,15 @@ class TestWeightHandlerForward(unittest.TestCase):
                     input_dim=input_dim,
                     hidden_dim=4,
                     output_dim=output_dim,
-                    generator_depth=1,
+                    generator_depth=2,
                     apply_output_postprocessing_flag=False,
-                    normalization_option=WeightNormalizationOptions.DISABLED,
+                    normalization_option=(
+                        WeightNormalizationOptions.DISABLED
+                        if is_bank
+                        else WeightNormalizationOptions.SOFTSIGN
+                    ),
                     normalization_position_option=(
-                        WeightNormalizationPositionOptions.DISABLED
+                        WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT
                     ),
                     stack_activation=ActivationOptions.DISABLED,
                     stack_dropout_probability=0.0,
@@ -852,6 +1403,11 @@ class TestWeightHandlerForward(unittest.TestCase):
                     decay_warmup_batches=0,
                 )
                 source = config.build().double()
+                if not is_bank:
+                    with torch.no_grad():
+                        source.normalization_policy.raw_scale.copy_(
+                            torch.tensor([-0.7, 1.7], dtype=torch.float64)
+                        )
                 source_optimizer = torch.optim.Adam(source.parameters(), lr=0.01)
                 weight_params = torch.tensor(
                     [[1.0, -2.0, 0.5], [0.25, 3.0, -1.0]],
@@ -879,6 +1435,11 @@ class TestWeightHandlerForward(unittest.TestCase):
                     return output.detach()
 
                 training_step(source, source_optimizer, first_input, weight_params)
+                if not is_bank:
+                    scale_state = source_optimizer.state[
+                        source.normalization_policy.raw_scale
+                    ]
+                    self.assertEqual(scale_state["exp_avg"].shape, (2,))
                 model_state = copy.deepcopy(source.state_dict())
                 optimizer_state = copy.deepcopy(source_optimizer.state_dict())
 
@@ -1377,6 +1938,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                 cfg = self.preset(
                     input_dim=input_dim,
                     output_dim=output_dim,
+                    generator_depth=generator_depth,
                     normalization_option=normalization,
                 )
                 model = DualModelDynamicWeight(cfg)
@@ -1398,7 +1960,9 @@ class TestWeightHandlerForward(unittest.TestCase):
             ):
                 message = f"dtype={dtype}, normalization={normalization}"
                 with self.subTest(msg=message):
-                    cfg = self.preset(normalization_option=normalization)
+                    cfg = self.preset(
+                        generator_depth=1, normalization_option=normalization
+                    )
                     model = DualModelDynamicWeight(cfg).to(dtype=dtype)
                     vectors = torch.zeros(
                         1,
@@ -1434,7 +1998,9 @@ class TestWeightHandlerForward(unittest.TestCase):
             ) in expected_value_by_normalization.items():
                 message = f"dtype={dtype}, normalization={normalization}"
                 with self.subTest(msg=message):
-                    cfg = self.preset(normalization_option=normalization)
+                    cfg = self.preset(
+                        generator_depth=1, normalization_option=normalization
+                    )
                     model = DualModelDynamicWeight(cfg).to(dtype=dtype)
                     vectors = torch.full(
                         (1, 1, 2),
@@ -1497,11 +2063,12 @@ class TestWeightHandlerForward(unittest.TestCase):
 
     def test_apply_normalization_transform_exact_math(self):
         cfg = self.preset(
-            normalization_option=WeightNormalizationOptions.DISABLED,
+            generator_depth=1,
+            normalization_option=WeightNormalizationOptions.SOFTSIGN,
         )
         model = DualModelDynamicWeight(cfg)
         vectors = torch.tensor([[[-2.0, -0.5, 0.5, 2.0]]])
-        model.normalization_policy.scale.data.fill_(2.0)
+        model.normalization_policy.raw_scale.data.fill_(log(expm1(1.9)))
         model.normalization_policy.clamp_limit.data.fill_(1.0)
 
         expected_by_option = {
@@ -1516,6 +2083,7 @@ class TestWeightHandlerForward(unittest.TestCase):
             )
             * 2.0,
             WeightNormalizationOptions.DISABLED: vectors,
+            WeightNormalizationOptions.SOFTSIGN: vectors / (1 + vectors.abs()) * 2.0,
         }
 
         for option, expected in expected_by_option.items():
@@ -1523,6 +2091,148 @@ class TestWeightHandlerForward(unittest.TestCase):
                 model.normalization_policy.normalization_option = option
                 result = model._apply_normalization_transform(vectors)
                 torch.testing.assert_close(result, expected)
+
+    def test_softsign_scale_learns_to_expand_the_output_range(self):
+        policy = (
+            self.preset(
+                generator_depth=1,
+                normalization_option=WeightNormalizationOptions.SOFTSIGN,
+            )
+            .build()
+            .normalization_policy.double()
+        )
+        optimizer = torch.optim.SGD(policy.parameters(), lr=2.0)
+        vectors = torch.tensor([[[-3.0, 0.0, 3.0]]], dtype=torch.float64)
+        target = torch.tensor([[[-1.5, 0.0, 1.5]]], dtype=torch.float64)
+        torch.testing.assert_close(
+            policy(vectors),
+            torch.tensor([[[-0.75, 0.0, 0.75]]], dtype=torch.float64),
+        )
+
+        F.mse_loss(policy(vectors), target).backward()
+        torch.testing.assert_close(
+            policy.raw_scale.grad,
+            torch.tensor([-0.75 * (1 - exp(-0.9))], dtype=torch.float64),
+        )
+        optimizer.step()
+
+        self.assertGreater(policy(vectors)[0, 0, 2].item(), 1.0)
+        self.assertLess(policy(vectors)[0, 0, 0].item(), -1.0)
+
+    def test_normalization_scale_has_a_positive_floor_for_every_scaled_method(self):
+        for option in (
+            WeightNormalizationOptions.L2_SCALE,
+            WeightNormalizationOptions.RMS,
+            WeightNormalizationOptions.SIGMOID_SCALE,
+            WeightNormalizationOptions.SOFTSIGN,
+        ):
+            for dtype in (torch.float16, torch.bfloat16, torch.float32, torch.float64):
+                config = WeightNormalizationConfig(
+                    generator_depth=1,
+                    normalization_option=option,
+                    normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                    normalization_learnable_scale_flag=True,
+                )
+                policy = config.build().to(dtype=dtype)
+                vectors = torch.tensor([[-2.0, 1.0]], dtype=dtype)
+                initial_output = policy(vectors).detach()
+                for raw, effective in (
+                    (-1000.0, 0.1),
+                    (-3.0, 0.14858735157374206),
+                    (0.0, 0.7931471805599453),
+                    (1000.0, 1000.1),
+                ):
+                    with self.subTest(option=option, dtype=dtype, raw=raw):
+                        with torch.no_grad():
+                            policy.raw_scale.fill_(raw)
+                        actual = policy(vectors)
+                        torch.testing.assert_close(
+                            policy.scale, torch.tensor([effective], dtype=dtype)
+                        )
+                        self.assertTrue(torch.isfinite(actual).all())
+                        self.assertTrue((actual * vectors > 0).all())
+                        torch.testing.assert_close(actual, initial_output * effective)
+                        if raw == 0:
+                            actual.sum().backward()
+                            torch.testing.assert_close(
+                                policy.raw_scale.grad,
+                                (0.5 * initial_output.sum()).reshape(1),
+                            )
+
+    def test_learnable_normalization_flag_controls_every_method(self):
+        for option in WeightNormalizationOptions:
+            for flag in (False, True):
+                with self.subTest(option=option, flag=flag):
+                    config = WeightNormalizationConfig(
+                        generator_depth=1,
+                        normalization_option=option,
+                        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+                        normalization_learnable_scale_flag=flag,
+                    )
+                    if option is WeightNormalizationOptions.DISABLED:
+                        with self.assertRaisesRegex(
+                            ValueError, "normalization_config=None"
+                        ):
+                            config.build()
+                        continue
+                    policy = WeightNormalizationPolicy(config).double()
+                    expected_learnable = flag is True
+                    self.assertIs(policy.raw_scale.requires_grad, expected_learnable)
+                    self.assertIs(policy.clamp_limit.requires_grad, expected_learnable)
+                    vectors = torch.tensor(
+                        [[-3.0, 0.25, 2.0]], dtype=torch.float64, requires_grad=True
+                    )
+                    policy(vectors).square().sum().backward()
+                    active = (
+                        policy.clamp_limit
+                        if option
+                        in (
+                            WeightNormalizationOptions.CLAMP,
+                            WeightNormalizationOptions.SOFT_CLAMP,
+                        )
+                        else policy.raw_scale
+                    )
+                    if (
+                        expected_learnable
+                        and option is not WeightNormalizationOptions.DISABLED
+                    ):
+                        self.assertIsNotNone(active.grad)
+                        self.assertGreater(active.grad.abs().item(), 0)
+                    else:
+                        self.assertIsNone(policy.raw_scale.grad)
+                        self.assertIsNone(policy.clamp_limit.grad)
+                    self.assertTrue(torch.isfinite(vectors.grad).all())
+
+    def test_learnable_normalization_flag_rejects_non_booleans(self):
+        for flag in (None, 0, 1, "true", [], object()):
+            with self.subTest(flag=flag):
+                config = self.preset(normalization_learnable_scale_flag=flag)
+                with self.assertRaisesRegex(
+                    (TypeError, ValueError), "normalization_learnable_scale_flag"
+                ):
+                    config.build()
+
+    def test_dimension_overrides_preserve_the_learnable_normalization_flag(self):
+        for flag in (False, True):
+            config = self.preset(normalization_learnable_scale_flag=flag)
+            model = config.build(
+                DualModelDynamicWeightConfig(input_dim=3, output_dim=4)
+            )
+            self.assertIs(model.normalization_policy.raw_scale.requires_grad, flag)
+            changed = config.build(
+                DualModelDynamicWeightConfig(
+                    normalization_config=replace(
+                        config.normalization_config,
+                        normalization_learnable_scale_flag=not flag,
+                    ),
+                )
+            )
+            self.assertIs(
+                changed.normalization_policy.raw_scale.requires_grad, not flag
+            )
+            self.assertIs(
+                config.normalization_config.normalization_learnable_scale_flag, flag
+            )
 
     def test_apply_normalization_transform_raises_on_unknown_option(self):
         batch_size = 2
@@ -1539,27 +2249,42 @@ class TestWeightHandlerForward(unittest.TestCase):
     def test_normalization_submodule_owns_config_parameters_and_module_lifecycle(self):
         config = self.preset(normalization_option=WeightNormalizationOptions.DISABLED)
         overrides = DualModelDynamicWeightConfig(
-            normalization_option=WeightNormalizationOptions.SIGMOID_SCALE,
-            normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+            normalization_config=WeightNormalizationConfig(
+                normalization_option=WeightNormalizationOptions.SIGMOID_SCALE,
+                normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+                normalization_learnable_scale_flag=True,
+            ),
         )
         model = DualModelDynamicWeight(config, overrides).double()
         policy = model.normalization_policy
         self.assertIsInstance(policy, WeightNormalizationPolicy)
         self.assertIs(model.get_submodule("normalization_policy"), policy)
-        self.assertIs(policy.cfg, model.cfg)
+        self.assertIsInstance(policy.cfg, WeightNormalizationConfig)
+        self.assertEqual(policy.cfg.generator_depth, model.cfg.generator_depth)
+        self.assertEqual(policy.raw_scale.shape, (model.cfg.generator_depth,))
+        self.assertIs(
+            policy.cfg.normalization_option,
+            model.normalization_config.normalization_option,
+        )
+        self.assertIs(
+            policy.cfg.normalization_position_option,
+            model.normalization_config.normalization_position_option,
+        )
+        self.assertIs(
+            policy.cfg.normalization_learnable_scale_flag,
+            model.normalization_config.normalization_learnable_scale_flag,
+        )
         self.assertIs(
             policy.normalization_option, WeightNormalizationOptions.SIGMOID_SCALE
         )
-        self.assertIs(config.normalization_option, WeightNormalizationOptions.DISABLED)
+        self.assertIsNone(config.normalization_config)
         self.assertIs(
             policy.normalization_position_option,
             WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
         )
-        self.assertIs(
-            config.normalization_position_option,
-            WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
+        self.assertEqual(
+            set(dict(policy.named_parameters())), {"raw_scale", "clamp_limit"}
         )
-        self.assertEqual(set(dict(policy.named_parameters())), {"scale", "clamp_limit"})
         for name, parameter in policy.named_parameters():
             self.assertFalse(hasattr(model, name))
             self.assertEqual(parameter.dtype, torch.float64)
@@ -1584,7 +2309,9 @@ class TestWeightHandlerForward(unittest.TestCase):
             lambda _module, _inputs, output: observed_outputs.append(output)
         )
         try:
-            vectors = torch.tensor([[-2.0, 0.25, 3.0]], dtype=torch.float64)
+            vectors = torch.tensor(
+                [[-2.0, 0.25, 3.0], [0.5, -1.0, 2.0]], dtype=torch.float64
+            )
             output = model._apply_normalization_transform(vectors)
             torch.testing.assert_close(output, 2 * vectors.sigmoid() - 1)
             self.assertEqual(len(observed_outputs), 1)
@@ -1595,27 +2322,35 @@ class TestWeightHandlerForward(unittest.TestCase):
     def test_normalization_uses_current_parameters_after_state_assignment(self):
         model = DualModelDynamicWeight(self.preset()).double()
         state = copy.deepcopy(model.state_dict())
-        state["normalization_policy.scale"].fill_(2.5)
+        state["normalization_policy.raw_scale"].copy_(torch.tensor([2.5, 0.5]))
         state["normalization_policy.clamp_limit"].fill_(1.5)
-        original_scale = model.normalization_policy.scale
+        original_scale = model.normalization_policy.raw_scale
         original_clamp_limit = model.normalization_policy.clamp_limit
         model.load_state_dict(state, strict=True, assign=True)
-        self.assertIsNot(model.normalization_policy.scale, original_scale)
+        self.assertIsNot(model.normalization_policy.raw_scale, original_scale)
         self.assertIsNot(model.normalization_policy.clamp_limit, original_clamp_limit)
         self.assertEqual(tuple(model.state_dict()), tuple(state))
 
         for option in (
             WeightNormalizationOptions.SIGMOID_SCALE,
             WeightNormalizationOptions.SOFT_CLAMP,
+            WeightNormalizationOptions.SOFTSIGN,
         ):
             with self.subTest(option=option):
                 model.normalization_policy.normalization_option = option
                 vectors = torch.tensor(
-                    [[[0.25, 1.5, 3.0]]], dtype=torch.float64, requires_grad=True
+                    [[[0.25, 1.5, 3.0], [0.5, -1.0, 2.0]]],
+                    dtype=torch.float64,
+                    requires_grad=True,
                 )
                 if option is WeightNormalizationOptions.SIGMOID_SCALE:
-                    parameter = model.normalization_policy.scale
-                    expected = (2 * vectors.sigmoid() - 1) * parameter
+                    parameter = model.normalization_policy.raw_scale
+                    scale = 0.1 + torch.logaddexp(parameter, parameter.new_zeros(()))
+                    expected = (2 * vectors.sigmoid() - 1) * scale.reshape(1, 2, 1)
+                elif option is WeightNormalizationOptions.SOFTSIGN:
+                    parameter = model.normalization_policy.raw_scale
+                    scale = 0.1 + torch.logaddexp(parameter, parameter.new_zeros(()))
+                    expected = vectors / (1 + vectors.abs()) * scale.reshape(1, 2, 1)
                 else:
                     parameter = model.normalization_policy.clamp_limit
                     expected = parameter * torch.tanh(vectors / parameter)

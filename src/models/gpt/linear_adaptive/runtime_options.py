@@ -337,6 +337,7 @@ class HiddenAdaptiveWeightOptions:
     decay_warmup_batches: int
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack_source: AdaptiveGeneratorStackSource
+    normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True)

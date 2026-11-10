@@ -363,6 +363,9 @@ def adaptive_options_from_config(
             config_module,
             f"{prefix}_WEIGHT_NORMALIZATION_OPTION",
         ),
+        weight_normalization_learnable_scale_flag=getattr(
+            config_module, f"{prefix}_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG"
+        ),
         weight_normalization_position_option=getattr(
             config_module,
             f"{prefix}_WEIGHT_NORMALIZATION_POSITION_OPTION",

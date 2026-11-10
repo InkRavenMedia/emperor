@@ -574,6 +574,7 @@ class ControlConfigFactory:
             decay_rate=adaptive_options.decay_rate,
             decay_warmup_batches=adaptive_options.decay_warmup_batches,
             normalization_option=adaptive_options.normalization_option,
+            normalization_learnable_scale_flag=adaptive_options.normalization_learnable_scale_flag,
             normalization_position_option=(
                 adaptive_options.normalization_position_option
             ),

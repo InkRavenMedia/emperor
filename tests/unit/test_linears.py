@@ -16,6 +16,7 @@ from emperor.augmentations.adaptive_parameters import (
     StandardDynamicDiagonalConfig,
     WeightDecayScheduleOptions,
     WeightInformedScoreAxisMaskConfig,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -75,8 +76,11 @@ def make_layer_stack_config(
 def make_weight_config(input_dim: int, output_dim: int) -> DualModelDynamicWeightConfig:
     return DualModelDynamicWeightConfig(
         generator_depth=2,
-        normalization_option=WeightNormalizationOptions.L2_SCALE,
-        normalization_position_option=WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
+        normalization_config=WeightNormalizationConfig(
+            normalization_learnable_scale_flag=False,
+            normalization_option=WeightNormalizationOptions.L2_SCALE,
+            normalization_position_option=WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
+        ),
         decay_schedule=WeightDecayScheduleOptions.DISABLED,
         decay_rate=0.0,
         decay_warmup_batches=0,
@@ -1022,7 +1026,7 @@ class TestAdaptiveLinearLayer(unittest.TestCase):
                 "bias_params",
                 "adaptive_behaviour.weight_model._decay_policy.decay_step",
                 "adaptive_behaviour.weight_model._decay_policy.warmup_step",
-                "adaptive_behaviour.weight_model.normalization_policy.scale",
+                "adaptive_behaviour.weight_model.normalization_policy.raw_scale",
                 "adaptive_behaviour.weight_model.normalization_policy.clamp_limit",
                 "adaptive_behaviour.weight_model.input_model.model.layers.0.model.weight_params",
                 "adaptive_behaviour.weight_model.input_model.model.layers.0.model.bias_params",

@@ -305,6 +305,7 @@ class HiddenModelConfigFactory:
             normalization_option=(
                 self.hidden_adaptive_weight_options.normalization_option
             ),
+            normalization_learnable_scale_flag=self.hidden_adaptive_weight_options.normalization_learnable_scale_flag,
             normalization_position_option=(
                 self.hidden_adaptive_weight_options.normalization_position_option
             ),
