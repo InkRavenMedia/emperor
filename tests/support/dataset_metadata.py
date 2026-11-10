@@ -16,6 +16,7 @@ from emperor.datasets.image.classification import Cifar10, Cifar100, FashionMNIS
 from emperor.datasets.text.bert_pretraining import (
     PennTreebankBertPretraining,
     WikiText2BertPretraining,
+    WikiText103BertHierarchical,
 )
 from emperor.datasets.text.language_modeling import (
     OpenWebText,
@@ -62,6 +63,7 @@ DATASET_TASKS = {
     Cifar100: ExperimentTask.IMAGE_CLASSIFICATION,
     PennTreebankBertPretraining: ExperimentTask.BERT_PRETRAINING,
     WikiText2BertPretraining: ExperimentTask.BERT_PRETRAINING,
+    WikiText103BertHierarchical: ExperimentTask.BERT_PRETRAINING,
     PennTreebank: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText2: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText103: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
@@ -253,6 +255,23 @@ def offline_dataset_metadata(
                 num_workers=0,
                 drop_last=False,
                 seed=seed,
+            )
+        return
+
+    if dataset_type is WikiText103BertHierarchical:
+        from datasets import Dataset as ArrowDataset
+
+        sources = {
+            split: ArrowDataset.from_dict({"text": list(rows)})
+            for split, rows in BERT_OFFLINE_TEXT_SPLITS.items()
+        }
+
+        def wiki_source(_data, split):
+            return sources["valid" if split == "validation" else split]
+
+        with patch.object(dataset_type, "_dataset", wiki_source):
+            yield dataset_type(
+                batch_size=2, sequence_length=10, root=str(root), num_workers=0, seed=seed
             )
         return
 

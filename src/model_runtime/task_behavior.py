@@ -46,6 +46,14 @@ class ExperimentTaskBehavior:
 
     def validate_dataset(self, dataset: type, configuration: Any) -> None:
         self.validate_configuration(configuration)
+        if self.task == ExperimentTask.BERT_PRETRAINING:
+            experiment = getattr(configuration, "experiment_config", None)
+            hierarchical = getattr(experiment, "masked_word_decoder_config", None)
+            raw_words = bool(getattr(dataset, "hierarchical_masked_word_flag", False))
+            if (hierarchical is not None) != raw_words:
+                raise ValueError(
+                    "Masked-word BERT requires a compatible dataset such as WikiText103BertHierarchical."
+                )
         if self.task != ExperimentTask.CAUSAL_LANGUAGE_MODELING:
             return
         experiment = getattr(configuration, "experiment_config", None)
@@ -72,16 +80,17 @@ class ExperimentTaskBehavior:
             argument.name: argument.value_from(configuration)
             for argument in self.dataset_arguments
         }
-        hierarchical = getattr(
-            getattr(configuration, "experiment_config", None),
-            "hierarchical_language_model_config",
-            None,
-        )
+        experiment = getattr(configuration, "experiment_config", None)
+        hierarchical = getattr(experiment, "hierarchical_language_model_config", None)
         if (
             self.task == ExperimentTask.CAUSAL_LANGUAGE_MODELING
             and hierarchical is not None
         ):
             arguments["max_token_bytes"] = hierarchical.embedding_config.max_token_bytes
+        if self.task == ExperimentTask.BERT_PRETRAINING:
+            decoder = getattr(experiment, "masked_word_decoder_config", None)
+            if decoder is not None:
+                arguments["max_token_bytes"] = decoder.max_token_bytes
         return arguments
 
     def ranking_score(self, result: Mapping[str, Any]) -> tuple[float, float]:
@@ -143,11 +152,20 @@ def _token_inputs(_dataset: type, configuration: Any) -> tuple[Any, ...]:
         getattr(configuration, "sequence_length", None),
         "configuration.sequence_length",
     )
-    hierarchical = getattr(
-        getattr(configuration, "experiment_config", None),
-        "hierarchical_language_model_config",
-        None,
-    )
+    experiment = getattr(configuration, "experiment_config", None)
+    masked_word_decoder = getattr(experiment, "masked_word_decoder_config", None)
+    if masked_word_decoder is not None:
+        from emperor.datasets.text.bert_pretraining import BertMaskedWordBatch
+
+        return (
+            BertMaskedWordBatch.collate(
+                [(("a",), ("b",), 0)],
+                sequence_length=sequence_length,
+                max_token_bytes=masked_word_decoder.max_token_bytes,
+                mlm_probability=1.0,
+            ),
+        )
+    hierarchical = getattr(experiment, "hierarchical_language_model_config", None)
     if hierarchical is not None:
         from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
 
@@ -237,15 +255,21 @@ _IMAGE_CLASSIFICATION_RESULT_METRIC_KEYS = (
     "best_validation/accuracy_epoch",
     "best_validation/loss_epoch",
 )
-_BERT_PRETRAINING_RESULT_METRIC_KEYS = _stage_metric_keys(
-    "loss",
-    "mlm/loss",
-    "mlm/perplexity",
-    "mlm/masked_accuracy",
-    "mlm/masked_top_5_accuracy",
-    "nsp/loss",
-    "nsp/accuracy",
-    "auxiliary/loss",
+_BERT_PRETRAINING_RESULT_METRIC_KEYS = (
+    *_stage_metric_keys(
+        "loss",
+        "mlm/loss",
+        "mlm/perplexity",
+        "mlm/masked_accuracy",
+        "mlm/masked_top_5_accuracy",
+        "mlm/byte_reconstruction_loss",
+        "mlm/oversized_words",
+        "nsp/loss",
+        "nsp/accuracy",
+        "auxiliary/loss",
+    ),
+    "validation/mlm/exact_word_accuracy",
+    "test/mlm/exact_word_accuracy",
 )
 _TEXT_TRANSLATION_RESULT_METRIC_KEYS = (
     *_stage_metric_keys(

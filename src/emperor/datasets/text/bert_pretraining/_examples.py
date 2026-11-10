@@ -1,6 +1,7 @@
 import random
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from typing import TypeVar
 
 import torch
 from tokenizers import Tokenizer
@@ -93,9 +94,12 @@ def build_bert_pretraining_examples(
     return examples
 
 
+_Token = TypeVar("_Token")
+
+
 def _truncate_longest_first(
-    tokens_a: list[int],
-    tokens_b: list[int],
+    tokens_a: list[_Token],
+    tokens_b: list[_Token],
     max_content_length: int,
 ) -> None:
     # Both segments are non-empty and max_content_length is at least two, so an
