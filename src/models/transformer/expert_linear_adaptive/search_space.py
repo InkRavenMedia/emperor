@@ -2,6 +2,7 @@ from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
     AffineTransformDynamicBiasConfig,
     AntiDynamicDiagonalConfig,
+    BroadcastSumDynamicWeightConfig,
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
@@ -42,6 +43,7 @@ SEARCH_SPACE_DECODER_NORMALIZATION = list(NormalizationOptions)
 SEARCH_SPACE_ATTENTION_PROJECTION_ADAPTIVE_WEIGHT_OPTION = [
     None,
     SingleModelDynamicWeightConfig,
+    BroadcastSumDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankDynamicWeightConfig,
@@ -57,6 +59,7 @@ SEARCH_SPACE_FEED_FORWARD_ADAPTIVE_WEIGHT_OPTION = (
 )
 SEARCH_SPACE_ROUTER_ADAPTIVE_WEIGHT_OPTION = [
     None,
+    BroadcastSumDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankDynamicWeightConfig,

@@ -57,6 +57,7 @@ from emperor.augmentations.adaptive_parameters._options import (
     WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._weights.config import (
+    BroadcastSumDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DynamicWeightConfig,
@@ -108,6 +109,7 @@ __all__ = (
     "DynamicWeightConfig",
     "SingleModelDynamicWeightConfig",
     "DualModelDynamicWeightConfig",
+    "BroadcastSumDynamicWeightConfig",
     "LowRankDynamicWeightConfig",
     "HypernetworkDynamicWeightConfig",
     "LayeredWeightedBankDynamicWeightConfig",

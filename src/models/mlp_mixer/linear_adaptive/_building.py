@@ -4,6 +4,7 @@ from emperor.attention import MixerAttentionConfig
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
     AxisMaskConfig,
+    BroadcastSumDynamicWeightConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
@@ -141,6 +142,10 @@ def _plain_linear_config(*, bias_flag: bool) -> LinearLayerConfig:
 
 
 _WEIGHT_OPTION_FIELDS: dict[type[DynamicWeightConfig], tuple[str, ...]] = {
+    BroadcastSumDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     SingleModelDynamicWeightConfig: (
         "normalization_option",
         "normalization_learnable_scale_flag",

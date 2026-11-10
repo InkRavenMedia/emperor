@@ -4,11 +4,13 @@ import pytest
 import torch
 
 from emperor.augmentations.adaptive_parameters import (
+    BroadcastSumDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankFactorSourceOptions,
     MatrixBiasMixtureConfig,
     MatrixWeightsMixtureConfig,
     WeightDecayScheduleOptions,
+    WeightNormalizationOptions,
 )
 from models.catalog import model_package
 
@@ -45,7 +47,11 @@ def test_transformer_generation_options_preserve_path_precedence(package_name):
 
 @pytest.mark.parametrize(
     "weight_option",
-    [DiagonallyModulatedLowRankDynamicWeightConfig, MatrixWeightsMixtureConfig],
+    [
+        DiagonallyModulatedLowRankDynamicWeightConfig,
+        MatrixWeightsMixtureConfig,
+        BroadcastSumDynamicWeightConfig,
+    ],
 )
 def test_linear_package_builds_bank_and_mixed_factor_sources_from_scalars(
     weight_option,
@@ -65,6 +71,11 @@ def test_linear_package_builds_bank_and_mixed_factor_sources_from_scalars(
             output_dim=3,
             weight_option_flag=True,
             weight_option=weight_option,
+            weight_normalization_option=(
+                WeightNormalizationOptions.SOFTSIGN
+                if weight_option is BroadcastSumDynamicWeightConfig
+                else WeightNormalizationOptions.DISABLED
+            ),
             weight_mixture_num_experts=3,
             weight_mixture_top_k=2,
             weight_decay_schedule=WeightDecayScheduleOptions.LINEAR,
@@ -122,10 +133,15 @@ def test_linear_package_builds_bank_and_mixed_factor_sources_from_scalars(
 @pytest.mark.parametrize(
     "key", ["transformer/linear_adaptive", "transformer/expert_linear_adaptive"]
 )
-@pytest.mark.parametrize("combined", [False, True])
-def test_transformer_bank_only_and_combined_build_forward_backward_inspection(
-    key, combined
-):
+@pytest.mark.parametrize(
+    "weight_option",
+    [
+        MatrixWeightsMixtureConfig,
+        DiagonallyModulatedLowRankDynamicWeightConfig,
+        BroadcastSumDynamicWeightConfig,
+    ],
+)
+def test_transformer_generators_build_forward_backward_inspection(key, weight_option):
     import importlib
 
     from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
@@ -155,9 +171,12 @@ def test_transformer_bank_only_and_combined_build_forward_backward_inspection(
         weight_option_flag=True,
         diagonal_option_flag=False,
         mask_option_flag=False,
-        weight_option=DiagonallyModulatedLowRankDynamicWeightConfig
-        if combined
-        else MatrixWeightsMixtureConfig,
+        weight_option=weight_option,
+        weight_normalization_option=(
+            WeightNormalizationOptions.SOFTSIGN
+            if weight_option is BroadcastSumDynamicWeightConfig
+            else WeightNormalizationOptions.DISABLED
+        ),
         weight_mixture_num_experts=3,
         weight_mixture_top_k=2,
         weight_input_factor_source=LowRankFactorSourceOptions.SHARED_PARAMETER,
@@ -190,9 +209,8 @@ def test_transformer_bank_only_and_combined_build_forward_backward_inspection(
     assert all(
         isinstance(
             m.adaptive_behaviour.weight_model,
-            DiagonallyModulatedLowRankDynamicWeightConfig().registry_owner(),
+            weight_option().registry_owner(),
         )
-        == combined
         for m in layers
     )
     executed = set()
@@ -229,3 +247,34 @@ def test_transformer_bank_only_and_combined_build_forward_backward_inspection(
         encoded = serialize_config_value(value)
         assert parse_config_value(config_module, field, encoded) is value
         assert encoded in schema[field].choices
+
+
+@pytest.mark.parametrize(
+    "key,prefix",
+    [
+        ("transformer/linear_adaptive", "projection_adaptive_"),
+        ("transformer/expert_linear_adaptive", "attention_projection_adaptive_"),
+    ],
+)
+def test_broadcast_sum_projection_selection_remains_local(key, prefix):
+    package = model_package(key)
+    runtime = package.bind_runtime_defaults(
+        {
+            "weight_option": MatrixWeightsMixtureConfig,
+            prefix + "weight_option": BroadcastSumDynamicWeightConfig,
+            prefix + "weight_normalization_option": WeightNormalizationOptions.RMS,
+            prefix + "generator_depth": 5,
+            prefix + "weight_decay_schedule": WeightDecayScheduleOptions.EXPONENTIAL,
+            prefix + "weight_decay_rate": 0.1,
+        }
+    )
+    projection = getattr(runtime, prefix + "options")
+    assert projection.weight_option is BroadcastSumDynamicWeightConfig
+    assert projection.weight_normalization_option is WeightNormalizationOptions.RMS
+    assert projection.generator_depth == 5
+    assert projection.weight_decay_schedule is WeightDecayScheduleOptions.EXPONENTIAL
+    assert projection.weight_decay_rate == 0.1
+    assert (
+        runtime.encoder_feed_forward_adaptive_options.weight_option
+        is MatrixWeightsMixtureConfig
+    )

@@ -86,6 +86,7 @@ ADAPTIVE_PARAMETER_PUBLIC_EXPORTS = (
     "DynamicWeightConfig",
     "SingleModelDynamicWeightConfig",
     "DualModelDynamicWeightConfig",
+    "BroadcastSumDynamicWeightConfig",
     "LowRankDynamicWeightConfig",
     "HypernetworkDynamicWeightConfig",
     "LayeredWeightedBankDynamicWeightConfig",

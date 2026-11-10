@@ -53,6 +53,7 @@ from emperor.augmentations.adaptive_parameters import (
     AttentionGroupingConfig,  # noqa: F401
     AxisMaskConfig,
     BankExpansionFactorOptions,
+    BroadcastSumDynamicWeightConfig,  # noqa: F401
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,

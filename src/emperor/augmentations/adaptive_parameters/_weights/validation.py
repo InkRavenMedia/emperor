@@ -174,6 +174,7 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
         )
 
         from .config import (
+            BroadcastSumDynamicWeightConfig,
             HypernetworkDynamicWeightConfig,
             LayeredWeightedBankDynamicWeightConfig,
             LowRankDynamicWeightConfig,
@@ -184,6 +185,11 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
 
         normalization = cfg.normalization_config
         if normalization is None:
+            if isinstance(cfg, BroadcastSumDynamicWeightConfig):
+                raise ValueError(
+                    "BroadcastSumDynamicWeight requires normalization_config "
+                    "to normalize each depth matrix before summing."
+                )
             return
         if not isinstance(normalization, WeightNormalizationConfig):
             raise TypeError(
@@ -204,6 +210,7 @@ class DynamicWeightValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
         if isinstance(
             cfg,
             (
+                BroadcastSumDynamicWeightConfig,
                 LowRankDynamicWeightConfig,
                 HypernetworkDynamicWeightConfig,
             ),

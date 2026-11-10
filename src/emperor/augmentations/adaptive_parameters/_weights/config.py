@@ -88,6 +88,14 @@ class DualModelDynamicWeightConfig(DynamicWeightConfig):
 
 
 @dataclass
+class BroadcastSumDynamicWeightConfig(DynamicWeightConfig):
+    def _registry_owner(self) -> type:
+        from .variants.broadcast_sum import BroadcastSumDynamicWeight
+
+        return BroadcastSumDynamicWeight
+
+
+@dataclass
 class LowRankDynamicWeightConfig(DynamicWeightConfig):
     def _registry_owner(self) -> type:
         from emperor.augmentations.adaptive_parameters._weights.variants.low_rank import (
