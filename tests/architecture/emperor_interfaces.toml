@@ -291,8 +291,8 @@ owners = ["emperor.datasets.image.classification._mnist", "emperor.datasets.imag
 [[interfaces]]
 module = "emperor.datasets.text.bert_pretraining"
 kind = "runtime"
-exports = ["BERT_PRETRAINING_TARGET_VOCAB_SIZE", "PennTreebankBertPretraining", "WikiText2BertPretraining"]
-owners = ["emperor.datasets.text.bert_pretraining", "emperor.datasets.text.bert_pretraining._datasets", "emperor.datasets.text.bert_pretraining._datasets"]
+exports = ["BERT_PRETRAINING_TARGET_VOCAB_SIZE", "BertMaskedWordBatch", "PennTreebankBertPretraining", "WikiText2BertPretraining", "WikiText103BertHierarchical"]
+owners = ["emperor.datasets.text.bert_pretraining", "emperor.datasets.text.bert_pretraining._masked_words", "emperor.datasets.text.bert_pretraining._datasets", "emperor.datasets.text.bert_pretraining._datasets", "emperor.datasets.text.bert_pretraining._wiki_text_103"]
 
 [[interfaces]]
 module = "emperor.datasets.text.language_modeling"

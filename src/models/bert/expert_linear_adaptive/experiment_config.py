@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 from emperor.config import ConfigBase, optional_field
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.embedding.hierarchical import HierarchicalByteDecoderConfig
 from emperor.layers import LayerStackConfig, NormalizationOptions, RecurrentLayerConfig
 from models.bert.expert_linear_adaptive._boundary_config_factory import (
     BertBoundaryConfig,
@@ -20,6 +21,9 @@ class ExperimentConfig(ConfigBase):
     )
     boundary_config: BertBoundaryConfig | None = optional_field(
         "Resolved configuration for BERT token embeddings and MLM/NSP heads."
+    )
+    masked_word_decoder_config: HierarchicalByteDecoderConfig | None = optional_field(
+        "Byte decoder for reconstructing masked words."
     )
     encoder_config: LayerStackConfig | RecurrentLayerConfig | None = optional_field(
         "Config for the transformer encoder block (a stack of encoder-layer blocks), "

@@ -1255,6 +1255,7 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SEQUENCE_EXPANSION_MAX_NEW_TOKENS', 1690, (1690,)),
         ('SEQUENCE_EXPANSION_MODEL_CONFIG', 1691, (1691,)),
         ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG', 1692, (1692,)),
+        ('HIERARCHICAL_MASKED_WORD_FLAG', 1701, (1701,)),
     )),
     RuntimeDefaultsSection(('Feed-Forward Stack Options',), (
         ('SOFT_MOE_NUM_EXPERTS', 559, (559, 1)),

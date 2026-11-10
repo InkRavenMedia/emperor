@@ -3,11 +3,13 @@ from __future__ import annotations
 import tempfile
 import unittest
 from collections import defaultdict
+from dataclasses import asdict
 from inspect import signature
 from pathlib import Path
 
 import torch
 
+from emperor.datasets.text.bert_pretraining import BertMaskedWordBatch
 from emperor.datasets.text.language_modeling import (
     OpenWebText,
     PennTreebank,
@@ -119,9 +121,14 @@ class DatasetMetadataContractTests(unittest.TestCase):
                             batches.append(next(iter(loader)))
 
                 self.assertEqual(loader_seeds, [SEED, SEED])
-                self.assertEqual(len(batches[0]), len(batches[1]))
-                for first, second in zip(*batches, strict=True):
+                if isinstance(batches[0], BertMaskedWordBatch):
+                    first, second = map(asdict, batches)
+                    self.assertEqual(first.pop("input_words"), second.pop("input_words"))
                     torch.testing.assert_close(first, second)
+                else:
+                    self.assertEqual(len(batches[0]), len(batches[1]))
+                    for first, second in zip(*batches, strict=True):
+                        torch.testing.assert_close(first, second)
 
                 self._assert_batch_semantics(task, dataset_type, batches[0])
 
@@ -155,6 +162,12 @@ class DatasetMetadataContractTests(unittest.TestCase):
             return
 
         if task == ExperimentTask.BERT_PRETRAINING:
+            if isinstance(batch, BertMaskedWordBatch):
+                self.assertEqual(batch.attention_mask.shape, (BATCH_SIZE, 10))
+                self.assertTrue(batch.attention_mask[batch.prediction_mask].all())
+                self.assertEqual(batch.byte_lengths.numel(), int(batch.prediction_mask.sum()))
+                self.assertEqual(batch.next_sentence_labels.shape, (BATCH_SIZE,))
+                return
             (
                 input_ids,
                 mlm_labels,

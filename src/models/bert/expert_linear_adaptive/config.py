@@ -1696,3 +1696,6 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
 ) = None
 
 _component_defaults.declare_component_defaults(globals())
+
+# Whole-word reconstruction with the hierarchical byte decoder.
+HIERARCHICAL_MASKED_WORD_FLAG: bool = False

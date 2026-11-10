@@ -45,6 +45,7 @@ from models.bert.expert_linear_adaptive._control_support import (
 from models.bert.expert_linear_adaptive._control_support import (
     ExpertsRecurrentConfigFactory as BertRecurrentConfigFactory,
 )
+from models.bert.expert_linear_adaptive._masked_word import build_masked_word_decoder
 from models.bert.expert_linear_adaptive.runtime_options import (
     BertEmbeddingOptions,
     BertMlmHeadOptions,
@@ -180,6 +181,7 @@ class BertBackendConfigBuilder:
                 positional_embedding_config=positional_embedding_config,
                 boundary_config=boundary_config,
                 encoder_config=encoder_config,
+                masked_word_decoder_config=self._build_masked_word_decoder(),
                 encoder_output_normalization=(
                     self.encoder_options.output_normalization
                     if self.encoder_options is not None
@@ -187,6 +189,18 @@ class BertBackendConfigBuilder:
                 ),
             ),
         )
+
+    def _build_masked_word_decoder(self):
+        if not self.embedding_options.hierarchical_masked_word_flag:
+            return None
+        embedding = self.embedding_options.hierarchical_embedding_config
+        if embedding is None or self.embedding_options.contextual_embedding_config is not None:
+            raise ValueError("Masked-word BERT requires a hierarchical byte encoder.")
+        if self.causal_attention_mask_flag:
+            raise ValueError("Masked-word BERT requires bidirectional sequence attention.")
+        if self.mlm_head_options.decoder_weight_tying_flag:
+            raise ValueError("Masked-word BERT requires disabling vocabulary-head weight tying.")
+        return build_masked_word_decoder(embedding)
 
     def _build_boundary_config(self):
         return BoundaryConfigFactory(

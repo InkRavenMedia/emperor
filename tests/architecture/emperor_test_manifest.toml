@@ -855,6 +855,7 @@ modules = [
 [families.datasets]
 status = "pending"
 focused_tests = [
+  "tests/model_packages/test_bert_masked_words.py",
   "tests/unit/test_wikitext_hierarchical.py",
   "tests/unit/test_dataset*.py",
   "tests/unit/test_*dataset.py",
@@ -919,8 +920,10 @@ modules = [
   "src/emperor/datasets/text/bert_pretraining/_collation.py",
   "src/emperor/datasets/text/bert_pretraining/_datasets.py",
   "src/emperor/datasets/text/bert_pretraining/_examples.py",
+  "src/emperor/datasets/text/bert_pretraining/_masked_words.py",
   "src/emperor/datasets/text/bert_pretraining/_next_sentence.py",
   "src/emperor/datasets/text/bert_pretraining/_tokenizer.py",
+  "src/emperor/datasets/text/bert_pretraining/_wiki_text_103.py",
   "src/emperor/datasets/text/classification/__init__.py",
   "src/emperor/datasets/text/classification/_ag_news.py",
   "src/emperor/datasets/text/classification/_dbpedia.py",
