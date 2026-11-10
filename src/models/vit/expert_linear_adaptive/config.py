@@ -365,11 +365,17 @@ ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
 
 ## Attention Source Memory Options
 ATTN_SOURCE_MEMORY_FLAG: bool = False
-ATTN_SOURCE_MEMORY_CONFIG: _attention_source_memory.AttentionSourceMemoryConfig | None = None
+ATTN_SOURCE_MEMORY_CONFIG: (
+    _attention_source_memory.AttentionSourceMemoryConfig | None
+) = None
 ATTN_SOURCE_MEMORY_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
 ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
-ATTN_SOURCE_MEMORY_GROUPING_METHOD: type[_attention_source_memory.GroupingConfig] | None = None
-ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: (
+    type[_attention_source_memory.GroupingConfig] | None
+) = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = (
+    None
+)
 ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
     _attention_source_memory.SummaryNormalizationOptions | None
 ) = None
