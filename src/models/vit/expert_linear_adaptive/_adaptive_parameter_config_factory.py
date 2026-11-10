@@ -3,6 +3,7 @@ from typing import TypeVar
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
     BankExpansionFactorOptions,
+    BroadcastSumDynamicWeightConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
@@ -31,6 +32,10 @@ from emperor.layers import LayerStackConfig
 _AdaptiveParameterConfigT = TypeVar("_AdaptiveParameterConfigT")
 
 _WEIGHT_OPTION_FIELDS: dict[type[DynamicWeightConfig], tuple[str, ...]] = {
+    BroadcastSumDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     SingleModelDynamicWeightConfig: (
         "normalization_option",
         "normalization_learnable_scale_flag",

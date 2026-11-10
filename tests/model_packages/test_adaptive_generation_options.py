@@ -14,6 +14,7 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterInputOrderOptions,
     AttentionGroupingConfig,
     BankExpansionFactorOptions,
+    BroadcastSumDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     HypernetworkDynamicWeightConfig,
@@ -110,6 +111,7 @@ def test_unsupported_weight_normalization_is_rejected_by_package_builders(
     (
         MatrixWeightsMixtureConfig,
         DiagonallyModulatedLowRankDynamicWeightConfig,
+        BroadcastSumDynamicWeightConfig,
     ),
 )
 def test_generation_settings_reach_executable_adaptive_layers(
@@ -120,6 +122,11 @@ def test_generation_settings_reach_executable_adaptive_layers(
         config_overrides=dict(
             weight_option_flag=True,
             weight_option=weight_option,
+            weight_normalization_option=(
+                WeightNormalizationOptions.SOFTSIGN
+                if weight_option is BroadcastSumDynamicWeightConfig
+                else WeightNormalizationOptions.DISABLED
+            ),
             generator_depth=32,
             bias_option_flag=True,
             bias_option=MatrixBiasMixtureConfig,
@@ -157,7 +164,7 @@ def test_generation_settings_reach_executable_adaptive_layers(
             assert (weights.num_experts, weights.top_k) == (3, 2)
             assert weights.sampler_config.router_config.model_config.hidden_dim == 7
             assert weights.sampler_config is not biases.sampler_config
-        else:
+        elif weight_option is DiagonallyModulatedLowRankDynamicWeightConfig:
             assert type(weights.generator_depth) is int
             assert weights.generator_depth == 32
             assert (
@@ -167,6 +174,12 @@ def test_generation_settings_reach_executable_adaptive_layers(
             assert weights.input_factor_model_config is None
             assert weights.output_factor_model_config.hidden_dim == 7
             assert weights.coefficient_model_config.hidden_dim == 5
+        else:
+            assert weights.generator_depth == 32
+            assert (
+                weights.normalization_config.normalization_option
+                is WeightNormalizationOptions.SOFTSIGN
+            )
 
     template_config = import_module(
         "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
@@ -310,6 +323,7 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
     for key, value in (
         ("weight_option", MatrixWeightsMixtureConfig),
         ("weight_option", DiagonallyModulatedLowRankDynamicWeightConfig),
+        ("weight_option", BroadcastSumDynamicWeightConfig),
         ("weight_normalization_option", WeightNormalizationOptions.SOFTSIGN),
         (
             "weight_normalization_position_option",
@@ -323,6 +337,14 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
         serialized = serialize_config_value(value)
         assert serialized in schema[key].choices
         assert parse_config_value(config_module, key.upper(), serialized) is value
+    serialized = serialize_config_value(BroadcastSumDynamicWeightConfig)
+    for key, field in schema.items():
+        if key == "weight_option" or key.endswith("_weight_option"):
+            assert serialized in field.choices, key
+            assert (
+                parse_config_value(config_module, key.upper(), serialized)
+                is BroadcastSumDynamicWeightConfig
+            )
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
@@ -388,6 +410,7 @@ def test_after_depth_sum_reaches_native_adaptive_layers(package_name, learnable)
     [
         SingleModelDynamicWeightConfig,
         DualModelDynamicWeightConfig,
+        BroadcastSumDynamicWeightConfig,
         LowRankDynamicWeightConfig,
         DiagonallyModulatedLowRankDynamicWeightConfig,
         HypernetworkDynamicWeightConfig,
@@ -449,6 +472,32 @@ def test_normalization_scale_flag_reaches_native_layers(
         )
     else:
         assert policy.raw_scale.grad is None
+
+
+@pytest.mark.parametrize("package_name", PACKAGES)
+def test_broadcast_sum_rejects_explicit_disabled_package_normalization(package_name):
+    configuration = model_package(package_name).build_configuration(
+        config_overrides=dict(
+            weight_option_flag=True,
+            weight_option=BroadcastSumDynamicWeightConfig,
+            weight_normalization_option=WeightNormalizationOptions.DISABLED,
+        )
+    )
+    augmentation = next(
+        value
+        for value in _augmentations(configuration)
+        if isinstance(value.weight_config, BroadcastSumDynamicWeightConfig)
+    )
+    template = import_module(
+        "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
+    ).AdaptiveLinearLayerTemplateConfig
+    with pytest.raises(ValueError, match="requires normalization_config"):
+        template(
+            input_dim=6,
+            output_dim=4,
+            bias_flag=False,
+            adaptive_augmentation_config=deepcopy(augmentation),
+        ).build()
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
@@ -517,17 +566,36 @@ def test_independent_coefficients_inherit_the_weight_generator_defaults(package_
         ),
     ],
 )
-def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
+@pytest.mark.parametrize(
+    "weight_option", [MatrixWeightsMixtureConfig, BroadcastSumDynamicWeightConfig]
+)
+def test_role_generation_and_grouping_overrides_remain_local(
+    package_name, prefix, weight_option
+):
     overrides = dict(
         weight_option_flag=True,
-        weight_option=MatrixWeightsMixtureConfig,
+        weight_option=weight_option,
+        weight_normalization_option=(
+            WeightNormalizationOptions.SOFTSIGN
+            if weight_option is BroadcastSumDynamicWeightConfig
+            else WeightNormalizationOptions.DISABLED
+        ),
+        weight_normalization_learnable_scale_flag=True,
+        generator_depth=2,
         weight_mixture_num_experts=3,
     )
     overrides.update(
         {
             prefix + key: value
             for key, value in dict(
-                weight_option=MatrixWeightsMixtureConfig,
+                weight_option=weight_option,
+                weight_normalization_option=(
+                    WeightNormalizationOptions.RMS
+                    if weight_option is BroadcastSumDynamicWeightConfig
+                    else WeightNormalizationOptions.DISABLED
+                ),
+                weight_normalization_learnable_scale_flag=False,
+                generator_depth=5,
                 weight_mixture_num_experts=5,
                 weight_mixture_top_k=2,
                 grouping_scope=AdaptiveParameterGroupingScopeOptions.ROWS,
@@ -544,12 +612,17 @@ def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
     weights = [
         augmentation
         for augmentation in _augmentations(configuration)
-        if isinstance(augmentation.weight_config, MatrixWeightsMixtureConfig)
+        if isinstance(augmentation.weight_config, weight_option)
     ]
+    distinction = (
+        "num_experts"
+        if weight_option is MatrixWeightsMixtureConfig
+        else "generator_depth"
+    )
     selected = [
         augmentation
         for augmentation in weights
-        if augmentation.weight_config.num_experts == 5
+        if getattr(augmentation.weight_config, distinction) == 5
     ]
     assert selected
     assert all(
@@ -559,21 +632,44 @@ def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
     inherited = [
         augmentation
         for augmentation in weights
-        if augmentation.weight_config.num_experts == 3
+        if getattr(augmentation.weight_config, distinction)
+        == (3 if weight_option is MatrixWeightsMixtureConfig else 2)
     ]
     assert inherited
     assert all(augmentation.grouping_config is None for augmentation in inherited)
-    assert all(a.weight_config.normalization_config is None for a in weights)
-    with pytest.raises(
-        ValueError, match="MatrixWeightsMixtureConfig does not support"
-    ):
-        model_package(package_name).build_configuration(
-            config_overrides=overrides
-            | {
-                prefix
-                + "weight_normalization_option": WeightNormalizationOptions.SOFTSIGN
-            }
+    if weight_option is BroadcastSumDynamicWeightConfig:
+        assert all(
+            a.weight_config.normalization_config.normalization_learnable_scale_flag
+            is False
+            for a in selected
         )
+        assert all(
+            a.weight_config.normalization_config.normalization_learnable_scale_flag
+            is True
+            for a in inherited
+        )
+        assert all(
+            a.weight_config.normalization_config.normalization_option
+            is WeightNormalizationOptions.RMS
+            for a in selected
+        )
+        assert all(
+            a.weight_config.normalization_config.normalization_option
+            is WeightNormalizationOptions.SOFTSIGN
+            for a in inherited
+        )
+    else:
+        assert all(a.weight_config.normalization_config is None for a in weights)
+        with pytest.raises(
+            ValueError, match="MatrixWeightsMixtureConfig does not support"
+        ):
+            model_package(package_name).build_configuration(
+                config_overrides=overrides
+                | {
+                    prefix
+                    + "weight_normalization_option": WeightNormalizationOptions.SOFTSIGN
+                }
+            )
 
 
 @pytest.mark.parametrize(
@@ -582,7 +678,11 @@ def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
 )
 @pytest.mark.parametrize(
     "weight_option",
-    (MatrixWeightsMixtureConfig, DiagonallyModulatedLowRankDynamicWeightConfig),
+    (
+        MatrixWeightsMixtureConfig,
+        DiagonallyModulatedLowRankDynamicWeightConfig,
+        BroadcastSumDynamicWeightConfig,
+    ),
 )
 @pytest.mark.parametrize("grouped", (False, True))
 def test_complete_models_run_with_new_parameter_generators(
@@ -636,6 +736,11 @@ def test_complete_models_run_with_new_parameter_generators(
     overrides.update(
         weight_option_flag=True,
         weight_option=weight_option,
+        weight_normalization_option=(
+            WeightNormalizationOptions.SOFTSIGN
+            if weight_option is BroadcastSumDynamicWeightConfig
+            else WeightNormalizationOptions.DISABLED
+        ),
         bias_option_flag=True,
         bias_option=MatrixBiasMixtureConfig,
         weight_mixture_num_experts=3,

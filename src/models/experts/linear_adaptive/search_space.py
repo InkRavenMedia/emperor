@@ -3,6 +3,7 @@ from emperor.augmentations.adaptive_parameters import (
     AffineTransformDynamicBiasConfig,
     AntiDynamicDiagonalConfig,
     BankExpansionFactorOptions,
+    BroadcastSumDynamicWeightConfig,
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
@@ -60,6 +61,7 @@ SEARCH_SPACE_STACK_ACTIVATION: list = [
 SEARCH_SPACE_WEIGHT_OPTION: list = [
     None,
     SingleModelDynamicWeightConfig,
+    BroadcastSumDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankDynamicWeightConfig,
