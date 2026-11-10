@@ -235,6 +235,22 @@ mise run experiment -- \
 
 </details>
 
+### WikiText-2 validation results
+
+The BERT-001 study (R004–R017, revision `39ea4c3c`) used a related variant
+with **five-token attention-memory chunks** and no optional monitors.
+The example command above uses ten-token attention-memory chunks.
+
+Training reached **61.72 epoch equivalents** (91,654 optimizer steps at
+1,485 steps per full training pass).
+
+| Validation | Epoch equivalents | Masked top-1 ↑ | Masked top-5 ↑ | Next-sentence accuracy ↑ |
+| --- | ---: | ---: | ---: | ---: |
+| First validation | 1.00 | 9.27% | 25.78% | 53.88% |
+| Final checkpoint | 61.72 | 26.71% | 39.76% | 63.03% |
+
+Validation uses random token masks and generated next-sentence pairs.
+
 ## Environment setup
 
 Install Git and [mise](https://mise.jdx.dev/), then clone the repository and set
