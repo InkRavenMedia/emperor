@@ -1,6 +1,6 @@
 {
   "revision": "13792f69d4ca11307a6f7677baf87b2a55682bc5",
-  "provenance": "Captured from an isolated git archive of the untouched starting revision. All-component ROWS reference supplements the bias-only snapshot captured before implementation edits.",
+  "provenance": "Captured from an isolated git archive of the untouched starting revision. All-component ROWS reference supplements the bias-only snapshot captured before implementation edits. Normalization state was subsequently converted to per-depth raw_scale, then its unused entries were removed when disabled normalization stopped constructing a policy. Reference inputs and outputs are unchanged.",
   "source_path": "tests/unit/test_adaptive_parameter_grouping_contracts.py",
   "components": [
     "DualModelDynamicWeightConfig",
@@ -72,8 +72,6 @@
     "adaptive_behaviour.weight_model._decay_policy.warmup_step": [
       0.0
     ],
-    "adaptive_behaviour.weight_model.normalization_policy.scale": 1.0,
-    "adaptive_behaviour.weight_model.normalization_policy.clamp_limit": 1.0,
     "adaptive_behaviour.weight_model.input_model.model.layers.0.model.weight_params": [
       [
         [

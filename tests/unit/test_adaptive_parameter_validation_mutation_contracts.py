@@ -20,6 +20,7 @@ from emperor.augmentations.adaptive_parameters import (
     TopSliceAxisMaskConfig,
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -399,8 +400,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
             decay_rate=0.0,
             decay_warmup_batches=0,
             model_config=wrong_config,
-            normalization_option=WeightNormalizationOptions.DISABLED,
-            normalization_position_option=(WeightNormalizationPositionOptions.DISABLED),
         )
         self.assert_exact_error(
             TypeError,
@@ -528,9 +527,10 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
             decay_rate=-0.1,
             decay_warmup_batches=0,
             model_config=linear_stack_config(2, 2),
-            normalization_option=WeightNormalizationOptions.L2_SCALE,
-            normalization_position_option=(
-                WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
+            normalization_config=WeightNormalizationConfig(
+                normalization_learnable_scale_flag=False,
+                normalization_option=WeightNormalizationOptions.L2_SCALE,
+                normalization_position_option=WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT,
             ),
         )
         self.assert_exact_error(
@@ -631,10 +631,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 decay_schedule=WeightDecayScheduleOptions.DISABLED,
                 decay_rate=0.0,
                 decay_warmup_batches=0,
-                normalization_option=WeightNormalizationOptions.DISABLED,
-                normalization_position_option=(
-                    WeightNormalizationPositionOptions.DISABLED
-                ),
                 model_config=invalid_model_config,
             ),
         )
@@ -659,10 +655,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
-                    normalization_option=WeightNormalizationOptions.DISABLED,
-                    normalization_position_option=(
-                        WeightNormalizationPositionOptions.DISABLED
-                    ),
                     model_config=invalid_model_config,
                 ),
                 "SingleModelDynamicWeight requires input_dim == output_dim, "
@@ -748,10 +740,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
-                    normalization_option=WeightNormalizationOptions.DISABLED,
-                    normalization_position_option=(
-                        WeightNormalizationPositionOptions.DISABLED
-                    ),
                     model_config=invalid_model_config,
                 ),
             ),
@@ -931,10 +919,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
                 decay_rate=0.0,
                 decay_warmup_batches=0,
                 model_config=linear_stack_config(2, 2),
-                normalization_option=WeightNormalizationOptions.DISABLED,
-                normalization_position_option=(
-                    WeightNormalizationPositionOptions.DISABLED
-                ),
             ).build(),
             DepthMappingLayer(
                 DepthMappingLayerConfig(
@@ -974,8 +958,6 @@ class AdaptiveParameterValidationMutationContractTests(unittest.TestCase):
             decay_rate=0.0,
             decay_warmup_batches=0,
             model_config=linear_stack_config(),
-            normalization_option=WeightNormalizationOptions.DISABLED,
-            normalization_position_option=(WeightNormalizationPositionOptions.DISABLED),
         )
 
         self.assert_exact_error(

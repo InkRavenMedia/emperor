@@ -928,6 +928,7 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     mask_generator_stack_last_layer_bias_option: LastLayerBiasOptions | None
     mask_generator_stack_apply_output_postprocessing_flag: bool | None
     mask_generator_stack_bias_flag: bool | None
+    weight_normalization_learnable_scale_flag: bool = False
 
 
 __all__ = ["RuntimeOptions"]

@@ -27,6 +27,7 @@ class WeightNormalizationOptions(Enum):
     SOFT_CLAMP = 3
     RMS = 4
     SIGMOID_SCALE = 5
+    SOFTSIGN = 6
 
 
 class BankExpansionFactorOptions(Enum):
@@ -46,3 +47,4 @@ class WeightNormalizationPositionOptions(Enum):
     DISABLED = 0
     BEFORE_OUTER_PRODUCT = 1
     AFTER_OUTER_PRODUCT = 2
+    AFTER_DEPTH_SUM = 3

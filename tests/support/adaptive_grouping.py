@@ -12,8 +12,6 @@ from emperor.augmentations.adaptive_parameters import (
     PerAxisScoreMaskConfig,
     StandardDynamicDiagonalConfig,
     WeightDecayScheduleOptions,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.layers import (
     ActivationOptions,
@@ -111,10 +109,6 @@ def combined_linear():
                     decay_schedule=WeightDecayScheduleOptions.DISABLED,
                     decay_rate=0.0,
                     decay_warmup_batches=0,
-                    normalization_option=WeightNormalizationOptions.DISABLED,
-                    normalization_position_option=(
-                        WeightNormalizationPositionOptions.DISABLED
-                    ),
                     model_config=generator_config,
                 ),
                 diagonal_config=StandardDynamicDiagonalConfig(

@@ -611,11 +611,11 @@ class TestGptExpertLinearAdaptiveModel(unittest.TestCase):
             5,
         )
         self.assertEqual(
-            adaptive_config.weight_config.normalization_option,
+            adaptive_config.weight_config.normalization_config.normalization_option,
             WeightNormalizationOptions.L2_SCALE,
         )
         self.assertEqual(
-            adaptive_config.weight_config.normalization_position_option,
+            adaptive_config.weight_config.normalization_config.normalization_position_option,
             WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
         )
         self.assertEqual(

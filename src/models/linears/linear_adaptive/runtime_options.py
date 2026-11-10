@@ -176,6 +176,7 @@ class AdaptiveWeightOptions:
     decay_warmup_batches: int
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack: GeneratorStackOptions
+    normalization_learnable_scale_flag: bool = False
 
     def __post_init__(self) -> None:
         if self.enabled and self.option is None:
@@ -266,6 +267,7 @@ class AdaptiveProjectionOptions:
     mask_surrogate_scale: float
     mask_floor: float
     mask_transition_width: float
+    weight_normalization_learnable_scale_flag: bool = False
 
     def __post_init__(self) -> None:
         _non_negative("projection.weight_decay_rate", self.weight_decay_rate)

@@ -5,6 +5,7 @@ from emperor.augmentations.adaptive_parameters._decay.policy import DecayPolicy
 from emperor.augmentations.adaptive_parameters._weights.config import (
     DynamicWeightConfig,
     MatrixWeightsMixtureConfig,
+    WeightNormalizationConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
     DepthMappingHandlerConfig,
@@ -20,8 +21,6 @@ from emperor.nn import Module
 
 
 class DynamicWeightAbstract(Module):
-    """Common runtime contract and setup for dynamic-weight variants."""
-
     VALIDATOR = DynamicWeightValidator
 
     def __init__(
@@ -34,13 +33,20 @@ class DynamicWeightAbstract(Module):
         self.VALIDATOR.validate(self)
         self.input_dim = self.cfg.input_dim
         self.output_dim = self.cfg.output_dim
+        self.normalization_config = self.cfg.normalization_config
         self._decay_policy = DecayPolicy(self.cfg)
         self.__init_depth_and_normalization()
 
     def __init_depth_and_normalization(self) -> None:
         if not isinstance(self.cfg, MatrixWeightsMixtureConfig):
             self.generator_depth = self.cfg.generator_depth
-            self.normalization_policy = WeightNormalizationPolicy(self.cfg)
+            self.normalization_policy = self.__init_normalization_policy()
+
+    def __init_normalization_policy(self) -> WeightNormalizationPolicy | None:
+        if self.normalization_config is None:
+            return None
+        overrides = WeightNormalizationConfig(generator_depth=self.generator_depth)
+        return self.normalization_config.build(overrides)
 
     def get_auxiliary_loss(self) -> Tensor | None:
         return None
@@ -58,13 +64,18 @@ class DynamicWeightAbstract(Module):
         raise NotImplementedError(f"{type(self).__name__} must implement forward().")
 
     def _compute_dynamic_weights(self, outer_product: Tensor) -> Tensor:
-        return outer_product.sum(dim=1)
+        summed_weights = outer_product.sum(dim=1)
+        if self.normalization_policy is None:
+            return summed_weights
+        return self.normalization_policy.normalize_after_depth_sum(summed_weights)
 
     def _compute_outer_product(
         self,
         input_vectors: Tensor,
         output_vectors: Tensor,
     ) -> Tensor:
+        if self.normalization_policy is None:
+            return self._compute_raw_outer_product(input_vectors, output_vectors)
         input_vectors = self.normalization_policy.normalize_before_outer_product(
             input_vectors
         )
@@ -85,6 +96,8 @@ class DynamicWeightAbstract(Module):
         self,
         vectors: Tensor,
     ) -> Tensor:
+        if self.normalization_policy is None:
+            return vectors
         return self.normalization_policy(vectors)
 
     def _maybe_apply_weight_decay(self, weight_params: Tensor) -> Tensor:

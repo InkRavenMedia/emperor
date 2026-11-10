@@ -326,11 +326,11 @@ class TestTransformerConfigurationFlexibility(unittest.TestCase):
                 self.assertEqual(augmentation.weight_config.decay_rate, 0.2)
                 self.assertEqual(augmentation.weight_config.decay_warmup_batches, 7)
                 self.assertIs(
-                    augmentation.weight_config.normalization_option,
+                    augmentation.weight_config.normalization_config.normalization_option,
                     WeightNormalizationOptions.CLAMP,
                 )
                 self.assertIs(
-                    augmentation.weight_config.normalization_position_option,
+                    augmentation.weight_config.normalization_config.normalization_position_option,
                     WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
                 )
                 self.assertEqual(augmentation.weight_config.model_config.hidden_dim, 31)

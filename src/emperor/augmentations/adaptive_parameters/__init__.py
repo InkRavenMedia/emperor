@@ -66,6 +66,7 @@ from emperor.augmentations.adaptive_parameters._weights.config import (
     MatrixWeightsMixtureConfig,
     SingleModelDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
+    WeightNormalizationConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
     DepthMappingHandlerConfig,
@@ -87,6 +88,7 @@ __all__ = (
     "DepthMappingLayerStack",
     "DecayPolicy",
     "WeightNormalizationPolicy",
+    "WeightNormalizationConfig",
     "MatrixWeightsMixtureConfig",
     "MatrixBiasMixtureConfig",
     "MatrixWeightsMixture",

@@ -13,14 +13,23 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
     AttentionGroupingConfig,
+    BankExpansionFactorOptions,
     DiagonallyModulatedLowRankDynamicWeightConfig,
+    DualModelDynamicWeightConfig,
+    HypernetworkDynamicWeightConfig,
+    LayeredWeightedBankDynamicWeightConfig,
+    LowRankDynamicWeightConfig,
     LowRankFactorSourceOptions,
     MatrixBiasMixtureConfig,
     MatrixWeightsMixtureConfig,
     MeanGroupingConfig,
     MeanStdGroupingConfig,
     RMSGroupingConfig,
+    SingleModelDynamicWeightConfig,
+    SoftWeightedBankDynamicWeightConfig,
     SumGroupingConfig,
+    WeightNormalizationOptions,
+    WeightNormalizationPositionOptions,
 )
 from emperor.layers import LayerConfig, LayerStackConfig
 from model_runtime.inspection import configuration_schema
@@ -59,7 +68,49 @@ def _augmentations(value):
 @pytest.mark.parametrize("package_name", PACKAGES)
 @pytest.mark.parametrize(
     "weight_option",
-    (MatrixWeightsMixtureConfig, DiagonallyModulatedLowRankDynamicWeightConfig),
+    [
+        LayeredWeightedBankDynamicWeightConfig,
+        SoftWeightedBankDynamicWeightConfig,
+        MatrixWeightsMixtureConfig,
+    ],
+)
+@pytest.mark.parametrize("normalization", list(WeightNormalizationOptions))
+def test_unsupported_weight_normalization_is_rejected_by_package_builders(
+    package_name, weight_option, normalization
+):
+    package = model_package(package_name)
+    overrides = dict(
+        weight_option_flag=True,
+        weight_option=weight_option,
+        weight_normalization_option=normalization,
+        weight_bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
+        weight_mixture_num_experts=3,
+        weight_mixture_top_k=2,
+    )
+    if normalization is WeightNormalizationOptions.DISABLED:
+        configuration = package.build_configuration(config_overrides=overrides)
+        weights = [
+            a.weight_config
+            for a in _augmentations(configuration)
+            if isinstance(a.weight_config, weight_option)
+        ]
+        assert weights and all(
+            weight.normalization_config is None for weight in weights
+        )
+    else:
+        with pytest.raises(
+            ValueError, match=weight_option.__name__ + ".*does not support"
+        ):
+            package.build_configuration(config_overrides=overrides)
+
+
+@pytest.mark.parametrize("package_name", PACKAGES)
+@pytest.mark.parametrize(
+    "weight_option",
+    (
+        MatrixWeightsMixtureConfig,
+        DiagonallyModulatedLowRankDynamicWeightConfig,
+    ),
 )
 def test_generation_settings_reach_executable_adaptive_layers(
     package_name, weight_option
@@ -259,6 +310,11 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
     for key, value in (
         ("weight_option", MatrixWeightsMixtureConfig),
         ("weight_option", DiagonallyModulatedLowRankDynamicWeightConfig),
+        ("weight_normalization_option", WeightNormalizationOptions.SOFTSIGN),
+        (
+            "weight_normalization_position_option",
+            WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+        ),
         ("bias_option", MatrixBiasMixtureConfig),
         ("weight_input_factor_source", LowRankFactorSourceOptions.SHARED_PARAMETER),
         ("grouping_method", AttentionGroupingConfig),
@@ -267,6 +323,132 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
         serialized = serialize_config_value(value)
         assert serialized in schema[key].choices
         assert parse_config_value(config_module, key.upper(), serialized) is value
+
+
+@pytest.mark.parametrize("package_name", PACKAGES)
+@pytest.mark.parametrize("learnable", [False, True])
+def test_after_depth_sum_reaches_native_adaptive_layers(package_name, learnable):
+    configuration = model_package(package_name).build_configuration(
+        config_overrides=dict(
+            weight_option_flag=True,
+            weight_option=DualModelDynamicWeightConfig,
+            weight_normalization_option=WeightNormalizationOptions.SOFTSIGN,
+            weight_normalization_position_option=WeightNormalizationPositionOptions.AFTER_DEPTH_SUM,
+            weight_normalization_learnable_scale_flag=learnable,
+            generator_depth=3,
+            adaptive_generator_stack_hidden_dim=4,
+            adaptive_generator_stack_num_layers=1,
+        )
+    )
+    augmentations = [
+        a
+        for a in _augmentations(configuration)
+        if isinstance(a.weight_config, DualModelDynamicWeightConfig)
+    ]
+    assert augmentations
+    assert all(
+        a.weight_config.normalization_config.normalization_position_option
+        is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+        for a in augmentations
+    )
+    template = import_module(
+        "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
+    ).AdaptiveLinearLayerTemplateConfig
+    layer_config = template(
+        input_dim=3,
+        output_dim=4,
+        bias_flag=False,
+        adaptive_augmentation_config=deepcopy(augmentations[0]),
+    )
+    if learnable:
+        with pytest.raises(ValueError, match="must be False for AFTER_DEPTH_SUM"):
+            layer_config.build()
+        return
+    layer = layer_config.build()
+    assert layer.adaptive_behaviour.weight_model.normalization_policy.raw_scale is None
+    assert layer.adaptive_behaviour.weight_model.normalization_policy.scale is None
+    observed_shapes = []
+    handle = layer.adaptive_behaviour.weight_model.normalization_policy.register_forward_hook(
+        lambda _module, args, _output: observed_shapes.append(tuple(args[0].shape))
+    )
+    inputs = torch.randn(2, 3, requires_grad=True)
+    try:
+        output = layer(inputs)
+    finally:
+        handle.remove()
+    assert observed_shapes == [(2, 3, 4)]
+    assert output.shape == (2, 4)
+    output.square().sum().backward()
+    assert inputs.grad is not None and torch.isfinite(inputs.grad).all()
+
+
+@pytest.mark.parametrize("package_name", PACKAGES)
+@pytest.mark.parametrize(
+    "weight_option",
+    [
+        SingleModelDynamicWeightConfig,
+        DualModelDynamicWeightConfig,
+        LowRankDynamicWeightConfig,
+        DiagonallyModulatedLowRankDynamicWeightConfig,
+        HypernetworkDynamicWeightConfig,
+    ],
+)
+@pytest.mark.parametrize("learnable", [None, False, True])
+def test_normalization_scale_flag_reaches_native_layers(
+    package_name, weight_option, learnable
+):
+    overrides = dict(
+        weight_option_flag=True,
+        weight_option=weight_option,
+        weight_normalization_option=WeightNormalizationOptions.SOFTSIGN,
+        weight_normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+        generator_depth=2,
+        adaptive_generator_stack_hidden_dim=4,
+        adaptive_generator_stack_num_layers=1,
+    )
+    if learnable is not None:
+        overrides["weight_normalization_learnable_scale_flag"] = learnable
+    configuration = model_package(package_name).build_configuration(
+        config_overrides=overrides
+    )
+    augmentations = [
+        a
+        for a in _augmentations(configuration)
+        if isinstance(a.weight_config, weight_option)
+    ]
+    assert augmentations
+    enabled = learnable is True
+    assert all(
+        a.weight_config.normalization_config.normalization_learnable_scale_flag
+        is enabled
+        for a in augmentations
+    )
+    template = import_module(
+        "models." + package_name.replace("/", ".") + "._adaptive_linear_template"
+    ).AdaptiveLinearLayerTemplateConfig
+    output_dim = 3 if weight_option is SingleModelDynamicWeightConfig else 4
+    layer = template(
+        input_dim=3,
+        output_dim=output_dim,
+        bias_flag=False,
+        adaptive_augmentation_config=deepcopy(augmentations[0]),
+    ).build()
+    policy = layer.adaptive_behaviour.weight_model.normalization_policy
+    assert policy.raw_scale.shape == (
+        layer.adaptive_behaviour.weight_model.generator_depth,
+    )
+    torch.testing.assert_close(policy.scale, torch.ones_like(policy.raw_scale))
+    assert policy.raw_scale.requires_grad is enabled
+    assert policy.clamp_limit.requires_grad is enabled
+    output = layer(torch.randn(2, 3, requires_grad=True))
+    output.square().sum().backward()
+    if enabled:
+        assert (
+            policy.raw_scale.grad is not None
+            and torch.isfinite(policy.raw_scale.grad).all()
+        )
+    else:
+        assert policy.raw_scale.grad is None
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
@@ -322,6 +504,10 @@ def test_independent_coefficients_inherit_the_weight_generator_defaults(package_
             for prefix in ("router_", "input_layer_", "output_layer_")
         ),
         *(
+            ("linears/linear_adaptive", prefix)
+            for prefix in ("input_layer_", "output_layer_")
+        ),
+        *(
             ("neuron/linear_adaptive", prefix)
             for prefix in ("input_layer_", "output_layer_")
         ),
@@ -355,14 +541,14 @@ def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
     configuration = model_package(package_name).build_configuration(
         config_overrides=overrides
     )
-    mixtures = [
+    weights = [
         augmentation
         for augmentation in _augmentations(configuration)
         if isinstance(augmentation.weight_config, MatrixWeightsMixtureConfig)
     ]
     selected = [
         augmentation
-        for augmentation in mixtures
+        for augmentation in weights
         if augmentation.weight_config.num_experts == 5
     ]
     assert selected
@@ -372,11 +558,22 @@ def test_role_mixture_and_grouping_overrides_remain_local(package_name, prefix):
     )
     inherited = [
         augmentation
-        for augmentation in mixtures
+        for augmentation in weights
         if augmentation.weight_config.num_experts == 3
     ]
     assert inherited
     assert all(augmentation.grouping_config is None for augmentation in inherited)
+    assert all(a.weight_config.normalization_config is None for a in weights)
+    with pytest.raises(
+        ValueError, match="MatrixWeightsMixtureConfig does not support"
+    ):
+        model_package(package_name).build_configuration(
+            config_overrides=overrides
+            | {
+                prefix
+                + "weight_normalization_option": WeightNormalizationOptions.SOFTSIGN
+            }
+        )
 
 
 @pytest.mark.parametrize(

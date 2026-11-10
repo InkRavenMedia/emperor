@@ -20,6 +20,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,
     WeightInformedScoreAxisMaskConfig,
+    WeightNormalizationConfig,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -28,22 +29,31 @@ from emperor.layers import LayerStackConfig
 _WEIGHT_OPTION_FIELDS: dict[type[DynamicWeightConfig], tuple[str, ...]] = {
     SingleModelDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "normalization_position_option",
     ),
     DualModelDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "normalization_position_option",
     ),
-    LowRankDynamicWeightConfig: ("normalization_option",),
+    LowRankDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     DiagonallyModulatedLowRankDynamicWeightConfig: (
         "normalization_option",
+        "normalization_learnable_scale_flag",
         "input_factor_source",
         "output_factor_source",
         "input_factor_model_config",
         "output_factor_model_config",
         "coefficient_model_config",
     ),
-    HypernetworkDynamicWeightConfig: ("normalization_option",),
+    HypernetworkDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     LayeredWeightedBankDynamicWeightConfig: ("bank_expansion_factor",),
     SoftWeightedBankDynamicWeightConfig: ("bank_expansion_factor",),
 }
@@ -67,12 +77,26 @@ def build_weight_config(
     decay_rate: float,
     decay_warmup_batches: int,
     normalization_option: WeightNormalizationOptions,
+    normalization_learnable_scale_flag: bool = False,
     normalization_position_option: WeightNormalizationPositionOptions,
     bank_expansion_factor: BankExpansionFactorOptions,
     model_config: LayerStackConfig | None = None,
 ) -> DynamicWeightConfig | None:
     if weight_option is None:
         return None
+    if (
+        weight_option
+        in (
+            LayeredWeightedBankDynamicWeightConfig,
+            SoftWeightedBankDynamicWeightConfig,
+            MatrixWeightsMixtureConfig,
+        )
+        and normalization_option is not WeightNormalizationOptions.DISABLED
+    ):
+        raise ValueError(
+            f"{weight_option.__name__} does not support weight normalization; "
+            f"normalization_option={normalization_option!r} is not a supported combination."
+        )
     if weight_option is MatrixWeightsMixtureConfig:
         mixture_fields = {
             name: value
@@ -95,6 +119,7 @@ def build_weight_config(
     }
     optional = {
         "normalization_option": normalization_option,
+        "normalization_learnable_scale_flag": normalization_learnable_scale_flag,
         "normalization_position_option": normalization_position_option,
         "bank_expansion_factor": bank_expansion_factor,
     }
@@ -177,4 +202,20 @@ def build_mask_config(
 
 
 def _selected_kwargs(field_table, option, optional_kwargs):
-    return {name: optional_kwargs[name] for name in field_table.get(option, ())}
+    arguments = {name: optional_kwargs[name] for name in field_table.get(option, ())}
+    if "normalization_option" in arguments:
+        method = arguments.pop("normalization_option")
+        position = arguments.pop(
+            "normalization_position_option", WeightNormalizationPositionOptions.DISABLED
+        )
+        learnable_scale = arguments.pop("normalization_learnable_scale_flag")
+        arguments["normalization_config"] = (
+            None
+            if method is WeightNormalizationOptions.DISABLED
+            else WeightNormalizationConfig(
+                normalization_option=method,
+                normalization_position_option=position,
+                normalization_learnable_scale_flag=learnable_scale,
+            )
+        )
+    return arguments

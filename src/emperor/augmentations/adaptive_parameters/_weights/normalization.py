@@ -1,4 +1,6 @@
-"""Configuration-owned weight normalization with trainable scale and clamp limit."""
+"""Weight normalization with optional learnable scale and clamp limit."""
+
+from math import expm1, log
 
 import torch
 from torch import Tensor, nn
@@ -8,33 +10,61 @@ from emperor.augmentations.adaptive_parameters._options import (
     WeightNormalizationPositionOptions,
 )
 from emperor.augmentations.adaptive_parameters._weights.config import (
-    DynamicWeightConfig,
+    WeightNormalizationConfig,
 )
 from emperor.augmentations.adaptive_parameters._weights.validation import (
-    DynamicWeightValidator,
+    WeightNormalizationValidator,
 )
+from emperor.nn import Module
 
 
-class WeightNormalizationPolicy(nn.Module):
-    VALIDATOR = DynamicWeightValidator
+class WeightNormalizationPolicy(Module):
+    VALIDATOR = WeightNormalizationValidator
+    _MINIMUM_SCALE = 0.1
 
-    def __init__(self, cfg: DynamicWeightConfig):
+    def __init__(
+        self,
+        cfg: WeightNormalizationConfig,
+        overrides: WeightNormalizationConfig | None = None,
+    ):
         super().__init__()
-        self.cfg = cfg
-        self.normalization_option = getattr(
-            self.cfg, "normalization_option", WeightNormalizationOptions.DISABLED
+        self.cfg: WeightNormalizationConfig = self._override_config(cfg, overrides)
+        self.VALIDATOR.validate(self)
+        self.generator_depth = self.cfg.generator_depth
+        self.normalization_option = self.cfg.normalization_option
+        self.normalization_position_option = self.cfg.normalization_position_option
+        self.normalization_learnable_scale_flag = (
+            self.cfg.normalization_learnable_scale_flag
         )
-        self.normalization_position_option = getattr(
-            self.cfg,
-            "normalization_position_option",
-            WeightNormalizationPositionOptions.DISABLED,
+        self.register_parameter("raw_scale", self.__initialize_raw_scale())
+        self.clamp_limit = nn.Parameter(
+            torch.tensor(1.0), requires_grad=self.normalization_learnable_scale_flag
         )
-        self.VALIDATOR.validate_normalization_option(self.normalization_option)
-        self.VALIDATOR.validate_normalization_position_option(
+
+    def __initialize_raw_scale(self) -> nn.Parameter | None:
+        if (
             self.normalization_position_option
+            is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+        ):
+            return None
+        initial_effective_scale = 1.0
+        initial_softplus_output = initial_effective_scale - self._MINIMUM_SCALE
+        exponentiated_initial_raw_scale = expm1(initial_softplus_output)
+        initial_raw_scale_value = log(exponentiated_initial_raw_scale)
+        initial_raw_scale_shape = (self.generator_depth,)
+        initial_raw_scale_tensor = torch.full(
+            initial_raw_scale_shape, initial_raw_scale_value
         )
-        self.scale = nn.Parameter(torch.tensor(1.0))
-        self.clamp_limit = nn.Parameter(torch.tensor(1.0))
+        return nn.Parameter(
+            initial_raw_scale_tensor,
+            requires_grad=self.normalization_learnable_scale_flag,
+        )
+
+    @property
+    def scale(self) -> Tensor | None:
+        if self.raw_scale is None:
+            return None
+        return self.__calculate_scale()
 
     def normalize_before_outer_product(self, vectors: Tensor) -> Tensor:
         self.VALIDATOR.validate_normalization_position_option(
@@ -58,21 +88,54 @@ class WeightNormalizationPolicy(nn.Module):
             return self(outer_product)
         return outer_product
 
+    def normalize_after_depth_sum(self, summed_weights: Tensor) -> Tensor:
+        self.VALIDATOR.validate_normalization_position_option(
+            self.normalization_position_option
+        )
+        if (
+            self.normalization_position_option
+            is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+        ):
+            return self(summed_weights)
+        return summed_weights
+
     def forward(self, vectors: Tensor) -> Tensor:
         self.VALIDATOR.validate_normalization_option(self.normalization_option)
+        self.VALIDATOR.validate_normalization_position_option(
+            self.normalization_position_option
+        )
         match self.normalization_option:
             case WeightNormalizationOptions.CLAMP:
                 return self.__apply_symmetric_clamp(vectors)
             case WeightNormalizationOptions.L2_SCALE:
-                return self.__apply_stable_l2_normalization(vectors) * self.scale
+                normalized_vectors = self.__apply_stable_l2_normalization(vectors)
             case WeightNormalizationOptions.SOFT_CLAMP:
                 return self.__apply_stable_soft_clamp(vectors)
             case WeightNormalizationOptions.RMS:
-                return self.__apply_stable_rms_normalization(vectors) * self.scale
+                normalized_vectors = self.__apply_stable_rms_normalization(vectors)
             case WeightNormalizationOptions.SIGMOID_SCALE:
-                return (torch.sigmoid(vectors) * 2 - 1) * self.scale
+                normalized_vectors = torch.sigmoid(vectors) * 2 - 1
+            case WeightNormalizationOptions.SOFTSIGN:
+                normalized_vectors = torch.nn.functional.softsign(vectors)
             case WeightNormalizationOptions.DISABLED:
                 return vectors
+        if (
+            self.normalization_position_option
+            is WeightNormalizationPositionOptions.AFTER_DEPTH_SUM
+        ):
+            return normalized_vectors
+        return normalized_vectors * self.__scale_for_depths(vectors)
+
+    def __calculate_scale(self) -> Tensor:
+        return self._MINIMUM_SCALE + torch.nn.functional.softplus(self.raw_scale)
+
+    def __scale_for_depths(self, vectors: Tensor) -> Tensor:
+        depth_axis = 0 if vectors.ndim == 2 else 1
+        self.VALIDATOR.validate_depth_axis(vectors, self.generator_depth, depth_axis)
+        broadcast_shape = [1] * vectors.ndim
+        broadcast_shape[depth_axis] = self.generator_depth
+        effective_scales = self.__calculate_scale().to(dtype=vectors.dtype)
+        return effective_scales.reshape(broadcast_shape)
 
     def __apply_symmetric_clamp(self, vectors: Tensor) -> Tensor:
         clamp_limit_magnitude = self.clamp_limit.abs()

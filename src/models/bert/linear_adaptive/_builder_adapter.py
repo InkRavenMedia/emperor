@@ -1201,6 +1201,11 @@ def _merge_hidden_adaptive_weight_options(
             global_default.normalization_option,
             role_default.normalization_option,
         ),
+        normalization_learnable_scale_flag=_role_value(
+            base.normalization_learnable_scale_flag,
+            global_default.normalization_learnable_scale_flag,
+            role_default.normalization_learnable_scale_flag,
+        ),
         normalization_position_option=_role_value(
             base.normalization_position_option,
             global_default.normalization_position_option,
