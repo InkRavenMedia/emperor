@@ -31,21 +31,9 @@ def build_bert_next_sentence_pairs(
     rng = rng or random.Random()
     pairs = []
     for sentence_a_index in range(len(units) - 1):
-        true_next_index = sentence_a_index + 1
-        random_next_candidates = [
-            index
-            for index in range(len(units))
-            if index != sentence_a_index and index != true_next_index
-        ]
-        use_random_next = (
-            bool(random_next_candidates) and rng.random() < random_next_probability
+        sentence_b_index, next_sentence_label = sample_next_sentence(
+            len(units), sentence_a_index, True, random_next_probability, rng
         )
-        if use_random_next:
-            sentence_b_index = rng.choice(random_next_candidates)
-            next_sentence_label = 1
-        else:
-            sentence_b_index = true_next_index
-            next_sentence_label = 0
 
         pairs.append(
             BertNextSentencePair(
@@ -57,3 +45,24 @@ def build_bert_next_sentence_pairs(
             )
         )
     return pairs
+
+
+def sample_next_sentence(
+    sentence_count: int,
+    anchor: int,
+    has_successor: bool,
+    random_next_probability: float,
+    rng: random.Random,
+) -> tuple[int, int]:
+    """Sample an NSP pair with adjacent anchor/successor excluded from negatives."""
+    excluded_count = 1 + int(has_successor)
+    negative_count = sentence_count - excluded_count
+    if has_successor and (
+        negative_count == 0 or rng.random() >= random_next_probability
+    ):
+        return anchor + 1, 0
+    # Sampling the ordered complement preserves the legacy seeded choices.
+    negative = rng.randrange(negative_count)
+    if negative >= anchor:
+        negative += excluded_count
+    return negative, 1
