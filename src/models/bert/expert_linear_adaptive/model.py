@@ -53,7 +53,10 @@ class Model(BertPretrainingExperiment):
         super().__init__(config)
         self.experiment_config: ExperimentConfig = experiment_config
         self.sequence_expansion_enabled = (
-            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.encoder_config, 0) > 0
+            _sequence_expansion.expanded_sequence_capacity(
+                self.experiment_config.encoder_config, 0
+            )
+            > 0
         )
         self.boundary_config: BertBoundaryConfig = boundary_config
         self.__validate_pretraining_dimensions()
