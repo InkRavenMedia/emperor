@@ -579,6 +579,7 @@ class TransformerFeedForwardOptions:
 
 @dataclass(frozen=True, slots=True)
 class BertEmbeddingOptions:
+    hierarchical_masked_word_flag: bool = field(default=False, kw_only=True)
     contextual_embedding_config: ByteContextualEmbeddingConfig | None = field(
         default=None, kw_only=True
     )

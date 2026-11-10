@@ -308,10 +308,17 @@ class ExperimentPresets(BuilderBackedExperimentPresetsBase):
         )
 
     def _dataset_config(self, dataset: type) -> dict:
-        return {
+        values = {
             **super()._dataset_config(dataset),
             "sequence_length": dataset.sequence_length,
         }
+        if getattr(dataset, "hierarchical_masked_word_flag", False):
+            values.update(
+                hierarchical_masked_word_flag=True,
+                hierarchical_embedding_flag=True,
+                mlm_decoder_weight_tying_flag=False,
+            )
+        return values
 
 
 class Experiment(ExperimentBase):

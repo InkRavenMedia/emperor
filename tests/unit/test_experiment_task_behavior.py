@@ -117,16 +117,22 @@ class ExperimentTaskBehaviorTests(unittest.TestCase):
                 "best_validation/accuracy_epoch",
                 "best_validation/loss_epoch",
             },
-            ExperimentTask.BERT_PRETRAINING: stage_keys(
-                "loss",
-                "mlm/loss",
-                "mlm/perplexity",
-                "mlm/masked_accuracy",
-                "mlm/masked_top_5_accuracy",
-                "nsp/loss",
-                "nsp/accuracy",
-                "auxiliary/loss",
-            ),
+            ExperimentTask.BERT_PRETRAINING: {
+                *stage_keys(
+                    "loss",
+                    "mlm/loss",
+                    "mlm/perplexity",
+                    "mlm/masked_accuracy",
+                    "mlm/masked_top_5_accuracy",
+                    "mlm/byte_reconstruction_loss",
+                    "mlm/oversized_words",
+                    "nsp/loss",
+                    "nsp/accuracy",
+                    "auxiliary/loss",
+                ),
+                "validation/mlm/exact_word_accuracy",
+                "test/mlm/exact_word_accuracy",
+            },
             ExperimentTask.TEXT_TRANSLATION: {
                 *stage_keys(
                     "loss",
