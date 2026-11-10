@@ -7,6 +7,7 @@ import torch
 from emperor.attention import MixtureOfAttentionHeadsConfig
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
+    BroadcastSumDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     HypernetworkDynamicWeightConfig,
@@ -125,6 +126,7 @@ def _leaf_config(option: type | None, values: dict):
         in (
             SingleModelDynamicWeightConfig,
             DualModelDynamicWeightConfig,
+            BroadcastSumDynamicWeightConfig,
             LowRankDynamicWeightConfig,
             DiagonallyModulatedLowRankDynamicWeightConfig,
             HypernetworkDynamicWeightConfig,

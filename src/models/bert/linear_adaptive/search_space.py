@@ -30,6 +30,7 @@ SEARCH_SPACE_STACK_ACTIVATION: list = [
 SEARCH_SPACE_WEIGHT_OPTION: list = [
     None,
     SingleModelDynamicWeightConfig,
+    BroadcastSumDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankDynamicWeightConfig,

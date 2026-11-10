@@ -3,6 +3,7 @@ from __future__ import annotations
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
     AxisMaskConfig,
+    BroadcastSumDynamicWeightConfig,
     DiagonalAxisMaskConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     DualModelDynamicWeightConfig,
@@ -40,6 +41,10 @@ from models.neuron.linear_adaptive._residual import (
 )
 
 _WEIGHT_OPTION_FIELDS: dict[type[DynamicWeightConfig], tuple[str, ...]] = {
+    BroadcastSumDynamicWeightConfig: (
+        "normalization_option",
+        "normalization_learnable_scale_flag",
+    ),
     DiagonallyModulatedLowRankDynamicWeightConfig: (
         "normalization_option",
         "normalization_learnable_scale_flag",

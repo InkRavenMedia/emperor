@@ -366,6 +366,9 @@ describe.skipIf(!RUN_CONTRACT_E2E)(
       const fields = Object.fromEntries(
         schema.fields.map((field) => [field.key, field]),
       );
+      expect(fields.WEIGHT_OPTION.choices).toContain(
+        "BroadcastSumDynamicWeightConfig",
+      );
       expect(fields.WEIGHT_NORMALIZATION_OPTION.choices).toContain("SOFTSIGN");
       expect(fields.WEIGHT_NORMALIZATION_POSITION_OPTION.choices).toContain(
         "AFTER_DEPTH_SUM",
@@ -389,6 +392,7 @@ describe.skipIf(!RUN_CONTRACT_E2E)(
         ["DualModelDynamicWeight", "SOFTSIGN", "AFTER_OUTER_PRODUCT", true],
         ["DualModelDynamicWeight", "SOFTSIGN", "AFTER_DEPTH_SUM", false],
         ["SingleModelDynamicWeight", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false],
+        ["BroadcastSumDynamicWeight", "SOFTSIGN", "DISABLED", true],
       ] as const;
       for (const [variant, method, position, learnable] of cases) {
         const overrides = {
@@ -429,6 +433,24 @@ describe.skipIf(!RUN_CONTRACT_E2E)(
             normalization_learnable_scale_flag: learnable,
           });
         }
+        if (variant === "BroadcastSumDynamicWeight") {
+          const snapshot = await createConfigSnapshot(
+            {
+              ...identity,
+              name: "normalized broadcast sum",
+              preset: "baseline",
+              overrides,
+            },
+            createMutationRequestOptions(),
+          );
+          const restored = await inspectModel({
+            ...identity,
+            preset: "baseline",
+            dataset: "Mnist",
+            overrides: snapshot.overrides,
+          });
+          expect(restored).toEqual(graph);
+        }
       }
     }, 120_000);
 
@@ -441,6 +463,7 @@ describe.skipIf(!RUN_CONTRACT_E2E)(
         ["LayeredWeightedBankDynamicWeightConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
         ["SoftWeightedBankDynamicWeightConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
         ["MatrixWeightsMixtureConfig", "SOFTSIGN", "AFTER_OUTER_PRODUCT", false, "does not support"],
+        ["BroadcastSumDynamicWeightConfig", "DISABLED", "DISABLED", false, "requires normalization_config"],
         ["DualModelDynamicWeightConfig", "SOFTSIGN", "AFTER_DEPTH_SUM", true, "must be False for AFTER_DEPTH_SUM"],
       ] as const;
       for (const [variant, method, position, learnable, detail] of cases) {

@@ -17,6 +17,7 @@ SEARCH_SPACE_ATTN_NUM_HEADS: list = [1, 2, 4]
 SEARCH_SPACE_WEIGHT_OPTION: list = [
     None,
     SingleModelDynamicWeightConfig,
+    BroadcastSumDynamicWeightConfig,
     DualModelDynamicWeightConfig,
     DiagonallyModulatedLowRankDynamicWeightConfig,
     LowRankDynamicWeightConfig,

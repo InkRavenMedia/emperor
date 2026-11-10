@@ -501,6 +501,7 @@ modules = [
   "src/emperor/augmentations/adaptive_parameters/_weights/config.py",
   "src/emperor/augmentations/adaptive_parameters/_weights/depth_mapping.py",
   "src/emperor/augmentations/adaptive_parameters/_weights/variants/dual_model.py",
+  "src/emperor/augmentations/adaptive_parameters/_weights/variants/broadcast_sum.py",
   "src/emperor/augmentations/adaptive_parameters/_weights/variants/hypernetwork.py",
   "src/emperor/augmentations/adaptive_parameters/_weights/variants/layered_weighted_bank.py",
   "src/emperor/augmentations/adaptive_parameters/_weights/variants/low_rank.py",
