@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from emperor.config import ConfigBase, optional_field
 
 if TYPE_CHECKING:
+    from emperor.attention._memory.config import AttentionSourceMemoryConfig
     from emperor.experts import MixtureOfExpertsModelConfig
     from emperor.layers import LayerStackConfig, RecurrentCompositionConfig
     from emperor.memory import DynamicMemoryConfig
@@ -26,11 +27,11 @@ class MixerAttentionConfig(ConfigBase):
     mixing_model_config: "LayerStackConfig | MixtureOfExpertsModelConfig | RecurrentCompositionConfig | None" = (  # noqa: E501
         optional_field(
             "Model configuration built with sequence_length as both its input and "
-            "output dimensions, doubled when source memory is enabled."
+            "output dimensions, extended by the configured source-memory capacity."
         )
     )
-    source_memory_config: "DynamicMemoryConfig | None" = optional_field(
-        "Optional memory module generating one extra token per input token. "
+    source_memory_config: "DynamicMemoryConfig | AttentionSourceMemoryConfig | None" = optional_field(
+        "Optional per-token dynamic memory or chunk-compressed attention source memory. "
         "All positions are mixed, then memory output positions are discarded."
     )
     variable_sequence_length_flag: bool | None = optional_field(

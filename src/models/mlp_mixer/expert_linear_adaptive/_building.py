@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from emperor.attention import MixerAttentionConfig
+from emperor.attention import AttentionSourceMemoryConfig, MixerAttentionConfig
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterAugmentationConfig,
+    AdaptiveParameterGroupingScopeOptions,
     AxisMaskConfig,
     BroadcastSumDynamicWeightConfig,
     DiagonalAxisMaskConfig,
@@ -46,7 +47,6 @@ from emperor.layers import (
 from emperor.linears import LinearLayerConfig
 from emperor.memory import (
     AttentionDynamicMemoryConfig,
-    DynamicMemoryConfig,
     MemoryPositionOptions,
 )
 from emperor.patch import LinearPatchEmbeddingConfig
@@ -1088,9 +1088,32 @@ def _configure_controls(
     )
 
 
-def _source_memory_config(runtime: RuntimeOptions) -> DynamicMemoryConfig | None:
+def _source_memory_config(runtime: RuntimeOptions):
     if not runtime.token_mixer_source_memory_flag:
         return None
+    if runtime.token_mixer_source_memory_chunk_size is not None:
+        chunk_size = runtime.token_mixer_source_memory_chunk_size
+        if type(chunk_size) is not int or chunk_size <= 0:
+            raise ValueError(
+                "token_mixer_source_memory_chunk_size must be a positive integer"
+            )
+        if (
+            runtime.token_mixer_source_memory_test_time_training_learning_rate
+            is not None
+            or runtime.token_mixer_source_memory_test_time_training_num_inner_steps
+            is not None
+        ):
+            raise ValueError(
+                "Chunked source memory does not support per-token memory test-time training"
+            )
+        return AttentionSourceMemoryConfig(
+            model_config=runtime.token_mixer_source_memory_model_config
+            or LinearLayerConfig(bias_flag=True),
+            grouping_config=runtime.token_mixer_source_memory_grouping_method(
+                scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
+                chunk_size=chunk_size,
+            ),
+        )
     memory = runtime.token_mixer_source_memory_option(
         memory_position_option=MemoryPositionOptions.AFTER_AFFINE,
         model_config=_controller_stack_config(
