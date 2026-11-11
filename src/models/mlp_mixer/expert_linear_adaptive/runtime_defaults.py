@@ -6,6 +6,7 @@ from typing import Final
 
 import models.mlp_mixer.expert_linear_adaptive.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_values
+from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
 from models.mlp_mixer.expert_linear_adaptive.runtime_options import RuntimeOptions
 
 _PACKAGE = "models.mlp_mixer.expert_linear_adaptive"
@@ -71,6 +72,7 @@ def runtime_from_flat(
         package=_PACKAGE,
         config_module=config_module,
     )
+    values = resolve_soft_moe_runtime_defaults(values, config_module)
     runtime_updates = _runtime_updates(values)
     return replace(runtime_from_config(config_module), **runtime_updates)
 
