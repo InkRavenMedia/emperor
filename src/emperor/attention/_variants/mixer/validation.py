@@ -18,7 +18,10 @@ if TYPE_CHECKING:
 
 
 class MixerAttentionValidator(ValidatorBase):
-    OPTIONAL_FIELDS = {"source_memory_config", "variable_sequence_length_flag"}
+    OPTIONAL_FIELDS = {
+        "source_memory_config",
+        "variable_sequence_length_flag",
+    }
 
     @classmethod
     def validate(cls, model: "MixerAttention") -> None:
@@ -34,10 +37,22 @@ class MixerAttentionValidator(ValidatorBase):
 
     @staticmethod
     def validate_memory_config(memory_config) -> None:
+        from emperor.attention._memory.config import AttentionSourceMemoryConfig
+        from emperor.attention._memory.validation import AttentionSourceMemoryValidator
         from emperor.memory import DynamicMemoryConfig
 
+        if isinstance(memory_config, AttentionSourceMemoryConfig):
+            AttentionSourceMemoryValidator.validate_context_config(memory_config)
+            chunk_size = memory_config.grouping_config.chunk_size
+            if type(chunk_size) is not int or chunk_size <= 0:
+                raise ValueError(
+                    "Mixer source memory chunk_size must be a positive integer."
+                )
+            return
         if not isinstance(memory_config, DynamicMemoryConfig):
-            raise TypeError("source_memory_config must be a DynamicMemoryConfig.")
+            raise TypeError(
+                "source_memory_config must be a DynamicMemoryConfig or AttentionSourceMemoryConfig."
+            )
         if any(_adaptive_grouping_configs(memory_config, root="source_memory_config")):
             raise ValueError(
                 "Attention source memory requires independent token rows; grouping is unsupported."

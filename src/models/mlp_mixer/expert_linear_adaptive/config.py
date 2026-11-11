@@ -1206,6 +1206,11 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | None
 ) = None
 
+# Optional chunk-compressed source memory (None retains per-token memory).
+TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
+TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD: type[GroupingConfig] = SumGroupingConfig
+TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG: ConfigBase | None = None
+
 # Recurrent halting policy; defaults preserve the image model's behavior.
 RECURRENT_MIN_STEPS: int = 1
 RECURRENT_PONDER_COST_WEIGHT: float = 1.0
