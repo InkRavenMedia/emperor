@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import models.mlp_mixer.expert_linear_adaptive.config as config
 from emperor.config import BaseOptions
+from emperor.datasets.text.bert_pretraining import WikiText103BertHierarchical
 from emperor.layers import LayerNormPositionOptions
 from model_runtime.packages import (
     BuilderBackedExperimentPresetsBase,
@@ -113,6 +114,13 @@ class ExperimentPresets(BuilderBackedExperimentPresetsBase):
 
     def _dataset_config(self, dataset: type) -> dict:
         dataset_config = super()._dataset_config(dataset)
+        if issubclass(dataset, WikiText103BertHierarchical):
+            return {
+                **dataset_config,
+                "hierarchical_masked_word_flag": True,
+                "sequence_length": dataset.sequence_length,
+                "token_mixer_soft_moe_flag": True,
+            }
         return {
             **dataset_config,
             "image_patch_size": default_patch_size_for_dataset(dataset),

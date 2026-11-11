@@ -47,6 +47,12 @@ class _ModelPackageAdapter:
         return presets.get_config(preset, dataset, **kwargs)[0]
 
     def build_model(self, configuration):
+        from .experiment_config import MaskedWordExperimentConfig
+
+        if isinstance(configuration.experiment_config, MaskedWordExperimentConfig):
+            from ._text_model import MaskedWordModel
+
+            return MaskedWordModel(configuration)
         from .model import Model
 
         return Model(configuration)

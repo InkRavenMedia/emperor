@@ -92,6 +92,10 @@ from .runtime_options import RuntimeOptions
 
 
 def sequence_length(runtime: RuntimeOptions) -> int:
+    if runtime.hierarchical_masked_word_flag:
+        if type(runtime.sequence_length) is not int or runtime.sequence_length <= 0:
+            raise ValueError("sequence_length must be a positive integer")
+        return runtime.sequence_length
     image_height = runtime.image_height
     patch_size = runtime.image_patch_size
     if image_height <= 0 or patch_size <= 0:
@@ -895,7 +899,7 @@ def _channel_mixing_model(runtime: RuntimeOptions):
         apply_output_postprocessing_flag=(
             runtime.channel_mixer_stack_apply_output_postprocessing_flag
         ),
-        mirrored=True,
+        mirrored=not runtime.hierarchical_masked_word_flag,
         control_options=channel_mixer_control_options(runtime),
     )
 
@@ -1131,6 +1135,57 @@ def _source_memory_config(runtime: RuntimeOptions):
     return memory
 
 
+def _mixer_config(runtime: RuntimeOptions, tokens: int) -> MixerAttentionConfig:
+    if not runtime.hierarchical_masked_word_flag:
+        return MixerAttentionConfig(
+            embedding_dim=runtime.hidden_dim,
+            sequence_length=tokens,
+            batch_first_flag=True,
+            mixing_model_config=build_soft_moe_stack(
+                _token_mixing_model(runtime, tokens),
+                runtime.token_mixer_soft_moe_config,
+                tokens,
+            ),
+            source_memory_config=_source_memory_config(runtime),
+        )
+    if runtime.sequence_expansion_flag or runtime.sequence_expansion_config is not None:
+        raise ValueError("Masked-word Mixer does not support sequence expansion.")
+    if runtime.token_mixer_soft_moe_config is None:
+        raise ValueError(
+            "Masked-word Mixer token projections require token_mixer_soft_moe_flag."
+        )
+    for name in ("token_mixing_hidden_dim", "token_mixing_num_layers"):
+        value = getattr(runtime, name)
+        if type(value) is not int or value <= 0:
+            raise ValueError(f"{name} must be a positive integer")
+    return MixerAttentionConfig(
+        embedding_dim=runtime.hidden_dim,
+        sequence_length=tokens,
+        batch_first_flag=True,
+        variable_sequence_length_flag=True,
+        token_model_config=build_soft_moe_stack(
+            _token_mixing_model(runtime, runtime.hidden_dim),
+            runtime.token_mixer_soft_moe_config,
+            runtime.hidden_dim,
+        ),
+        mixing_model_config=LayerStackConfig(
+            input_dim=tokens,
+            output_dim=tokens,
+            hidden_dim=runtime.token_mixing_hidden_dim,
+            num_layers=runtime.token_mixing_num_layers,
+            apply_output_postprocessing_flag=False,
+            last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
+            layer_config=LayerConfig(
+                activation=runtime.stack_activation,
+                dropout_probability=runtime.stack_dropout_probability,
+                layer_norm_position=LayerNormPositionOptions.DISABLED,
+                layer_model_config=LinearLayerConfig(bias_flag=runtime.stack_bias_flag),
+            ),
+        ),
+        source_memory_config=_source_memory_config(runtime),
+    )
+
+
 def encoder_config(runtime: RuntimeOptions, tokens: int):
     mixer_layer = TransformerEncoderLayerConfig(
         embedding_dim=runtime.hidden_dim,
@@ -1144,17 +1199,7 @@ def encoder_config(runtime: RuntimeOptions, tokens: int):
             residual_block_size=runtime.mixer_residual_block_size,
             residual_rms_norm_epsilon=runtime.mixer_residual_rms_norm_epsilon,
         ),
-        attention_config=MixerAttentionConfig(
-            embedding_dim=runtime.hidden_dim,
-            sequence_length=tokens,
-            batch_first_flag=True,
-            mixing_model_config=build_soft_moe_stack(
-                _token_mixing_model(runtime, tokens),
-                runtime.token_mixer_soft_moe_config,
-                tokens,
-            ),
-            source_memory_config=_source_memory_config(runtime),
-        ),
+        attention_config=_mixer_config(runtime, tokens),
         feed_forward_config=FeedForwardConfig(
             input_dim=runtime.hidden_dim,
             output_dim=runtime.hidden_dim,
