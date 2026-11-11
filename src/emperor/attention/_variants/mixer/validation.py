@@ -21,6 +21,7 @@ class MixerAttentionValidator(ValidatorBase):
     OPTIONAL_FIELDS = {
         "source_memory_config",
         "variable_sequence_length_flag",
+        "token_model_config",
     }
 
     @classmethod
@@ -34,6 +35,24 @@ class MixerAttentionValidator(ValidatorBase):
         if model.cfg.source_memory_config is not None:
             cls.validate_memory_config(model.cfg.source_memory_config)
         cls._validate_mixing_model_config(model.mixing_model_config)
+        if model.cfg.token_model_config is not None:
+            cls.validate_token_model_config(model.cfg.token_model_config)
+
+    @staticmethod
+    def validate_token_model_config(config) -> None:
+        from emperor.experts import MixtureOfExpertsModelConfig, SoftMoEConfig
+
+        if not isinstance(config, MixtureOfExpertsModelConfig):
+            raise TypeError("token_model_config must be a MixtureOfExpertsModelConfig.")
+        if not any(
+            isinstance(visit.config, SoftMoEConfig)
+            for visit in _configuration_visits(
+                config, "MixerAttention.token_model_config"
+            )
+        ):
+            raise ValueError(
+                "Mixer token_model_config requires sequence-aware Soft MoE."
+            )
 
     @staticmethod
     def validate_memory_config(memory_config) -> None:

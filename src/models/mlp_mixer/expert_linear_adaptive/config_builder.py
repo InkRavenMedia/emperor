@@ -23,6 +23,19 @@ class MlpMixerExpertLinearAdaptiveConfigBuilder:
 
     def build(self) -> ModelConfig:
         runtime = self.runtime
+        if runtime.hierarchical_masked_word_flag:
+            from ._masked_word import build_experiment_config
+
+            experiment_config = build_experiment_config(runtime)
+        else:
+            experiment_config = ExperimentConfig(
+                patch_config=patch_config(runtime),
+                encoder_config=_sequence_expansion.with_expansion_attention_capacity(
+                    encoder_config(runtime, self.sequence_length), self.sequence_length
+                ),
+                output_config=output_config(runtime),
+                encoder_output_normalization=runtime.encoder_output_normalization,
+            )
         return ModelConfig(
             learning_rate=self.learning_rate,
             batch_size=self.batch_size,
@@ -30,14 +43,7 @@ class MlpMixerExpertLinearAdaptiveConfigBuilder:
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             sequence_length=self.sequence_length,
-            experiment_config=ExperimentConfig(
-                patch_config=patch_config(runtime),
-                encoder_config=_sequence_expansion.with_expansion_attention_capacity(
-                    encoder_config(runtime, self.sequence_length), self.sequence_length
-                ),
-                output_config=output_config(runtime),
-                encoder_output_normalization=runtime.encoder_output_normalization,
-            ),
+            experiment_config=experiment_config,
         )
 
 

@@ -1,6 +1,11 @@
 from dataclasses import dataclass, field
 
 from emperor.config import ConfigBase, optional_field
+from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
+from emperor.embedding.hierarchical import (
+    HierarchicalByteDecoderConfig,
+    HierarchicalByteEmbeddingConfig,
+)
 from emperor.layers import (
     LayerConfig,
     LayerStackConfig,
@@ -24,3 +29,15 @@ class ExperimentConfig(ConfigBase):
     output_config: LayerConfig | None = optional_field(
         "Config for the mean-pooled classification head."
     )
+
+
+@dataclass(kw_only=True)
+class MaskedWordExperimentConfig(ConfigBase):
+    """Package-owned text boundary; independent of the image classifier."""
+
+    embedding_config: HierarchicalByteEmbeddingConfig
+    masked_word_decoder_config: HierarchicalByteDecoderConfig
+    positional_embedding_config: TextLearnedPositionalEmbeddingConfig
+    encoder_config: LayerStackConfig | RecurrentLayerConfig
+    encoder_output_normalization: NormalizationOptions
+    embedding_dropout_probability: float

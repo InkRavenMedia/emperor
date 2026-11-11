@@ -34,6 +34,10 @@ class MixerAttentionConfig(ConfigBase):
         "Optional per-token dynamic memory or chunk-compressed attention source memory. "
         "All positions are mixed, then memory output positions are discarded."
     )
+    token_model_config: "MixtureOfExpertsModelConfig | None" = optional_field(
+        "Optional sequence-aware Soft MoE projection before token-axis mixing. "
+        "Adaptive grouping retains token/slot rows, never embedding-channel rows."
+    )
     variable_sequence_length_flag: bool | None = optional_field(
         "Accept masked sequences up to sequence_length, padding only inside token mixing. None preserves exact-length mixing."
     )
