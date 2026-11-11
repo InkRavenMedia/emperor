@@ -53,6 +53,16 @@ positions and returns the original 100. With no chunk size, the existing per-tok
 Dynamic Memory path remains available; its test-time-training controls cannot be
 combined with chunked memory.
 
+The same Runtime Defaults are available as CLI flags and Workbench controls.
+Select task `bert-pretraining` and dataset `WikiText103BertHierarchical` in
+Workbench. The memory generator has flat `token_mixer_source_memory_model_option`
+and `token_mixer_source_memory_model_bias_flag` controls; `LINEAR` with bias
+enabled reproduces the reference generator without a JSON configuration.
+`LINEAR_STACK` also exposes stack depth/width, and `RECURRENT_LINEAR` exposes
+the generator's recurrent step count. The older `*_model_config` JSON flag is
+retained for saved configurations. Restart an already-running Workbench backend
+and reload the page after updating the code so its metadata cache is refreshed.
+
 Backbone head counts, Q/K/V projection controls and KV caches have no Mixer
 counterpart. The text path requires token-row Soft MoE and rejects sequence
 expansion; neither is silently substituted. Inputs may be shorter than the
@@ -153,7 +163,8 @@ mise run experiment -- \
     --token-mixer-source-memory-chunk-size 5 \
     --token-mixer-source-memory-flag true \
     --token-mixer-source-memory-grouping-method SumGroupingConfig \
-    --token-mixer-source-memory-model-config '{"bias_flag":true,"type":"LinearLayerConfig"}' \
+    --token-mixer-source-memory-model-option LINEAR \
+    --token-mixer-source-memory-model-bias-flag true \
     --channel-mixer-stack-hidden-dim 32 \
     --layer-norm-position AFTER \
     --token-mixer-num-layers 1 \
