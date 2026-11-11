@@ -27,7 +27,12 @@ def declare_projection_model_defaults(namespace: dict[str, Any]) -> None:
     annotations = namespace.setdefault("__annotations__", {})
     aliases = namespace.setdefault("_CONFIG_FIELD_METADATA_ALIASES", {})
     for owner in tuple(namespace):
-        if not owner.endswith("ATTN_SOURCE_MEMORY_MODEL_CONFIG"):
+        if not owner.endswith(
+            (
+                "ATTN_SOURCE_MEMORY_MODEL_CONFIG",
+                "TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG",
+            )
+        ):
             continue
         prefix = owner.removesuffix("_CONFIG")
         for suffix, annotation in (

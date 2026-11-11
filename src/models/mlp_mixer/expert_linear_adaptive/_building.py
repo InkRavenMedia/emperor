@@ -57,7 +57,7 @@ from emperor.transformer import (
     TransformerEncoderLayerConfig,
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
-from models import _learned_grouping, _sequence_expansion
+from models import _learned_grouping, _projection_model, _sequence_expansion
 from models.mlp_mixer.expert_linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
@@ -1111,7 +1111,14 @@ def _source_memory_config(runtime: RuntimeOptions):
                 "Chunked source memory does not support per-token memory test-time training"
             )
         return AttentionSourceMemoryConfig(
-            model_config=runtime.token_mixer_source_memory_model_config
+            model_config=_projection_model.resolve_projection_model(
+                runtime.token_mixer_source_memory_model_config,
+                runtime.token_mixer_source_memory_model_option,
+                runtime.token_mixer_source_memory_model_bias_flag,
+                stack_num_layers=runtime.token_mixer_source_memory_model_stack_num_layers,
+                stack_hidden_dim=runtime.token_mixer_source_memory_model_stack_hidden_dim,
+                recurrent_max_steps=runtime.token_mixer_source_memory_model_recurrent_max_steps,
+            )
             or LinearLayerConfig(bias_flag=True),
             grouping_config=runtime.token_mixer_source_memory_grouping_method(
                 scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,

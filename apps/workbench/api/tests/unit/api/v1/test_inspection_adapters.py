@@ -104,7 +104,7 @@ def _selected_with_metadata(payload: object) -> SelectedModelPackage:
 
 
 class InspectionAdapterEquivalenceTests(unittest.TestCase):
-    def test_masked_word_mixer_groups_controls_and_exposes_text_dataset(self) -> None:
+    def test_masked_word_mixer_exposes_flat_controls_and_text_dataset(self) -> None:
         selected = self.catalog().select("mlp_mixer/expert_linear_adaptive")
         response = config_schema_response(selected.configuration("baseline"))
         fields = {field.key: field for field in response.fields}
@@ -117,6 +117,8 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             "TOKEN_MIXING_HIDDEN_DIM": "int",
             "TOKEN_MIXING_NUM_LAYERS": "int",
             "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": "int",
+            "TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION": "enum",
+            "TOKEN_MIXER_SOURCE_MEMORY_MODEL_BIAS_FLAG": "bool",
             "RECURRENT_MIN_STEPS": "int",
             "RECURRENT_PONDER_COST_WEIGHT": "float",
         }
@@ -130,6 +132,9 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": [
                 "Token Mixer Source Memory Options"
             ],
+            "TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION": [
+                "Token Mixer Source Memory Options"
+            ],
             "RECURRENT_MIN_STEPS": [
                 "Recurrent Layer Options",
                 "Recurrent Halting Options",
@@ -138,6 +143,11 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
         for key, section_path in sections.items():
             with self.subTest(key=key):
                 self.assertEqual(fields[key].sectionPath, section_path)
+        self.assertEqual(
+            fields["TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION"].choices,
+            ["LINEAR", "LINEAR_STACK", "RECURRENT_LINEAR"],
+        )
+        self.assertTrue(fields["TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG"].legacyJson)
         self.assertTrue(
             any(
                 group.experiment_task == "bert-pretraining"
