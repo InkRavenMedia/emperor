@@ -898,6 +898,8 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('SEQUENCE_EXPANSION_MAX_NEW_TOKENS', 1201, (1201,)),
         ('SEQUENCE_EXPANSION_MODEL_CONFIG', 1202, (1202,)),
         ('SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG', 1203, (1203,)),
+        ('RECURRENT_MIN_STEPS', 1210, (1210,)),
+        ('RECURRENT_PONDER_COST_WEIGHT', 1211, (1211,)),
     )),
     RuntimeDefaultsSection(('Mlp Mixer Options', 'Channel Mixer Stack Options'), (
         ('SOFT_MOE_FLAG', 420, (420, 0)),

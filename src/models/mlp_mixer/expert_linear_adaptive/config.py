@@ -1206,4 +1206,8 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | None
 ) = None
 
+# Recurrent halting policy; defaults preserve the image model's behavior.
+RECURRENT_MIN_STEPS: int = 1
+RECURRENT_PONDER_COST_WEIGHT: float = 1.0
+
 _component_defaults.declare_component_defaults(globals())

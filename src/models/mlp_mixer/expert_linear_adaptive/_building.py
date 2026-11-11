@@ -966,8 +966,8 @@ def _configured_halting(
     return options.implementation(
         input_dim=model_dim,
         threshold=options.threshold,
-        min_steps=1,
-        ponder_cost_weight=1.0,
+        min_steps=options.min_steps,
+        ponder_cost_weight=options.ponder_cost_weight,
         dropout_probability=options.dropout_probability,
         hidden_state_mode=options.hidden_state_mode,
         halting_gate_config=_controller_stack_config(
