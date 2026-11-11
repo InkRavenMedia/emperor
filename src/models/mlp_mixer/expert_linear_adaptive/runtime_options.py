@@ -46,6 +46,13 @@ from models import _learned_grouping, _sequence_expansion
 class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     recurrent_min_steps: int = field(default=1, kw_only=True)
     recurrent_ponder_cost_weight: float = field(default=1.0, kw_only=True)
+    token_mixer_source_memory_chunk_size: int | None = field(default=None, kw_only=True)
+    token_mixer_source_memory_grouping_method: type[GroupingConfig] | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_model_config: ConfigBase | None = field(
+        default=None, kw_only=True
+    )
     token_mixer_soft_moe_config: SoftMoEConfig | None = field(
         default=None, kw_only=True
     )
