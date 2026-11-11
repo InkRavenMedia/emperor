@@ -104,6 +104,51 @@ def _selected_with_metadata(payload: object) -> SelectedModelPackage:
 
 
 class InspectionAdapterEquivalenceTests(unittest.TestCase):
+    def test_masked_word_mixer_groups_controls_and_exposes_text_dataset(self) -> None:
+        selected = self.catalog().select("mlp_mixer/expert_linear_adaptive")
+        response = config_schema_response(selected.configuration("baseline"))
+        fields = {field.key: field for field in response.fields}
+        expected = {
+            "HIERARCHICAL_MASKED_WORD_FLAG": "bool",
+            "HIERARCHICAL_BYTE_EMBEDDING_DIM": "int",
+            "HIERARCHICAL_BYTE_ENCODER_NUM_LAYERS": "int",
+            "TOKEN_MIXER_SOFT_MOE_FLAG": "bool",
+            "SOFT_MOE_FLAG": "bool",
+            "TOKEN_MIXING_HIDDEN_DIM": "int",
+            "TOKEN_MIXING_NUM_LAYERS": "int",
+            "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": "int",
+            "RECURRENT_MIN_STEPS": "int",
+            "RECURRENT_PONDER_COST_WEIGHT": "float",
+        }
+        for key, kind in expected.items():
+            with self.subTest(key=key):
+                self.assertEqual(fields[key].type, kind)
+                self.assertEqual(fields[key].flag, "--" + key.lower().replace("_", "-"))
+        sections = {
+            "HIERARCHICAL_MASKED_WORD_FLAG": ["Hierarchical Masked-Word Options"],
+            "TOKEN_MIXING_HIDDEN_DIM": ["Token Mixing Options"],
+            "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": [
+                "Token Mixer Source Memory Options"
+            ],
+            "RECURRENT_MIN_STEPS": [
+                "Recurrent Layer Options",
+                "Recurrent Halting Options",
+            ],
+        }
+        for key, section_path in sections.items():
+            with self.subTest(key=key):
+                self.assertEqual(fields[key].sectionPath, section_path)
+        self.assertTrue(
+            any(
+                group.experiment_task == "bert-pretraining"
+                and any(
+                    dataset.name == "WikiText103BertHierarchical"
+                    for dataset in group.datasets
+                )
+                for group in selected.metadata().dataset_groups
+            )
+        )
+
     def test_json_fields_have_flat_workbench_controls(self) -> None:
         for package in discover_model_packages():
             response = config_schema_response(configuration_schema(package))
