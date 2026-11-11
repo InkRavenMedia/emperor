@@ -120,6 +120,8 @@ class HaltingOptions:
     dropout_probability: float
     hidden_state_mode: HaltingHiddenStateModeOptions
     stack: ControllerStackSource
+    min_steps: int = 1
+    ponder_cost_weight: float = 1.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +246,8 @@ def main_control_options(runtime: RuntimeOptions) -> ControlOptions:
                 dropout_probability=runtime.recurrent_halting_dropout,
                 hidden_state_mode=runtime.recurrent_halting_hidden_state_mode,
                 stack=_main_recurrent_halting_stack(runtime),
+                min_steps=runtime.recurrent_min_steps,
+                ponder_cost_weight=runtime.recurrent_ponder_cost_weight,
             ),
             memory=MemoryOptions(
                 enabled=runtime.recurrent_memory_flag,
