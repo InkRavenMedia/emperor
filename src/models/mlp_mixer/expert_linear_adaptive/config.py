@@ -1206,7 +1206,8 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | None
 ) = None
 
-# Hierarchical masked-word input (selected by the text dataset).
+# Hierarchical Masked-Word Options
+# Selected by the text dataset.
 HIERARCHICAL_MASKED_WORD_FLAG: bool = False
 SEQUENCE_LENGTH: int = 100
 HIERARCHICAL_BYTE_EMBEDDING_DIM: int = 32
@@ -1216,16 +1217,20 @@ HIERARCHICAL_BYTE_NUM_HEADS: int = 4
 HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
 EMBEDDING_DROPOUT_PROBABILITY: float = 0.0
 
+# Token Mixing Options
 # Token-axis MLP after sequence-aware expert projection for text inputs.
 TOKEN_MIXING_HIDDEN_DIM: int = 32
 TOKEN_MIXING_NUM_LAYERS: int = 2
 
+# Token Mixer Source Memory Options
 # Optional chunk-compressed source memory (None retains per-token memory).
 TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
 TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD: type[GroupingConfig] = SumGroupingConfig
 TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG: ConfigBase | None = None
 
-# Recurrent halting policy; defaults preserve the image model's behavior.
+# Recurrent Layer Options
+## Recurrent Halting Options
+# Defaults preserve the image model's behavior.
 RECURRENT_MIN_STEPS: int = 1
 RECURRENT_PONDER_COST_WEIGHT: float = 1.0
 
