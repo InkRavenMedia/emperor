@@ -44,6 +44,16 @@ from models import _learned_grouping, _sequence_expansion
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
+    hierarchical_masked_word_flag: bool = field(default=False, kw_only=True)
+    sequence_length: int = field(default=100, kw_only=True)
+    hierarchical_byte_embedding_dim: int = field(default=32, kw_only=True)
+    hierarchical_byte_encoder_num_layers: int = field(default=1, kw_only=True)
+    hierarchical_byte_feed_forward_dim: int = field(default=64, kw_only=True)
+    hierarchical_byte_num_heads: int = field(default=4, kw_only=True)
+    hierarchical_max_token_bytes: int = field(default=64, kw_only=True)
+    embedding_dropout_probability: float = field(default=0.0, kw_only=True)
+    token_mixing_hidden_dim: int = field(default=32, kw_only=True)
+    token_mixing_num_layers: int = field(default=2, kw_only=True)
     recurrent_min_steps: int = field(default=1, kw_only=True)
     recurrent_ponder_cost_weight: float = field(default=1.0, kw_only=True)
     token_mixer_source_memory_chunk_size: int | None = field(default=None, kw_only=True)

@@ -1206,6 +1206,20 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
     | None
 ) = None
 
+# Hierarchical masked-word input (selected by the text dataset).
+HIERARCHICAL_MASKED_WORD_FLAG: bool = False
+SEQUENCE_LENGTH: int = 100
+HIERARCHICAL_BYTE_EMBEDDING_DIM: int = 32
+HIERARCHICAL_BYTE_ENCODER_NUM_LAYERS: int = 1
+HIERARCHICAL_BYTE_FEED_FORWARD_DIM: int = 64
+HIERARCHICAL_BYTE_NUM_HEADS: int = 4
+HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
+EMBEDDING_DROPOUT_PROBABILITY: float = 0.0
+
+# Token-axis MLP after sequence-aware expert projection for text inputs.
+TOKEN_MIXING_HIDDEN_DIM: int = 32
+TOKEN_MIXING_NUM_LAYERS: int = 2
+
 # Optional chunk-compressed source memory (None retains per-token memory).
 TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
 TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD: type[GroupingConfig] = SumGroupingConfig

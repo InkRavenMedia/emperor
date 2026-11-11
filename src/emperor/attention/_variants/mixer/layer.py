@@ -79,6 +79,15 @@ class MixerAttention(Module):
             if self.cfg.source_memory_config is not None
             else None
         )
+        self.token_model = (
+            self._build_from_config(
+                self.cfg.token_model_config,
+                input_dim=self.embedding_dim,
+                output_dim=self.embedding_dim,
+            )
+            if self.cfg.token_model_config is not None
+            else None
+        )
 
     def __exact_mixing_model_config(self, config):
         from emperor.experts import MixtureOfExpertsModelConfig
@@ -157,7 +166,8 @@ class MixerAttention(Module):
             if not self.batch_first_flag:
                 excluded = excluded.transpose(0, 1)
             q = q.masked_fill(excluded.unsqueeze(-1), 0)
-        token_vectors = self.__token_vectors(q, sequence_axis)
+        projected, preparation_loss = self.__project_tokens(q, excluded)
+        token_vectors = self.__token_vectors(projected, sequence_axis)
         if self.source_memory is not None:
             if self.chunked_source_memory:
                 source = q.transpose(0, 1) if self.batch_first_flag else q
@@ -180,7 +190,13 @@ class MixerAttention(Module):
                     (0, self.memory_sequence_length - memory_vectors.size(-1)),
                 )
                 token_vectors = torch.cat((token_vectors, memory_vectors), dim=-1)
-                return token_vectors, excluded, memory_loss
+                if memory_loss is not None:
+                    preparation_loss = (
+                        memory_loss
+                        if preparation_loss is None
+                        else preparation_loss + memory_loss
+                    )
+                return token_vectors, excluded, preparation_loss
             # Per-token rows keep optional adaptation independent across tokens.
             token_rows = q.reshape(-1, self.embedding_dim)
             memory = self.source_memory(token_rows)
@@ -191,7 +207,40 @@ class MixerAttention(Module):
             token_vectors = torch.cat(
                 (token_vectors, self.__token_vectors(memory, sequence_axis)), dim=-1
             )
-        return token_vectors, excluded, None
+        return token_vectors, excluded, preparation_loss
+
+    def __project_tokens(
+        self, tokens: Tensor, excluded: Tensor | None
+    ) -> tuple[Tensor, Tensor | None]:
+        if self.token_model is None:
+            return tokens, None
+        from emperor.experts import MixtureOfExpertsLayerState
+
+        tokens = tokens if self.batch_first_flag else tokens.transpose(0, 1)
+        active = (
+            None
+            if excluded is None
+            else ~(
+                excluded if self.batch_first_flag else excluded.transpose(0, 1)
+            ).unsqueeze(-1)
+        )
+        input_length = tokens.size(1)
+        unused_positions = self.sequence_length - input_length
+        if unused_positions:
+            if active is None:
+                active = torch.ones(
+                    (*tokens.shape[:2], 1), dtype=torch.bool, device=tokens.device
+                )
+            tokens = F.pad(tokens, (0, 0, 0, unused_positions))
+            active = F.pad(active, (0, 0, 0, unused_positions), value=False)
+        state = self.token_model(
+            MixtureOfExpertsLayerState(hidden=tokens, skip_mask=active)
+        )
+        self.VALIDATOR.validate_mixing_state(state, tokens)
+        projected = state.hidden[:, :input_length]
+        return (
+            projected if self.batch_first_flag else projected.transpose(0, 1)
+        ), state.loss
 
     def __token_vectors(self, tokens: Tensor, sequence_axis: int) -> Tensor:
         vectors = tokens.movedim(sequence_axis, -1)
