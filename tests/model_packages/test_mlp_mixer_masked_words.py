@@ -28,6 +28,8 @@ from emperor.datasets.text.bert_pretraining import (
 )
 from emperor.experiments import ExperimentTask
 from emperor.experts import MixtureOfExpertsModelConfig
+from emperor.layers import LayerStackConfig, RecurrentLayerConfig
+from emperor.linears import LinearLayerConfig
 from model_runtime.task_behavior import experiment_task_behavior
 from models.catalog import model_package
 from models.cli_selection import resolve_cli_selection
@@ -439,3 +441,40 @@ def test_documented_command_matches_the_reference_model_options():
         dataset=WikiText103BertHierarchical, config_overrides=selection.config_overrides
     )
     assert asdict(config) == asdict(configuration())
+
+
+@pytest.mark.parametrize(
+    "option,config_type",
+    [
+        ("LINEAR", LinearLayerConfig),
+        ("LINEAR_STACK", LayerStackConfig),
+        ("RECURRENT_LINEAR", RecurrentLayerConfig),
+    ],
+)
+def test_memory_generator_flat_flags_build_without_json(option, config_type):
+    config = configuration(
+        token_mixer_source_memory_model_config=None,
+        token_mixer_source_memory_model_option=option,
+        token_mixer_source_memory_model_bias_flag=False,
+        token_mixer_source_memory_model_stack_num_layers=3,
+        token_mixer_source_memory_model_stack_hidden_dim=16,
+        token_mixer_source_memory_model_recurrent_max_steps=3,
+    )
+    memory_config = attention_config(config).source_memory_config
+    generator = memory_config.model_config
+    assert type(generator) is config_type
+    if option == "LINEAR_STACK":
+        assert generator.num_layers == 3 and generator.hidden_dim == 16
+        linear = generator.layer_config.layer_model_config
+    elif option == "RECURRENT_LINEAR":
+        assert generator.max_steps == generator.initial_iterations == 3
+        linear = generator.block_config.layer_model_config
+    else:
+        linear = generator
+    assert linear.bias_flag is False
+    memory = memory_config.build(type(memory_config)(embedding_dim=32))
+    source = torch.randn(7, 2, 32, requires_grad=True)
+    generated, _, _ = memory(source)
+    assert generated.shape == (4, 32)
+    generated.square().sum().backward()
+    assert source.grad is not None and torch.isfinite(source.grad).all()

@@ -39,7 +39,7 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
-from models import _learned_grouping, _sequence_expansion
+from models import _learned_grouping, _projection_model, _sequence_expansion
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +61,21 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
         default=None, kw_only=True
     )
     token_mixer_source_memory_model_config: ConfigBase | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_model_option: (
+        _projection_model.ProjectionModelOptions | None
+    ) = field(default=None, kw_only=True)
+    token_mixer_source_memory_model_bias_flag: bool | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_model_stack_num_layers: int | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_model_stack_hidden_dim: int | None = field(
+        default=None, kw_only=True
+    )
+    token_mixer_source_memory_model_recurrent_max_steps: int | None = field(
         default=None, kw_only=True
     )
     token_mixer_soft_moe_config: SoftMoEConfig | None = field(
