@@ -686,6 +686,7 @@ modules = [
   "src/emperor/attention/_variants/mixer/layer.py",
   "src/emperor/attention/_variants/mixer/masking.py",
   "src/emperor/attention/_variants/mixer/memory.py",
+  "src/emperor/attention/_variants/mixer/processing.py",
   "src/emperor/attention/_variants/mixer/reshaping.py",
   "src/emperor/attention/_variants/mixer/validation.py",
   "src/emperor/attention/_variants/self_attention/__init__.py",
