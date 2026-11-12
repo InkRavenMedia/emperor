@@ -733,7 +733,6 @@ class TestMixerAttention(unittest.TestCase):
             model(values, clone, values)
 
         unsupported_cases = (
-            ("k_padding_mask", torch.zeros(2, 3, dtype=torch.bool), "padding"),
             ("attention_mask", torch.zeros(3, 3), "attention masks"),
             ("static_k", torch.zeros(2, 3, 2), "static key/value"),
             ("static_v", torch.zeros(2, 3, 2), "static key/value"),
@@ -742,6 +741,19 @@ class TestMixerAttention(unittest.TestCase):
             with self.subTest(argument=argument):
                 with self.assertRaisesRegex(RuntimeError, message):
                     model(values, values, values, **{argument: unsupported_value})
+
+    def test_rejects_invalid_padding_masks(self):
+        model = _mixer_config(embedding_dim=2).build()
+        values = torch.randn(2, 3, 2)
+        cases = (
+            (torch.zeros(2, 2, dtype=torch.bool), "batch and sequence dimensions"),
+            (torch.zeros(2, 3, dtype=torch.int64), "Boolean or additive"),
+            (torch.full((2, 3), 0.5), "Boolean or additive"),
+        )
+        for padding_mask, message in cases:
+            with self.subTest(message=message):
+                with self.assertRaisesRegex(ValueError, message):
+                    model(values, values, values, k_padding_mask=padding_mask)
 
     def test_rejects_non_shape_preserving_nested_output(self):
         model = _mixer_config(embedding_dim=2).build()
@@ -989,12 +1001,8 @@ if __name__ == "__main__":
     unittest.main()
 
 
-def test_variable_mixer_masks_padding_and_preserves_valid_gradients():
-    from dataclasses import replace
-
-    config = replace(
-        _mixer_config(sequence_length=7), variable_sequence_length_flag=True
-    )
+def test_mixer_masks_padding_and_preserves_valid_gradients():
+    config = _mixer_config(sequence_length=7)
     model = config.build()
     inputs = torch.randn(2, 5, 4, requires_grad=True)
     padding = torch.tensor([[False, False, False, True, True], [False] * 5])
@@ -1002,6 +1010,13 @@ def test_variable_mixer_masks_padding_and_preserves_valid_gradients():
     perturbed = inputs.detach().clone().masked_fill(padding.unsqueeze(-1), 9999)
     perturbed_output, _, _ = model(perturbed, perturbed, perturbed, padding)
     torch.testing.assert_close(output, perturbed_output)
+    padded_inputs = torch.nn.functional.pad(inputs, (0, 0, 0, 2))
+    padded_mask = torch.nn.functional.pad(padding, (0, 2), value=True)
+    padded_output, _, _ = model(
+        padded_inputs, padded_inputs, padded_inputs, padded_mask
+    )
+    torch.testing.assert_close(padded_output[:, :5], output)
+    assert torch.count_nonzero(padded_output[:, 5:]) == 0
     assert output.shape == inputs.shape
     assert torch.count_nonzero(output[padding]) == 0
     output.square().sum().backward()

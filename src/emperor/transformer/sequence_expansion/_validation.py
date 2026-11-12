@@ -250,13 +250,9 @@ class _TransformerExpansionBlockValidator(Layer.VALIDATOR):
         )
 
         if isinstance(attention_config, MixerAttentionConfig):
-            if (
-                cls.DECODER
-                or not attention_config.batch_first_flag
-                or not attention_config.variable_sequence_length_flag
-            ):
+            if cls.DECODER or not attention_config.batch_first_flag:
                 raise ValueError(
-                    "SequenceExpansion requires batch-first variable-length MixerAttention in an encoder."
+                    "SequenceExpansion requires batch-first MixerAttention in an encoder."
                 )
             return
 

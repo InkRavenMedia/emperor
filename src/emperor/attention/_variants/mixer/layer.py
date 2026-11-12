@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
+from emperor.attention._variants.mixer.masking import MixerMask
 from emperor.attention._variants.mixer.memory import MixerSourceMemory
 from emperor.attention._variants.mixer.reshaping import MixerReshaper
 from emperor.attention._variants.mixer.validation import (
@@ -39,15 +40,13 @@ class MixerAttention(Module):
         self.embedding_dim: int = self.cfg.embedding_dim
         self.sequence_length: int = self.cfg.sequence_length
         self.batch_first_flag: bool = self.cfg.batch_first_flag
-        self.variable_sequence_length_flag: bool = bool(
-            self.cfg.variable_sequence_length_flag
-        )
         self.mixing_model_config: (
             LayerStackConfig | MixtureOfExpertsModelConfig | RecurrentCompositionConfig
         ) = self.cfg.mixing_model_config
 
         self.VALIDATOR.validate(self)
         self.reshaper = MixerReshaper(self.cfg)
+        self.masks = MixerMask(self.reshaper)
         memory_config = self.cfg.source_memory_config
         self.memory_sequence_length = (
             memory_config.source_memory_length(self.sequence_length)
@@ -129,8 +128,7 @@ class MixerAttention(Module):
         mixed = self.reshaper.restore_output_layout(
             mixed_vectors, input_sequence_length
         )
-        if excluded is not None:
-            mixed = mixed.masked_fill(excluded.unsqueeze(-1), 0)
+        mixed = self.masks.apply_to_tokens(mixed, excluded)
         loss = mixing_state.loss
         if preparation_loss is not None:
             loss = preparation_loss if loss is None else loss + preparation_loss
@@ -139,15 +137,7 @@ class MixerAttention(Module):
     def __prepare_mixing_input(
         self, q: Tensor, k_padding_mask: Tensor | None
     ) -> tuple[Tensor, Tensor | None, Tensor | None]:
-        excluded = None
-        if k_padding_mask is not None:
-            excluded = (
-                k_padding_mask
-                if k_padding_mask.dtype == torch.bool
-                else k_padding_mask.isneginf()
-            )
-            excluded = self.reshaper.from_batch_first(excluded)
-            q = q.masked_fill(excluded.unsqueeze(-1), 0)
+        q, excluded = self.masks.prepare_inputs(q, k_padding_mask)
         projected, preparation_loss = self.__project_tokens(q, excluded)
         token_vectors = self.reshaper.prepare_token_axis_vectors(projected)
         token_vectors, memory_loss = self.memory_handler.append_sources(
