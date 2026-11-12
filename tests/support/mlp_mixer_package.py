@@ -392,7 +392,7 @@ class MlpMixerPackageContractMixin:
         patch_tokens = model.patch(inputs)
         logits, auxiliary_loss = self._logits_and_loss(model(inputs))
         block = self._block(model)
-        token_stack = block.self_attention_model.mixing_model
+        token_stack = block.self_attention_model.processor.mixing_model
         channel_stack = block.feed_forward_model.model
         token_layers = self._stack_layers(token_stack)
         channel_layers = self._stack_layers(channel_stack)

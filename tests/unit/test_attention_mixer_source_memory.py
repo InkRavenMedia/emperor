@@ -73,7 +73,7 @@ def test_memory_uses_masked_original_tokens_with_soft_mixing(
     memory_hook = model.source_memory.register_forward_pre_hook(
         lambda _model, args: memory_inputs.append(args[0].detach().clone())
     )
-    mixing_hook = model.mixing_model.register_forward_pre_hook(
+    mixing_hook = model.processor.mixing_model.register_forward_pre_hook(
         lambda _model, args: mixing_inputs.append(args[0].hidden.detach().clone())
     )
     output, attention_weights, auxiliary_loss = model(
@@ -104,7 +104,7 @@ def test_memory_uses_masked_original_tokens_with_soft_mixing(
     objective.backward()
     assert torch.isfinite(inputs.grad).all()
     assert (inputs.grad[output_exclusions] == 0).all()
-    for component in (model.mixing_model, model.source_memory):
+    for component in (model.processor.mixing_model, model.source_memory):
         assert any(
             parameter.grad is not None
             and torch.isfinite(parameter.grad).all()
@@ -146,7 +146,9 @@ def test_soft_mixer_routes_channel_vectors_then_restores_token_layout(
         extended = torch.cat((inputs, memory), dim=sequence_axis)
     vectors = extended.movedim(sequence_axis, -1)
     assert vectors.shape == (2, 4, 6 if with_memory else 3)
-    expected = model.mixing_model(MixtureOfExpertsLayerState(hidden=vectors)).hidden
+    expected = model.processor.mixing_model(
+        MixtureOfExpertsLayerState(hidden=vectors)
+    ).hidden
     expected = expected[..., :3].movedim(-1, sequence_axis)
     actual, weights, _ = model(inputs, inputs, inputs)
     torch.testing.assert_close(actual, expected)
@@ -154,7 +156,7 @@ def test_soft_mixer_routes_channel_vectors_then_restores_token_layout(
     actual.square().sum().backward()
     assert any(
         p.grad is not None and p.grad.abs().sum() > 0
-        for p in model.mixing_model.parameters()
+        for p in model.processor.mixing_model.parameters()
     )
     if with_memory:
         assert any(
@@ -176,7 +178,7 @@ def test_mixer_appends_memory_mixes_all_positions_and_keeps_original_outputs(
     weight = torch.arange(36, dtype=torch.float64).reshape(6, 6) / 19
     bias = torch.linspace(-0.2, 0.3, 6, dtype=torch.float64)
     with torch.no_grad():
-        linear = model.mixing_model.layers[0].model
+        linear = model.processor.mixing_model.layers[0].model
         linear.weight_params.copy_(weight)
         linear.bias_params.copy_(bias)
     memory = next(m for m in model.modules() if isinstance(m, DynamicMemoryAbstract))

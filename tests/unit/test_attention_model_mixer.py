@@ -13,6 +13,7 @@ from emperor.attention import (
 )
 from emperor.attention._base import MultiHeadAttentionAbstract
 from emperor.attention._variants.mixer.layer import MixerAttention
+from emperor.attention._variants.mixer.processing import MixerProcessor
 from emperor.attention._variants.mixer.validation import MixerAttentionValidator
 from emperor.config import ConfigBase, optional_field
 from emperor.experts import (
@@ -217,7 +218,7 @@ def _set_linear_parameters(
     weight: torch.Tensor,
     bias: torch.Tensor,
 ) -> None:
-    linear = model.mixing_model.layers[0].model
+    linear = model.processor.mixing_model.layers[0].model
     with torch.no_grad():
         linear.weight_params.copy_(weight)
         linear.bias_params.copy_(bias)
@@ -267,9 +268,8 @@ class _LossBlock(Module):
 
 
 class _WrongShapeModel(torch.nn.Module):
-    def forward(self, state: LayerState) -> LayerState:
-        state.hidden = state.hidden[..., :-1]
-        return state
+    def forward_sequence(self, hidden: torch.Tensor) -> LayerState:
+        return LayerState(hidden=hidden[..., :-1])
 
 
 class _InvalidNestedResultModel(torch.nn.Module):
@@ -277,7 +277,8 @@ class _InvalidNestedResultModel(torch.nn.Module):
         super().__init__()
         self.failure = failure
 
-    def forward(self, state: LayerState):
+    def forward_sequence(self, hidden: torch.Tensor):
+        state = LayerState(hidden=hidden)
         if self.failure == "state":
             return state.hidden
         if self.failure == "hidden":
@@ -318,10 +319,11 @@ class TestMixerAttention(unittest.TestCase):
         self.assertNotIsInstance(model, MultiHeadAttentionAbstract)
         self.assertIs(MixerAttention.__base__, Module)
         self.assertIs(config._registry_owner(), MixerAttention)
-        self.assertEqual(model.mixing_model.input_dim, 3)
-        self.assertEqual(model.mixing_model.output_dim, 3)
-        self.assertFalse(hasattr(model, "projector"))
-        self.assertFalse(hasattr(model, "processor"))
+        self.assertEqual(model.processor.mixing_model.input_dim, 3)
+        self.assertEqual(model.processor.mixing_model.output_dim, 3)
+        self.assertIsInstance(model.processor, MixerProcessor)
+        self.assertIsInstance(model.processor, Module)
+        self.assertIs(model.processor.cfg, model.cfg)
 
     def test_construction_preserves_exact_module_and_state_fingerprint(self):
         with torch.random.fork_rng():
@@ -335,26 +337,27 @@ class TestMixerAttention(unittest.TestCase):
             tuple(name for name, _module in model.named_modules()),
             (
                 "",
-                "mixing_model",
-                "mixing_model.shared_controllers",
-                "mixing_model.layers",
-                "mixing_model.layers.0",
-                "mixing_model.layers.0.postprocessing",
-                "mixing_model.layers.0.halting",
-                "mixing_model.layers.0.memory",
-                "mixing_model.layers.0.residual",
-                "mixing_model.layers.0.normalization",
-                "mixing_model.layers.0.model",
+                "processor",
+                "processor.mixing_model",
+                "processor.mixing_model.shared_controllers",
+                "processor.mixing_model.layers",
+                "processor.mixing_model.layers.0",
+                "processor.mixing_model.layers.0.postprocessing",
+                "processor.mixing_model.layers.0.halting",
+                "processor.mixing_model.layers.0.memory",
+                "processor.mixing_model.layers.0.residual",
+                "processor.mixing_model.layers.0.normalization",
+                "processor.mixing_model.layers.0.model",
             ),
         )
         expected_state_topology = (
             (
-                "mixing_model.layers.0.model.weight_params",
+                "processor.mixing_model.layers.0.model.weight_params",
                 (3, 3),
                 torch.float32,
             ),
             (
-                "mixing_model.layers.0.model.bias_params",
+                "processor.mixing_model.layers.0.model.bias_params",
                 (3,),
                 torch.float32,
             ),
@@ -440,7 +443,9 @@ class TestMixerAttention(unittest.TestCase):
         def capture_flattened_input(_module, args) -> None:
             captured_inputs.append(args[0].hidden.detach().clone())
 
-        handle = model.mixing_model.register_forward_pre_hook(capture_flattened_input)
+        handle = model.processor.mixing_model.register_forward_pre_hook(
+            capture_flattened_input
+        )
         output, _, _ = model(values, values, values)
         handle.remove()
 
@@ -459,7 +464,7 @@ class TestMixerAttention(unittest.TestCase):
         contiguous_source = torch.randn(2, 2, 3, dtype=torch.float64)
         values = contiguous_source.transpose(1, 2).requires_grad_()
         self.assertFalse(values.is_contiguous())
-        linear = model.mixing_model.layers[0].model
+        linear = model.processor.mixing_model.layers[0].model
 
         output, weights, loss = model(values, values, values)
         output.square().sum().backward()
@@ -492,9 +497,9 @@ class TestMixerAttention(unittest.TestCase):
             embedding_dim=2,
             mixing_model_config=_recurrent_stack(3),
         ).build()
-        self.assertIsInstance(model.mixing_model, RecurrentLayer)
+        self.assertIsInstance(model.processor.mixing_model, RecurrentLayer)
         weight = torch.diag(torch.tensor([0.5, 1.5, 2.0]))
-        linear = model.mixing_model.block_model.layers[0].model
+        linear = model.processor.mixing_model.block_model.layers[0].model
         with torch.no_grad():
             linear.weight_params.copy_(weight)
             linear.bias_params.zero_()
@@ -558,10 +563,10 @@ class TestMixerAttention(unittest.TestCase):
         self.assertEqual(output.shape, values.shape)
         self.assertIsNone(weights)
         torch.testing.assert_close(loss, torch.zeros_like(loss))
-        self.assertEqual(model.mixing_model.input_dim, 3)
-        self.assertEqual(model.mixing_model.output_dim, 3)
-        self.assertEqual(model.mixing_model.expert_stack.input_dim, 3)
-        self.assertEqual(model.mixing_model.expert_stack.output_dim, 3)
+        self.assertEqual(model.processor.mixing_model.input_dim, 3)
+        self.assertEqual(model.processor.mixing_model.output_dim, 3)
+        self.assertEqual(model.processor.mixing_model.expert_stack.input_dim, 3)
+        self.assertEqual(model.processor.mixing_model.expert_stack.output_dim, 3)
         self.assertEqual((supplied.input_dim, supplied.output_dim), (7, 7))
         self.assertIsNotNone(values.grad)
         self.assertGreater(values.grad.abs().sum().item(), 0.0)
@@ -757,10 +762,10 @@ class TestMixerAttention(unittest.TestCase):
 
     def test_rejects_non_shape_preserving_nested_output(self):
         model = _mixer_config(embedding_dim=2).build()
-        model.mixing_model = _WrongShapeModel()
+        model.processor.mixing_model = _WrongShapeModel()
         values = torch.randn(2, 3, 2)
 
-        with self.assertRaisesRegex(RuntimeError, "preserve flattened shape"):
+        with self.assertRaisesRegex(RuntimeError, "preserve input shape"):
             model(values, values, values)
 
     def test_rejects_invalid_nested_state_hidden_dtype_and_device(self):
@@ -775,7 +780,7 @@ class TestMixerAttention(unittest.TestCase):
         for failure, message in cases:
             with self.subTest(failure=failure):
                 model = _mixer_config(embedding_dim=2).build()
-                model.mixing_model = _InvalidNestedResultModel(failure)
+                model.processor.mixing_model = _InvalidNestedResultModel(failure)
                 with self.assertRaisesRegex(RuntimeError, message):
                     model(values, values, values)
 
