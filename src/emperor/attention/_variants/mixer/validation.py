@@ -8,7 +8,7 @@ from torch import Tensor
 from emperor._validation import (
     ValidatorBase,
     _configuration_visits,
-    _first_adaptive_grouping_path,
+    _validate_adaptive_sequence_input,
 )
 from emperor.layers import LayerState
 
@@ -32,6 +32,12 @@ class MixerAttentionValidator(ValidatorBase):
         if model.cfg.source_memory_config is not None:
             cls.validate_memory_config(model.cfg.source_memory_config)
         cls._validate_mixing_model_config(model.cfg.mixing_model_config)
+        _validate_adaptive_sequence_input(
+            model.cfg.mixing_model_config,
+            root="MixerAttentionConfig.mixing_model_config",
+            sequence_length=model.embedding_dim,
+            input_order="BATCH_FIRST",
+        )
 
     @staticmethod
     def validate_memory_config(memory_config: object) -> None:
@@ -65,16 +71,6 @@ class MixerAttentionValidator(ValidatorBase):
                 "RecurrentCompositionConfig, or a MixtureOfExpertsModelConfig for "
                 "MixerAttention, got "
                 f"{type(mixing_model_config).__name__}."
-            )
-        grouping_path = _first_adaptive_grouping_path(
-            mixing_model_config,
-            root="MixerAttentionConfig.mixing_model_config",
-        )
-        if grouping_path is not None:
-            raise ValueError(
-                "Adaptive parameter grouping is not supported by MixerAttention "
-                "because its flattened rows represent embedding channels, not "
-                f"sequence rows. Found grouping at {grouping_path}."
             )
         cls._validate_required_nested_mixing_configs(mixing_model_config)
         uses_soft_moe = any(
