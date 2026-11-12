@@ -792,7 +792,7 @@ def test_feed_forward_and_outer_model_reject_ambiguous_boundaries():
         torch.zeros(4, 2, dtype=torch.bool),
         torch.full((2, 4), float("nan")),
     ):
-        with pytest.raises((TypeError, ValueError), match="Soft MoE"):
+        with pytest.raises((TypeError, ValueError), match="Feed-forward.*padding"):
             feed_forward(torch.zeros(2, 4, 3), padding_mask=padding)
     with pytest.raises(TypeError, match="batch_first"):
         feed_forward(torch.zeros(2, 4, 3), batch_first=None)
