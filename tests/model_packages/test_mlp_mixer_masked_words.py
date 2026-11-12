@@ -7,7 +7,6 @@ historical Trainer timer is configuration evidence only; these tests never fit.
 import copy
 import io
 import json
-import shlex
 import subprocess
 import sys
 from dataclasses import asdict
@@ -345,10 +344,13 @@ def test_normal_cli_resolves_mixer_without_executing_an_experiment():
     selection = resolve_cli_selection(
         parsed, package, package.preset_type, build_monitor_callbacks=False
     )
+    assert selection.config_overrides["trainer_max_time"] is None
+    assert selection.config_overrides["num_epochs"] == 100
     config = package.build_configuration(
         dataset=WikiText103BertHierarchical, config_overrides=selection.config_overrides
     )
     assert isinstance(attention_config(config), MixerAttentionConfig)
+    assert asdict(config) == asdict(configuration())
 
 
 @pytest.mark.training
@@ -414,31 +416,6 @@ assert not any(n.startswith("models.bert.") for n in set(sys.modules) - catalog_
         [sys.executable, "-c", code], capture_output=True, text=True
     )
     assert result.returncode == 0, result.stderr
-
-
-def test_documented_command_matches_the_reference_model_options():
-    root = Path(__file__).resolve().parents[2]
-    text = (
-        root / "src/models/mlp_mixer/expert_linear_adaptive/masked-word.md"
-    ).read_text()
-    command = text.split("```bash\n", 1)[1].split("\n```", 1)[0]
-    arguments = shlex.split(command.replace("\\\n", ""))
-    assert arguments[:4] == ["mise", "run", "experiment", "--"]
-    arguments = arguments[4:]
-    for selector in ("--model-type", "--model"):
-        position = arguments.index(selector)
-        del arguments[position : position + 2]
-    package = model_package("mlp_mixer/expert_linear_adaptive")
-    parsed = get_experiment_parser(package).parse_args(arguments)
-    selection = resolve_cli_selection(
-        parsed, package, package.preset_type, build_monitor_callbacks=False
-    )
-    assert selection.config_overrides["trainer_max_time"] is None
-    assert selection.config_overrides["num_epochs"] == 100
-    config = package.build_configuration(
-        dataset=WikiText103BertHierarchical, config_overrides=selection.config_overrides
-    )
-    assert asdict(config) == asdict(configuration())
 
 
 @pytest.mark.parametrize(
