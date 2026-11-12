@@ -909,18 +909,14 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('HIERARCHICAL_MAX_TOKEN_BYTES', 1217, (1217,)),
         ('EMBEDDING_DROPOUT_PROBABILITY', 1218, (1218,)),
     )),
-    RuntimeDefaultsSection(('Token Mixing Options',), (
-        ('TOKEN_MIXING_HIDDEN_DIM', 1222, (1222,)),
-        ('TOKEN_MIXING_NUM_LAYERS', 1223, (1223,)),
-    )),
     RuntimeDefaultsSection(('Token Mixer Source Memory Options',), (
-        ('TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE', 1227, (1227,)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD', 1228, (1228,)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG', 1229, (1229,)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE', 1222, (1222,)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD', 1223, (1223,)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG', 1224, (1224,)),
     )),
     RuntimeDefaultsSection(('Recurrent Layer Options', 'Recurrent Halting Options'), (
-        ('RECURRENT_MIN_STEPS', 1234, (1234,)),
-        ('RECURRENT_PONDER_COST_WEIGHT', 1235, (1235,)),
+        ('RECURRENT_MIN_STEPS', 1229, (1229,)),
+        ('RECURRENT_PONDER_COST_WEIGHT', 1230, (1230,)),
     )),
     RuntimeDefaultsSection(('Mlp Mixer Options', 'Channel Mixer Stack Options'), (
         ('SOFT_MOE_FLAG', 420, (420, 0)),
@@ -949,11 +945,11 @@ CONFIGURATION_METADATA_SECTIONS: tuple[RuntimeDefaultsSection, ...] = (
         ('TOKEN_MIXER_SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION', 392, (392, 21)),
     )),
     RuntimeDefaultsSection(('Token Mixer Source Memory Options',), (
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION', 1229, (1229, 22)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_BIAS_FLAG', 1229, (1229, 23)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 1229, (1229, 24)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 1229, (1229, 25)),
-        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 1229, (1229, 26)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION', 1224, (1224, 22)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_BIAS_FLAG', 1224, (1224, 23)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_STACK_NUM_LAYERS', 1224, (1224, 24)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_STACK_HIDDEN_DIM', 1224, (1224, 25)),
+        ('TOKEN_MIXER_SOURCE_MEMORY_MODEL_RECURRENT_MAX_STEPS', 1224, (1224, 26)),
     )),
     RuntimeDefaultsSection(('Main Grouping',), (
         ('GROUPING_MODEL_OPTION', 1178, (1178, 27)),
