@@ -67,3 +67,23 @@ def test_invalid_chunk_size_fails_before_model_construction(chunk_size):
     )
     with pytest.raises(ValueError, match="chunk_size"):
         config.build()
+
+
+def test_chunked_memory_validation_uses_its_registered_owner(monkeypatch):
+    memory_config = AttentionSourceMemoryConfig(
+        grouping_config=SumGroupingConfig(chunk_size=5)
+    )
+    memory_owner = memory_config.registry_owner()
+    validated_configs = []
+
+    class RegisteredMemoryValidator(memory_owner.VALIDATOR):
+        @classmethod
+        def validate_context_config(cls, config):
+            validated_configs.append(config)
+            super().validate_context_config(config)
+
+    monkeypatch.setattr(memory_owner, "VALIDATOR", RegisteredMemoryValidator)
+    mixer_validator = MixerAttentionConfig().registry_owner().VALIDATOR
+    mixer_validator.validate_memory_config(memory_config)
+    assert len(validated_configs) == 1
+    assert validated_configs[0] is memory_config

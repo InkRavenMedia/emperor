@@ -7,7 +7,8 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-from emperor.attention._memory.config import AttentionSourceMemoryConfig
+from emperor.attention._variants.mixer.memory import MixerSourceMemory
+from emperor.attention._variants.mixer.reshaping import MixerReshaper
 from emperor.attention._variants.mixer.validation import (
     MixerAttentionValidator,
 )
@@ -46,39 +47,21 @@ class MixerAttention(Module):
         ) = self.cfg.mixing_model_config
 
         self.VALIDATOR.validate(self)
+        self.reshaper = MixerReshaper(self.cfg)
         memory_config = self.cfg.source_memory_config
-        self.chunked_source_memory = isinstance(
-            memory_config, AttentionSourceMemoryConfig
+        self.memory_sequence_length = (
+            memory_config.source_memory_length(self.sequence_length)
+            if memory_config is not None
+            else 0
         )
-        self.memory_sequence_length = 0
-        if memory_config is not None:
-            chunk_size = (
-                memory_config.grouping_config.chunk_size
-                if self.chunked_source_memory
-                else 1
-            )
-            self.memory_sequence_length = (
-                self.sequence_length + chunk_size - 1
-            ) // chunk_size
         self.mixing_sequence_length = self.sequence_length + self.memory_sequence_length
         exact_mixing_config = self.__exact_mixing_model_config(self.mixing_model_config)
         self.mixing_model = exact_mixing_config.build()
         self.uses_soft_moe = getattr(self.mixing_model, "uses_soft_moe", False)
-        self.source_memory = (
-            self._build_from_config(
-                self.cfg.source_memory_config,
-                **(
-                    {"embedding_dim": self.embedding_dim}
-                    if self.chunked_source_memory
-                    else {
-                        "input_dim": self.embedding_dim,
-                        "output_dim": self.embedding_dim,
-                    }
-                ),
-            )
-            if self.cfg.source_memory_config is not None
-            else None
+        self.memory_handler = MixerSourceMemory(
+            self.cfg, self.reshaper, self.memory_sequence_length
         )
+        self.source_memory = self.memory_handler.build_source_memory()
         self.token_model = (
             self._build_from_config(
                 self.cfg.token_model_config,
@@ -118,10 +101,9 @@ class MixerAttention(Module):
             self, q, k, v, k_padding_mask, attention_mask, static_k, static_v
         )
 
-        sequence_axis = 1 if self.batch_first_flag else 0
-        input_sequence_length = q.size(sequence_axis)
+        input_sequence_length = q.size(self.reshaper.sequence_axis)
         token_vectors, excluded, preparation_loss = self.__prepare_mixing_input(
-            q, k_padding_mask, sequence_axis
+            q, k_padding_mask
         )
         leading_shape = token_vectors.shape[:-1]
         if self.uses_soft_moe:
@@ -144,8 +126,9 @@ class MixerAttention(Module):
             *leading_shape,
             self.mixing_sequence_length,
         )
-        mixed = mixed_vectors.movedim(-1, sequence_axis)
-        mixed = mixed.narrow(sequence_axis, 0, input_sequence_length)
+        mixed = self.reshaper.restore_output_layout(
+            mixed_vectors, input_sequence_length
+        )
         if excluded is not None:
             mixed = mixed.masked_fill(excluded.unsqueeze(-1), 0)
         loss = mixing_state.loss
@@ -154,7 +137,7 @@ class MixerAttention(Module):
         return mixed, None, loss
 
     def __prepare_mixing_input(
-        self, q: Tensor, k_padding_mask: Tensor | None, sequence_axis: int
+        self, q: Tensor, k_padding_mask: Tensor | None
     ) -> tuple[Tensor, Tensor | None, Tensor | None]:
         excluded = None
         if k_padding_mask is not None:
@@ -163,49 +146,16 @@ class MixerAttention(Module):
                 if k_padding_mask.dtype == torch.bool
                 else k_padding_mask.isneginf()
             )
-            if not self.batch_first_flag:
-                excluded = excluded.transpose(0, 1)
+            excluded = self.reshaper.from_batch_first(excluded)
             q = q.masked_fill(excluded.unsqueeze(-1), 0)
         projected, preparation_loss = self.__project_tokens(q, excluded)
-        token_vectors = self.__token_vectors(projected, sequence_axis)
-        if self.source_memory is not None:
-            if self.chunked_source_memory:
-                source = q.transpose(0, 1) if self.batch_first_flag else q
-                active_rows = (
-                    None
-                    if excluded is None
-                    else ~(
-                        excluded.transpose(0, 1) if self.batch_first_flag else excluded
-                    ).reshape(-1, 1)
-                )
-                memory, _, memory_loss = self.source_memory(
-                    source, skip_mask=active_rows
-                )
-                memory = memory.reshape(-1, source.size(1), self.embedding_dim)
-                if self.batch_first_flag:
-                    memory = memory.transpose(0, 1)
-                memory_vectors = memory.movedim(sequence_axis, -1)
-                memory_vectors = F.pad(
-                    memory_vectors,
-                    (0, self.memory_sequence_length - memory_vectors.size(-1)),
-                )
-                token_vectors = torch.cat((token_vectors, memory_vectors), dim=-1)
-                if memory_loss is not None:
-                    preparation_loss = (
-                        memory_loss
-                        if preparation_loss is None
-                        else preparation_loss + memory_loss
-                    )
-                return token_vectors, excluded, preparation_loss
-            # Per-token rows keep optional adaptation independent across tokens.
-            token_rows = q.reshape(-1, self.embedding_dim)
-            memory = self.source_memory(token_rows)
-            self.VALIDATOR.validate_output(memory, token_rows)
-            memory = memory.reshape_as(q)
-            if excluded is not None:
-                memory = memory.masked_fill(excluded.unsqueeze(-1), 0)
-            token_vectors = torch.cat(
-                (token_vectors, self.__token_vectors(memory, sequence_axis)), dim=-1
+        token_vectors = self.reshaper.prepare_token_axis_vectors(projected)
+        token_vectors, memory_loss = self.memory_handler.append_sources(
+            self.source_memory, token_vectors, q, excluded
+        )
+        if memory_loss is not None:
+            preparation_loss = (
+                memory_loss if preparation_loss is None else preparation_loss + memory_loss
             )
         return token_vectors, excluded, preparation_loss
 
@@ -241,8 +191,3 @@ class MixerAttention(Module):
         return (
             projected if self.batch_first_flag else projected.transpose(0, 1)
         ), state.loss
-
-    def __token_vectors(self, tokens: Tensor, sequence_axis: int) -> Tensor:
-        vectors = tokens.movedim(sequence_axis, -1)
-        unused_positions = self.sequence_length - vectors.size(-1)
-        return F.pad(vectors, (0, unused_positions)) if unused_positions else vectors
