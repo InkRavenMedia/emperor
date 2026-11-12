@@ -7,7 +7,6 @@ from torch import Tensor
 
 from emperor._validation import (
     ValidatorBase,
-    _adaptive_grouping_configs,
     _configuration_visits,
     _first_adaptive_grouping_path,
 )
@@ -55,34 +54,18 @@ class MixerAttentionValidator(ValidatorBase):
             )
 
     @staticmethod
-    def validate_memory_config(memory_config) -> None:
+    def validate_memory_config(memory_config: object) -> None:
         from emperor.attention._memory.config import AttentionSourceMemoryConfig
-        from emperor.attention._memory.validation import AttentionSourceMemoryValidator
         from emperor.memory import DynamicMemoryConfig
 
-        if isinstance(memory_config, AttentionSourceMemoryConfig):
-            AttentionSourceMemoryValidator.validate_context_config(memory_config)
-            chunk_size = memory_config.grouping_config.chunk_size
-            if type(chunk_size) is not int or chunk_size <= 0:
-                raise ValueError(
-                    "Mixer source memory chunk_size must be a positive integer."
-                )
-            return
-        if not isinstance(memory_config, DynamicMemoryConfig):
+        if not isinstance(
+            memory_config, (DynamicMemoryConfig, AttentionSourceMemoryConfig)
+        ):
             raise TypeError(
                 "source_memory_config must be a DynamicMemoryConfig or AttentionSourceMemoryConfig."
             )
-        if any(_adaptive_grouping_configs(memory_config, root="source_memory_config")):
-            raise ValueError(
-                "Attention source memory requires independent token rows; grouping is unsupported."
-            )
-
-    @staticmethod
-    def validate_output(memory: Tensor, source: Tensor) -> None:
-        if not isinstance(memory, Tensor) or memory.shape != source.shape:
-            raise ValueError(
-                "Attention source memory must preserve the token rows and feature width."
-            )
+        memory_validator = memory_config.registry_owner().VALIDATOR
+        memory_validator.validate_source_memory_config(memory_config)
 
     @classmethod
     def _validate_mixing_model_config(cls, mixing_model_config: object) -> None:

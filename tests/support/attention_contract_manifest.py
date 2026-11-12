@@ -525,6 +525,22 @@ ATTENTION_CONTRACT_MANIFEST = {
             "tests.unit.test_attention_model_mixer",
         ),
     ),
+    "emperor.attention._variants.mixer.memory": module_contract(
+        ("source-memory construction", "source extension"),
+        "tests.unit.test_attention_mixer_source_memory",
+        MixerSourceMemory=class_contract(
+            ("memory-owned generation", "fixed-capacity source extension"),
+            "tests.unit.test_attention_mixer_source_memory",
+        ),
+    ),
+    "emperor.attention._variants.mixer.reshaping": module_contract(
+        ("token and memory layouts", "fixed capacity", "output restoration"),
+        "tests.unit.test_attention_model_mixer",
+        MixerReshaper=class_contract(
+            ("layout conversion", "sequence padding", "retained output positions"),
+            "tests.unit.test_attention_model_mixer",
+        ),
+    ),
     "emperor.attention._variants.mixer.validation": module_contract(
         ("mixer-attention configuration and runtime validation",),
         "tests.unit.test_attention_model_mixer",
