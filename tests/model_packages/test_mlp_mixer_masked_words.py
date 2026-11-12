@@ -22,6 +22,7 @@ from emperor.augmentations.adaptive_parameters import (
 )
 from emperor.datasets.text.bert_pretraining import (
     BertMaskedWordBatch,
+    WikiText2BertHierarchical,
     WikiText103BertHierarchical,
 )
 from emperor.experiments import ExperimentTask
@@ -322,7 +323,16 @@ def test_unsupported_combinations_fail_closed(overrides, message):
         configuration(**overrides)
 
 
-def test_normal_cli_resolves_mixer_without_executing_an_experiment():
+@pytest.mark.parametrize(
+    "dataset_selector,dataset_type",
+    [
+        ("wiki-text103-bert-hierarchical", WikiText103BertHierarchical),
+        ("wiki-text2-bert-hierarchical", WikiText2BertHierarchical),
+    ],
+)
+def test_normal_cli_resolves_mixer_without_executing_an_experiment(
+    dataset_selector, dataset_type
+):
     package = model_package("mlp_mixer/expert_linear_adaptive")
     arguments = [
         "--experiment-task",
@@ -330,7 +340,7 @@ def test_normal_cli_resolves_mixer_without_executing_an_experiment():
         "--preset",
         "baseline",
         "--datasets",
-        "wiki-text103-bert-hierarchical",
+        dataset_selector,
         "--config",
     ]
     for key, value in mixer_overrides().items():
@@ -346,8 +356,10 @@ def test_normal_cli_resolves_mixer_without_executing_an_experiment():
     )
     assert selection.config_overrides["trainer_max_time"] is None
     assert selection.config_overrides["num_epochs"] == 100
+    (dataset,) = package.resolve_datasets(parsed.datasets, selection.experiment_task)
+    assert dataset is dataset_type
     config = package.build_configuration(
-        dataset=WikiText103BertHierarchical, config_overrides=selection.config_overrides
+        dataset=dataset, config_overrides=selection.config_overrides
     )
     assert isinstance(attention_config(config), MixerAttentionConfig)
     assert asdict(config) == asdict(configuration())

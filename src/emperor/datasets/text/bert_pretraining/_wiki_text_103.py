@@ -1,4 +1,4 @@
-"""Disk-backed WikiText-103 sentence pairs for hierarchical masked-word BERT."""
+"""Disk-backed WikiText sentence pairs for hierarchical masked-word BERT."""
 
 import hashlib
 import random
@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 
 import torch
-from datasets import Dataset, Features, Sequence, Value
+from datasets import Dataset, Features, Sequence, Value, load_dataset
 from tokenizers import Regex
 from tokenizers.pre_tokenizers import Split
 
@@ -68,7 +68,7 @@ class _SentencePairs(torch.utils.data.Dataset):
         return first["words"], second["words"], label
 
 
-class WikiText103BertHierarchical(DataModule):
+class _WikiTextBertHierarchical(DataModule):
     """Raw word strings and masked byte targets, without a fixed word vocabulary."""
 
     flattened_input_dim = OUTPUT_SYMBOLS
@@ -108,7 +108,7 @@ class WikiText103BertHierarchical(DataModule):
         self.seed = seed
 
     def _dataset(self, split):
-        return load_raw_wikitext103(split, self.root)
+        raise NotImplementedError
 
     def prepare_data(self):
         for split in ("train", "validation", "test"):
@@ -170,3 +170,22 @@ class WikiText103BertHierarchical(DataModule):
 
     def _get_test_dataloader(self):
         return self._loader(self.test)
+
+
+class WikiText103BertHierarchical(_WikiTextBertHierarchical):
+    """Raw WikiText-103 for hierarchical masked-word pretraining."""
+
+    def _dataset(self, split):
+        return load_raw_wikitext103(split, self.root)
+
+
+class WikiText2BertHierarchical(_WikiTextBertHierarchical):
+    """Raw WikiText-2 for hierarchical masked-word pretraining."""
+
+    def _dataset(self, split):
+        return load_dataset(
+            "Salesforce/wikitext",
+            "wikitext-2-raw-v1",
+            split=split,
+            cache_dir=str(self.root),
+        )

@@ -2,13 +2,14 @@ import io
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import torch
 from datasets import Dataset
 
 from emperor.datasets.text.bert_pretraining import (
     BertMaskedWordBatch,
+    WikiText2BertHierarchical,
     WikiText103BertHierarchical,
 )
 from emperor.embedding.hierarchical.decoder import (
@@ -87,6 +88,36 @@ class BertMaskedWordTests(unittest.TestCase):
             self.assertIsInstance(
                 next(iter(data.val_dataloader())), BertMaskedWordBatch
             )
+
+    def test_wikitext2_loads_raw_splits_as_masked_word_batches(self):
+        source = Dataset.from_dict({"text": ["A cat jumps. It sleeps."]})
+        with (
+            tempfile.TemporaryDirectory() as root,
+            patch(
+                "emperor.datasets.text.bert_pretraining._wiki_text_103.load_dataset",
+                return_value=source,
+            ) as load_dataset,
+        ):
+            data = WikiText2BertHierarchical(root=root, num_workers=0)
+            data.setup()
+            self.assertEqual(
+                load_dataset.call_args_list,
+                [
+                    call(
+                        "Salesforce/wikitext",
+                        "wikitext-2-raw-v1",
+                        split=split,
+                        cache_dir=root,
+                    )
+                    for split in ("train", "validation", "test")
+                ],
+            )
+            for loader in (
+                data.train_dataloader(),
+                data.val_dataloader(),
+                data.test_dataloader(),
+            ):
+                self.assertIsInstance(next(iter(loader)), BertMaskedWordBatch)
 
     def test_byte_loss_backpropagates_and_checkpoint_restores_shared_weights(self):
         (config,) = ExperimentPresets().get_config(
