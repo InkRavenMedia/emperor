@@ -6,7 +6,7 @@ from emperor.experts._config import MixtureOfExpertsModelConfig
 from emperor.experts._options import RoutingInitializationMode
 from emperor.experts._state import MixtureOfExpertsLayerState
 from emperor.experts._validation.model import MixtureOfExpertsModelValidator
-from emperor.layers import LayerState
+from emperor.layers import Layer, LayerState
 from emperor.nn import Module
 
 if TYPE_CHECKING:
@@ -48,6 +48,12 @@ class MixtureOfExpertsModel(Module):
 
     def __build_expert_stack(self) -> Module:
         return self.stack_config.build()
+
+    def forward_sequence(self, hidden: Tensor) -> LayerState:
+        if self.uses_soft_moe:
+            sequence_state = Layer.run_model_from_hidden(self, hidden)
+            return LayerState(hidden=sequence_state.hidden, loss=sequence_state.loss)
+        return Layer.run_model_on_sequence_rows(self, hidden)
 
     def forward(self, state: LayerState) -> MixtureOfExpertsLayerState:
         existing_routing_probabilities = getattr(state, "probabilities", None)
