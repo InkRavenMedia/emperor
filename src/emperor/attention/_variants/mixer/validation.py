@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 class MixerAttentionValidator(ValidatorBase):
     OPTIONAL_FIELDS = {
         "source_memory_config",
-        "variable_sequence_length_flag",
         "token_model_config",
     }
 
@@ -193,14 +192,13 @@ class MixerAttentionValidator(ValidatorBase):
                 "must be non-empty."
             )
 
-        sequence_axis = 1 if model.batch_first_flag else 0
+        sequence_axis = 0
+        if model.batch_first_flag:
+            sequence_axis = 1
         actual_sequence_length = tensor.size(sequence_axis)
-        if actual_sequence_length != model.sequence_length and not (
-            model.variable_sequence_length_flag
-            and actual_sequence_length < model.sequence_length
-        ):
+        if actual_sequence_length > model.sequence_length:
             raise RuntimeError(
-                "MixerAttention sequence length must be exactly "
+                "MixerAttention sequence length must be at most "
                 f"{model.sequence_length}, got {actual_sequence_length}."
             )
         actual_embedding_dim = tensor.size(-1)
@@ -212,20 +210,18 @@ class MixerAttentionValidator(ValidatorBase):
 
     @staticmethod
     def _validate_padding_mask(
-        model, tensor: Tensor, padding_mask: Tensor | None
+        model: "MixerAttention", tensor: Tensor, padding_mask: Tensor | None
     ) -> None:
         if padding_mask is None:
             return
-        if not model.variable_sequence_length_flag:
-            raise RuntimeError(
-                "MixerAttention does not support key padding masks unless variable_sequence_length_flag is enabled."
-            )
-        expected_shape = (
-            tensor.shape[:2]
-            if model.batch_first_flag
-            else (tensor.size(1), tensor.size(0))
-        )
-        if not isinstance(padding_mask, Tensor) or padding_mask.shape != expected_shape:
+        if model.batch_first_flag:
+            expected_mask_shape = tensor.shape[:2]
+        else:
+            expected_mask_shape = (tensor.size(1), tensor.size(0))
+        if (
+            not isinstance(padding_mask, Tensor)
+            or padding_mask.shape != expected_mask_shape
+        ):
             raise ValueError(
                 "MixerAttention key padding mask must match batch and sequence dimensions."
             )

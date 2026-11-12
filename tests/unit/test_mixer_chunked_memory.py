@@ -17,7 +17,6 @@ def test_chunked_memory_uses_valid_token_sums_and_fixed_capacity():
         sequence_length=8,
         batch_first_flag=True,
         mixing_model_config=_linear_stack(8, 8),
-        variable_sequence_length_flag=True,
         source_memory_config=AttentionSourceMemoryConfig(
             grouping_config=SumGroupingConfig(chunk_size=5),
             model_config=LinearLayerConfig(bias_flag=True),

@@ -144,7 +144,6 @@ def with_expansion_attention_capacity(
             self_attention = layer.attention_config
         if isinstance(self_attention, MixerAttentionConfig):
             self_attention.sequence_length = capacity
-            self_attention.variable_sequence_length_flag = True
         else:
             self_attention.target_sequence_length = capacity
             self_attention.source_sequence_length = capacity

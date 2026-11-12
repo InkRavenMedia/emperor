@@ -210,7 +210,7 @@ class TestTinyRecursiveModelRecurrentSharedBlocks(unittest.TestCase):
         self.assertIsNotNone(inputs.grad)
         self.assertTrue(torch.isfinite(result.hidden).all())
 
-    def test_mixer_transition_rejects_padding_masks_explicitly(self) -> None:
+    def test_mixer_transition_accepts_padding_masks(self) -> None:
         model_dim = 4
         sequence_length = 3
         mixer = MixerAttentionConfig(
@@ -226,11 +226,15 @@ class TestTinyRecursiveModelRecurrentSharedBlocks(unittest.TestCase):
             key_padding_mask=torch.zeros(2, sequence_length, dtype=torch.bool),
         )
 
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "MixerAttention does not support key padding masks",
-        ):
-            runtime(state)
+        inputs = state.hidden
+        padding_mask = state.key_padding_mask.clone()
+        result = runtime(state)
+        self.assertEqual(result.hidden.shape, (2, sequence_length, model_dim))
+        torch.testing.assert_close(result.key_padding_mask, padding_mask)
+        self.assertTrue(torch.isfinite(result.hidden).all())
+        result.hidden.square().sum().backward()
+        self.assertIsNotNone(inputs.grad)
+        self.assertTrue(torch.isfinite(inputs.grad).all())
 
 
 class TestHierarchicalReasoningModelRecurrentSharedBlocks(unittest.TestCase):
@@ -283,7 +287,7 @@ class TestHierarchicalReasoningModelRecurrentSharedBlocks(unittest.TestCase):
         self.assertIsNotNone(inputs.grad)
         self.assertTrue(torch.isfinite(result.hidden).all())
 
-    def test_mixer_transitions_reject_padding_masks_explicitly(self) -> None:
+    def test_mixer_transitions_accept_padding_masks(self) -> None:
         model_dim = 4
         sequence_length = 3
         mixer = MixerAttentionConfig(
@@ -301,11 +305,15 @@ class TestHierarchicalReasoningModelRecurrentSharedBlocks(unittest.TestCase):
             key_padding_mask=torch.zeros(2, sequence_length, dtype=torch.bool),
         )
 
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "MixerAttention does not support key padding masks",
-        ):
-            runtime(state)
+        inputs = state.hidden
+        padding_mask = state.key_padding_mask.clone()
+        result = runtime(state)
+        self.assertEqual(result.hidden.shape, (2, sequence_length, model_dim))
+        torch.testing.assert_close(result.key_padding_mask, padding_mask)
+        self.assertTrue(torch.isfinite(result.hidden).all())
+        result.hidden.square().sum().backward()
+        self.assertIsNotNone(inputs.grad)
+        self.assertTrue(torch.isfinite(inputs.grad).all())
 
 
 class TestRecurrentCompositionConsumers(unittest.TestCase):

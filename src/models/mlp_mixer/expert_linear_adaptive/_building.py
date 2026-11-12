@@ -1169,7 +1169,6 @@ def _mixer_config(runtime: RuntimeOptions, tokens: int) -> MixerAttentionConfig:
         embedding_dim=runtime.hidden_dim,
         sequence_length=tokens,
         batch_first_flag=True,
-        variable_sequence_length_flag=True,
         token_model_config=build_soft_moe_stack(
             _token_mixing_model(runtime, runtime.hidden_dim),
             runtime.token_mixer_soft_moe_config,

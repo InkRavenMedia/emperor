@@ -525,6 +525,14 @@ ATTENTION_CONTRACT_MANIFEST = {
             "tests.unit.test_attention_model_mixer",
         ),
     ),
+    "emperor.attention._variants.mixer.masking": module_contract(
+        ("input exclusion", "output exclusion"),
+        "tests.unit.test_attention_mixer_source_memory",
+        MixerMask=class_contract(
+            ("Boolean and additive masks", "excluded output tokens"),
+            "tests.unit.test_attention_mixer_source_memory",
+        ),
+    ),
     "emperor.attention._variants.mixer.memory": module_contract(
         ("source-memory construction", "source extension"),
         "tests.unit.test_attention_mixer_source_memory",
@@ -545,7 +553,12 @@ ATTENTION_CONTRACT_MANIFEST = {
         ("mixer-attention configuration and runtime validation",),
         "tests.unit.test_attention_model_mixer",
         MixerAttentionValidator=class_contract(
-            ("fixed shape", "unsupported inputs", "nested output contract"),
+            (
+                "sequence capacity",
+                "padding masks",
+                "unsupported inputs",
+                "nested output contract",
+            ),
             "tests.unit.test_attention_model_mixer",
         ),
     ),
