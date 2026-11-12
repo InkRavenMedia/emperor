@@ -239,6 +239,24 @@ class LayerResidualDelegateValidator(ValidatorBase):
 
 class LayerValidator(ValidatorBase):
     @staticmethod
+    def validate_sequence_input(hidden: Tensor) -> None:
+        if not isinstance(hidden, torch.Tensor) or hidden.ndim != 3:
+            raise ValueError("Sequence input must have shape [batch, rows, features].")
+        if any(dimension <= 0 for dimension in hidden.shape):
+            raise ValueError("Sequence input dimensions must be non-empty.")
+
+    @staticmethod
+    def validate_sequence_row_output(state: object, input_rows: Tensor) -> None:
+        from emperor.layers._state import LayerState
+
+        if not isinstance(state, LayerState):
+            raise RuntimeError("Sequence model must return a LayerState.")
+        if not isinstance(state.hidden, torch.Tensor):
+            raise RuntimeError("Sequence model LayerState.hidden must be a Tensor.")
+        if state.hidden.ndim != 2 or state.hidden.size(0) != input_rows.size(0):
+            raise RuntimeError("Sequence model must preserve the input row count.")
+
+    @staticmethod
     def validate_input_mask(hidden: Tensor, input_mask: Tensor) -> None:
         if not isinstance(input_mask, torch.Tensor) or input_mask.dtype != torch.bool:
             raise TypeError("Layer input_mask must be a Boolean Tensor.")

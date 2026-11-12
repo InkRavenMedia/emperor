@@ -70,6 +70,19 @@ class Layer(LayerModuleBase):
             input_state = _MaskedInputLayerState(hidden=hidden, input_mask=input_mask)
         return model(input_state)
 
+    @staticmethod
+    def run_model_on_sequence_rows(model: Module, hidden: Tensor) -> LayerState:
+        Layer.VALIDATOR.validate_sequence_input(hidden)
+        sequence_shape = hidden.shape[:-1]
+        input_rows = hidden.reshape(-1, hidden.size(-1))
+        row_state = Layer.run_model_from_hidden(model, input_rows)
+        Layer.VALIDATOR.validate_sequence_row_output(row_state, input_rows)
+        output_shape = (*sequence_shape, row_state.hidden.size(-1))
+        return LayerState(
+            hidden=row_state.hidden.reshape(output_shape),
+            loss=row_state.loss,
+        )
+
     def forward(
         self,
         state: LayerState,
