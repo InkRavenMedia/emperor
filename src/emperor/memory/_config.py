@@ -6,6 +6,7 @@ from emperor.config import ConfigBase, optional_field
 
 if TYPE_CHECKING:
     from emperor.layers import LayerStackConfig
+    from emperor.memory._interface import SourceMemoryInterface
 
 
 class MemoryPositionOptions(Enum):
@@ -34,6 +35,14 @@ class DynamicMemoryConfig(ConfigBase):
     model_config: "LayerStackConfig | None" = optional_field(
         "Configuration for the internal generator network."
     )
+
+    def source_memory_length(self, sequence_length: int) -> int:
+        """Generate one memory token for each source token."""
+        return sequence_length
+
+    def build_source_memory(self, embedding_dim: int) -> "SourceMemoryInterface":
+        overrides = type(self)(input_dim=embedding_dim, output_dim=embedding_dim)
+        return self.build(overrides=overrides)
 
     def _registry_owner(self) -> type:
         raise ValueError(

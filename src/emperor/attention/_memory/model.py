@@ -63,6 +63,32 @@ class AttentionSourceMemory(Module):
         valid_memory_rows = valid_memory_mask.transpose(0, 1).reshape(-1, 1)
         return memory_rows, valid_memory_rows, auxiliary_loss
 
+    def generate_source_memory(
+        self,
+        source: Tensor,
+        *,
+        excluded_token_mask: Tensor | None = None,
+        batch_first_flag: bool = True,
+    ) -> tuple[Tensor, Tensor | None]:
+        """Generate chunk memory and return tokens in the source sequence layout."""
+        memory_inputs = source
+        valid_row_mask = None
+        if excluded_token_mask is not None:
+            memory_inputs = source.masked_fill(excluded_token_mask.unsqueeze(-1), 0)
+            sequence_first_mask = excluded_token_mask
+            if batch_first_flag:
+                sequence_first_mask = excluded_token_mask.transpose(0, 1)
+            valid_row_mask = ~sequence_first_mask.reshape(-1, 1)
+        if batch_first_flag:
+            memory_inputs = memory_inputs.transpose(0, 1)
+        memory_rows, _, auxiliary_loss = self(memory_inputs, skip_mask=valid_row_mask)
+        memory_tokens = memory_rows.reshape(
+            -1, memory_inputs.size(1), self.embedding_dim
+        )
+        if batch_first_flag:
+            memory_tokens = memory_tokens.transpose(0, 1)
+        return memory_tokens, auxiliary_loss
+
     def __generate_context_memory(
         self, context_embeddings: Tensor, valid_memory_mask: Tensor
     ) -> tuple[Tensor, Tensor | None]:

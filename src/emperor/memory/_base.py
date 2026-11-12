@@ -34,6 +34,26 @@ class DynamicMemoryAbstract(Module):
         self.model_config = self.cfg.model_config
         self.test_time_training_flag = self.test_time_training_learning_rate is not None
 
+    def generate_source_memory(
+        self,
+        source: Tensor,
+        *,
+        excluded_token_mask: Tensor | None = None,
+        batch_first_flag: bool = True,
+    ) -> tuple[Tensor, Tensor | None]:
+        memory_inputs = source
+        if excluded_token_mask is not None:
+            memory_inputs = source.masked_fill(excluded_token_mask.unsqueeze(-1), 0)
+        token_rows = memory_inputs.reshape(-1, source.size(-1))
+        memory_rows = self(token_rows)
+        self.VALIDATOR.validate_source_memory_output(memory_rows, token_rows)
+        memory_tokens = memory_rows.reshape_as(source)
+        if excluded_token_mask is not None:
+            memory_tokens = memory_tokens.masked_fill(
+                excluded_token_mask.unsqueeze(-1), 0
+            )
+        return memory_tokens, None
+
     def _init_model(self, overrides: LayerStackConfig) -> "Layer | LayerStack":
         return self._build_generator_model(overrides)
 

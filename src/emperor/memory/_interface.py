@@ -16,3 +16,13 @@ class MemoryInterface(Protocol):
     memory_position_option: MemoryPositionOptions
 
     def __call__(self, hidden: Tensor) -> Tensor: ...  # pragma: no cover
+
+
+class SourceMemoryInterface(Protocol):
+    def generate_source_memory(
+        self,
+        source: Tensor,
+        *,
+        excluded_token_mask: Tensor | None = None,
+        batch_first_flag: bool = True,
+    ) -> tuple[Tensor, Tensor | None]: ...  # pragma: no cover
