@@ -18,7 +18,8 @@ class MixerAttentionConfig(ConfigBase):
         "Exact feature width of each token passed to the mixer."
     )
     sequence_length: int | None = optional_field(
-        "Token-mixing width; variable-length inputs may use fewer positions when enabled."
+        "Maximum runtime token count and fixed token-mixing width. "
+        "Shorter inputs are padded internally and outputs retain the input length."
     )
     batch_first_flag: bool | None = optional_field(
         "Explicit input layout. True selects [batch, sequence, embedding]; "
@@ -37,9 +38,6 @@ class MixerAttentionConfig(ConfigBase):
     token_model_config: "MixtureOfExpertsModelConfig | None" = optional_field(
         "Optional sequence-aware Soft MoE projection before token-axis mixing. "
         "Adaptive grouping retains token/slot rows, never embedding-channel rows."
-    )
-    variable_sequence_length_flag: bool | None = optional_field(
-        "Accept masked sequences up to sequence_length, padding only inside token mixing. None preserves exact-length mixing."
     )
 
     def _registry_owner(self) -> type:

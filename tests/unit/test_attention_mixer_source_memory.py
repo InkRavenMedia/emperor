@@ -44,7 +44,6 @@ def test_memory_uses_masked_original_tokens_with_soft_mixing(
     torch.manual_seed(241)
     config = replace(
         _mixer_config(sequence_length=8, batch_first_flag=batch_first),
-        variable_sequence_length_flag=True,
         mixing_model_config=soft_moe_model_config(dimension=8, layers=1),
         source_memory_config=(
             AttentionSourceMemoryConfig(

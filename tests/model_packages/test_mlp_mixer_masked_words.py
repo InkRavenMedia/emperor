@@ -131,7 +131,6 @@ def test_reference_configuration_has_separate_mixer_backbone_and_matching_text_b
     assert encoder.max_steps == 10
     assert encoder.initial_iterations == 2
     assert encoder.forward_calls_before_iteration_increment == 20_000
-    assert mixer.variable_sequence_length_flag is True
     assert mixer.source_memory_config.grouping_config.chunk_size == 5
     assert asdict(target.experiment_config.embedding_config) == asdict(
         baseline.experiment_config.boundary_config.embedding_options.hierarchical_embedding_config
