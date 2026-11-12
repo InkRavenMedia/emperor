@@ -56,12 +56,23 @@ class AttentionSourceMemoryValidator:
             raise ValueError(
                 "Attention memory supports chunk_size only, not group_count."
             )
+        if (
+            type(grouping_config.chunk_size) is not int
+            or grouping_config.chunk_size <= 0
+        ):
+            raise ValueError(
+                "Attention source memory chunk_size must be a positive integer."
+            )
         if grouping_config.scope not in (
             None,
             AdaptiveParameterGroupingScopeOptions.SEQUENCE,
         ):
             raise ValueError("Attention memory grouping must use SEQUENCE scope.")
         cls.validate_context_model(getattr(grouping_config, "model_config", None))
+
+    @classmethod
+    def validate_source_memory_config(cls, config: object) -> None:
+        cls.validate_context_config(config)
 
     @staticmethod
     def validate_context_model(config: "ConfigBase | None") -> None:

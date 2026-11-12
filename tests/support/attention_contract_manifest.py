@@ -199,6 +199,7 @@ ATTENTION_CONTRACT_MANIFEST = {
                 "context grouping",
                 "inferred embedding width",
                 "registry construction and overrides",
+                "source-memory capacity and construction interface",
             ),
             "tests.unit.test_grouped_attention_memory",
         ),
@@ -278,6 +279,7 @@ ATTENTION_CONTRACT_MANIFEST = {
             "memory model construction",
             "independent chunk generation",
             "projected K/V extension",
+            "sequence source-memory interface",
         ),
         "tests.unit.test_attention_source_memory",
         AttentionSourceMemory=class_contract(
