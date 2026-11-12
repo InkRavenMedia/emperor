@@ -844,39 +844,49 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
         )
         self.assertTrue(torch.equal(torch.random.get_rng_state(), rng_state))
 
-    def test_mixer_attention_rejects_grouping_before_building_mixing_model(self):
+    def test_mixer_attention_groups_channel_rows_within_each_sample(self):
+        tokens = torch.arange(1, 25, dtype=torch.float32).reshape(2, 3, 4)
+        pair_sums = tokens[..., ::2] + tokens[..., 1::2]
+        expected = pair_sums.repeat_interleave(2, dim=-1)
+
+        for batch_first in (True, False):
+            with self.subTest(batch_first=batch_first):
+                mixer = MixerAttentionConfig(
+                    embedding_dim=4,
+                    sequence_length=3,
+                    batch_first_flag=batch_first,
+                    mixing_model_config=grouped_stack(
+                        3,
+                        AdaptiveParameterGroupingScopeOptions.SEQUENCE,
+                    ),
+                ).build()
+                adaptive_layer = mixer.processor.mixing_model[0].model
+                generator = adaptive_layer.adaptive_behaviour.bias_model.model[0].model
+                with torch.no_grad():
+                    adaptive_layer.weight_params.zero_()
+                    adaptive_layer.bias_params.zero_()
+                    generator.weight_params.copy_(torch.eye(3))
+                    generator.bias_params.zero_()
+
+                inputs = tokens if batch_first else tokens.transpose(0, 1)
+                mixed, _, _ = mixer(inputs, inputs, inputs)
+                expected_output = expected if batch_first else expected.transpose(0, 1)
+                torch.testing.assert_close(mixed, expected_output)
+
+    def test_mixer_attention_validates_grouping_against_channel_rows(self):
         config = MixerAttentionConfig(
             embedding_dim=2,
             sequence_length=4,
             batch_first_flag=True,
             mixing_model_config=grouped_stack(
                 4,
-                AdaptiveParameterGroupingScopeOptions.ROWS,
+                AdaptiveParameterGroupingScopeOptions.SEQUENCE,
             ),
-        )
-
-        with self.assertRaisesRegex(ValueError, "not supported by MixerAttention"):
-            config.build()
-
-    def test_outer_validation_finds_grouping_in_extensible_config_containers(self):
-        grouped_augmentation = grouped_linear_config(
-            4,
-            AdaptiveParameterGroupingScopeOptions.ROWS,
-        ).adaptive_augmentation_config
-        mixing_model_config = linear_stack(4, 4)
-        mixing_model_config.layer_config.layer_model_config = _NestedConfig(
-            nested={"custom": [grouped_augmentation]},
-        )
-        config = MixerAttentionConfig(
-            embedding_dim=2,
-            sequence_length=4,
-            batch_first_flag=True,
-            mixing_model_config=mixing_model_config,
         )
 
         with self.assertRaisesRegex(
             ValueError,
-            r"nested\['custom'\]\[0\]",
+            "sequence_length=4 does not match actual sequence length 2",
         ):
             config.build()
 

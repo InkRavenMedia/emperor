@@ -30,7 +30,9 @@ class MixerAttentionConfig(ConfigBase):
         "RecurrentCompositionConfig | None"
     ) = optional_field(
         "Model configuration built with sequence_length as both its input and "
-        "output dimensions, extended by the configured source-memory capacity."
+        "output dimensions, extended by the configured source-memory capacity. "
+        "Direct sequence grouping uses embedding_dim channel rows per sample "
+        "in batch-first order."
     )
     source_memory_config: "DynamicMemoryConfig | AttentionSourceMemoryConfig | None" = optional_field(
         "Optional per-token dynamic memory or chunk-compressed attention source memory. "
