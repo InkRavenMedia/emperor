@@ -58,7 +58,9 @@ def test_mlp_mixer_source_memory_is_optional_and_differentiable(name):
     disabled = package.build_model(configuration(name))
     mixers = [m for m in disabled.modules() if isinstance(m, MixerAttention)]
     assert mixers and all(m.source_memory is None for m in mixers)
-    assert all(m.mixing_sequence_length == m.sequence_length == 4 for m in mixers)
+    assert all(
+        m.processor.mixing_sequence_length == m.sequence_length == 4 for m in mixers
+    )
     enabled_config = configuration(
         name,
         token_mixer_source_memory_flag=True,
@@ -72,7 +74,9 @@ def test_mlp_mixer_source_memory_is_optional_and_differentiable(name):
     for mixer in mixers:
         assert isinstance(mixer.source_memory.cfg, AttentionDynamicMemoryConfig)
         assert mixer.source_memory.num_memory_slots == 3
-        assert mixer.mixing_sequence_length == 8 and mixer.sequence_length == 4
+        assert (
+            mixer.processor.mixing_sequence_length == 8 and mixer.sequence_length == 4
+        )
         handles.append(
             mixer.register_forward_hook(lambda _m, _a, result: calls.append(result[0]))
         )

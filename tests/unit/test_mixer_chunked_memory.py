@@ -23,7 +23,7 @@ def test_chunked_memory_uses_valid_token_sums_and_fixed_capacity():
         ),
     )
     model = config.build().eval()
-    assert model.mixing_sequence_length == 10
+    assert model.processor.mixing_sequence_length == 10
     tokens = torch.arange(56, dtype=torch.float32).reshape(2, 7, 4) / 10
     padding = torch.tensor([[False] * 6 + [True], [False] * 3 + [True] * 4])
     observed = []

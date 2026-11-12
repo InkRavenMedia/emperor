@@ -187,11 +187,11 @@ def test_reference_masked_word_path_gradients_optimizer_and_checkpoint():
         for m in model.modules()
         if isinstance(getattr(m, "cfg", None), MixerAttentionConfig)
     )
-    assert mixer.mixing_sequence_length == 120
-    assert mixer.mixing_model.uses_soft_moe
+    assert mixer.processor.mixing_sequence_length == 120
+    assert mixer.processor.mixing_model.uses_soft_moe
     adaptive = [
         m
-        for m in mixer.mixing_model.modules()
+        for m in mixer.processor.mixing_model.modules()
         if isinstance(getattr(m, "cfg", None), AdaptiveLinearLayerConfig)
     ]
     assert adaptive
@@ -210,7 +210,7 @@ def test_reference_masked_word_path_gradients_optimizer_and_checkpoint():
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     for module in (
-        mixer.mixing_model,
+        mixer.processor.mixing_model,
         mixer.source_memory,
         model.word_decoder,
     ):
@@ -265,7 +265,7 @@ def test_soft_token_mixing_padding_and_samples_remain_independent():
     tokens = torch.randn(2, 100, 32, requires_grad=True)
     padding = torch.arange(100).unsqueeze(0) >= torch.tensor([[7], [11]])
     observed = []
-    handle = model.mixing_model.register_forward_pre_hook(
+    handle = model.processor.mixing_model.register_forward_pre_hook(
         lambda module, args: observed.append(args[0].hidden.detach().clone())
     )
     output, _, _ = model(tokens, tokens, tokens, padding)
@@ -297,8 +297,8 @@ def test_soft_token_mixing_padding_and_samples_remain_independent():
 def test_text_uses_the_existing_token_mixer_with_optional_soft_moe(soft_moe):
     config = attention_config(configuration(token_mixer_soft_moe_flag=soft_moe))
     model = config.build().eval()
-    assert set(dict(model.named_children())) == {"mixing_model", "source_memory"}
-    assert model.mixing_model.uses_soft_moe is soft_moe
+    assert set(dict(model.named_children())) == {"processor", "source_memory"}
+    assert model.processor.mixing_model.uses_soft_moe is soft_moe
     tokens = torch.randn(2, 7, 32)
     output, weights, loss = model(tokens, tokens, tokens)
     assert output.shape == tokens.shape and weights is None

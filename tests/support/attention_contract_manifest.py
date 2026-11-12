@@ -518,10 +518,10 @@ ATTENTION_CONTRACT_MANIFEST = {
         ),
     ),
     "emperor.attention._variants.mixer.layer": module_contract(
-        ("token-axis model mixing", "attention-shaped forward contract"),
+        ("mixer component orchestration", "attention-shaped forward contract"),
         "tests.unit.test_attention_model_mixer",
         MixerAttention=class_contract(
-            ("self processing", "layout restoration", "auxiliary loss"),
+            ("self processing", "model registration", "auxiliary loss"),
             "tests.unit.test_attention_model_mixer",
         ),
     ),
@@ -539,6 +539,23 @@ ATTENTION_CONTRACT_MANIFEST = {
         MixerSourceMemory=class_contract(
             ("memory-owned generation", "fixed-capacity source extension"),
             "tests.unit.test_attention_mixer_source_memory",
+        ),
+    ),
+    "emperor.attention._variants.mixer.processing": module_contract(
+        (
+            "mixing configuration and capacity",
+            "model ownership",
+            "token-axis model execution",
+        ),
+        "tests.unit.test_attention_model_mixer",
+        MixerProcessor=class_contract(
+            (
+                "model construction",
+                "recursive dimension overrides",
+                "sequence-shaped token vectors",
+                "model-owned input layout",
+            ),
+            "tests.unit.test_attention_model_mixer",
         ),
     ),
     "emperor.attention._variants.mixer.reshaping": module_contract(

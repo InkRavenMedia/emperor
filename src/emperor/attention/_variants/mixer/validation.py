@@ -31,7 +31,7 @@ class MixerAttentionValidator(ValidatorBase):
         )
         if model.cfg.source_memory_config is not None:
             cls.validate_memory_config(model.cfg.source_memory_config)
-        cls._validate_mixing_model_config(model.mixing_model_config)
+        cls._validate_mixing_model_config(model.cfg.mixing_model_config)
 
     @staticmethod
     def validate_memory_config(memory_config: object) -> None:
@@ -221,30 +221,30 @@ class MixerAttentionValidator(ValidatorBase):
     @staticmethod
     def validate_mixing_state(
         state: object,
-        flattened_input: "Tensor",
+        mixing_input: "Tensor",
     ) -> None:
         if not isinstance(state, LayerState):
             raise RuntimeError(
                 "MixerAttention mixing model must return a LayerState, got "
                 f"{type(state).__name__}."
             )
-        hidden = state.hidden
-        if not torch.is_tensor(hidden):
+        mixed_vectors = state.hidden
+        if not torch.is_tensor(mixed_vectors):
             raise RuntimeError(
                 "MixerAttention mixing model LayerState.hidden must be a Tensor."
             )
-        if hidden.shape != flattened_input.shape:
+        if mixed_vectors.shape != mixing_input.shape:
             raise RuntimeError(
-                "MixerAttention mixing model must preserve flattened shape "
-                f"{tuple(flattened_input.shape)}, got {tuple(hidden.shape)}."
+                "MixerAttention mixing model must preserve input shape "
+                f"{tuple(mixing_input.shape)}, got {tuple(mixed_vectors.shape)}."
             )
-        if hidden.dtype != flattened_input.dtype:
+        if mixed_vectors.dtype != mixing_input.dtype:
             raise RuntimeError(
                 "MixerAttention mixing model must preserve dtype "
-                f"{flattened_input.dtype}, got {hidden.dtype}."
+                f"{mixing_input.dtype}, got {mixed_vectors.dtype}."
             )
-        if hidden.device != flattened_input.device:
+        if mixed_vectors.device != mixing_input.device:
             raise RuntimeError(
                 "MixerAttention mixing model must preserve device "
-                f"{flattened_input.device}, got {hidden.device}."
+                f"{mixing_input.device}, got {mixed_vectors.device}."
             )
