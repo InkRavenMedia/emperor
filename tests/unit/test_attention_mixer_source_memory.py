@@ -31,6 +31,90 @@ def memory_config(variant=GatedResidualDynamicMemoryConfig, **options):
 
 
 @pytest.mark.parametrize("batch_first", [True, False])
+@pytest.mark.parametrize("chunked_memory", [True, False])
+@pytest.mark.parametrize("additive_mask", [True, False])
+def test_memory_uses_masked_original_tokens_with_soft_mixing(
+    batch_first, chunked_memory, additive_mask
+):
+    from emperor.attention import AttentionSourceMemoryConfig
+    from emperor.augmentations.adaptive_parameters import SumGroupingConfig
+    from emperor.linears import LinearLayerConfig
+    from tests.unit.test_expert_soft_moe import model_config as soft_moe_model_config
+
+    torch.manual_seed(241)
+    config = replace(
+        _mixer_config(sequence_length=8, batch_first_flag=batch_first),
+        variable_sequence_length_flag=True,
+        mixing_model_config=soft_moe_model_config(dimension=8, layers=1),
+        source_memory_config=(
+            AttentionSourceMemoryConfig(
+                grouping_config=SumGroupingConfig(chunk_size=5),
+                model_config=LinearLayerConfig(bias_flag=True),
+            )
+            if chunked_memory
+            else memory_config()
+        ),
+    )
+    model = config.build().double().eval()
+    batch_tokens = torch.randn(2, 7, 4, dtype=torch.float64)
+    excluded_tokens = torch.tensor([[False] * 6 + [True], [True] * 7])
+    poisoned_tokens = batch_tokens.masked_fill(
+        excluded_tokens.unsqueeze(-1), float("nan")
+    )
+    inputs = poisoned_tokens if batch_first else poisoned_tokens.transpose(0, 1)
+    inputs.requires_grad_()
+    padding_mask = excluded_tokens
+    if additive_mask:
+        padding_mask = torch.zeros_like(
+            excluded_tokens, dtype=torch.float64
+        ).masked_fill(excluded_tokens, -torch.inf)
+
+    memory_inputs = []
+    mixing_inputs = []
+    memory_hook = model.source_memory.register_forward_pre_hook(
+        lambda _model, args: memory_inputs.append(args[0].detach().clone())
+    )
+    mixing_hook = model.mixing_model.register_forward_pre_hook(
+        lambda _model, args: mixing_inputs.append(args[0].hidden.detach().clone())
+    )
+    output, attention_weights, auxiliary_loss = model(
+        inputs, inputs, inputs, padding_mask
+    )
+    memory_hook.remove()
+    mixing_hook.remove()
+
+    masked_tokens = batch_tokens.masked_fill(excluded_tokens.unsqueeze(-1), 0)
+    if chunked_memory:
+        expected_memory_input = masked_tokens.transpose(0, 1)
+    else:
+        layout_tokens = masked_tokens if batch_first else masked_tokens.transpose(0, 1)
+        expected_memory_input = layout_tokens.reshape(-1, 4)
+    assert len(memory_inputs) == len(mixing_inputs) == 1
+    torch.testing.assert_close(memory_inputs[0], expected_memory_input)
+    torch.testing.assert_close(mixing_inputs[0][..., :7], masked_tokens.transpose(1, 2))
+    assert output.shape == inputs.shape and attention_weights is None
+    output_exclusions = (
+        excluded_tokens if batch_first else excluded_tokens.transpose(0, 1)
+    )
+    assert torch.isfinite(output).all()
+    assert (output[output_exclusions] == 0).all()
+
+    objective = output.square().sum()
+    if auxiliary_loss is not None:
+        objective = objective + auxiliary_loss
+    objective.backward()
+    assert torch.isfinite(inputs.grad).all()
+    assert (inputs.grad[output_exclusions] == 0).all()
+    for component in (model.mixing_model, model.source_memory):
+        assert any(
+            parameter.grad is not None
+            and torch.isfinite(parameter.grad).all()
+            and parameter.grad.abs().sum() > 0
+            for parameter in component.parameters()
+        )
+
+
+@pytest.mark.parametrize("batch_first", [True, False])
 @pytest.mark.parametrize("with_memory", [True, False])
 def test_soft_mixer_routes_channel_vectors_then_restores_token_layout(
     batch_first, with_memory
