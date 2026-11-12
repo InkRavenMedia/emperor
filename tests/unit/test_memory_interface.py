@@ -31,6 +31,7 @@ EXPECTED_EXPORTS = (
     "MemoryInterface",
     "MemoryMonitorCallback",
     "MemoryPositionOptions",
+    "SourceMemoryInterface",
     "WeightedDynamicMemoryConfig",
 )
 
@@ -42,6 +43,7 @@ EXPECTED_OWNERS = {
     "MemoryInterface": "emperor.memory._interface",
     "MemoryMonitorCallback": "emperor.memory._monitoring",
     "MemoryPositionOptions": "emperor.memory._config",
+    "SourceMemoryInterface": "emperor.memory._interface",
     "WeightedDynamicMemoryConfig": "emperor.memory._config",
 }
 

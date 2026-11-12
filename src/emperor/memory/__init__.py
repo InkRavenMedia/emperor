@@ -8,7 +8,7 @@ from emperor.memory._config import (
     MemoryPositionOptions,
     WeightedDynamicMemoryConfig,
 )
-from emperor.memory._interface import MemoryInterface
+from emperor.memory._interface import MemoryInterface, SourceMemoryInterface
 from emperor.memory._monitoring import MemoryMonitorCallback
 
 __all__ = (
@@ -19,5 +19,6 @@ __all__ = (
     "MemoryInterface",
     "MemoryMonitorCallback",
     "MemoryPositionOptions",
+    "SourceMemoryInterface",
     "WeightedDynamicMemoryConfig",
 )

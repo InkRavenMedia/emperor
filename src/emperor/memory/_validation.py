@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from emperor._validation import ValidatorBase
+from emperor._validation import ValidatorBase, _adaptive_grouping_configs
 from emperor.layers import LayerStackConfig
 from emperor.memory._config import MemoryPositionOptions
 
@@ -75,6 +75,20 @@ class DynamicMemoryValidator(AdaptiveGeneratorValidatorBase, ValidatorBase):
         "test_time_training_learning_rate",
         "test_time_training_num_inner_steps",
     }
+
+    @staticmethod
+    def validate_source_memory_config(config: object) -> None:
+        if any(_adaptive_grouping_configs(config, root="source_memory_config")):
+            raise ValueError(
+                "Attention source memory requires independent token rows; grouping is unsupported."
+            )
+
+    @staticmethod
+    def validate_source_memory_output(memory: "Tensor", source: "Tensor") -> None:
+        if not isinstance(memory, torch.Tensor) or memory.shape != source.shape:
+            raise ValueError(
+                "Attention source memory must preserve the token rows and feature width."
+            )
 
     @classmethod
     def validate(cls, model: "DynamicMemoryAbstract") -> None:

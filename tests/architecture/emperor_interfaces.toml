@@ -231,8 +231,8 @@ owners = ["emperor.linears._layer", "emperor.linears._layer", "emperor.linears._
 [[interfaces]]
 module = "emperor.memory"
 kind = "runtime"
-exports = ["AttentionDynamicMemoryConfig", "DynamicMemoryConfig", "ElementWiseWeightedDynamicMemoryConfig", "GatedResidualDynamicMemoryConfig", "MemoryInterface", "MemoryMonitorCallback", "MemoryPositionOptions", "WeightedDynamicMemoryConfig"]
-owners = ["emperor.memory._config", "emperor.memory._config", "emperor.memory._config", "emperor.memory._config", "emperor.memory._interface", "emperor.memory._monitoring", "emperor.memory._config", "emperor.memory._config"]
+exports = ["AttentionDynamicMemoryConfig", "DynamicMemoryConfig", "ElementWiseWeightedDynamicMemoryConfig", "GatedResidualDynamicMemoryConfig", "MemoryInterface", "MemoryMonitorCallback", "MemoryPositionOptions", "SourceMemoryInterface", "WeightedDynamicMemoryConfig"]
+owners = ["emperor.memory._config", "emperor.memory._config", "emperor.memory._config", "emperor.memory._config", "emperor.memory._interface", "emperor.memory._monitoring", "emperor.memory._config", "emperor.memory._interface", "emperor.memory._config"]
 
 [[interfaces]]
 module = "emperor.monitoring"
