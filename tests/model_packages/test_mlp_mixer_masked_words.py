@@ -20,7 +20,6 @@ import torch.nn.functional as F
 from emperor.attention import MixerAttentionConfig
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
-    SumGroupingConfig,
 )
 from emperor.datasets.text.bert_pretraining import (
     BertMaskedWordBatch,
@@ -63,6 +62,14 @@ def mixer_overrides():
         "ff_stack_hidden_dim": "channel_mixer_stack_hidden_dim",
     }.items():
         values[new] = values.pop(old)
+    for key in (
+        "chunk_size",
+        "grouping_input_order",
+        "grouping_method",
+        "grouping_scope",
+        "grouping_sequence_length",
+    ):
+        values["channel_mixer_" + key] = values.pop(key)
     # Spell out the reference's defaults where the image Mixer's defaults differ.
     values.update(
         layer_norm_position="AFTER",
@@ -150,13 +157,9 @@ def test_reference_configuration_has_separate_mixer_backbone_and_matching_text_b
     assert asdict(mixer.source_memory_config) == asdict(
         reference_attention.source_memory_config
     )
-    target_experts = (
-        mixer.token_model_config.stack_config.layer_config.layer_model_config
-    )
-    # Both are inferred from their containing stacks at construction in Mixer.
-    assert target_experts.input_dim is target_experts.output_dim is None
-    target_experts.input_dim = target_experts.output_dim = target.hidden_dim
-    assert asdict(target_experts) == asdict(reference_attention.experts_config)
+    assert isinstance(mixer.mixing_model_config, MixtureOfExpertsModelConfig)
+    assert mixer.mixing_model_config.input_dim == target.sequence_length
+    assert mixer.mixing_model_config.output_dim == target.sequence_length
     encoder.halting_config.input_dim = reference_encoder.halting_config.input_dim
     target_ff = encoder.block_config.layer_config.layer_model_config.feed_forward_config.stack_config
     reference_ff = reference_encoder.block_config.layer_config.layer_model_config.feed_forward_config.stack_config
@@ -185,20 +188,15 @@ def test_reference_masked_word_path_gradients_optimizer_and_checkpoint():
         if isinstance(getattr(m, "cfg", None), MixerAttentionConfig)
     )
     assert mixer.mixing_sequence_length == 120
-    assert mixer.token_model.uses_soft_moe
+    assert mixer.mixing_model.uses_soft_moe
     adaptive = [
         m
-        for m in mixer.token_model.modules()
+        for m in mixer.mixing_model.modules()
         if isinstance(getattr(m, "cfg", None), AdaptiveLinearLayerConfig)
     ]
     assert adaptive
     for layer in adaptive:
-        grouping = layer.adaptive_behaviour.grouping_config
-        assert isinstance(grouping, SumGroupingConfig)
-        assert grouping.chunk_size == 5
-        assert grouping.scope.name == "SEQUENCE"
-        assert grouping.input_order.name == "BATCH_FIRST"
-        assert grouping.sequence_length in (10, 100)
+        assert layer.adaptive_behaviour.grouping_config is None
     data = batch()
     output, sentence_logits, auxiliary = model(data)
     loss = F.cross_entropy(output.logits, data.byte_labels)
@@ -213,7 +211,6 @@ def test_reference_masked_word_path_gradients_optimizer_and_checkpoint():
     loss.backward()
     for module in (
         mixer.mixing_model,
-        mixer.token_model,
         mixer.source_memory,
         model.word_decoder,
     ):
@@ -260,7 +257,7 @@ def test_reference_masked_word_path_gradients_optimizer_and_checkpoint():
     torch.testing.assert_close(actual[2], expected[2])
 
 
-def test_grouped_projection_padding_and_samples_remain_independent():
+def test_soft_token_mixing_padding_and_samples_remain_independent():
     config = copy.deepcopy(
         attention_config(configuration(stack_dropout_probability=0.0))
     )
@@ -268,23 +265,15 @@ def test_grouped_projection_padding_and_samples_remain_independent():
     tokens = torch.randn(2, 100, 32, requires_grad=True)
     padding = torch.arange(100).unsqueeze(0) >= torch.tensor([[7], [11]])
     observed = []
-    adaptive = [
-        m
-        for m in model.token_model.modules()
-        if isinstance(getattr(m, "cfg", None), AdaptiveLinearLayerConfig)
-    ]
-    handles = [
-        m.adaptive_behaviour.weight_model.register_forward_pre_hook(
-            lambda module, args: observed.append((module.input_dim, args[1].shape))
-        )
-        for m in adaptive
-    ]
+    handle = model.mixing_model.register_forward_pre_hook(
+        lambda module, args: observed.append(args[0].hidden.detach().clone())
+    )
     output, _, _ = model(tokens, tokens, tokens, padding)
-    for handle in handles:
-        handle.remove()
-    assert observed
-    assert all(width == 32 and shape[-1] == 32 for width, shape in observed)
-    assert {shape[0] for _, shape in observed} == {4, 40}
+    handle.remove()
+    assert len(observed) == 1
+    assert observed[0].shape == (2, 32, 120)
+    masked_tokens = tokens.masked_fill(padding.unsqueeze(-1), 0)
+    torch.testing.assert_close(observed[0][..., :100], masked_tokens.transpose(1, 2))
     poisoned = tokens.detach().masked_fill(padding.unsqueeze(-1), float("nan"))
     poisoned[1, :11] += 1000
     changed, _, _ = model(poisoned, poisoned, poisoned, padding)
@@ -304,12 +293,22 @@ def test_grouped_projection_padding_and_samples_remain_independent():
     assert (tokens.grad[padding] == 0).all()
 
 
+@pytest.mark.parametrize("soft_moe", [True, False])
+def test_text_uses_the_existing_token_mixer_with_optional_soft_moe(soft_moe):
+    config = attention_config(configuration(token_mixer_soft_moe_flag=soft_moe))
+    model = config.build().eval()
+    assert set(dict(model.named_children())) == {"mixing_model", "source_memory"}
+    assert model.mixing_model.uses_soft_moe is soft_moe
+    tokens = torch.randn(2, 7, 32)
+    output, weights, loss = model(tokens, tokens, tokens)
+    assert output.shape == tokens.shape and weights is None
+    assert torch.isfinite(output).all()
+    assert loss is None or torch.isfinite(loss).all()
+
+
 @pytest.mark.parametrize(
     "overrides,message",
     [
-        ({"token_mixer_soft_moe_flag": False}, "token_mixer_soft_moe"),
-        ({"token_mixing_hidden_dim": 0}, "positive integer"),
-        ({"token_mixing_num_layers": 0}, "positive integer"),
         ({"hierarchical_byte_embedding_dim": 3}, "divisible"),
         ({"token_mixer_source_memory_chunk_size": 0}, "positive integer"),
         (

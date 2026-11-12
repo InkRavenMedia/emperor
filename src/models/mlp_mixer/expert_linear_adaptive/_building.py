@@ -1143,50 +1143,20 @@ def _source_memory_config(runtime: RuntimeOptions):
 
 
 def _mixer_config(runtime: RuntimeOptions, tokens: int) -> MixerAttentionConfig:
-    if not runtime.hierarchical_masked_word_flag:
-        return MixerAttentionConfig(
-            embedding_dim=runtime.hidden_dim,
-            sequence_length=tokens,
-            batch_first_flag=True,
-            mixing_model_config=build_soft_moe_stack(
-                _token_mixing_model(runtime, tokens),
-                runtime.token_mixer_soft_moe_config,
-                tokens,
-            ),
-            source_memory_config=_source_memory_config(runtime),
-        )
-    if runtime.sequence_expansion_flag or runtime.sequence_expansion_config is not None:
-        raise ValueError("Masked-word Mixer does not support sequence expansion.")
-    if runtime.token_mixer_soft_moe_config is None:
-        raise ValueError(
-            "Masked-word Mixer token projections require token_mixer_soft_moe_flag."
-        )
-    for name in ("token_mixing_hidden_dim", "token_mixing_num_layers"):
-        value = getattr(runtime, name)
-        if type(value) is not int or value <= 0:
-            raise ValueError(f"{name} must be a positive integer")
+    if runtime.hierarchical_masked_word_flag:
+        if (
+            runtime.sequence_expansion_flag
+            or runtime.sequence_expansion_config is not None
+        ):
+            raise ValueError("Masked-word Mixer does not support sequence expansion.")
     return MixerAttentionConfig(
         embedding_dim=runtime.hidden_dim,
         sequence_length=tokens,
         batch_first_flag=True,
-        token_model_config=build_soft_moe_stack(
-            _token_mixing_model(runtime, runtime.hidden_dim),
+        mixing_model_config=build_soft_moe_stack(
+            _token_mixing_model(runtime, tokens),
             runtime.token_mixer_soft_moe_config,
-            runtime.hidden_dim,
-        ),
-        mixing_model_config=LayerStackConfig(
-            input_dim=tokens,
-            output_dim=tokens,
-            hidden_dim=runtime.token_mixing_hidden_dim,
-            num_layers=runtime.token_mixing_num_layers,
-            apply_output_postprocessing_flag=False,
-            last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-            layer_config=LayerConfig(
-                activation=runtime.stack_activation,
-                dropout_probability=runtime.stack_dropout_probability,
-                layer_norm_position=LayerNormPositionOptions.DISABLED,
-                layer_model_config=LinearLayerConfig(bias_flag=runtime.stack_bias_flag),
-            ),
+            tokens,
         ),
         source_memory_config=_source_memory_config(runtime),
     )

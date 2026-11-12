@@ -87,15 +87,15 @@ mise run experiment -- \
     --bias-option-flag true \
     --callback-checkpoint-flag true \
     --callback-early-stopping-patience 0 \
-    --chunk-size 5 \
+    --channel-mixer-chunk-size 5 \
     --data-num-workers 4 \
     --diagonal-option-flag false \
     --expert-bias-flag true \
     --generator-depth 5 \
-    --grouping-input-order BATCH_FIRST \
-    --grouping-method SumGroupingConfig \
-    --grouping-scope SEQUENCE \
-    --grouping-sequence-length 100 \
+    --channel-mixer-grouping-input-order BATCH_FIRST \
+    --channel-mixer-grouping-method SumGroupingConfig \
+    --channel-mixer-grouping-scope SEQUENCE \
+    --channel-mixer-grouping-sequence-length 100 \
     --hidden-dim 32 \
     --hierarchical-byte-embedding-dim 32 \
     --hierarchical-byte-encoder-num-layers 1 \

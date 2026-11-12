@@ -114,8 +114,8 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             "HIERARCHICAL_BYTE_ENCODER_NUM_LAYERS": "int",
             "TOKEN_MIXER_SOFT_MOE_FLAG": "bool",
             "SOFT_MOE_FLAG": "bool",
-            "TOKEN_MIXING_HIDDEN_DIM": "int",
-            "TOKEN_MIXING_NUM_LAYERS": "int",
+            "TOKEN_MIXER_STACK_HIDDEN_DIM": "int",
+            "TOKEN_MIXER_NUM_LAYERS": "int",
             "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": "int",
             "TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION": "enum",
             "TOKEN_MIXER_SOURCE_MEMORY_MODEL_BIAS_FLAG": "bool",
@@ -128,7 +128,10 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                 self.assertEqual(fields[key].flag, "--" + key.lower().replace("_", "-"))
         sections = {
             "HIERARCHICAL_MASKED_WORD_FLAG": ["Hierarchical Masked-Word Options"],
-            "TOKEN_MIXING_HIDDEN_DIM": ["Token Mixing Options"],
+            "TOKEN_MIXER_STACK_HIDDEN_DIM": [
+                "Mlp Mixer Options",
+                "Token Mixer Stack Options",
+            ],
             "TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE": [
                 "Token Mixer Source Memory Options"
             ],
