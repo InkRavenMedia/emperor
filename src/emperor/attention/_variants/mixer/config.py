@@ -25,11 +25,12 @@ class MixerAttentionConfig(ConfigBase):
         "Explicit input layout. True selects [batch, sequence, embedding]; "
         "False selects [sequence, batch, embedding]."
     )
-    mixing_model_config: "LayerStackConfig | MixtureOfExpertsModelConfig | RecurrentCompositionConfig | None" = (  # noqa: E501
-        optional_field(
-            "Model configuration built with sequence_length as both its input and "
-            "output dimensions, extended by the configured source-memory capacity."
-        )
+    mixing_model_config: (
+        "LayerStackConfig | MixtureOfExpertsModelConfig | "
+        "RecurrentCompositionConfig | None"
+    ) = optional_field(
+        "Model configuration built with sequence_length as both its input and "
+        "output dimensions, extended by the configured source-memory capacity."
     )
     source_memory_config: "DynamicMemoryConfig | AttentionSourceMemoryConfig | None" = optional_field(
         "Optional per-token dynamic memory or chunk-compressed attention source memory. "
