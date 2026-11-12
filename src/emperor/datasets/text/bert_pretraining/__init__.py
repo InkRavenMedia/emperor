@@ -9,6 +9,7 @@ from emperor.datasets.text.bert_pretraining._tokenizer import (
     BERT_PRETRAINING_TARGET_VOCAB_SIZE,
 )
 from emperor.datasets.text.bert_pretraining._wiki_text_103 import (
+    WikiText2BertHierarchical,
     WikiText103BertHierarchical,
 )
 
@@ -18,4 +19,5 @@ __all__ = (
     "PennTreebankBertPretraining",
     "WikiText2BertPretraining",
     "WikiText103BertHierarchical",
+    "WikiText2BertHierarchical",
 )

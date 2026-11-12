@@ -15,6 +15,7 @@ from torch.utils.data import Dataset
 from emperor.datasets.image.classification import Cifar10, Cifar100, FashionMNIST, Mnist
 from emperor.datasets.text.bert_pretraining import (
     PennTreebankBertPretraining,
+    WikiText2BertHierarchical,
     WikiText2BertPretraining,
     WikiText103BertHierarchical,
 )
@@ -64,6 +65,7 @@ DATASET_TASKS = {
     PennTreebankBertPretraining: ExperimentTask.BERT_PRETRAINING,
     WikiText2BertPretraining: ExperimentTask.BERT_PRETRAINING,
     WikiText103BertHierarchical: ExperimentTask.BERT_PRETRAINING,
+    WikiText2BertHierarchical: ExperimentTask.BERT_PRETRAINING,
     PennTreebank: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText2: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText103: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
@@ -258,7 +260,7 @@ def offline_dataset_metadata(
             )
         return
 
-    if dataset_type is WikiText103BertHierarchical:
+    if dataset_type in (WikiText103BertHierarchical, WikiText2BertHierarchical):
         from datasets import Dataset as ArrowDataset
 
         sources = {
