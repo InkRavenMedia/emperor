@@ -3,8 +3,6 @@
 from copy import deepcopy
 from typing import TYPE_CHECKING
 
-import torch
-import torch.nn.functional as F
 from torch import Tensor
 
 from emperor.attention._variants.mixer.masking import MixerMask
@@ -61,15 +59,6 @@ class MixerAttention(Module):
             self.cfg, self.reshaper, self.memory_sequence_length
         )
         self.source_memory = self.memory_handler.build_source_memory()
-        self.token_model = (
-            self._build_from_config(
-                self.cfg.token_model_config,
-                input_dim=self.embedding_dim,
-                output_dim=self.embedding_dim,
-            )
-            if self.cfg.token_model_config is not None
-            else None
-        )
 
     def __exact_mixing_model_config(self, config):
         from emperor.experts import MixtureOfExpertsModelConfig
@@ -138,46 +127,8 @@ class MixerAttention(Module):
         self, q: Tensor, k_padding_mask: Tensor | None
     ) -> tuple[Tensor, Tensor | None, Tensor | None]:
         q, excluded = self.masks.prepare_inputs(q, k_padding_mask)
-        projected, preparation_loss = self.__project_tokens(q, excluded)
-        token_vectors = self.reshaper.prepare_token_axis_vectors(projected)
+        token_vectors = self.reshaper.prepare_token_axis_vectors(q)
         token_vectors, memory_loss = self.memory_handler.append_sources(
             self.source_memory, token_vectors, q, excluded
         )
-        if memory_loss is not None:
-            preparation_loss = (
-                memory_loss if preparation_loss is None else preparation_loss + memory_loss
-            )
-        return token_vectors, excluded, preparation_loss
-
-    def __project_tokens(
-        self, tokens: Tensor, excluded: Tensor | None
-    ) -> tuple[Tensor, Tensor | None]:
-        if self.token_model is None:
-            return tokens, None
-        from emperor.experts import MixtureOfExpertsLayerState
-
-        tokens = tokens if self.batch_first_flag else tokens.transpose(0, 1)
-        active = (
-            None
-            if excluded is None
-            else ~(
-                excluded if self.batch_first_flag else excluded.transpose(0, 1)
-            ).unsqueeze(-1)
-        )
-        input_length = tokens.size(1)
-        unused_positions = self.sequence_length - input_length
-        if unused_positions:
-            if active is None:
-                active = torch.ones(
-                    (*tokens.shape[:2], 1), dtype=torch.bool, device=tokens.device
-                )
-            tokens = F.pad(tokens, (0, 0, 0, unused_positions))
-            active = F.pad(active, (0, 0, 0, unused_positions), value=False)
-        state = self.token_model(
-            MixtureOfExpertsLayerState(hidden=tokens, skip_mask=active)
-        )
-        self.VALIDATOR.validate_mixing_state(state, tokens)
-        projected = state.hidden[:, :input_length]
-        return (
-            projected if self.batch_first_flag else projected.transpose(0, 1)
-        ), state.loss
+        return token_vectors, excluded, memory_loss

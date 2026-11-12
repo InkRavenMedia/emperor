@@ -1217,11 +1217,6 @@ HIERARCHICAL_BYTE_NUM_HEADS: int = 4
 HIERARCHICAL_MAX_TOKEN_BYTES: int = 64
 EMBEDDING_DROPOUT_PROBABILITY: float = 0.0
 
-# Token Mixing Options
-# Token-axis MLP after sequence-aware expert projection for text inputs.
-TOKEN_MIXING_HIDDEN_DIM: int = 32
-TOKEN_MIXING_NUM_LAYERS: int = 2
-
 # Token Mixer Source Memory Options
 # Optional chunk-compressed source memory (None retains per-token memory).
 TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: int | None = None

@@ -36,10 +36,6 @@ class MixerAttentionConfig(ConfigBase):
         "Optional per-token dynamic memory or chunk-compressed attention source memory. "
         "All positions are mixed, then memory output positions are discarded."
     )
-    token_model_config: "MixtureOfExpertsModelConfig | None" = optional_field(
-        "Optional sequence-aware Soft MoE projection before token-axis mixing. "
-        "Adaptive grouping retains token/slot rows, never embedding-channel rows."
-    )
 
     def _registry_owner(self) -> type:
         from emperor.attention._variants.mixer.layer import MixerAttention
