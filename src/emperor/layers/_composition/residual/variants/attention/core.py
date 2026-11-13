@@ -129,15 +129,11 @@ class AttentionResidual(ResidualConnectionAbstract):
         if self.query is not None:
             return self.query
 
-        from emperor.layers import LayerStack, LayerState
-
-        query_model_input = current.unsqueeze(0) if current.ndim == 1 else current
-        if isinstance(self.query_model, LayerStack):
-            query_input_state = LayerState(hidden=query_model_input)
-            query_output_state = self.query_model(query_input_state)
-            generated_query = query_output_state.hidden
-        else:
-            generated_query = self.query_model(query_model_input)
+        is_single_feature_vector = current.ndim == 1
+        query_model_input = current
+        if is_single_feature_vector:
+            query_model_input = current.unsqueeze(0)
+        generated_query = self.query_model.forward_hidden(query_model_input)
         self.VALIDATOR.validate_query_model_output(generated_query, query_model_input)
         return generated_query.reshape(current.shape)
 
