@@ -20,9 +20,6 @@ from emperor.layers import (
 from emperor.layers._composition.residual.base import (
     ResidualConnectionAbstract,
 )
-from emperor.layers._composition.residual.pairwise import (
-    WeightedPairwiseResidualAbstract,
-)
 from emperor.layers._composition.residual.variants.additive import AdditiveResidual
 from emperor.layers._composition.residual.variants.attention import AttentionResidual
 from emperor.layers._composition.residual.variants.weighted import WeightedResidual
@@ -102,7 +99,7 @@ class TestResidualConfigRegistry(unittest.TestCase):
 
 
 class TestResidualRuntimeHierarchy(unittest.TestCase):
-    def test_runtime_hierarchy_shares_the_residual_and_weighted_interfaces(self):
+    def test_runtime_variants_directly_inherit_the_residual_interface(self):
         additive = AdditiveResidualConfig().build()
         weighted = WeightedResidualConfig().build()
         blend = WeightedBlendResidualConfig().build()
@@ -112,8 +109,7 @@ class TestResidualRuntimeHierarchy(unittest.TestCase):
 
         for residual in (additive, weighted, blend, attention):
             self.assertIsInstance(residual, ResidualConnectionAbstract)
-        for residual in (weighted, blend):
-            self.assertIsInstance(residual, WeightedPairwiseResidualAbstract)
+            self.assertEqual(type(residual).__bases__, (ResidualConnectionAbstract,))
 
     def test_pairwise_variants_use_the_default_no_state_creation(self):
         initial_source = torch.ones(1, 2)

@@ -24,6 +24,8 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     ResidualConfig,
+    WeightedBlendResidualConfig,
+    WeightedResidualConfig,
 )
 from emperor.linears import LinearLayerConfig
 from emperor.memory import GatedResidualDynamicMemoryConfig, MemoryPositionOptions
@@ -89,6 +91,37 @@ class TestDepthMappingAugmentation(unittest.TestCase):
         cfg = self.preset(generator_depth=1)
         model = cfg.build()
         self.assertIsInstance(model, DepthMappingLayer)
+
+    def test_depth_mapping_coefficients_work_in_weighted_residuals(self):
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            with self.subTest(residual=config_type.__name__):
+                residual = config_type(
+                    residual_dim=2,
+                    model_config=DepthMappingLayerConfig(
+                        generator_depth=3, bias_flag=True
+                    ),
+                ).build()
+                current = torch.randn(4, 3, 2, requires_grad=True)
+                previous = torch.randn_like(current)
+                with torch.no_grad():
+                    raw_coefficient = residual.model(
+                        torch.cat((current, previous), dim=-1)
+                    )
+                    coefficient = torch.sigmoid(raw_coefficient)
+                    if config_type is WeightedResidualConfig:
+                        expected = previous + raw_coefficient.tanh() * current
+                    else:
+                        expected = (
+                            coefficient * current + (1.0 - coefficient) * previous
+                        )
+
+                actual = residual(current, previous)
+                torch.testing.assert_close(actual, expected)
+                actual.square().sum().backward()
+                for gradient in (current.grad, residual.model.weight_params.grad):
+                    self.assertIsNotNone(gradient)
+                    self.assertTrue(torch.isfinite(gradient).all())
+                    self.assertTrue(torch.any(gradient != 0))
 
     def test_build_with_overrides(self):
         cfg = self.preset(generator_depth=1)

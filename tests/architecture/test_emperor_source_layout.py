@@ -26,7 +26,14 @@ _LAYER_CONFIG_CONSTRUCTOR_OWNERS = {
         "HierarchicalReasoningModelRecurrent",
     ),
     ("_composition/residual/base.py", "ResidualConnectionAbstract"),
-    ("_composition/residual/pairwise.py", "WeightedPairwiseResidualAbstract"),
+    (
+        "_composition/residual/variants/weighted.py",
+        "WeightedResidual",
+    ),
+    (
+        "_composition/residual/variants/weighted_blend.py",
+        "WeightedBlendResidual",
+    ),
     ("_composition/residual/variants/attention/core.py", "AttentionResidual"),
     ("_layer/core.py", "Layer"),
     ("_layer/pipeline/halting.py", "LayerHaltingDelegate"),
