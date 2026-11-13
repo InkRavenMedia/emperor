@@ -33,15 +33,16 @@ class AttentionResidualState(ResidualState):
 
     @property
     def sources(self) -> tuple[Tensor, ...]:
-        partial_sources = () if self._partial_block is None else (self._partial_block,)
+        partial_sources = ()
+        if self._partial_block is not None:
+            partial_sources = (self._partial_block,)
         return (self.initial_source, *self._completed_blocks, *partial_sources)
 
     def append(self, raw_output: Tensor) -> None:
-        self._partial_block = (
-            raw_output
-            if self._partial_block is None
-            else self._partial_block + raw_output
-        )
+        updated_partial_block = raw_output
+        if self._partial_block is not None:
+            updated_partial_block = self._partial_block + raw_output
+        self._partial_block = updated_partial_block
         self._partial_count += 1
         if self._partial_count == self.block_size:
             self._completed_blocks.append(self._partial_block)

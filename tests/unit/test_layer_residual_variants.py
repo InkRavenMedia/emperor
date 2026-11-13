@@ -115,7 +115,7 @@ class TestResidualRuntimeHierarchy(unittest.TestCase):
         for residual in (weighted, blend):
             self.assertIsInstance(residual, WeightedPairwiseResidualAbstract)
 
-    def test_pairwise_variants_use_the_default_stateless_lifecycle(self):
+    def test_pairwise_variants_use_the_default_no_state_creation(self):
         initial_source = torch.ones(1, 2)
 
         for config in (
@@ -126,32 +126,36 @@ class TestResidualRuntimeHierarchy(unittest.TestCase):
             with self.subTest(config=type(config).__name__):
                 residual = config.build()
 
-                self.assertIsNone(residual.residual_state_lifecycle)
                 self.assertIsNone(residual.new_state(initial_source))
 
-    def test_attention_requires_a_state_lifecycle(self):
-        class MissingLifecycleResidual(AttentionResidual):
-            def __init__(self, cfg, overrides=None):
-                super().__init__(cfg, overrides)
-                self.residual_state_lifecycle = None
+    def test_attention_rejects_missing_state_from_its_creation_method(self):
+        class MissingStateResidual(AttentionResidual):
+            def new_state(self, initial_source):
+                return None
 
         @dataclass
-        class MissingLifecycleResidualConfig(AttentionResidualConfig):
+        class MissingStateResidualConfig(AttentionResidualConfig):
             def _registry_owner(self) -> type:
-                return MissingLifecycleResidual
+                return MissingStateResidual
+
+        delegate = LayerResidualDelegate(
+            LayerConfig(
+                output_dim=2,
+                residual_config=MissingStateResidualConfig(
+                    block_size=1, rms_norm_epsilon=1e-6
+                ),
+            )
+        )
+        current = torch.ones(1, 2)
+        layer_state = LayerState(hidden=current)
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "MissingLifecycleResidual requires forward-local residual state",
+            "AttentionResidual failed to create forward-local residual state",
         ):
-            LayerResidualDelegate(
-                LayerConfig(
-                    output_dim=2,
-                    residual_config=MissingLifecycleResidualConfig(
-                        block_size=1, rms_norm_epsilon=1e-6
-                    ),
-                )
-            )
+            delegate.apply_residual(layer_state, torch.zeros(1, 2))
+        self.assertIs(layer_state.hidden, current)
+        self.assertIsNone(layer_state.residual_state)
 
     def test_default_state_aware_application_preserves_pairwise_state(self):
         residual = AdditiveResidualConfig(residual_dim=2).build()

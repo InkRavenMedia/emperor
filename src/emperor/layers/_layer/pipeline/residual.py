@@ -37,13 +37,9 @@ class LayerResidualDelegate(Module):
             self.config,
             residual_dim=self.output_dim,
         )
-        connection = self.VALIDATOR.validate_built_residual_connection_type(
+        return self.VALIDATOR.validate_built_residual_connection_type(
             residual_connection
         )
-        if connection is None:
-            return None
-        self.VALIDATOR.validate_state_lifecycle(connection)
-        return connection
 
     def apply_residual(
         self,

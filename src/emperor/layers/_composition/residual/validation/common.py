@@ -59,10 +59,6 @@ class ResidualConnectionValidator(
         """Pairwise residuals impose no additional stack configuration checks."""
 
     @staticmethod
-    def validate_state_lifecycle(connection: ResidualConnectionAbstract) -> None:
-        """Pairwise residuals do not require a forward-local state lifecycle."""
-
-    @staticmethod
     def validate_stateless_execution(
         config: ResidualConfig,
         *,

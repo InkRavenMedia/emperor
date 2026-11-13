@@ -13,7 +13,6 @@ from emperor.layers._composition.residual.validation.common import (
 
 if TYPE_CHECKING:
     from emperor.layers._composition.residual.base import (
-        ResidualConnectionAbstract,
         ResidualState,
     )
     from emperor.layers._composition.residual.config import ResidualConfig
@@ -26,14 +25,6 @@ if TYPE_CHECKING:
 
 class AttentionResidualValidator(ResidualConnectionValidator):
     OPTIONAL_FIELDS = {"model_config"}
-
-    @staticmethod
-    def validate_state_lifecycle(connection: ResidualConnectionAbstract) -> None:
-        if connection.residual_state_lifecycle is None:
-            raise RuntimeError(
-                f"{type(connection).__name__} requires forward-local residual "
-                "state but does not provide a ResidualStateLifecycle."
-            )
 
     @staticmethod
     def validate_stateless_execution(
