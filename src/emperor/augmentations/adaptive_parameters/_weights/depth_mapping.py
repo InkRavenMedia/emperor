@@ -6,7 +6,7 @@ from torch import Tensor
 from emperor.augmentations.adaptive_parameters._weights.validation import (
     DepthMappingValidator,
 )
-from emperor.layers import Layer, LayerStackConfig
+from emperor.layers import LayerStackConfig
 from emperor.linears import LinearLayerConfig
 from emperor.nn import Module
 
@@ -39,6 +39,10 @@ class DepthMappingLayer(Module):
         self.generator_depth: int = self.cfg.generator_depth
 
         self.__init_parameters()
+
+    def forward_hidden(self, hidden: Tensor) -> Tensor:
+        """Run the depth mapping and return its output tensor."""
+        return self(hidden)
 
     def __init_parameters(self):
         weight_shape = (self.generator_depth, self.input_dim, self.output_dim)
@@ -96,6 +100,10 @@ class DepthMappingLayerStack(Module):
         self.model_config: LayerStackConfig = self.__build_depth_mapping_stack_config()
         self.model = self.model_config.build()
 
+    def forward_hidden(self, hidden: Tensor) -> Tensor:
+        """Run the depth mapping stack and return its output tensor."""
+        return self(hidden)
+
     def __build_depth_mapping_stack_config(self) -> LayerStackConfig:
         source = self.cfg.model_config
         self.__validate_source_stack_config(source)
@@ -135,5 +143,4 @@ class DepthMappingLayerStack(Module):
 
         X = X.unsqueeze(1)
         X = X.repeat(1, self.generator_depth, 1)
-        depth_mapping_state = Layer.run_model_from_hidden(self.model, X)
-        return depth_mapping_state.hidden
+        return self.model.forward_hidden(X)

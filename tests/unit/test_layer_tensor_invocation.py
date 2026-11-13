@@ -147,6 +147,132 @@ class PassthroughMemory(nn.Module):
 
 
 class LayerTensorInvocationTests(unittest.TestCase):
+    def test_forward_hidden_preserves_outputs_gradients_and_forward_hooks(self):
+        cases = (
+            (
+                "linear",
+                LinearLayerConfig(input_dim=2, output_dim=3, bias_flag=True).build(),
+                False,
+            ),
+            ("layer", plain_layer(), True),
+            (
+                "stack",
+                replace(
+                    linear_stack_config(input_dim=2, output_dim=3), num_layers=2
+                ).build(),
+                True,
+            ),
+        )
+        for name, model, uses_state in cases:
+            with self.subTest(model=name):
+                model = model.double()
+                inputs = torch.tensor(
+                    [[0.2, -0.3], [0.5, 0.7]],
+                    dtype=torch.float64,
+                    requires_grad=True,
+                )
+                reference_inputs = inputs.detach().clone().requires_grad_()
+                expected = (
+                    model(LayerState(hidden=reference_inputs)).hidden
+                    if uses_state
+                    else model(reference_inputs)
+                )
+                forward_outputs = []
+
+                def capture_output(_module, _args, output, outputs=forward_outputs):
+                    outputs.append(output)
+
+                hook = model.register_forward_hook(capture_output)
+                try:
+                    actual = model.forward_hidden(inputs)
+                finally:
+                    hook.remove()
+
+                self.assertEqual(len(forward_outputs), 1)
+                hooked_output = forward_outputs[0]
+                self.assertIs(
+                    actual, hooked_output.hidden if uses_state else hooked_output
+                )
+                torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+                parameters = tuple(model.parameters())
+                actual_gradients = torch.autograd.grad(
+                    actual.square().sum(), (inputs, *parameters)
+                )
+                expected_gradients = torch.autograd.grad(
+                    expected.square().sum(), (reference_inputs, *parameters)
+                )
+                for actual_gradient, expected_gradient in zip(
+                    actual_gradients, expected_gradients, strict=True
+                ):
+                    torch.testing.assert_close(
+                        actual_gradient, expected_gradient, rtol=0, atol=0
+                    )
+
+    def test_forward_hidden_creates_fresh_layer_state_for_each_call(self):
+        for model in (plain_layer(), linear_stack_config().build()):
+            with self.subTest(model=type(model).__name__):
+                inputs = torch.ones(2, 2)
+                received_states = []
+
+                def capture_state(_module, args, states=received_states):
+                    state = args[0]
+                    states.append(
+                        (
+                            state,
+                            state.hidden,
+                            state.loss,
+                            state.halting_state,
+                            state.residual_state,
+                        )
+                    )
+
+                hook = model.register_forward_pre_hook(capture_state)
+                try:
+                    model.forward_hidden(inputs)
+                    model.forward_hidden(inputs)
+                finally:
+                    hook.remove()
+
+                self.assertEqual(len(received_states), 2)
+                self.assertIsNot(received_states[0][0], received_states[1][0])
+                for state, hidden, *metadata in received_states:
+                    self.assertIs(type(state), LayerState)
+                    self.assertIs(hidden, inputs)
+                    self.assertEqual(metadata, [None, None, None])
+
+    def test_forward_hidden_supports_state_based_sequential_generators(self):
+        generator = nn.Sequential(plain_layer(), plain_layer()).double()
+        inputs = torch.randn(3, 2, dtype=torch.float64, requires_grad=True)
+        reference_inputs = inputs.detach().clone().requires_grad_()
+        expected = generator(LayerState(hidden=reference_inputs)).hidden
+        received_states = []
+        hook = generator.register_forward_pre_hook(
+            lambda _module, args: received_states.append(args[0])
+        )
+        try:
+            actual = Layer.forward_hidden(generator, inputs)
+            repeated = Layer.forward_hidden(generator, inputs)
+        finally:
+            hook.remove()
+
+        torch.testing.assert_close(actual, expected, rtol=0, atol=0)
+        torch.testing.assert_close(repeated, expected, rtol=0, atol=0)
+        self.assertEqual(len(received_states), 2)
+        self.assertIsNot(received_states[0], received_states[1])
+        parameters = tuple(generator.parameters())
+        actual_gradients = torch.autograd.grad(
+            actual.square().sum(), (inputs, *parameters)
+        )
+        expected_gradients = torch.autograd.grad(
+            expected.square().sum(), (reference_inputs, *parameters)
+        )
+        for actual_gradient, expected_gradient in zip(
+            actual_gradients, expected_gradients, strict=True
+        ):
+            torch.testing.assert_close(
+                actual_gradient, expected_gradient, rtol=0, atol=0
+            )
+
     def test_layer_invokes_ordinary_tensor_model_and_retains_state(self):
         layer = plain_layer()
         spy = OrdinaryTensorSpy()

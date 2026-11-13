@@ -17,5 +17,4 @@ class GeneratorDynamicBias(DynamicBiasAbstract):
         self.model = self._init_model(self.output_dim)
 
     def forward(self, _bias_params: Tensor, logits: Tensor) -> Tensor:
-        generated_bias_state = Layer.run_model_from_hidden(self.model, logits)
-        return generated_bias_state.hidden
+        return Layer.forward_hidden(self.model, logits)

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.layers import Layer, LayerStackConfig
+from emperor.layers import LayerStackConfig
 from emperor.patch._base import PatchBase
 
 if TYPE_CHECKING:
@@ -45,8 +45,7 @@ class PatchEmbeddingLinear(PatchBase):
         X = X.transpose(1, 2)
         batch_size, sequence_length, patch_dim = X.shape
         X = X.reshape(batch_size * sequence_length, patch_dim)
-        embedding_state = Layer.run_model_from_hidden(self.embedding_model, X)
-        X = embedding_state.hidden
+        X = self.embedding_model.forward_hidden(X)
         X = X.reshape(batch_size, sequence_length, self.embedding_dim)
         X = self._concatenate_class_token(X)
         X = self.dropout(X)

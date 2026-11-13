@@ -19,6 +19,5 @@ class AdditiveDynamicBias(DynamicBiasAbstract):
     def forward(self, bias_params: Tensor, logits: Tensor) -> Tensor:
         self.VALIDATOR.ensure_parameters_exist(bias_params)
         bias_params = self._maybe_apply_bias_decay(bias_params)
-        generated_bias_state = Layer.run_model_from_hidden(self.model, logits)
-        generated_bias_offset = generated_bias_state.hidden
+        generated_bias_offset = Layer.forward_hidden(self.model, logits)
         return bias_params + generated_bias_offset
