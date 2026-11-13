@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch import Tensor
 
 from emperor.layers._composition.residual.base import (
@@ -94,17 +93,12 @@ class AttentionResidual(ResidualConnectionAbstract):
         residual_sources = self.__append_and_stack_residual_sources(
             residual_state, current
         )
-        accumulator_sources = self.__convert_to_accumulator_precision(
-            residual_sources,
-        )
-        normalized_source_keys = self.__normalize_residual_source_keys(
-            accumulator_sources,
-        )
+        normalized_source_keys = self.key_norm(residual_sources)
         depth_weights = self.__calculate_residual_depth_weights(
             normalized_source_keys, query
         )
         mixed_residual_sources = self.__mix_depth_weighted_residual_sources(
-            accumulator_sources, depth_weights
+            residual_sources, depth_weights
         )
         return mixed_residual_sources.to(dtype=residual_sources.dtype)
 
@@ -128,33 +122,6 @@ class AttentionResidual(ResidualConnectionAbstract):
         attention_state.append(current)
         return torch.stack(attention_state.sources, dim=0)
 
-    def __convert_to_accumulator_precision(
-        self,
-        residual_sources: Tensor,
-    ) -> Tensor:
-        accumulator_dtype = self.__resolve_accumulator_dtype(
-            residual_sources.dtype,
-        )
-        return residual_sources.to(dtype=accumulator_dtype)
-
-    @staticmethod
-    def __resolve_accumulator_dtype(values_dtype: torch.dtype) -> torch.dtype:
-        if values_dtype in (torch.float16, torch.bfloat16):
-            return torch.float32
-        else:
-            return values_dtype
-
-    def __normalize_residual_source_keys(
-        self,
-        accumulator_sources: Tensor,
-    ) -> Tensor:
-        return F.rms_norm(
-            accumulator_sources,
-            normalized_shape=(self.residual_dim,),
-            weight=self.key_norm.weight.to(dtype=accumulator_sources.dtype),
-            eps=self.rms_norm_epsilon,
-        )
-
     def __calculate_residual_depth_weights(
         self,
         normalized_source_keys: Tensor,
@@ -167,11 +134,11 @@ class AttentionResidual(ResidualConnectionAbstract):
 
     @staticmethod
     def __mix_depth_weighted_residual_sources(
-        accumulator_sources: Tensor,
+        residual_sources: Tensor,
         depth_weights: Tensor,
     ) -> Tensor:
         feature_broadcast_depth_weights = depth_weights.unsqueeze(-1)
         depth_weighted_residual_sources = (
-            feature_broadcast_depth_weights * accumulator_sources
+            feature_broadcast_depth_weights * residual_sources
         )
         return torch.sum(depth_weighted_residual_sources, dim=0)

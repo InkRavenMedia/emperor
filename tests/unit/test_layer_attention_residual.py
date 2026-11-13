@@ -695,8 +695,13 @@ class TestAttentionResidual(unittest.TestCase):
                 self.assertTrue(torch.isfinite(tensor.grad).all())
                 self.assertGreater(torch.count_nonzero(tensor.grad), 0)
 
-    def test_mixer_accumulates_low_precision_sources_in_float32(self):
-        for source_dtype in (torch.float16, torch.bfloat16):
+    def test_mixer_matches_source_dtype_reference(self):
+        for source_dtype in (
+            torch.float16,
+            torch.bfloat16,
+            torch.float32,
+            torch.float64,
+        ):
             with self.subTest(source_dtype=source_dtype):
                 epsilon = 1e-6
                 residual = AttentionResidual(
@@ -705,7 +710,7 @@ class TestAttentionResidual(unittest.TestCase):
                         residual_dim=3,
                         rms_norm_epsilon=epsilon,
                     )
-                )
+                ).to(dtype=source_dtype)
                 query = torch.tensor([0.3, -0.8, 1.1])
                 norm_weight = torch.tensor([1.2, 0.9, 1.4])
                 with torch.no_grad():
@@ -724,11 +729,11 @@ class TestAttentionResidual(unittest.TestCase):
                 actual = _apply_attention_residual(residual, current, state)
 
                 expected = _paper_attention_residual(
-                    (initial_source.float(), current.float()),
-                    query,
-                    norm_weight,
+                    (initial_source, current),
+                    query.to(dtype=source_dtype),
+                    norm_weight.to(dtype=source_dtype),
                     epsilon,
-                ).to(source_dtype)
+                )
                 self.assertEqual(actual.dtype, source_dtype)
                 torch.testing.assert_close(actual, expected)
 
@@ -740,7 +745,7 @@ class TestAttentionResidual(unittest.TestCase):
                 residual_dim=2,
                 rms_norm_epsilon=epsilon,
             )
-        )
+        ).double()
         query = torch.tensor([0.25, -0.75], dtype=torch.float64)
         norm_weight = torch.tensor([1.4, 0.6], dtype=torch.float64)
         with torch.no_grad():
