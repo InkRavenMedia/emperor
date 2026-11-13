@@ -18,6 +18,7 @@ from emperor.layers import (
     WeightedBlendResidualConfig,
     WeightedResidualConfig,
 )
+from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
 
 # Dimension and layer-model fields are supplied by the mixture owner. Routers
@@ -40,6 +41,7 @@ _DEFAULTS: dict[str, tuple[Any, Any]] = {
         LastLayerBiasOptions.DEFAULT,
     ),
     "scoring_residual_connection_option": (type[ResidualConfig] | None, None),
+    "scoring_residual_model_flag": (bool, False),
 }
 _POSITIVE_FIELDS = (
     "num_experts",
@@ -158,6 +160,18 @@ def _build_config(
         )
     residual_config = None
     residual_option = settings["scoring_residual_connection_option"]
+    residual_model_flag = settings["scoring_residual_model_flag"]
+    if residual_model_flag and (
+        not isinstance(residual_option, type)
+        or not issubclass(
+            residual_option, (WeightedResidualConfig, WeightedBlendResidualConfig)
+        )
+    ):
+        raise ValueError(
+            f"{prefix.upper()}_SCORING_RESIDUAL_MODEL_FLAG=True requires "
+            f"{prefix.upper()}_SCORING_RESIDUAL_CONNECTION_OPTION to select "
+            "WeightedResidualConfig or WeightedBlendResidualConfig."
+        )
     if residual_option is not None:
         if issubclass(residual_option, AttentionResidualConfig):
             raise ValueError(
@@ -175,6 +189,11 @@ def _build_config(
                         "RESIDUAL_COEFFICIENT_ACTIVATION",
                         ActivationOptions.SIGMOID,
                     ),
+                ),
+                model_config=(
+                    _build_coefficient_stack(values, config_module)
+                    if residual_model_flag
+                    else None
                 ),
             )
         else:
@@ -199,6 +218,92 @@ def _build_config(
         num_experts=num_experts,
         slots_per_expert=settings["slots_per_expert"],
         router_config=router_config,
+    )
+
+
+def _residual_stack_setting(
+    values: Mapping[str, Any], config_module: ModuleType, field: str
+) -> Any:
+    """Apply residual-stack overrides to the shared submodule-stack settings."""
+    independent = values.get(
+        "residual_stack_independent_flag", config_module.RESIDUAL_STACK_INDEPENDENT_FLAG
+    )
+    residual_key = f"residual_stack_{field}"
+    override = values.get(residual_key, getattr(config_module, residual_key.upper()))
+    if (
+        independent or field in {"residual_block_size", "residual_rms_norm_epsilon"}
+    ) and override is not None:
+        return override
+    submodule_key = f"submodule_stack_{field}"
+    if submodule_key in values:
+        return values[submodule_key]
+    submodule_options = values.get("submodule_stack_options")
+    if submodule_options is not None:
+        return getattr(submodule_options, field)
+    return getattr(config_module, submodule_key.upper())
+
+
+def _build_coefficient_stack(
+    values: Mapping[str, Any], config_module: ModuleType
+) -> LayerStackConfig:
+    """Build the scoring residual's coefficient model from Residual Stack Options."""
+    if values.get(
+        "residual_stack_residual_model_flag",
+        config_module.RESIDUAL_STACK_RESIDUAL_MODEL_FLAG,
+    ):
+        raise ValueError(
+            "RESIDUAL_STACK_RESIDUAL_MODEL_FLAG=True would recursively define "
+            "the residual coefficient stack in itself."
+        )
+    fields = (
+        "hidden_dim",
+        "num_layers",
+        "last_layer_bias_option",
+        "apply_output_postprocessing_flag",
+        "activation",
+        "layer_norm_position",
+        "normalization",
+        "residual_connection_option",
+        "residual_block_size",
+        "residual_rms_norm_epsilon",
+        "dropout_probability",
+        "bias_flag",
+    )
+    settings = {
+        field: _residual_stack_setting(values, config_module, field) for field in fields
+    }
+    residual_config = None
+    residual_option = settings["residual_connection_option"]
+    if residual_option is not None:
+        if issubclass(
+            residual_option, (WeightedResidualConfig, WeightedBlendResidualConfig)
+        ):
+            residual_config = residual_option(
+                coefficient_activation=values.get(
+                    "residual_coefficient_activation",
+                    config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
+                )
+            )
+        elif issubclass(residual_option, AttentionResidualConfig):
+            residual_config = residual_option(
+                block_size=settings["residual_block_size"],
+                rms_norm_epsilon=settings["residual_rms_norm_epsilon"],
+            )
+        else:
+            residual_config = residual_option()
+    return LayerStackConfig(
+        hidden_dim=settings["hidden_dim"],
+        num_layers=settings["num_layers"],
+        last_layer_bias_option=settings["last_layer_bias_option"],
+        apply_output_postprocessing_flag=settings["apply_output_postprocessing_flag"],
+        layer_config=LayerConfig(
+            activation=settings["activation"],
+            layer_norm_position=settings["layer_norm_position"],
+            normalization=settings["normalization"],
+            residual_config=residual_config,
+            dropout_probability=settings["dropout_probability"],
+            layer_model_config=LinearLayerConfig(bias_flag=settings["bias_flag"]),
+        ),
     )
 
 
