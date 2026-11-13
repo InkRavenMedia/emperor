@@ -27,8 +27,6 @@ if TYPE_CHECKING:
 
 
 class AttentionResidual(ResidualConnectionAbstract):
-    """Learned softmax routing across raw residual-depth sources."""
-
     VALIDATOR = AttentionResidualValidator
 
     def __init__(
