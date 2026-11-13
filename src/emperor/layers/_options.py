@@ -28,8 +28,6 @@ class ActivationOptions(BaseOptions):
 
 
 class NormalizationOptions(BaseOptions):
-    """Last-dimension normalization and learned elementwise replacements."""
-
     RMS_NORM = 1
     LAYER_NORM = 2
     DYNAMIC_TANH = 3
