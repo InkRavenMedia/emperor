@@ -64,7 +64,6 @@ class ResidualConnectionAbstract(Module, ABC):
         self,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         """Compose current and previous sources."""
