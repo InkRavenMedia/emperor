@@ -1543,7 +1543,9 @@ def test_unsupported_encoder_configurations_are_rejected(option):
     elif option == "sequence_first":
         encoder.attention_config.batch_first_flag = False
     elif option == "weighted_residual":
-        encoder.residual_config = WeightedResidualConfig()
+        encoder.residual_config = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        )
     elif option == "stateful_residual":
         cfg.residual_config = AttentionResidualConfig(
             block_size=2, rms_norm_epsilon=1e-6

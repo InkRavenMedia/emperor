@@ -3,6 +3,7 @@ import unittest
 import torch
 
 from emperor.layers import (
+    ActivationOptions,
     AttentionResidualConfig,
     GateConfig,
     LayerGateOptions,
@@ -102,7 +103,9 @@ class TestResidualConnectionValidatorAdapter(unittest.TestCase):
                 self.assertIs(runtime_type.VALIDATOR, validator_type)
 
     def test_successful_runtime_validations_return_none(self):
-        weighted_connection = WeightedResidualConfig().build()
+        weighted_connection = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
         attention_connection = AttentionResidualConfig(
             block_size=1, rms_norm_epsilon=1e-6, residual_dim=2
         ).build()
@@ -144,6 +147,7 @@ class TestResidualConnectionValidatorAdapter(unittest.TestCase):
         ):
             TrackingWeightedBlendResidual(
                 WeightedBlendResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID,
                     residual_dim=3,
                     model_config=LinearLayerConfig(bias_flag=True),
                 )
@@ -158,7 +162,9 @@ class TestResidualConnectionValidatorAdapter(unittest.TestCase):
         class RejectingWeightedResidual(WeightedResidual):
             VALIDATOR = RejectingValidator
 
-        connection = RejectingWeightedResidual(WeightedResidualConfig())
+        connection = RejectingWeightedResidual(
+            WeightedResidualConfig(coefficient_activation=ActivationOptions.SIGMOID)
+        )
         connection.raw_weight = None
         hidden = torch.ones(1, 2)
 
@@ -169,7 +175,9 @@ class TestResidualConnectionValidatorAdapter(unittest.TestCase):
             connection(hidden, hidden)
 
     def test_missing_coefficient_error_contract_is_preserved(self):
-        connection = WeightedResidualConfig().build()
+        connection = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
         connection.raw_weight = None
         hidden = torch.ones(1, 2)
 

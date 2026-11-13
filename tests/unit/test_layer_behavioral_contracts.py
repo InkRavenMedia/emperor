@@ -72,7 +72,9 @@ class LayerBehavioralContractTests(unittest.TestCase):
                         input_dim=2,
                         output_dim=2,
                         activation=ActivationOptions.TANH,
-                        residual_config=WeightedBlendResidualConfig(),
+                        residual_config=WeightedBlendResidualConfig(
+                            coefficient_activation=ActivationOptions.SIGMOID
+                        ),
                         dropout_probability=0.0,
                         layer_norm_position=LayerNormPositionOptions.AFTER,
                         gate_config=GateConfig(
@@ -124,7 +126,9 @@ class LayerBehavioralContractTests(unittest.TestCase):
                         activation=ActivationOptions.TANH,
                         model_config=linear_stack_config(2, bias_flag=True),
                     ),
-                    residual_config=WeightedBlendResidualConfig(),
+                    residual_config=WeightedBlendResidualConfig(
+                        coefficient_activation=ActivationOptions.SIGMOID
+                    ),
                     halting_config=None,
                     memory_config=None,
                 )

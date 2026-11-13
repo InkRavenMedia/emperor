@@ -210,6 +210,7 @@ class TestLayer(unittest.TestCase):
             for config_field in fields(WeightedBlendResidualConfig)
         }
         residual_config = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=3,
             model_config=LinearLayerConfig(bias_flag=True),
         )
@@ -222,7 +223,8 @@ class TestLayer(unittest.TestCase):
             ("residual_dim",),
         )
         self.assertEqual(
-            tuple(weighted_config_fields), ("residual_dim", "model_config")
+            tuple(weighted_config_fields),
+            ("residual_dim", "model_config", "coefficient_activation"),
         )
         model_config_help = weighted_config_fields["model_config"].metadata["help"]
         self.assertIn("data-dependent", model_config_help.lower())
@@ -291,6 +293,12 @@ class TestLayer(unittest.TestCase):
                 None
                 if residual_connection_option is None
                 else residual_connection_option(
+                    **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_connection_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
                     **(
                         {"block_size": 1, "rms_norm_epsilon": 1e-6}
                         if residual_connection_option is AttentionResidualConfig
@@ -395,7 +403,14 @@ class TestLayer(unittest.TestCase):
                     layer_norm_position=LayerNormPositionOptions.DISABLED,
                     residual_config=None
                     if gate_residual_connection_option is None
-                    else gate_residual_connection_option(),
+                    else gate_residual_connection_option(
+                        **(
+                            {"coefficient_activation": ActivationOptions.SIGMOID}
+                            if gate_residual_connection_option
+                            in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                            else {}
+                        )
+                    ),
                     dropout_probability=gate_dropout_probability,
                     halting_config=None,
                     gate_config=None,
@@ -423,7 +438,14 @@ class TestLayer(unittest.TestCase):
                         layer_norm_position=LayerNormPositionOptions.DISABLED,
                         residual_config=None
                         if gate_residual_connection_option is None
-                        else gate_residual_connection_option(),
+                        else gate_residual_connection_option(
+                            **(
+                                {"coefficient_activation": ActivationOptions.SIGMOID}
+                                if gate_residual_connection_option
+                                in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                                else {}
+                            )
+                        ),
                         dropout_probability=gate_dropout_probability,
                         halting_config=None,
                         gate_config=None,
@@ -442,6 +464,12 @@ class TestLayer(unittest.TestCase):
                 None
                 if residual_connection_option is None
                 else residual_connection_option(
+                    **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_connection_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
                     **(
                         {"block_size": 1, "rms_norm_epsilon": 1e-6}
                         if residual_connection_option is AttentionResidualConfig
@@ -1223,7 +1251,7 @@ class TestLayer(unittest.TestCase):
             (
                 WeightedResidualConfig,
                 None,
-                lambda current, previous: previous,
+                lambda current, previous: previous + 0.5 * current,
             ),
             (
                 WeightedBlendResidualConfig,
@@ -1266,7 +1294,7 @@ class TestLayer(unittest.TestCase):
                         torch.cat((model_output, x), dim=-1)
                     )
                     if option is WeightedResidualConfig:
-                        expected = x + torch.tanh(raw_coefficients) * model_output
+                        expected = x + torch.sigmoid(raw_coefficients) * model_output
                     else:
                         blend = torch.sigmoid(raw_coefficients)
                         expected = blend * model_output + (1.0 - blend) * x
@@ -1279,6 +1307,7 @@ class TestLayer(unittest.TestCase):
     ):
         output_dim = 3
         connection = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=output_dim,
             model_config=LinearLayerConfig(bias_flag=True),
         ).build()
@@ -1332,6 +1361,7 @@ class TestLayer(unittest.TestCase):
     def test_data_dependent_weighted_blend_routes_by_position_and_feature(self):
         output_dim = 2
         connection = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=output_dim,
             model_config=LinearLayerConfig(bias_flag=True),
         ).build()
@@ -1370,6 +1400,7 @@ class TestLayer(unittest.TestCase):
 
     def test_data_dependent_weighted_blend_preserves_all_gradients(self):
         connection = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=2,
             model_config=LinearLayerConfig(bias_flag=True),
         ).build()
@@ -1406,6 +1437,7 @@ class TestLayer(unittest.TestCase):
             with self.subTest(output_dim=output_dim):
                 with self.assertRaisesRegex(error_type, "residual_dim"):
                     WeightedBlendResidualConfig(
+                        coefficient_activation=ActivationOptions.SIGMOID,
                         residual_dim=output_dim,
                         model_config=LinearLayerConfig(bias_flag=True),
                     ).build()
@@ -1413,6 +1445,7 @@ class TestLayer(unittest.TestCase):
     def test_data_dependent_residual_rejects_an_unsupported_model_config(self):
         with self.assertRaisesRegex(TypeError, "model_config"):
             WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID,
                 residual_dim=2,
                 model_config=object(),
             ).build()
@@ -1509,7 +1542,9 @@ class TestLayer(unittest.TestCase):
         torch.testing.assert_close(result, current + previous)
 
     def test_existing_weighted_residual_state_is_unchanged_by_residual_dimension(self):
-        connection = WeightedBlendResidualConfig(residual_dim=4).build()
+        connection = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID, residual_dim=4
+        ).build()
 
         self.assertEqual(tuple(connection.state_dict()), ("raw_weight",))
         self.assertIsNone(connection.model)
@@ -1536,6 +1571,7 @@ class TestLayer(unittest.TestCase):
                     connection = option(
                         residual_dim=4,
                         model_config=coefficient_model_config,
+                        coefficient_activation=ActivationOptions.SIGMOID,
                     ).build()
 
                 self.assertEqual(
@@ -1548,7 +1584,9 @@ class TestLayer(unittest.TestCase):
                 )
 
     def test_weighted_residual_rejects_a_missing_coefficient_source(self):
-        connection = WeightedResidualConfig().build()
+        connection = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
         connection.raw_weight = None
         hidden = torch.ones(2, 3)
 
@@ -1561,6 +1599,7 @@ class TestLayer(unittest.TestCase):
     def test_data_dependent_weighted_residual_uses_model_coefficients(self):
         output_dim = 2
         connection = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=output_dim,
             model_config=LinearLayerConfig(bias_flag=True),
         ).build()
@@ -1574,10 +1613,10 @@ class TestLayer(unittest.TestCase):
 
         result = connection(current, previous)
 
-        expected = previous + torch.tanh(current - previous) * current
+        expected = previous + torch.sigmoid(current - previous) * current
         torch.testing.assert_close(result, expected)
 
-    def test_weighted_residual_uses_tanh_constrained_scalar(self):
+    def test_weighted_residual_uses_sigmoid_constrained_scalar(self):
         dim = 4
         cfg = self.preset(
             input_dim=dim,
@@ -1592,7 +1631,7 @@ class TestLayer(unittest.TestCase):
 
         result = layer.residual.apply_residual(state, previous)
 
-        expected = previous + torch.tanh(torch.tensor(0.5)) * current
+        expected = previous + torch.sigmoid(torch.tensor(0.5)) * current
         self.assertIs(result, state)
         torch.testing.assert_close(result.hidden, expected)
 

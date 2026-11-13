@@ -4,7 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import Final, cast
 
-from emperor.layers import LastLayerBiasOptions
+from emperor.layers import ActivationOptions, LastLayerBiasOptions
+from models.neuron.linear import config
 from models.neuron.linear._hidden._runtime_default_values import (
     GateConditionValues,
     HaltingMeasureValues,
@@ -232,6 +233,11 @@ def _residual_stack(
     values = stack.values
     return resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=reader.enum(
+                "residual_coefficient_activation",
+                config.RESIDUAL_COEFFICIENT_ACTIVATION,
+                ActivationOptions,
+            ),
             independent_flag=values.independent_flag,
             hidden_dim=values.hidden_dim,
             num_layers=values.num_layers,

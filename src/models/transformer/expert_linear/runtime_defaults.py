@@ -670,6 +670,7 @@ def runtime_from_config() -> RuntimeOptions:
         source_sequence_length=config.SOURCE_SEQUENCE_LENGTH,
         target_sequence_length=config.TARGET_SEQUENCE_LENGTH,
         dropout_probability=config.DROPOUT_PROBABILITY,
+        residual_coefficient_activation=config.RESIDUAL_COEFFICIENT_ACTIVATION,
         residual_stack_independent_flag=(config.RESIDUAL_STACK_INDEPENDENT_FLAG),
         residual_stack_hidden_dim=config.RESIDUAL_STACK_HIDDEN_DIM,
         residual_stack_layer_norm_position=(config.RESIDUAL_STACK_LAYER_NORM_POSITION),

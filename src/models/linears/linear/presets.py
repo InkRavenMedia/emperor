@@ -250,7 +250,7 @@ _PRESET_DEFINITIONS = {
         preset_values={
             "stack_residual_connection_option": WeightedResidualConfig,
         },
-        description="Default config with a learned tanh-scaled current contribution "
+        description="Default config with a learned sigmoid-scaled current contribution "
         "composed with the previous hidden state at each hidden layer.",
     ),
     ExperimentPreset.WEIGHTED_BLEND_RESIDUAL: PresetDefinition(

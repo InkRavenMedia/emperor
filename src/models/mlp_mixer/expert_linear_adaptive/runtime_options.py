@@ -44,6 +44,9 @@ from models import _learned_grouping, _projection_model, _sequence_expansion
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
+    residual_coefficient_activation: ActivationOptions = field(
+        default=ActivationOptions.SIGMOID, kw_only=True
+    )
     hierarchical_masked_word_flag: bool = field(default=False, kw_only=True)
     sequence_length: int = field(default=100, kw_only=True)
     hierarchical_byte_embedding_dim: int = field(default=32, kw_only=True)

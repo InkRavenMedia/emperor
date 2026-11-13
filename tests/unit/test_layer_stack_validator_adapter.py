@@ -189,8 +189,10 @@ class TestLayerStackValidatorAdapter(unittest.TestCase):
         for residual_config in (
             None,
             AdditiveResidualConfig(),
-            WeightedResidualConfig(),
-            WeightedBlendResidualConfig(),
+            WeightedResidualConfig(coefficient_activation=ActivationOptions.SIGMOID),
+            WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID
+            ),
         ):
             with self.subTest(residual=residual_config):
                 config = make_config(

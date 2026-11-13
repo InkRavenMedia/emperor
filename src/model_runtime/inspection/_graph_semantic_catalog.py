@@ -328,12 +328,12 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.variants.weighted.WeightedResidual",
-            "Adds the previous hidden value to a learned tanh-weighted current value.",
+            "Adds the previous hidden value to a weighted current value, using the explicitly configured coefficient activation.",
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.variants.weighted_blend."
             "WeightedBlendResidual",
-            "Convexly blends current and previous hidden values with a learned weight.",
+            "Blends current and previous hidden values with complementary weights, using the explicitly configured coefficient activation.",
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.variants.attention.AttentionResidual",
@@ -349,11 +349,11 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.config.WeightedResidualConfig",
-            "Builds tanh-weighted residual composition with a scalar or generated coefficient.",
+            "Builds weighted residual composition with a scalar or generated coefficient and an explicitly selected activation.",
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.config.WeightedBlendResidualConfig",
-            "Builds sigmoid convex residual blending with a scalar or generated coefficient.",
+            "Builds complementary residual blending with a scalar or generated coefficient and an explicitly selected activation.",
         ),
         _semantic_type_policy(
             "emperor.layers._composition.residual.config.AttentionResidualConfig",

@@ -402,6 +402,7 @@ def _resolve_stacks(values: RuntimeDefaultValues) -> _ResolvedStacks:
     residual_values = values.residual_stack
     residual = resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=values.residual_coefficient_activation,
             independent_flag=residual_values.independent_flag,
             hidden_dim=residual_values.hidden_dim,
             num_layers=residual_values.num_layers,

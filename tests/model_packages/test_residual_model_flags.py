@@ -115,6 +115,79 @@ def _modeled_residuals(configuration: object):
 
 
 class TestResidualModelFlagCatalogContract(unittest.TestCase):
+    def test_public_coefficient_activation_reaches_weighted_residuals(self) -> None:
+        for package in discover_model_packages():
+            defaults = package.runtime_defaults_spec
+            schema = {
+                field.key: field for field in configuration_schema(package).fields
+            }
+            self.assertTrue(
+                "RESIDUAL_COEFFICIENT_ACTIVATION" in schema, package.catalog_key
+            )
+            self.assertIn(
+                "SIGMOID is recommended",
+                schema["RESIDUAL_COEFFICIENT_ACTIVATION"].description,
+            )
+            self.assertIs(
+                defaults.current_value("RESIDUAL_COEFFICIENT_ACTIVATION"),
+                ActivationOptions.SIGMOID,
+            )
+            parsed = defaults.parse_overrides(
+                {"residual-coefficient-activation": "TANH"}
+            )
+            self.assertIs(
+                parsed["residual_coefficient_activation"], ActivationOptions.TANH
+            )
+            selector = (
+                "stack_residual_connection_option"
+                if defaults.has_current_value("STACK_RESIDUAL_CONNECTION_OPTION")
+                else "attn_stack_residual_connection_option"
+            )
+            for activation in (
+                ActivationOptions.SIGMOID,
+                ActivationOptions.TANH,
+                ActivationOptions.DISABLED,
+            ):
+                for residual_option in (
+                    WeightedResidualConfig,
+                    WeightedBlendResidualConfig,
+                ):
+                    for model_flag in (False, True):
+                        with self.subTest(
+                            package=package.catalog_key,
+                            activation=activation.name,
+                            residual=residual_option.__name__,
+                            model_flag=model_flag,
+                        ):
+                            overrides = {
+                                selector: residual_option,
+                                selector.replace(
+                                    "connection_option", "model_flag"
+                                ): model_flag,
+                                "residual_coefficient_activation": activation,
+                            }
+                            configuration = package.build_configuration(
+                                config_overrides=overrides
+                            )
+                            residuals = [
+                                value
+                                for _, value in _walk_objects(configuration)
+                                if isinstance(value, residual_option)
+                            ]
+                            self.assertTrue(residuals)
+                            self.assertTrue(
+                                all(
+                                    value.coefficient_activation is activation
+                                    for value in residuals
+                                )
+                            )
+                            self.assertTrue(
+                                any(
+                                    (value.model_config is not None) is model_flag
+                                    for value in residuals
+                                )
+                            )
+
     def test_every_package_exposes_the_exact_gate_parity_residual_stack(self) -> None:
         for package in discover_model_packages():
             runtime_defaults = package.runtime_defaults_spec

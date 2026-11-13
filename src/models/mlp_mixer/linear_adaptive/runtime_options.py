@@ -39,6 +39,9 @@ from models import _learned_grouping, _sequence_expansion
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
+    residual_coefficient_activation: ActivationOptions = field(
+        default=ActivationOptions.SIGMOID, kw_only=True
+    )
     token_mixer_soft_moe_config: SoftMoEConfig | None = field(
         default=None, kw_only=True
     )

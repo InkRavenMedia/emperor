@@ -15,6 +15,8 @@ from emperor.layers import (
     LayerStackConfig,
     NormalizationOptions,
     ResidualConfig,
+    WeightedBlendResidualConfig,
+    WeightedResidualConfig,
 )
 from emperor.sampler import RouterConfig
 
@@ -157,12 +159,26 @@ def _build_config(
     residual_config = None
     residual_option = settings["scoring_residual_connection_option"]
     if residual_option is not None:
-        residual_config = residual_option()
-        if isinstance(residual_config, AttentionResidualConfig):
+        if issubclass(residual_option, AttentionResidualConfig):
             raise ValueError(
                 "Soft MoE scoring cannot use AttentionResidualConfig: it requires "
                 "output postprocessing, but the router requires raw logits."
             )
+        if issubclass(
+            residual_option, (WeightedResidualConfig, WeightedBlendResidualConfig)
+        ):
+            residual_config = residual_option(
+                coefficient_activation=values.get(
+                    "residual_coefficient_activation",
+                    getattr(
+                        config_module,
+                        "RESIDUAL_COEFFICIENT_ACTIVATION",
+                        ActivationOptions.SIGMOID,
+                    ),
+                ),
+            )
+        else:
+            residual_config = residual_option()
     layer_config = LayerConfig(
         activation=settings["scoring_activation"],
         dropout_probability=settings["scoring_dropout_probability"],

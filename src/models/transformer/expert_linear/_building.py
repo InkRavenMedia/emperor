@@ -185,6 +185,7 @@ def _experts_config(
 def _residual_stack(runtime: RuntimeOptions):
     return resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=runtime.residual_coefficient_activation,
             independent_flag=runtime.residual_stack_independent_flag,
             hidden_dim=runtime.residual_stack_hidden_dim,
             num_layers=runtime.residual_stack_num_layers,

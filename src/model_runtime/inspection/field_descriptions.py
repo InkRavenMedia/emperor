@@ -4,6 +4,13 @@ from dataclasses import dataclass
 from typing import Any
 
 EXPLICIT_FIELD_DESCRIPTIONS = {
+    "RESIDUAL_COEFFICIENT_ACTIVATION": (
+        "Activation applied to scalar and model-generated coefficients in weighted "
+        "and weighted-blend residuals throughout this model. SIGMOID is recommended "
+        "and selected explicitly by the model recipe. DISABLED uses the raw "
+        "coefficient; other activations may produce negative or unbounded weights. "
+        "This does not change the activation inside the coefficient model."
+    ),
     "ATTN_SOURCE_MEMORY_FLAG": (
         "Enables memory embeddings generated from grouped source chunks. "
         "Set a chunk size to control how many source tokens each embedding summarizes."

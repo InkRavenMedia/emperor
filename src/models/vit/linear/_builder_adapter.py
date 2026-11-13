@@ -130,6 +130,7 @@ def _attach_residual_stack_options(
     residual_stack_keys = {
         f"residual_stack_{field}" for field in _RESIDUAL_STACK_FLAT_FIELDS
     }
+    residual_stack_keys.add("residual_coefficient_activation")
     if not residual_stack_keys.intersection(kwargs):
         if not any(
             key.endswith("_residual_model_flag") and value is True
@@ -144,6 +145,10 @@ def _attach_residual_stack_options(
         )
     residual_stack_options = resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=kwargs.get(
+                "residual_coefficient_activation",
+                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
+            ),
             independent_flag=kwargs.get(
                 "residual_stack_independent_flag",
                 config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,
