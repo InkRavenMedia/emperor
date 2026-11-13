@@ -21,7 +21,6 @@ class AdditiveResidual(ResidualConnectionAbstract):
         self,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         return current + previous

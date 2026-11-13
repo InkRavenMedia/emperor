@@ -87,7 +87,6 @@ class AttentionResidual(ResidualConnectionAbstract):
         self,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         self.VALIDATOR.validate_attention_forward_inputs(self, current, residual_state)
