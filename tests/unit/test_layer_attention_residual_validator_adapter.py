@@ -142,11 +142,11 @@ class TestAttentionResidualValidatorAdapter(unittest.TestCase):
         ):
             RejectingState(torch.ones(1, 2), block_size=1)
 
-    def test_lifecycle_state_creation_uses_the_residual_validator_adapter(self):
+    def test_state_creation_uses_the_residual_validator_adapter(self):
         class RejectingValidator(AttentionResidualValidator):
             @staticmethod
             def validate_source(source, *, residual_dim):
-                raise RuntimeError("substituted lifecycle validator was called")
+                raise RuntimeError("substituted state creation validator was called")
 
         class RejectingAttentionResidual(AttentionResidual):
             VALIDATOR = RejectingValidator
@@ -157,7 +157,7 @@ class TestAttentionResidualValidatorAdapter(unittest.TestCase):
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "substituted lifecycle validator was called",
+            "substituted state creation validator was called",
         ):
             residual.new_state(torch.ones(1, 2))
 

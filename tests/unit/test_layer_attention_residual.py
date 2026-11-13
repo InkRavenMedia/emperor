@@ -1,16 +1,13 @@
 import pickle
 import unittest
-from dataclasses import FrozenInstanceError, fields
+from dataclasses import fields
 from unittest.mock import patch
 
 import torch
 import torch.nn.functional as F
 
 from emperor.layers import LayerState
-from emperor.layers._composition.residual.base import (
-    ResidualState,
-    ResidualStateLifecycle,
-)
+from emperor.layers._composition.residual.base import ResidualState
 from emperor.layers._composition.residual.config import AttentionResidualConfig
 from emperor.layers._composition.residual.variants import attention as attention_variant
 from emperor.layers._composition.residual.variants.attention import (
@@ -19,9 +16,6 @@ from emperor.layers._composition.residual.variants.attention import (
 )
 from emperor.layers._composition.residual.variants.attention.core import (
     AttentionResidual as CoreAttentionResidual,
-)
-from emperor.layers._composition.residual.variants.attention.lifecycle import (
-    AttentionResidualStateLifecycle,
 )
 from emperor.layers._composition.residual.variants.attention.state import (
     AttentionResidualState as OwnedAttentionResidualState,
@@ -73,14 +67,6 @@ class TestAttentionResidualPackage(unittest.TestCase):
         initial_source = torch.ones(1, 2)
         state = residual.new_state(initial_source)
         self.assertIs(type(state), OwnedAttentionResidualState)
-        self.assertIs(
-            type(residual.residual_state_lifecycle),
-            AttentionResidualStateLifecycle,
-        )
-        self.assertEqual(
-            AttentionResidualStateLifecycle.__name__, "AttentionResidualStateLifecycle"
-        )
-        self.assertFalse(hasattr(attention_variant, "AttentionResidualStateLifecycle"))
         output = residual(
             torch.full((1, 2), 3.0),
             initial_source,
@@ -93,7 +79,6 @@ class TestAttentionResidualPackage(unittest.TestCase):
         for module_name, expected_class in (
             ("core", CoreAttentionResidual),
             ("state", OwnedAttentionResidualState),
-            ("lifecycle", AttentionResidualStateLifecycle),
         ):
             with self.subTest(class_name=expected_class.__name__):
                 self.assertEqual(
@@ -114,10 +99,6 @@ class TestAttentionResidualPackage(unittest.TestCase):
         )
         self.assertIs(type(restored_residual), CoreAttentionResidual)
         self.assertIs(type(restored_state), OwnedAttentionResidualState)
-        self.assertIs(
-            type(restored_residual.residual_state_lifecycle),
-            AttentionResidualStateLifecycle,
-        )
         current = torch.tensor([[-0.5, 1.0]])
         expected = residual(current, initial, residual_state=state)
         actual = restored_residual(current, initial, residual_state=restored_state)
@@ -326,7 +307,7 @@ class TestAttentionResidual(unittest.TestCase):
                         block_size=block_size,
                     )
 
-    def test_attention_owns_an_immutable_forward_state_lifecycle(self):
+    def test_new_state_creates_independent_attention_histories(self):
         residual = AttentionResidual(
             AttentionResidualConfig(
                 rms_norm_epsilon=1e-6,
@@ -335,29 +316,20 @@ class TestAttentionResidual(unittest.TestCase):
             )
         )
 
-        lifecycle = residual.residual_state_lifecycle
-
-        self.assertIsInstance(lifecycle, ResidualStateLifecycle)
-        self.assertEqual(lifecycle.residual_dim, 2)
-        self.assertEqual(lifecycle.block_size, 3)
-        with self.assertRaises(FrozenInstanceError):
-            lifecycle.block_size = 1
-
-    def test_compatibility_state_creation_delegates_to_the_lifecycle(self):
-        residual = AttentionResidual(
-            AttentionResidualConfig(rms_norm_epsilon=1e-6, residual_dim=2, block_size=2)
-        )
         initial_source = torch.ones(1, 2)
+        first_state = residual.new_state(initial_source)
+        second_state = residual.new_state(initial_source)
 
-        lifecycle_state = residual.residual_state_lifecycle.create_state(initial_source)
-        compatibility_state = residual.new_state(initial_source)
-
-        self.assertIsInstance(lifecycle_state, AttentionResidualState)
-        self.assertIsInstance(compatibility_state, AttentionResidualState)
-        self.assertIs(lifecycle_state.initial_source, initial_source)
-        self.assertIs(compatibility_state.initial_source, initial_source)
-        self.assertEqual(lifecycle_state.block_size, 2)
-        self.assertEqual(compatibility_state.block_size, 2)
+        self.assertIsInstance(first_state, AttentionResidualState)
+        self.assertIsInstance(second_state, AttentionResidualState)
+        self.assertIsNot(first_state, second_state)
+        self.assertIs(first_state.initial_source, initial_source)
+        self.assertIs(second_state.initial_source, initial_source)
+        self.assertEqual(first_state.block_size, 3)
+        self.assertEqual(second_state.block_size, 3)
+        first_state.append(torch.full((1, 2), 2.0))
+        self.assertEqual(len(first_state.sources), 2)
+        self.assertEqual(len(second_state.sources), 1)
 
     def test_state_aware_application_lazily_initializes_attention_history(self):
         residual = AttentionResidual(
