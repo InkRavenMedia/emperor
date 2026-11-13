@@ -112,6 +112,10 @@ def linear_builder_kwargs_from_flat(
     )
     residual_stack_options = resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=kwargs.get(
+                "residual_coefficient_activation",
+                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
+            ),
             independent_flag=kwargs.get(
                 "residual_stack_independent_flag",
                 config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,
@@ -739,6 +743,7 @@ def _modern_option_updates(
 
 def _modern_supported_flat_keys() -> set[str]:
     keys = {
+        "residual_coefficient_activation",
         *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "hierarchical_language_model_flag",
         "hierarchical_byte_embedding_dim",

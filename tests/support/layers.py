@@ -15,6 +15,8 @@ from emperor.layers import (
     LayerStackConfig,
     LayerState,
     RecurrentLayerConfig,
+    WeightedBlendResidualConfig,
+    WeightedResidualConfig,
 )
 from emperor.linears import LinearLayerConfig
 from emperor.memory import MemoryPositionOptions, WeightedDynamicMemoryConfig
@@ -209,10 +211,16 @@ def recurrent_config(
             if residual_connection_option is None
             else residual_connection_option(
                 **(
+                    {"coefficient_activation": ActivationOptions.SIGMOID}
+                    if residual_connection_option
+                    in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                    else {}
+                ),
+                **(
                     {"block_size": 1, "rms_norm_epsilon": 1e-6}
                     if residual_connection_option is AttentionResidualConfig
                     else {}
-                )
+                ),
             )
         ),
         halting_config=halting_config,

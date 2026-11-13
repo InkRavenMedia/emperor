@@ -2,10 +2,21 @@ from __future__ import annotations
 
 from torch import Tensor
 
+from emperor.layers._options import ActivationOptions
+
 
 class _WeightedResidualValidationMixin:
+    OPTIONAL_FIELDS = {"residual_dim", "model_config"}
+
     @classmethod
     def _validate_weighted_config(cls, config: object) -> None:
+        cls.validate_required_fields(config)
+        if not isinstance(config.coefficient_activation, ActivationOptions):
+            raise TypeError(
+                f"{type(config).__name__}.coefficient_activation must be an "
+                "ActivationOptions value, got "
+                f"{type(config.coefficient_activation).__name__}."
+            )
         model_config = config.model_config
         if model_config is None:
             return

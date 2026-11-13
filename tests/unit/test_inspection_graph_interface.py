@@ -1031,6 +1031,7 @@ assert semantic_module not in sys.modules
         configured_module = nn.Module()
         configured_module.cfg = LayerConfig(
             residual_config=WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID,
                 model_config=LinearLayerConfig(bias_flag=True),
             )
         )

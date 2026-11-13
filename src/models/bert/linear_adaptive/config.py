@@ -351,6 +351,10 @@ STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
 STACK_RESIDUAL_MODEL_FLAG: bool = False
 STACK_RESIDUAL_BLOCK_SIZE: int | None = None
 STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
+# - Applies to scalar and model-generated weighted residual coefficients.
+#   SIGMOID is recommended; DISABLED leaves the raw coefficient unchanged.
+RESIDUAL_COEFFICIENT_ACTIVATION: ActivationOptions = ActivationOptions.SIGMOID
+
 ## Residual Stack Options
 # - If False, residual stack options inherit layer stack submodule options.
 RESIDUAL_STACK_INDEPENDENT_FLAG: bool = False
@@ -1589,6 +1593,7 @@ ATTN_GROUPING_RMS_NORM_EPSILON: float | None = None
 # Construction defaults remain available to flat CLI adapters and presets. The
 # grouped builder interface exposes residual and adaptive parameter settings.
 _PUBLIC_CONFIG_KEYS = {
+    "RESIDUAL_COEFFICIENT_ACTIVATION",
     "SOFT_MOE_CONFIG",
     "GENERATOR_DEPTH",
     "ROW_MASK_OPTION",

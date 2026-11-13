@@ -69,6 +69,7 @@ def linear_stack_config(
 
 def grouped_residual_config(dim: int = 2) -> ResidualConfig:
     return WeightedResidualConfig(
+        coefficient_activation=ActivationOptions.SIGMOID,
         model_config=AdaptiveLinearLayerConfig(
             bias_flag=True,
             adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(

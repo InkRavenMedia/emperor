@@ -205,6 +205,11 @@ def resolve_runtime_construction(
         ),
     )
     residual_source = ResidualStackSource(
+        coefficient_activation=_pop(
+            values,
+            "residual_coefficient_activation",
+            config.RESIDUAL_COEFFICIENT_ACTIVATION,
+        ),
         independent_flag=_pop(
             values,
             "residual_stack_independent_flag",

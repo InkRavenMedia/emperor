@@ -213,6 +213,10 @@ SUBMODULE_STACK_BIAS_FLAG: bool = True
 # - True uses the residual stack for input-dependent queries or coefficients.
 # - For every attention residual selector, supply its RESIDUAL_BLOCK_SIZE and
 #   RESIDUAL_RMS_NORM_EPSILON explicitly (suggested: 1 for full attention, 1e-6).
+# - Applies to scalar and model-generated weighted residual coefficients.
+#   SIGMOID is recommended; DISABLED leaves the raw coefficient unchanged.
+RESIDUAL_COEFFICIENT_ACTIVATION: ActivationOptions = ActivationOptions.SIGMOID
+
 ## Residual Stack Options
 # - If False, residual stack options inherit layer stack submodule options.
 RESIDUAL_STACK_INDEPENDENT_FLAG: bool = False

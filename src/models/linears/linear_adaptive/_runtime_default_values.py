@@ -643,6 +643,7 @@ class GenerationValues:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeDefaultValues:
+    residual_coefficient_activation: ActivationOptions
     grouping: GroupingConfig | None
     input_grouping: GroupingConfig | None
     output_grouping: GroupingConfig | None
@@ -2206,6 +2207,13 @@ def _read_grouping(reader: RuntimeOverrideReader, prefix: str = ""):
 
 def _read_runtime_values(reader: RuntimeOverrideReader) -> RuntimeDefaultValues:
     return RuntimeDefaultValues(
+        residual_coefficient_activation=reader.read(
+            _enum_field(
+                "residual_coefficient_activation",
+                config.RESIDUAL_COEFFICIENT_ACTIVATION,
+                ActivationOptions,
+            )
+        ),
         grouping=_read_grouping(reader),
         input_grouping=_read_grouping(reader, "input_layer_"),
         output_grouping=_read_grouping(reader, "output_layer_"),
