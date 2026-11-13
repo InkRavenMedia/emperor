@@ -53,7 +53,6 @@ class WeightedResidual(ResidualConnectionAbstract):
         self,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         raw_mix_coefficient = self._resolve_raw_mix_coefficient(current, previous)
