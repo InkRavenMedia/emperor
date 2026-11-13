@@ -1,5 +1,6 @@
 from emperor.datasets.text.bert_pretraining import (
     PennTreebankBertPretraining,
+    WikiText2BertHierarchical,
     WikiText2BertPretraining,
     WikiText103BertHierarchical,
 )
@@ -11,5 +12,6 @@ DATASET_OPTIONS_BY_TASK: dict[ExperimentTask, list[type]] = {
         PennTreebankBertPretraining,
         WikiText2BertPretraining,
         WikiText103BertHierarchical,
+        WikiText2BertHierarchical,
     ],
 }
