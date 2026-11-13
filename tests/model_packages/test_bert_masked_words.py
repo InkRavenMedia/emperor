@@ -18,9 +18,11 @@ from emperor.embedding.hierarchical.decoder import (
     OUTPUT_SYMBOLS,
     HierarchicalByteDecoderOutput,
 )
+from emperor.experiments import ExperimentTask
 from models.bert.expert_linear_adaptive._masked_word import greedy_word_matches
 from models.bert.expert_linear_adaptive.model import Model
 from models.bert.expert_linear_adaptive.presets import ExperimentPresets
+from models.catalog import model_package
 
 
 def masked_batch(first=("Café",), second=("dog",)):
@@ -90,6 +92,11 @@ class BertMaskedWordTests(unittest.TestCase):
             )
 
     def test_wikitext2_loads_raw_splits_as_masked_word_batches(self):
+        package = model_package("bert/expert_linear_adaptive")
+        (dataset,) = package.resolve_datasets(
+            ["wiki-text2-bert-hierarchical"], ExperimentTask.BERT_PRETRAINING
+        )
+        self.assertIs(dataset, WikiText2BertHierarchical)
         source = Dataset.from_dict({"text": ["A cat jumps. It sleeps."]})
         with (
             tempfile.TemporaryDirectory() as root,
@@ -98,7 +105,7 @@ class BertMaskedWordTests(unittest.TestCase):
                 return_value=source,
             ) as load_dataset,
         ):
-            data = WikiText2BertHierarchical(root=root, num_workers=0)
+            data = dataset(root=root, num_workers=0)
             data.setup()
             self.assertEqual(
                 load_dataset.call_args_list,
