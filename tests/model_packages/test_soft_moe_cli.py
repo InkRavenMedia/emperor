@@ -15,7 +15,10 @@ from emperor.layers import (
     AdditiveResidualConfig,
     LastLayerBiasOptions,
     LayerNormPositionOptions,
+    LayerStackConfig,
     NormalizationOptions,
+    WeightedBlendResidualConfig,
+    WeightedResidualConfig,
 )
 from model_runtime.inspection import configuration_schema
 from model_runtime.packages.runtime_values import validate_runtime_default_values
@@ -78,6 +81,7 @@ def test_every_declared_soft_moe_component_has_cli_and_workbench_controls():
                     "SCORING_NORMALIZATION",
                     "SCORING_LAST_LAYER_BIAS_OPTION",
                     "SCORING_RESIDUAL_CONNECTION_OPTION",
+                    "SCORING_RESIDUAL_MODEL_FLAG",
                 )
             }
             assert expected <= set(spec.supported_keys), (
@@ -261,6 +265,210 @@ def test_scoring_attention_residual_reports_raw_logit_incompatibility():
     )
     with pytest.raises(ValueError, match="router requires raw logits"):
         configuration(package.catalog_key, **values)
+
+
+@pytest.mark.parametrize("name", PACKAGES)
+@pytest.mark.parametrize(
+    "residual_option", [WeightedResidualConfig, WeightedBlendResidualConfig]
+)
+def test_scoring_coefficient_models_use_public_residual_settings(name, residual_option):
+    torch.manual_seed(19)
+    package = model_package(name)
+    arguments = [
+        "--soft-moe-flag",
+        "true",
+        "--soft-moe-scoring-hidden-dim",
+        "8",
+        "--soft-moe-scoring-num-layers",
+        "3",
+        "--soft-moe-scoring-residual-connection-option",
+        residual_option.__name__,
+        "--soft-moe-scoring-residual-model-flag",
+        "true",
+        "--residual-coefficient-activation",
+        "SIGMOID",
+        "--residual-stack-independent-flag",
+        "true",
+        "--residual-stack-hidden-dim",
+        "5",
+        "--residual-stack-num-layers",
+        "2",
+        "--residual-stack-activation",
+        "GELU",
+        "--residual-stack-dropout-probability",
+        "0.0",
+        "--residual-stack-apply-output-postprocessing-flag",
+        "false",
+        "--residual-stack-bias-flag",
+        "true",
+    ]
+    if name.startswith("mlp_mixer/"):
+        arguments.extend(["--token-mixer-soft-moe-flag", "true"])
+    elif "expert" in name:
+        arguments.extend(["--attention-soft-moe-flag", "true"])
+    values = cli_values(package, arguments)
+    cfg = configuration(name, **values)
+    model = package.build_model(cfg).eval()
+    routers = [
+        module for module in model.modules() if isinstance(module, SoftMoERouter)
+    ]
+    assert routers
+    residuals = []
+    for router in routers:
+        scoring_stack = router.cfg.router_config.model_config
+        assert scoring_stack.apply_output_postprocessing_flag is False
+        residual_config = scoring_stack.layer_config.residual_config
+        assert isinstance(residual_config, residual_option)
+        assert residual_config.coefficient_activation is ActivationOptions.SIGMOID
+        coefficient_stack = residual_config.model_config
+        assert isinstance(coefficient_stack, LayerStackConfig)
+        assert coefficient_stack.hidden_dim == 5
+        assert coefficient_stack.num_layers == 2
+        assert coefficient_stack.layer_config.activation is ActivationOptions.GELU
+        residuals.extend(
+            module
+            for module in router.modules()
+            if isinstance(getattr(module, "cfg", None), residual_option)
+        )
+    assert residuals
+    assert all(
+        residual.raw_weight is None and residual.model is not None
+        for residual in residuals
+    )
+    outputs = run_model(model, name, inputs_for(name))
+    assert all(torch.isfinite(output).all() for output in outputs)
+    sum(output.square().mean() for output in outputs).backward()
+    for residual in residuals:
+        gradients = [
+            parameter.grad
+            for parameter in residual.model.parameters()
+            if parameter.grad is not None
+        ]
+        assert gradients and all(
+            torch.isfinite(gradient).all() for gradient in gradients
+        )
+        assert any(gradient.abs().sum() > 0 for gradient in gradients)
+    restored = package.build_model(cfg).eval()
+    restored.load_state_dict(model.state_dict(), strict=True)
+    inputs = inputs_for(name)
+    for actual, expected in zip(
+        run_model(restored, name, inputs), run_model(model, name, inputs), strict=True
+    ):
+        torch.testing.assert_close(actual, expected)
+
+
+@pytest.mark.parametrize(
+    "residual_option", [WeightedResidualConfig, WeightedBlendResidualConfig]
+)
+@pytest.mark.parametrize("model_flag", [False, True])
+@pytest.mark.parametrize(
+    "activation",
+    [ActivationOptions.SIGMOID, ActivationOptions.TANH, ActivationOptions.DISABLED],
+)
+def test_scoring_residual_activation_reaches_scalar_and_model_paths(
+    residual_option, model_flag, activation
+):
+    package = model_package("bert/linear")
+    cfg = configuration(
+        package.catalog_key,
+        soft_moe_flag=True,
+        soft_moe_scoring_hidden_dim=8,
+        soft_moe_scoring_num_layers=3,
+        soft_moe_scoring_residual_connection_option=residual_option,
+        soft_moe_scoring_residual_model_flag=model_flag,
+        residual_coefficient_activation=activation,
+    )
+    model = package.build_model(cfg)
+    residuals = [
+        module
+        for router in model.modules()
+        if isinstance(router, SoftMoERouter)
+        for module in router.modules()
+        if isinstance(getattr(module, "cfg", None), residual_option)
+    ]
+    assert residuals
+    for residual in residuals:
+        assert residual.coefficient_activation is activation
+        assert (residual.model is not None) is model_flag
+        current, previous = torch.randn(2, 8), torch.randn(2, 8)
+        raw = (
+            residual.model.forward_hidden(torch.cat((current, previous), dim=-1))
+            if model_flag
+            else residual.raw_weight
+        )
+        coefficient = (
+            raw if activation is ActivationOptions.DISABLED else activation(raw)
+        )
+        expected = (
+            previous + coefficient * current
+            if residual_option is WeightedResidualConfig
+            else (1 - coefficient) * previous + coefficient * current
+        )
+        torch.testing.assert_close(residual(current, previous), expected)
+
+
+@pytest.mark.parametrize("residual_option", [None, AdditiveResidualConfig])
+def test_scoring_model_flag_rejects_residuals_without_coefficients(residual_option):
+    with pytest.raises(
+        ValueError,
+        match="SCORING_RESIDUAL_MODEL_FLAG.*SCORING_RESIDUAL_CONNECTION_OPTION",
+    ):
+        configuration(
+            "bert/linear",
+            soft_moe_flag=True,
+            soft_moe_scoring_residual_model_flag=True,
+            soft_moe_scoring_residual_connection_option=residual_option,
+        )
+
+
+def test_scoring_model_flag_role_override_and_inherited_stack_settings():
+    package = model_package("bert/expert_linear")
+    cfg = configuration(
+        package.catalog_key,
+        soft_moe_flag=True,
+        attention_soft_moe_flag=True,
+        soft_moe_scoring_residual_connection_option=WeightedResidualConfig,
+        soft_moe_scoring_residual_model_flag=True,
+        attention_soft_moe_scoring_residual_model_flag=False,
+        submodule_stack_hidden_dim=7,
+        submodule_stack_num_layers=3,
+        submodule_stack_activation=ActivationOptions.GELU,
+        residual_stack_independent_flag=False,
+        residual_stack_hidden_dim=99,
+        residual_coefficient_activation=ActivationOptions.TANH,
+    )
+    mixtures = list(soft_configs(cfg))
+    assert len(mixtures) == 2
+    residuals = [
+        mixture.router_config.model_config.layer_config.residual_config
+        for mixture in mixtures
+    ]
+    assert all(
+        residual.coefficient_activation is ActivationOptions.TANH
+        for residual in residuals
+    )
+    modeled = [
+        residual.model_config
+        for residual in residuals
+        if residual.model_config is not None
+    ]
+    assert len(modeled) == 1
+    assert modeled[0].hidden_dim == 7
+    assert modeled[0].num_layers == 3
+    assert modeled[0].layer_config.activation is ActivationOptions.GELU
+
+
+def test_scoring_coefficient_stack_rejects_recursive_model_configuration():
+    with pytest.raises(
+        ValueError, match="RESIDUAL_STACK_RESIDUAL_MODEL_FLAG.*recursively"
+    ):
+        configuration(
+            "bert/linear",
+            soft_moe_flag=True,
+            soft_moe_scoring_residual_connection_option=WeightedResidualConfig,
+            soft_moe_scoring_residual_model_flag=True,
+            residual_stack_residual_model_flag=True,
+        )
 
 
 @pytest.mark.parametrize("has_feed_forward", [False, True])

@@ -274,6 +274,12 @@ class TestResidualModelFlagCatalogContract(unittest.TestCase):
                                 "DECODER_CROSS_ATTN_EXPERT_ADAPTIVE_",
                             )
                         )
+                        or model_flag_key.startswith(
+                            (
+                                "ATTENTION_SOFT_MOE_SCORING_",
+                                "TOKEN_MIXER_SOFT_MOE_SCORING_",
+                            )
+                        )
                     )
                     self.assertEqual(
                         runtime_defaults.annotations.get(model_flag_key),
@@ -401,6 +407,17 @@ class TestResidualModelFlagCatalogContract(unittest.TestCase):
                 if key.endswith(_MODEL_FLAG_SUFFIX)
             ):
                 overrides = {model_flag_key.lower(): True}
+                soft_scoring = model_flag_key.endswith(
+                    "SOFT_MOE_SCORING_RESIDUAL_MODEL_FLAG"
+                )
+                if soft_scoring:
+                    prefix = model_flag_key.removesuffix(
+                        "_SCORING_RESIDUAL_MODEL_FLAG"
+                    ).lower()
+                    overrides[f"{prefix}_flag"] = True
+                    overrides[f"{prefix}_scoring_residual_connection_option"] = (
+                        WeightedResidualConfig
+                    )
                 independent_key = (
                     f"{model_flag_key.removesuffix(_MODEL_FLAG_SUFFIX)}"
                     "_INDEPENDENT_FLAG"
@@ -413,6 +430,9 @@ class TestResidualModelFlagCatalogContract(unittest.TestCase):
                     model_flag=model_flag_key,
                 ):
                     runtime = package.bind_runtime_defaults(overrides)
+                    if soft_scoring:
+                        self.assertTrue(_modeled_residuals(runtime), model_flag_key)
+                        continue
                     self.assertTrue(
                         _enabled_residual_model_flag_paths(runtime),
                         model_flag_key,
