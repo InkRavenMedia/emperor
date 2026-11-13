@@ -21,7 +21,7 @@ from emperor.augmentations.adaptive_parameters._weights.depth_mapping import (
 from emperor.augmentations.adaptive_parameters._weights.validation import (
     ModulatedLowRankValidator,
 )
-from emperor.layers import Layer, LayerStack
+from emperor.layers import LayerStack
 
 
 class DiagonallyModulatedLowRankDynamicWeight(DynamicWeightAbstract):
@@ -148,4 +148,4 @@ class DiagonallyModulatedLowRankDynamicWeight(DynamicWeightAbstract):
         return self.output_factor
 
     def __get_coefficients(self, context: Tensor) -> Tensor:
-        return Layer.run_model_from_hidden(self.coefficient_model, context).hidden
+        return self.coefficient_model.forward_hidden(context)

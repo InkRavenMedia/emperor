@@ -102,22 +102,19 @@ class DynamicMemoryAbstract(Module):
         input_leading_shape = inputs.shape[:-1]
         input_feature_count = inputs.shape[-1]
         flattened_inputs = inputs.reshape(-1, input_feature_count)
-        flattened_leading_dimension = 0
-        if isinstance(model, (Layer, Sequential, LayerStack)):
+        if isinstance(model, (Layer, LayerStack)):
+            generator_output = model.forward_hidden(flattened_inputs)
+        elif isinstance(model, Sequential):
             generator_output = model(LayerState(hidden=flattened_inputs))
-            flattened_output_values = self._extract_model_hidden(generator_output)
-            restored_output_values = flattened_output_values.unflatten(
-                flattened_leading_dimension,
-                input_leading_shape,
-            )
-            return restored_output_values
-
-        flattened_output_values = model(flattened_inputs)
-        if not torch.is_tensor(flattened_output_values):
-            raise TypeError(
-                "DynamicMemory generator models must return a Tensor or LayerState, "
-                f"received {type(flattened_output_values).__name__}."
-            )
+        else:
+            generator_output = model(flattened_inputs)
+            if not torch.is_tensor(generator_output):
+                raise TypeError(
+                    "DynamicMemory generator models must return a Tensor or LayerState, "
+                    f"received {type(generator_output).__name__}."
+                )
+        flattened_output_values = self._extract_model_hidden(generator_output)
+        flattened_leading_dimension = 0
         restored_output_values = flattened_output_values.unflatten(
             flattened_leading_dimension,
             input_leading_shape,

@@ -28,6 +28,10 @@ class LinearAbstract(Module):
         self.VALIDATOR.validate(self)
         self.__init_parameters()
 
+    def forward_hidden(self, hidden: Tensor) -> Tensor:
+        """Run the linear model and return its output tensor."""
+        return self(hidden)
+
     def __init_parameters(self) -> None:
         weight, bias = self._create_base_parameters()
         self.register_parameter("weight_params", weight)

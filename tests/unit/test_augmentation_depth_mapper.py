@@ -618,6 +618,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         restored = DepthMappingLayerStack(config).double().eval()
         incompatible = restored.load_state_dict(model_state, strict=True)
         restored_output = restored(input_tensor)
+        hidden_output = restored.forward_hidden(input_tensor)
 
         self.assertEqual(incompatible.missing_keys, [])
         self.assertEqual(incompatible.unexpected_keys, [])
@@ -634,6 +635,7 @@ class TestDepthMappingLayerStack(unittest.TestCase):
         self.assertEqual(source_output.device.type, "cpu")
         self.assertTrue(torch.isfinite(source_output).all())
         torch.testing.assert_close(restored_output, source_output)
+        torch.testing.assert_close(hidden_output, source_output)
 
     def test_non_2d_input_raises_error(self):
         cfg = self.preset(generator_depth=2)

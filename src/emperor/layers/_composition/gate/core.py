@@ -8,7 +8,6 @@ from emperor.layers._options import ActivationOptions, LayerGateOptions
 from emperor.nn import Module
 
 if TYPE_CHECKING:
-    from emperor.layers._state import LayerState
     from emperor.nn import Module as EmperorModule
 
 
@@ -52,17 +51,15 @@ class LayerGate(Module):
         current: Tensor,
     ) -> Tensor:
         self.VALIDATOR.validate_gate_model(self.model)
-        gate_state = self.__gate_state(current)
-        output = self.model(gate_state)
-        return output.hidden if hasattr(output, "hidden") else output
+        if callable(getattr(self.model, "forward_hidden", None)):
+            return self.model.forward_hidden(current)
 
-    @staticmethod
-    def __gate_state(
-        current: Tensor,
-    ) -> "LayerState":
-        from emperor.layers._state import LayerState
+        from emperor.layers._layer import Layer
 
-        return LayerState(hidden=current)
+        output = Layer.run_model_from_hidden(self.model, current)
+        if hasattr(output, "hidden"):
+            return output.hidden
+        return output
 
     def effective_values(self, gate_output: Tensor) -> Tensor:
         if self.activation is None or self.activation == ActivationOptions.DISABLED:

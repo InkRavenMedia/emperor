@@ -24,7 +24,6 @@ class WeightedBankDynamicBias(DynamicBiasAbstract):
         return self.bank_expansion_factor, self.output_dim
 
     def forward(self, _bias_params: Tensor, logits: Tensor) -> Tensor:
-        bank_state = Layer.run_model_from_hidden(self.model, logits)
-        bank_logits = bank_state.hidden
+        bank_logits = Layer.forward_hidden(self.model, logits)
         bank_distribution = torch.softmax(bank_logits, dim=-1)
         return torch.matmul(bank_distribution, self.weight_bank)
