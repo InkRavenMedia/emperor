@@ -43,7 +43,6 @@ reviewed_modules = [
   "src/emperor/layers/_composition/residual/variants/additive.py",
   "src/emperor/layers/_composition/residual/variants/attention/__init__.py",
   "src/emperor/layers/_composition/residual/variants/attention/core.py",
-  "src/emperor/layers/_composition/residual/variants/attention/lifecycle.py",
   "src/emperor/layers/_composition/residual/variants/attention/state.py",
   "src/emperor/layers/_composition/residual/variants/weighted.py",
   "src/emperor/layers/_composition/residual/variants/weighted_blend.py",

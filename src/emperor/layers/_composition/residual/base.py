@@ -26,14 +26,6 @@ class ResidualState(ABC):
         )
 
 
-class ResidualStateLifecycle(ABC):
-    """Create residual state scoped to one forward execution."""
-
-    @abstractmethod
-    def create_state(self, initial_source: Tensor) -> ResidualState | None:
-        """Create state from the source entering the execution owner."""
-
-
 class ResidualConnectionAbstract(Module, ABC):
     """Stable runtime Interface implemented by every residual variant."""
 
@@ -48,12 +40,10 @@ class ResidualConnectionAbstract(Module, ABC):
         self.cfg: ResidualConfig = self._override_config(cfg, overrides)
         self.VALIDATOR.validate(self)
         self.residual_dim: int | None = self.cfg.residual_dim
-        self.residual_state_lifecycle: ResidualStateLifecycle | None = None
 
     def new_state(self, initial_source: Tensor) -> ResidualState | None:
-        if self.residual_state_lifecycle is None:
-            return None
-        return self.residual_state_lifecycle.create_state(initial_source)
+        """Return no history by default; stateful variants create their own."""
+        return None
 
     def apply_to_layer_state(
         self,

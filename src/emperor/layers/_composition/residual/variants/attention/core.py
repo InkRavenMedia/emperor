@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn as nn
@@ -13,9 +13,6 @@ from emperor.layers._composition.residual.base import (
 )
 from emperor.layers._composition.residual.config import AttentionResidualConfig
 from emperor.layers._composition.residual.validation import AttentionResidualValidator
-from emperor.layers._composition.residual.variants.attention.lifecycle import (
-    AttentionResidualStateLifecycle,
-)
 from emperor.layers._composition.residual.variants.attention.state import (
     AttentionResidualState,
 )
@@ -45,7 +42,6 @@ class AttentionResidual(ResidualConnectionAbstract):
         self.query_model: LayerStack | LinearAbstract | None = None
         self.__initialize_learned_query_or_query_model()
         self.key_norm = self.__build_key_norm()
-        self.residual_state_lifecycle = self.__build_residual_state_lifecycle()
 
     def __initialize_learned_query_or_query_model(self) -> None:
         if self.model_config is None:
@@ -64,13 +60,11 @@ class AttentionResidual(ResidualConnectionAbstract):
             elementwise_affine=True,
         )
 
-    def __build_residual_state_lifecycle(
-        self,
-    ) -> AttentionResidualStateLifecycle:
-        return AttentionResidualStateLifecycle(
-            residual_dim=self.residual_dim,
+    def new_state(self, initial_source: Tensor) -> AttentionResidualState:
+        self.VALIDATOR.validate_source(initial_source, residual_dim=self.residual_dim)
+        return AttentionResidualState(
+            initial_source=initial_source,
             block_size=self.block_size,
-            validator=self.VALIDATOR,
         )
 
     def apply_to_layer_state(
@@ -78,13 +72,15 @@ class AttentionResidual(ResidualConnectionAbstract):
         state: LayerState,
         previous: Tensor,
     ) -> LayerState:
-        if state.residual_state is None:
-            created_residual_state = self.new_state(previous)
-            self.VALIDATOR.validate_created_attention_state(
-                self,
-                created_residual_state,
-            )
-            state.residual_state = created_residual_state
+        if state.residual_state is not None:
+            return super().apply_to_layer_state(state, previous)
+
+        created_residual_state = self.new_state(previous)
+        self.VALIDATOR.validate_created_attention_state(
+            self,
+            created_residual_state,
+        )
+        state.residual_state = created_residual_state
         return super().apply_to_layer_state(state, previous)
 
     def forward(
@@ -94,11 +90,10 @@ class AttentionResidual(ResidualConnectionAbstract):
         *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
-        self.__validate_attention_forward_inputs(current, residual_state)
-        attention_state = cast(AttentionResidualState, residual_state)
+        self.VALIDATOR.validate_attention_forward_inputs(self, current, residual_state)
         query = self.__resolve_query(current)
         residual_sources = self.__append_and_stack_residual_sources(
-            attention_state, current
+            residual_state, current
         )
         accumulator_sources = self.__convert_to_accumulator_precision(
             residual_sources,
@@ -113,17 +108,6 @@ class AttentionResidual(ResidualConnectionAbstract):
             accumulator_sources, depth_weights
         )
         return mixed_residual_sources.to(dtype=residual_sources.dtype)
-
-    def __validate_attention_forward_inputs(
-        self,
-        current: Tensor,
-        residual_state: ResidualState | None,
-    ) -> None:
-        self.VALIDATOR.validate_attention_forward_inputs(
-            self,
-            current,
-            residual_state,
-        )
 
     def __resolve_query(self, current: Tensor) -> Tensor:
         if self.query is not None:

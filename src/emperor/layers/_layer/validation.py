@@ -230,12 +230,6 @@ class LayerResidualDelegateValidator(ValidatorBase):
             raise TypeError("residual_config must build a ResidualConnectionAbstract.")
         return connection
 
-    @staticmethod
-    def validate_state_lifecycle(
-        connection: ResidualConnectionAbstract,
-    ) -> None:
-        connection.VALIDATOR.validate_state_lifecycle(connection)
-
 
 class LayerValidator(ValidatorBase):
     @staticmethod

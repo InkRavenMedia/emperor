@@ -370,28 +370,6 @@ class TestLayerResidualDelegateValidatorAdapter(unittest.TestCase):
         ):
             TrackingLayerResidualDelegate(make_config())
 
-    def test_lifecycle_validation_dispatches_through_adapter(self):
-        class TrackingValidator(LayerResidualDelegateValidator):
-            @staticmethod
-            def validate_built_residual_connection_type(connection):
-                return connection
-
-            @staticmethod
-            def validate_state_lifecycle(connection):
-                raise RuntimeError("substituted lifecycle validator was called")
-
-        class TrackingLayerResidualDelegate(LayerResidualDelegate):
-            VALIDATOR = TrackingValidator
-
-            def _build_from_config(self, config, **kwargs):
-                return object()
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "substituted lifecycle validator was called",
-        ):
-            TrackingLayerResidualDelegate(make_config())
-
     def test_residual_output_dimension_error_contract_is_preserved(self):
         with self.assertRaisesRegex(
             ValueError,
