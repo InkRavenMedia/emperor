@@ -139,10 +139,16 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
                 activation=activation,
                 residual_config=residual_option(
                     **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
+                    **(
                         {"block_size": 1, "rms_norm_epsilon": 1e-6}
                         if residual_option is AttentionResidualConfig
                         else {}
-                    )
+                    ),
                 ),
                 dropout_probability=0.25,
                 layer_norm_position=LayerNormPositionOptions.BEFORE,

@@ -96,6 +96,7 @@ class TestDepthMappingAugmentation(unittest.TestCase):
         for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
             with self.subTest(residual=config_type.__name__):
                 residual = config_type(
+                    coefficient_activation=ActivationOptions.SIGMOID,
                     residual_dim=2,
                     model_config=DepthMappingLayerConfig(
                         generator_depth=3, bias_flag=True
@@ -109,7 +110,7 @@ class TestDepthMappingAugmentation(unittest.TestCase):
                     )
                     coefficient = torch.sigmoid(raw_coefficient)
                     if config_type is WeightedResidualConfig:
-                        expected = previous + raw_coefficient.tanh() * current
+                        expected = previous + coefficient * current
                     else:
                         expected = (
                             coefficient * current + (1.0 - coefficient) * previous

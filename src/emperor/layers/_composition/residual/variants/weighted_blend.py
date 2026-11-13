@@ -14,6 +14,7 @@ from emperor.layers._composition.residual.base import (
     ResidualState,
 )
 from emperor.layers._composition.residual.config import WeightedBlendResidualConfig
+from emperor.layers._options import ActivationOptions
 
 if TYPE_CHECKING:
     from emperor.layers import LayerStack, LayerStackConfig
@@ -27,6 +28,7 @@ class WeightedBlendResidual(ResidualConnectionAbstract):
         overrides: WeightedBlendResidualConfig | None = None,
     ) -> None:
         super().__init__(cfg, overrides)
+        self.coefficient_activation: ActivationOptions = self.cfg.coefficient_activation
         self.model_config: LayerStackConfig | LinearLayerConfig | None = (
             self.cfg.model_config
         )
@@ -58,14 +60,13 @@ class WeightedBlendResidual(ResidualConnectionAbstract):
         previous: Tensor,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
-        raw_mix_coefficient = self._resolve_raw_mix_coefficient(current, previous)
-        current_coefficient = torch.sigmoid(raw_mix_coefficient)
+        current_coefficient = self._resolve_mix_coefficient(current, previous)
         previous_coefficient = 1.0 - current_coefficient
         current_contribution = current_coefficient * current
         previous_contribution = previous_coefficient * previous
         return current_contribution + previous_contribution
 
-    def _resolve_raw_mix_coefficient(
+    def _resolve_mix_coefficient(
         self,
         current: Tensor,
         previous: Tensor,
@@ -78,7 +79,12 @@ class WeightedBlendResidual(ResidualConnectionAbstract):
                 current, previous
             )
 
-        return raw_mix_coefficient
+        return self.__activate_mix_coefficient(raw_mix_coefficient)
+
+    def __activate_mix_coefficient(self, raw_mix_coefficient: Tensor) -> Tensor:
+        if self.coefficient_activation == ActivationOptions.DISABLED:
+            return raw_mix_coefficient
+        return self.coefficient_activation(raw_mix_coefficient)
 
     def __compute_raw_mix_coefficient_with_model(
         self,

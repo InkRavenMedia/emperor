@@ -30,6 +30,9 @@ from models.neuron.expert_linear_adaptive._residual import (
 
 @dataclass(frozen=True, kw_only=True)
 class ControlDefaultValues:
+    residual_coefficient_activation: ActivationOptions = (
+        config.RESIDUAL_COEFFICIENT_ACTIVATION
+    )
     residual_stack_independent_flag: bool = config.RESIDUAL_STACK_INDEPENDENT_FLAG
     residual_stack_hidden_dim: int | None = config.RESIDUAL_STACK_HIDDEN_DIM
     residual_stack_layer_norm_position: LayerNormPositionOptions | None = (
@@ -1621,6 +1624,7 @@ def _recurrent_defaults(
     )
     residual_stack_options = resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=values.residual_coefficient_activation,
             independent_flag=values.residual_stack_independent_flag,
             hidden_dim=values.residual_stack_hidden_dim,
             num_layers=values.residual_stack_num_layers,

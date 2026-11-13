@@ -1161,6 +1161,11 @@ def _accepted_keys() -> frozenset[str]:
     read_recurrent_halting_measures(reader)
     read_recurrence_values(reader)
     read_halting_implementations(reader)
+    reader.enum(
+        "residual_coefficient_activation",
+        config.RESIDUAL_COEFFICIENT_ACTIVATION,
+        ActivationOptions,
+    )
     return frozenset(reader.accepted)
 
 

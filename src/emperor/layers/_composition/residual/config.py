@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from emperor.config import ConfigBase, optional_field
+from emperor.layers._options import ActivationOptions
 
 if TYPE_CHECKING:
     from emperor.layers import LayerStackConfig
@@ -40,6 +41,12 @@ class WeightedResidualConfig(ResidualConfig):
         "mixing coefficient per feature. When omitted, a learned scalar parameter "
         "is used. The coefficient model retains its own parameter initialization."
     )
+    coefficient_activation: ActivationOptions | None = optional_field(
+        "Required activation applied to the raw scalar or model-generated mixing "
+        "coefficient. Choose SIGMOID if unsure. Must be supplied explicitly; no "
+        "default is applied. Set DISABLED to use the raw "
+        "coefficient. Other activations may produce negative or unbounded weights."
+    )
 
     def _registry_owner(self) -> type:
         from emperor.layers._composition.residual.variants.weighted import (
@@ -56,6 +63,13 @@ class WeightedBlendResidualConfig(ResidualConfig):
         "receives concatenated current and previous values and produces one raw "
         "blend coefficient per feature. When omitted, a learned scalar parameter "
         "is used. The coefficient model retains its own parameter initialization."
+    )
+    coefficient_activation: ActivationOptions | None = optional_field(
+        "Required activation applied to the raw scalar or model-generated blend "
+        "coefficient. Choose SIGMOID if unsure. Must be supplied explicitly; no "
+        "default is applied. Set DISABLED to use the raw "
+        "coefficient. The previous coefficient is one minus the current coefficient; "
+        "activations outside [0, 1] do not produce a convex blend."
     )
 
     def _registry_owner(self) -> type:

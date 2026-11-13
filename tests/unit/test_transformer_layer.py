@@ -164,10 +164,16 @@ class TestTransformerEncoderLayer(unittest.TestCase):
                 if residual_connection_option is None
                 else residual_connection_option(
                     **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_connection_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
+                    **(
                         {}
                         if residual_model_config is None
                         else {"model_config": residual_model_config}
-                    )
+                    ),
                 )
             ),
             attention_config=attention_config,
@@ -636,10 +642,16 @@ class TestTransformerDecoderLayer(unittest.TestCase):
                 if residual_connection_option is None
                 else residual_connection_option(
                     **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_connection_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
+                    **(
                         {}
                         if residual_model_config is None
                         else {"model_config": residual_model_config}
-                    )
+                    ),
                 )
             ),
             self_attention_config=self_attention_config,

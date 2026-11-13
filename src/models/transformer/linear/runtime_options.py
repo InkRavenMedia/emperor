@@ -258,6 +258,9 @@ class TransformerFeedForwardOptions:
 
 @dataclass(frozen=True)
 class RuntimeOptions:
+    residual_coefficient_activation: ActivationOptions = field(
+        default=ActivationOptions.SIGMOID, kw_only=True
+    )
     encoder_output_normalization: NormalizationOptions = field(
         default=NormalizationOptions.LAYER_NORM, kw_only=True
     )

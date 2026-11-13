@@ -45,6 +45,7 @@ class _ParametricGeneratorConfigBuilderImplementation:
         ),
         stack_residual_model_flag: bool = config.STACK_RESIDUAL_MODEL_FLAG,
         stack_dropout_probability: float = config.STACK_DROPOUT_PROBABILITY,
+        residual_coefficient_activation: ActivationOptions = config.RESIDUAL_COEFFICIENT_ACTIVATION,
         residual_stack_independent_flag: bool = (
             config.RESIDUAL_STACK_INDEPENDENT_FLAG
         ),
@@ -137,6 +138,7 @@ class _ParametricGeneratorConfigBuilderImplementation:
             residual_stack_options
             or resolve_residual_stack_options(
                 ResidualStackSource(
+                    coefficient_activation=residual_coefficient_activation,
                     independent_flag=residual_stack_independent_flag,
                     hidden_dim=residual_stack_hidden_dim,
                     num_layers=residual_stack_num_layers,

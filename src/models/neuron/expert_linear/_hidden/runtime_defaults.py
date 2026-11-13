@@ -51,6 +51,10 @@ def builder_kwargs_from_flat(
     expert_control = expert_control_defaults(config_module)
     residual_stack_options = resolve_residual_stack_options(
         ResidualStackSource(
+            coefficient_activation=kwargs.pop(
+                "residual_coefficient_activation",
+                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
+            ),
             independent_flag=kwargs.pop(
                 "residual_stack_independent_flag",
                 config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,

@@ -67,6 +67,9 @@ class _SubmoduleStackDefaults(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class ResidualStackSource:
+    coefficient_activation: ActivationOptions = field(
+        default=ActivationOptions.SIGMOID, kw_only=True
+    )
     independent_flag: bool
     hidden_dim: int | None
     num_layers: int | None
@@ -85,6 +88,9 @@ class ResidualStackSource:
 
 @dataclass(frozen=True, slots=True)
 class ResidualStackOptions:
+    coefficient_activation: ActivationOptions = field(
+        default=ActivationOptions.SIGMOID, kw_only=True
+    )
     hidden_dim: int
     num_layers: int
     activation: ActivationOptions
@@ -110,6 +116,7 @@ def resolve_residual_stack_options(
 
     if not source.independent_flag:
         return ResidualStackOptions(
+            coefficient_activation=source.coefficient_activation,
             hidden_dim=defaults.hidden_dim,
             num_layers=defaults.num_layers,
             activation=defaults.activation,
@@ -133,6 +140,7 @@ def resolve_residual_stack_options(
             bias_flag=defaults.bias_flag,
         )
     return ResidualStackOptions(
+        coefficient_activation=source.coefficient_activation,
         hidden_dim=(
             defaults.hidden_dim if source.hidden_dim is None else source.hidden_dim
         ),
@@ -214,6 +222,7 @@ def build_residual_stack_config(
             residual_config=build_residual_config(
                 options.residual_connection_option,
                 False,
+                options,
                 residual_block_size=options.residual_block_size,
                 residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
                 selector_field="RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION",
@@ -240,6 +249,12 @@ def build_residual_config(
 ) -> ResidualConfig | None:
     """Build one package-owned residual config from a selector/flag pair."""
 
+    coefficient_activation = (
+        residual_stack_options.coefficient_activation
+        if residual_stack_options is not None
+        else ActivationOptions.SIGMOID
+    )
+
     if type(residual_model_flag) is not bool:
         raise TypeError(f"{model_flag_field} must be bool.")
     if residual_connection_option is None:
@@ -259,6 +274,13 @@ def build_residual_config(
             return residual_connection_option(
                 block_size=residual_block_size,
                 rms_norm_epsilon=residual_rms_norm_epsilon,
+            )
+        if issubclass(
+            residual_connection_option,
+            (WeightedResidualConfig, WeightedBlendResidualConfig),
+        ):
+            return residual_connection_option(
+                coefficient_activation=coefficient_activation,
             )
         return residual_connection_option()
     if not issubclass(residual_connection_option, _MODELED_RESIDUAL_CONFIGS):
@@ -283,6 +305,7 @@ def build_residual_config(
         residual_connection_option,
     )
     return weighted_residual_option(
+        coefficient_activation=coefficient_activation,
         model_config=build_residual_stack_config(
             residual_stack_options,
         ),

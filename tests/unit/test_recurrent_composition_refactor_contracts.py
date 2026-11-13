@@ -87,7 +87,7 @@ def _thinking_oracle(hidden, parameters, depth, gradient_count=None, controllers
                 )
                 candidate = (
                     previous
-                    + parameters["residual_connection.raw_weight"].tanh() * candidate
+                    + parameters["residual_connection.raw_weight"].sigmoid() * candidate
                 )
             hidden = candidate
     return hidden
@@ -204,7 +204,9 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
                     option=LayerGateOptions.ADDITION,
                     model_config=linear_stack_config(2, bias_flag=True),
                 ),
-                residual_config=WeightedResidualConfig(),
+                residual_config=WeightedResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
             )
             .build()
             .double()

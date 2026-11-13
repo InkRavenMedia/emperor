@@ -1,6 +1,6 @@
 import math
 import unittest
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 
 import torch
 
@@ -60,8 +60,18 @@ class TestResidualConfigRegistry(unittest.TestCase):
     def test_each_concrete_config_builds_its_exact_runtime_owner(self):
         cases = (
             (AdditiveResidualConfig(), AdditiveResidual),
-            (WeightedResidualConfig(), WeightedResidual),
-            (WeightedBlendResidualConfig(), WeightedBlendResidual),
+            (
+                WeightedResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                WeightedResidual,
+            ),
+            (
+                WeightedBlendResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                WeightedBlendResidual,
+            ),
             (
                 AttentionResidualConfig(
                     block_size=1, rms_norm_epsilon=1e-6, residual_dim=2
@@ -83,9 +93,9 @@ class TestResidualConfigRegistry(unittest.TestCase):
             ResidualConfig().build()
 
     def test_config_overrides_are_applied_before_runtime_construction(self):
-        residual = WeightedResidualConfig(residual_dim=2).build(
-            overrides=WeightedResidualConfig(residual_dim=5)
-        )
+        residual = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID, residual_dim=2
+        ).build(overrides=WeightedResidualConfig(residual_dim=5))
 
         self.assertEqual(residual.residual_dim, 5)
         self.assertEqual(residual.cfg.residual_dim, 5)
@@ -95,14 +105,20 @@ class TestResidualConfigRegistry(unittest.TestCase):
             TypeError,
             "WeightedResidualConfig builds WeightedResidual, not AdditiveResidual",
         ):
-            AdditiveResidual(WeightedResidualConfig())
+            AdditiveResidual(
+                WeightedResidualConfig(coefficient_activation=ActivationOptions.SIGMOID)
+            )
 
 
 class TestResidualRuntimeHierarchy(unittest.TestCase):
     def test_runtime_variants_directly_inherit_the_residual_interface(self):
         additive = AdditiveResidualConfig().build()
-        weighted = WeightedResidualConfig().build()
-        blend = WeightedBlendResidualConfig().build()
+        weighted = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
+        blend = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
         attention = AttentionResidualConfig(
             block_size=1, rms_norm_epsilon=1e-6, residual_dim=2
         ).build()
@@ -116,8 +132,10 @@ class TestResidualRuntimeHierarchy(unittest.TestCase):
 
         for config in (
             AdditiveResidualConfig(),
-            WeightedResidualConfig(),
-            WeightedBlendResidualConfig(),
+            WeightedResidualConfig(coefficient_activation=ActivationOptions.SIGMOID),
+            WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID
+            ),
         ):
             with self.subTest(config=type(config).__name__):
                 residual = config.build()
@@ -183,11 +201,13 @@ class TestPairwiseResidualVariants(unittest.TestCase):
         torch.testing.assert_close(current.grad, torch.ones_like(current))
         torch.testing.assert_close(previous.grad, torch.ones_like(previous))
 
-    def test_weighted_residual_owns_tanh_composition(self):
-        current = torch.tensor([[2.0, 3.0]], requires_grad=True)
+    def test_weighted_residual_attenuates_current_without_reversing_its_sign(self):
+        current = torch.tensor([[2.0, -3.0]], requires_grad=True)
         previous = torch.tensor([[5.0, 7.0]], requires_grad=True)
-        residual = WeightedResidualConfig().build()
-        raw_mix_coefficient = torch.tensor(0.4)
+        residual = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
+        raw_mix_coefficient = torch.tensor(math.log(0.25 / 0.75))
         with torch.no_grad():
             residual.raw_weight.copy_(raw_mix_coefficient)
 
@@ -196,15 +216,19 @@ class TestPairwiseResidualVariants(unittest.TestCase):
 
         torch.testing.assert_close(
             actual,
-            previous.detach() + torch.tanh(raw_mix_coefficient) * current.detach(),
+            previous.detach() + 0.25 * current.detach(),
         )
+        torch.testing.assert_close(current.grad, torch.full_like(current, 0.25))
+        torch.testing.assert_close(previous.grad, torch.ones_like(previous))
         self.assertIsNotNone(residual.raw_weight.grad)
         self.assertGreater(residual.raw_weight.grad.abs().item(), 0.0)
 
     def test_weighted_blend_owns_sigmoid_convex_composition(self):
         current = torch.tensor([[2.0, 3.0]], requires_grad=True)
         previous = torch.tensor([[5.0, 7.0]], requires_grad=True)
-        residual = WeightedBlendResidualConfig().build()
+        residual = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
         raw_mix_coefficient = torch.tensor(-0.3)
         with torch.no_grad():
             residual.raw_weight.copy_(raw_mix_coefficient)
@@ -222,8 +246,12 @@ class TestPairwiseResidualVariants(unittest.TestCase):
         self.assertGreater(residual.raw_weight.grad.abs().item(), 0.0)
 
     def test_scalar_coefficient_initializers_are_preserved(self):
-        weighted = WeightedResidualConfig().build()
-        blend = WeightedBlendResidualConfig().build()
+        weighted = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
+        blend = WeightedBlendResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID
+        ).build()
 
         torch.testing.assert_close(weighted.raw_weight, torch.tensor(0.0))
         torch.testing.assert_close(
@@ -269,6 +297,7 @@ class TestPairwiseResidualVariants(unittest.TestCase):
                     expected_rng_state = torch.random.get_rng_state().clone()
                     torch.manual_seed(17)
                     residual = config_type(
+                        coefficient_activation=ActivationOptions.SIGMOID,
                         residual_dim=residual_dim,
                         model_config=model_config,
                     ).build()
@@ -290,6 +319,7 @@ class TestPairwiseResidualVariants(unittest.TestCase):
 
     def test_data_dependent_coefficient_changes_the_output_and_receives_gradients(self):
         residual = WeightedResidualConfig(
+            coefficient_activation=ActivationOptions.SIGMOID,
             residual_dim=2,
             model_config=LinearLayerConfig(bias_flag=True),
         ).build()
@@ -311,6 +341,9 @@ class TestPairwiseResidualVariants(unittest.TestCase):
         output = residual(current, previous)
         output.sum().backward()
 
+        current_coefficients = (output.detach() - previous.detach()) / current.detach()
+        self.assertTrue(torch.all(current_coefficients > 0))
+        self.assertTrue(torch.all(current_coefficients < 1))
         self.assertIsNotNone(residual.model.weight_params.grad)
         self.assertGreater(
             torch.count_nonzero(residual.model.weight_params.grad).item(),
@@ -325,6 +358,7 @@ class TestPairwiseResidualVariants(unittest.TestCase):
             ):
                 torch.manual_seed(17)
                 residual = config_type(
+                    coefficient_activation=ActivationOptions.SIGMOID,
                     residual_dim=2,
                     model_config=_coefficient_stack_config(),
                 ).build()
@@ -336,7 +370,7 @@ class TestPairwiseResidualVariants(unittest.TestCase):
                         LayerState(hidden=coefficient_input)
                     ).hidden
                     if config_type is WeightedResidualConfig:
-                        expected = previous + torch.tanh(raw_coefficients) * current
+                        expected = previous + torch.sigmoid(raw_coefficients) * current
                     else:
                         blend = torch.sigmoid(raw_coefficients)
                         expected = blend * current + (1.0 - blend) * previous
@@ -369,6 +403,7 @@ class TestPairwiseResidualVariants(unittest.TestCase):
             with self.subTest(config=config_type.__name__):
                 residual = ModelInitializedResidual(
                     config_type(
+                        coefficient_activation=ActivationOptions.SIGMOID,
                         residual_dim=2,
                         model_config=LinearLayerConfig(bias_flag=True),
                     )
@@ -379,10 +414,21 @@ class TestPairwiseResidualVariants(unittest.TestCase):
     def test_runtime_parameter_names_remain_stable_and_attention_is_direct(self):
         cases = (
             (AdditiveResidualConfig(), ()),
-            (WeightedResidualConfig(), ("raw_weight",)),
-            (WeightedBlendResidualConfig(), ("raw_weight",)),
+            (
+                WeightedResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                ("raw_weight",),
+            ),
             (
                 WeightedBlendResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                ("raw_weight",),
+            ),
+            (
+                WeightedBlendResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID,
                     residual_dim=2,
                     model_config=LinearLayerConfig(bias_flag=True),
                 ),
@@ -408,9 +454,12 @@ class TestPairwiseResidualVariants(unittest.TestCase):
     def test_strict_checkpoint_round_trip_preserves_every_variant_output(self):
         configs = (
             AdditiveResidualConfig(),
-            WeightedResidualConfig(),
-            WeightedBlendResidualConfig(),
+            WeightedResidualConfig(coefficient_activation=ActivationOptions.SIGMOID),
             WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID
+            ),
+            WeightedBlendResidualConfig(
+                coefficient_activation=ActivationOptions.SIGMOID,
                 residual_dim=2,
                 model_config=LinearLayerConfig(bias_flag=True),
             ),
@@ -444,6 +493,152 @@ class TestPairwiseResidualVariants(unittest.TestCase):
                 torch.testing.assert_close(actual, expected)
 
 
+class TestWeightedResidualCoefficientActivation(unittest.TestCase):
+    def test_omitted_and_none_activation_are_rejected_and_help_recommends_sigmoid(self):
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            for model_config in (None, LinearLayerConfig(bias_flag=True)):
+                for activation_settings in ({}, {"coefficient_activation": None}):
+                    with self.subTest(
+                        config=config_type.__name__,
+                        model=model_config,
+                        settings=activation_settings,
+                    ):
+                        config = config_type(
+                            residual_dim=2,
+                            model_config=model_config,
+                            **activation_settings,
+                        )
+                        with self.assertRaisesRegex(
+                            ValueError,
+                            f"coefficient_activation is required for {config_type.__name__}",
+                        ):
+                            config.build()
+            activation_field = next(
+                field
+                for field in fields(config_type)
+                if field.name == "coefficient_activation"
+            )
+            self.assertIn("Choose SIGMOID if unsure", activation_field.metadata["help"])
+            self.assertIn("no default is applied", activation_field.metadata["help"])
+
+    def test_activation_can_be_supplied_by_an_override_before_validation(self):
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            with self.subTest(config=config_type.__name__):
+                config = config_type()
+                residual = config.build(
+                    overrides=config_type(
+                        coefficient_activation=ActivationOptions.SIGMOID
+                    )
+                )
+                self.assertIs(
+                    residual.coefficient_activation, ActivationOptions.SIGMOID
+                )
+                self.assertIsNone(config.coefficient_activation)
+
+    def test_every_activation_controls_scalar_and_model_coefficients_and_gradients(
+        self,
+    ):
+        model_configs = (
+            ("scalar", None),
+            ("linear", LinearLayerConfig(bias_flag=True)),
+            ("stack", _coefficient_stack_config()),
+        )
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            for activation in ActivationOptions:
+                for model_name, model_config in model_configs:
+                    with self.subTest(
+                        config=config_type.__name__,
+                        activation=activation.name,
+                        model=model_name,
+                    ):
+                        residual = (
+                            config_type(
+                                residual_dim=2,
+                                model_config=model_config,
+                                coefficient_activation=activation,
+                            )
+                            .build()
+                            .double()
+                        )
+                        current = torch.tensor([[2.0, -3.0]], dtype=torch.float64)
+                        previous = torch.tensor([[5.0, 7.0]], dtype=torch.float64)
+                        if model_config is None:
+                            reference_raw = torch.tensor(
+                                1.4, dtype=torch.float64, requires_grad=True
+                            )
+                            raw_parameter = residual.raw_weight
+                        else:
+                            reference_raw = torch.tensor(
+                                [-1.2, 1.4], dtype=torch.float64, requires_grad=True
+                            )
+                            output_model = (
+                                residual.model[-1].model
+                                if model_name == "stack"
+                                else residual.model
+                            )
+                            with torch.no_grad():
+                                output_model.weight_params.zero_()
+                            raw_parameter = output_model.bias_params
+                        with torch.no_grad():
+                            raw_parameter.copy_(reference_raw)
+
+                        coefficient = (
+                            reference_raw
+                            if activation == ActivationOptions.DISABLED
+                            else activation(reference_raw)
+                        )
+                        if config_type is WeightedResidualConfig:
+                            expected = previous + coefficient * current
+                        else:
+                            expected = (
+                                coefficient * current + (1.0 - coefficient) * previous
+                            )
+                        actual = residual(current, previous)
+                        torch.testing.assert_close(actual, expected)
+                        actual.sum().backward()
+                        expected.sum().backward()
+                        torch.testing.assert_close(
+                            raw_parameter.grad, reference_raw.grad
+                        )
+
+    def test_dimension_overrides_preserve_activation_and_explicit_overrides_win(self):
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            with self.subTest(config=config_type.__name__):
+                config = config_type(coefficient_activation=ActivationOptions.TANH)
+                residual = config.build(overrides=config_type(residual_dim=3))
+                self.assertIs(residual.coefficient_activation, ActivationOptions.TANH)
+                self.assertEqual(residual.residual_dim, 3)
+
+                overridden = config.build(
+                    overrides=config_type(
+                        coefficient_activation=ActivationOptions.SIGMOID
+                    )
+                )
+                self.assertIs(
+                    overridden.coefficient_activation, ActivationOptions.SIGMOID
+                )
+                self.assertIs(config.coefficient_activation, ActivationOptions.TANH)
+
+    def test_invalid_activation_is_rejected_for_scalar_and_model_paths(self):
+        for config_type in (WeightedResidualConfig, WeightedBlendResidualConfig):
+            for model_config in (None, LinearLayerConfig(bias_flag=True)):
+                for activation in ("sigmoid", False, 0, torch.sigmoid):
+                    with self.subTest(
+                        config=config_type.__name__,
+                        model=model_config,
+                        activation=activation,
+                    ):
+                        with self.assertRaisesRegex(
+                            TypeError,
+                            "coefficient_activation must be an ActivationOptions",
+                        ):
+                            config_type(
+                                residual_dim=2,
+                                model_config=model_config,
+                                coefficient_activation=activation,
+                            ).build()
+
+
 class TestWeightedResidualValidationContracts(unittest.TestCase):
     def test_each_nested_controller_is_rejected_for_both_weighted_variants(self):
         paths = (
@@ -465,7 +660,11 @@ class TestWeightedResidualValidationContracts(unittest.TestCase):
                     else:
                         setattr(stack, path, object())
                     with self.assertRaises(ValueError) as raised:
-                        config_type(residual_dim=2, model_config=stack).build()
+                        config_type(
+                            coefficient_activation=ActivationOptions.SIGMOID,
+                            residual_dim=2,
+                            model_config=stack,
+                        ).build()
                     self.assertEqual(
                         str(raised.exception),
                         f"{config_type.__name__}.model_config.{path} must be None "
@@ -523,7 +722,9 @@ class TestWeightedResidualValidationContracts(unittest.TestCase):
                 with self.subTest(variant=config_type.__name__, message=message):
                     with self.assertRaisesRegex(error, message):
                         config_type(
-                            residual_dim=None, model_config=model_config
+                            coefficient_activation=ActivationOptions.SIGMOID,
+                            residual_dim=None,
+                            model_config=model_config,
                         ).build()
 
     def test_explicit_final_bias_enables_both_weighted_stack_variants(self):
@@ -532,7 +733,11 @@ class TestWeightedResidualValidationContracts(unittest.TestCase):
                 stack = _coefficient_stack_config(
                     bias_flag=False, last_layer_bias_option=LastLayerBiasOptions.ENABLED
                 )
-                residual = config_type(residual_dim=2, model_config=stack).build()
+                residual = config_type(
+                    coefficient_activation=ActivationOptions.SIGMOID,
+                    residual_dim=2,
+                    model_config=stack,
+                ).build()
                 self.assertIsNotNone(residual.model[-1].model.bias_params)
                 self.assertFalse(stack.layer_config.layer_model_config.bias_flag)
 

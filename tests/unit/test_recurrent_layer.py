@@ -1093,6 +1093,12 @@ class TestRecurrentLayer(unittest.TestCase):
                 if residual_connection_option is None
                 else residual_connection_option(
                     **(
+                        {"coefficient_activation": ActivationOptions.SIGMOID}
+                        if residual_connection_option
+                        in (WeightedResidualConfig, WeightedBlendResidualConfig)
+                        else {}
+                    ),
+                    **(
                         {"block_size": 1, "rms_norm_epsilon": 1e-6}
                         if residual_connection_option is AttentionResidualConfig
                         else {}
@@ -4902,7 +4908,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 WeightedResidualConfig,
                 None,
-                torch.full_like(hidden, 1.0),
+                torch.full_like(hidden, 2.5),
             ),
             (
                 WeightedBlendResidualConfig,
@@ -4942,7 +4948,7 @@ class TestRecurrentLayer(unittest.TestCase):
                         torch.cat((current, hidden), dim=-1)
                     )
                     if option is WeightedResidualConfig:
-                        expected = hidden + torch.tanh(raw_coefficients) * current
+                        expected = hidden + torch.sigmoid(raw_coefficients) * current
                     else:
                         blend = torch.sigmoid(raw_coefficients)
                         expected = blend * current + (1.0 - blend) * hidden
