@@ -15,7 +15,7 @@ from emperor.layers._state import LayerState
 
 
 @dataclass(frozen=True)
-class RecurrentTokenSelection:
+class InnerThinkingTokenSelection:
     VALIDATOR = InnerThinkingRecurrentValidator
     indices: Tensor
     valid: Tensor
@@ -31,7 +31,7 @@ class RecurrentTokenSelection:
         feature_indices = self.indices.unsqueeze(-1).expand_as(valid_token_update)
         return previous_hidden.scatter_add(-2, feature_indices, valid_token_update)
 
-    def select_state(self, state: LayerState, *, attention_heads: int) -> LayerState:
+    def select_state(self, state: LayerState, attention_heads: int) -> LayerState:
         updates = {"hidden": self.gather_hidden(state.hidden)}
         updates.update(self.__select_padding_masks(state))
         updates.update(self.__select_attention_masks(state, attention_heads))
@@ -67,7 +67,7 @@ class RecurrentTokenSelection:
         return selected_masks
 
     def __select_attention_mask(
-        self, mask: Tensor, *, attention_heads: int, select_keys: bool
+        self, mask: Tensor, attention_heads: int, select_keys: bool
     ) -> Tensor:
         sequence_batch_size = prod(self.indices.shape[:-1])
         selected_token_count = self.indices.shape[-1]

@@ -254,7 +254,7 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             "Builds an ordered stack of Layer blocks, with shared dimensions and optional shared gate, halting, or memory modules.",
         ),
         _semantic_type_policy(
-            "emperor.layers._composition.recurrent.variants.standard.RecurrentLayer",
+            "emperor.layers._composition.recurrent.variants.standard.core.RecurrentLayer",
             "Reuses a configured block for multiple recurrent steps, optionally adding recurrent gating, normalization, halting, or memory.",
         ),
         _semantic_type_policy(
@@ -267,7 +267,7 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             "Abstract recurrent composition Interface; use a concrete recurrent config.",
         ),
         _semantic_type_policy(
-            "emperor.layers._composition.recurrent.variants.tiny_recursive_model."
+            "emperor.layers._composition.recurrent.variants.tiny_recursive_model.core."
             "TinyRecursiveModelRecurrent",
             "Reuses one transition block for Tiny Recursive Model latent and answer updates across a fixed answer-update schedule.",
         ),
@@ -278,7 +278,7 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
         ),
         _semantic_type_policy(
             "emperor.layers._composition.recurrent.variants."
-            "hierarchical_reasoning_model.HierarchicalReasoningModelRecurrent",
+            "hierarchical_reasoning_model.core.HierarchicalReasoningModelRecurrent",
             "Runs distinct low- and high-level transitions on nested recurrent clocks.",
         ),
         _semantic_type_policy(

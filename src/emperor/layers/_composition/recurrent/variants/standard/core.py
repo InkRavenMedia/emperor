@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from torch import Tensor
@@ -13,28 +13,14 @@ from emperor.layers._composition.recurrent.runtime.execution import (
     RecurrentExecution,
 )
 from emperor.layers._composition.recurrent.validation import RecurrentLayerValidator
+from emperor.layers._composition.recurrent.variants.standard.state import (
+    StandardRecurrentState,
+)
 from emperor.layers._state import LayerState
 
 if TYPE_CHECKING:
-    from emperor.halting import HaltingStateBase
     from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
     from emperor.layers._composition.residual.base import ResidualState
-
-
-@dataclass(frozen=True)
-class _StandardRecurrentState:
-    hidden: Tensor
-    fixed_input: Tensor
-    loss: Tensor | None
-    context_state: LayerState
-    transition_index: int
-    residual_state: ResidualState | None = None
-    halting_state: HaltingStateBase | None = None
-    all_items_halted: bool = False
-
-    @property
-    def output_hidden(self) -> Tensor:
-        return self.hidden
 
 
 class RecurrentLayer(RecurrentCompositionAbstract):
@@ -58,7 +44,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
             self.max_steps
         )
         self.block_model = self._build_transition_model(self.block_config)
-        self.__recurrent_execution: RecurrentExecution[_StandardRecurrentState] = (
+        self.__recurrent_execution: RecurrentExecution[StandardRecurrentState] = (
             RecurrentExecution()
         )
 
@@ -73,16 +59,16 @@ class RecurrentLayer(RecurrentCompositionAbstract):
     def _initialize_recurrent_execution_state(
         self,
         layer_state: LayerState,
-        *,
         branch_base_loss: Tensor | None,
-    ) -> _StandardRecurrentState:
-        return _StandardRecurrentState(
+    ) -> StandardRecurrentState:
+        residual_state = self.__initialize_recurrent_residual_state(layer_state)
+        return StandardRecurrentState(
             hidden=layer_state.hidden,
             fixed_input=layer_state.hidden,
             loss=branch_base_loss,
             context_state=layer_state,
             transition_index=0,
-            residual_state=self.__initialize_recurrent_residual_state(layer_state),
+            residual_state=residual_state,
         )
 
     def __initialize_recurrent_residual_state(
@@ -100,8 +86,8 @@ class RecurrentLayer(RecurrentCompositionAbstract):
 
     @staticmethod
     def _detach_recurrent_execution_state(
-        recurrent_state: _StandardRecurrentState,
-    ) -> _StandardRecurrentState:
+        recurrent_state: StandardRecurrentState,
+    ) -> StandardRecurrentState:
         return replace(
             recurrent_state,
             hidden=recurrent_state.hidden.detach(),
@@ -110,7 +96,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
 
     def _prepare_recurrent_transition(
         self,
-        recurrent_state: _StandardRecurrentState,
+        recurrent_state: StandardRecurrentState,
         *,
         tracks_gradients: bool,
     ) -> PreparedRecurrentTransition:
@@ -140,13 +126,10 @@ class RecurrentLayer(RecurrentCompositionAbstract):
 
     @staticmethod
     def _apply_recurrent_transition_result(
-        recurrent_state: _StandardRecurrentState,
+        recurrent_state: StandardRecurrentState,
         transition_result: RecurrentTransitionResult,
-    ) -> _StandardRecurrentState:
-        context_state = (
-            getattr(transition_result, "context_state", None)
-            or recurrent_state.context_state
-        )
+    ) -> StandardRecurrentState:
+        context_state = transition_result.context_state or recurrent_state.context_state
         return replace(
             recurrent_state,
             hidden=transition_result.hidden,
@@ -163,8 +146,8 @@ class RecurrentLayer(RecurrentCompositionAbstract):
 
     def _fork_recurrent_handoff_state(
         self,
-        recurrent_state: _StandardRecurrentState,
-    ) -> _StandardRecurrentState:
+        recurrent_state: StandardRecurrentState,
+    ) -> StandardRecurrentState:
         residual_schedule = self.recurrent_residual_schedule
         residual_state = recurrent_state.residual_state
         if residual_schedule is None:
@@ -176,6 +159,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
 
     @staticmethod
     def _recurrent_branch_loss(
-        recurrent_state: _StandardRecurrentState,
+        recurrent_state: StandardRecurrentState,
     ) -> Tensor | None:
         return recurrent_state.loss

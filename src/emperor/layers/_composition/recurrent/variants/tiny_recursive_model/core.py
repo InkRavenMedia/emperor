@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from torch import Tensor
@@ -11,69 +11,54 @@ from emperor.layers._composition.recurrent.runtime.execution import (
     RecurrentExecution,
 )
 from emperor.layers._composition.recurrent.validation import (
-    HierarchicalReasoningModelRecurrentValidator,
+    TinyRecursiveModelRecurrentValidator,
+)
+from emperor.layers._composition.recurrent.variants.tiny_recursive_model.state import (
+    TinyRecursiveModelState,
 )
 
 if TYPE_CHECKING:
     from emperor.config import ConfigBase
-    from emperor.halting import HaltingStateBase
     from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
     from emperor.layers._composition.recurrent.config import (
-        HierarchicalReasoningModelRecurrentConfig,
+        TinyRecursiveModelRecurrentConfig,
     )
     from emperor.layers._state import LayerState
     from emperor.nn import Module
 
 
-@dataclass(frozen=True)
-class _HierarchicalReasoningModelState:
-    fixed_input: Tensor
-    high: Tensor
-    low: Tensor
-    initial_loss: Tensor | None
-    auxiliary_losses: tuple[Tensor, ...]
-    context_state: LayerState
-    transition_index: int
-    halting_state: HaltingStateBase | None = None
-    all_items_halted: bool = False
+class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
+    """Apply one shared transition using the Tiny Recursive Model schedule."""
 
-    @property
-    def output_hidden(self) -> Tensor:
-        return self.high
-
-
-class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
-    """Apply distinct high- and low-level transitions on nested clocks."""
-
-    VALIDATOR = HierarchicalReasoningModelRecurrentValidator
+    VALIDATOR = TinyRecursiveModelRecurrentValidator
     supports_recurrent_diagnostics = True
 
     if TYPE_CHECKING:
-        high_initial: Tensor
-        low_initial: Tensor
+        answer_initial: Tensor
+        latent_initial: Tensor
 
     def __init__(
         self,
-        cfg: HierarchicalReasoningModelRecurrentConfig,
-        overrides: HierarchicalReasoningModelRecurrentConfig | None = None,
+        cfg: TinyRecursiveModelRecurrentConfig,
+        overrides: TinyRecursiveModelRecurrentConfig | None = None,
     ) -> None:
         super().__init__(cfg, overrides)
-        self.cfg: HierarchicalReasoningModelRecurrentConfig
-        self.high_block_config: ConfigBase = self.cfg.high_block_config
-        self.low_block_config: ConfigBase = self.cfg.low_block_config
-        self.high_cycles: int = self.cfg.high_cycles
-        self.low_cycles: int = self.cfg.low_cycles
+        self.cfg: TinyRecursiveModelRecurrentConfig
+        self.block_config: ConfigBase = self.cfg.block_config
+        self.latent_updates_per_answer_update: int = (
+            self.cfg.latent_updates_per_answer_update
+        )
+        self.answer_update_count: int = self.cfg.answer_update_count
         self.initialization_standard_deviation: float = (
             self.cfg.initialization_standard_deviation
         )
 
-        self.__register_initial_buffer("high_initial")
-        self.__register_initial_buffer("low_initial")
-        self.high_model: Module = self._build_transition_model(self.high_block_config)
-        self.low_model: Module = self._build_transition_model(self.low_block_config)
-        self.__recurrent_execution: RecurrentExecution[
-            _HierarchicalReasoningModelState
-        ] = RecurrentExecution()
+        self.__register_initial_buffer("answer_initial")
+        self.__register_initial_buffer("latent_initial")
+        self.block_model: Module = self._build_transition_model(self.block_config)
+        self.__recurrent_execution: RecurrentExecution[TinyRecursiveModelState] = (
+            RecurrentExecution()
+        )
 
     def __register_initial_buffer(self, buffer_name: str) -> None:
         initial_buffer = self._new_recurrent_initial_buffer(
@@ -85,8 +70,8 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
         self.VALIDATOR.validate_state(state, self.input_dim)
         self.VALIDATOR.validate_initial_buffers(
             state.hidden,
-            high_initial=self.high_initial,
-            low_initial=self.low_initial,
+            answer_initial=self.answer_initial,
+            latent_initial=self.latent_initial,
             expected_feature_dim=self.output_dim,
         )
 
@@ -99,14 +84,19 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
     def _initialize_recurrent_execution_state(
         self,
         layer_state: LayerState,
-        *,
         branch_base_loss: Tensor | None,
-    ) -> _HierarchicalReasoningModelState:
+    ) -> TinyRecursiveModelState:
         fixed_input = layer_state.hidden
-        return _HierarchicalReasoningModelState(
+        return TinyRecursiveModelState(
             fixed_input=fixed_input,
-            high=self._expand_recurrent_initial(self.high_initial, fixed_input),
-            low=self._expand_recurrent_initial(self.low_initial, fixed_input),
+            answer=self._expand_recurrent_initial(
+                self.answer_initial,
+                fixed_input,
+            ),
+            latent=self._expand_recurrent_initial(
+                self.latent_initial,
+                fixed_input,
+            ),
             initial_loss=branch_base_loss,
             auxiliary_losses=(),
             context_state=layer_state,
@@ -115,68 +105,66 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
 
     @staticmethod
     def _detach_recurrent_execution_state(
-        recurrent_state: _HierarchicalReasoningModelState,
-    ) -> _HierarchicalReasoningModelState:
+        recurrent_state: TinyRecursiveModelState,
+    ) -> TinyRecursiveModelState:
         return replace(
             recurrent_state,
-            high=recurrent_state.high.detach(),
-            low=recurrent_state.low.detach(),
+            answer=recurrent_state.answer.detach(),
+            latent=recurrent_state.latent.detach(),
             context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
         self,
-        recurrent_state: _HierarchicalReasoningModelState,
-        *,
+        recurrent_state: TinyRecursiveModelState,
         tracks_gradients: bool,
     ) -> PreparedRecurrentTransition:
-        if self.__updates_high(recurrent_state):
+        if self.__updates_answer(recurrent_state):
             return PreparedRecurrentTransition(
-                run_transition=self.high_model,
-                transition_input=recurrent_state.high + recurrent_state.low,
-                previous_evolving_hidden=recurrent_state.high,
+                run_transition=self.block_model,
+                transition_input=recurrent_state.answer + recurrent_state.latent,
+                previous_evolving_hidden=recurrent_state.answer,
                 halting_update_enabled=tracks_gradients,
             )
         return PreparedRecurrentTransition(
-            run_transition=self.low_model,
+            run_transition=self.block_model,
             transition_input=(
-                recurrent_state.low + recurrent_state.high + recurrent_state.fixed_input
+                recurrent_state.latent
+                + recurrent_state.answer
+                + recurrent_state.fixed_input
             ),
-            previous_evolving_hidden=recurrent_state.low,
+            previous_evolving_hidden=recurrent_state.latent,
             halting_update_enabled=False,
         )
 
     def _apply_recurrent_transition_result(
         self,
-        recurrent_state: _HierarchicalReasoningModelState,
+        recurrent_state: TinyRecursiveModelState,
         transition_result: RecurrentTransitionResult,
-    ) -> _HierarchicalReasoningModelState:
+    ) -> TinyRecursiveModelState:
         auxiliary_losses = self.__with_reduced_transition_loss(
             recurrent_state.auxiliary_losses,
             transition_result.loss,
         )
-        context_state = (
-            getattr(transition_result, "context_state", None)
-            or recurrent_state.context_state
+        context_state = transition_result.context_state or recurrent_state.context_state
+        answer = context_state.align_recurrent_hidden(
+            recurrent_state.answer,
+            initial=self.answer_initial,
+            source_state=recurrent_state.context_state,
         )
-        state_updates = {
-            "high": context_state.align_recurrent_hidden(
-                recurrent_state.high,
-                initial=self.high_initial,
-                source_state=recurrent_state.context_state,
-            ),
-            "low": context_state.align_recurrent_hidden(
-                recurrent_state.low,
-                initial=self.low_initial,
-                source_state=recurrent_state.context_state,
-            ),
-        }
-        state_updates["high" if self.__updates_high(recurrent_state) else "low"] = (
-            transition_result.hidden
+        latent = context_state.align_recurrent_hidden(
+            recurrent_state.latent,
+            initial=self.latent_initial,
+            source_state=recurrent_state.context_state,
         )
+        if self.__updates_answer(recurrent_state):
+            answer = transition_result.hidden
+        else:
+            latent = transition_result.hidden
         return replace(
             recurrent_state,
-            **state_updates,
+            answer=answer,
+            latent=latent,
             context_state=context_state,
             fixed_input=context_state.align_recurrent_hidden(
                 recurrent_state.fixed_input,
@@ -199,25 +187,25 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
 
     @staticmethod
     def _fork_recurrent_handoff_state(
-        recurrent_state: _HierarchicalReasoningModelState,
-    ) -> _HierarchicalReasoningModelState:
+        recurrent_state: TinyRecursiveModelState,
+    ) -> TinyRecursiveModelState:
         return replace(recurrent_state)
 
     def _recurrent_branch_loss(
         self,
-        recurrent_state: _HierarchicalReasoningModelState,
+        recurrent_state: TinyRecursiveModelState,
     ) -> Tensor | None:
         return self._accumulate_recurrent_losses(
             recurrent_state.initial_loss,
             recurrent_state.auxiliary_losses,
         )
 
-    def __updates_high(
+    def __updates_answer(
         self,
-        recurrent_state: _HierarchicalReasoningModelState,
+        recurrent_state: TinyRecursiveModelState,
     ) -> bool:
         transitions_per_iteration = (
             self.recurrent_iteration_schedule.transitions_per_iteration
         )
         phase_index = recurrent_state.transition_index % transitions_per_iteration
-        return phase_index >= self.low_cycles
+        return phase_index >= self.latent_updates_per_answer_update
