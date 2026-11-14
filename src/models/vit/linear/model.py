@@ -7,6 +7,7 @@ from emperor.experiments.classifier import ClassifierExperiment
 from emperor.layers import (
     Layer,
     LayerConfig,
+    LayerNormalizationDelegate,
     LayerNormPositionOptions,
     LayerState,
 )
@@ -39,13 +40,15 @@ class Model(ClassifierExperiment):
     def __build_encoder_model(self) -> nn.Module:
         return self.experiment_config.encoder_config.build()
 
-    def __build_encoder_layer_norm(self) -> nn.Module:
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.encoder_output_normalization,
-        ).build_normalization()
+    def __build_encoder_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.encoder_output_normalization,
+            )
+        )
 
     def __build_output_model(self) -> nn.Module:
         return self.experiment_config.output_config.build()
@@ -71,7 +74,7 @@ class Model(ClassifierExperiment):
         encoder_state = self.transformer(
             TransformerEncoderLayerState(hidden=token_embeddings)
         )
-        encoder_state.hidden = self.encoder_layer_norm(encoder_state.hidden)
+        self.encoder_layer_norm.before_model(encoder_state)
         return encoder_state
 
     def __build_classification_logits(self, encoder_hidden: Tensor) -> Tensor:

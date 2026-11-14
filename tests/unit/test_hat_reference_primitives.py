@@ -75,4 +75,4 @@ def test_transformer_can_select_final_rms_normalization():
         final_normalization=NormalizationOptions.RMS_NORM,
     )
     model = cfg.build()
-    assert isinstance(model.encoder_layer_norm, torch.nn.RMSNorm)
+    assert isinstance(model.encoder_layer_norm.module, torch.nn.RMSNorm)

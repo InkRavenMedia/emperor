@@ -125,6 +125,7 @@ class TestLayer(unittest.TestCase):
             "LayerConfig",
             "LayerGateOptions",
             "LayerNormPositionOptions",
+            "LayerNormalizationDelegate",
             "NormalizationOptions",
             "LayerStackConfig",
             "MirroredLayerStackConfig",

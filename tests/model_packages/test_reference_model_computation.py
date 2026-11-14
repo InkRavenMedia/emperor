@@ -210,7 +210,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         hidden = _layer_norm(
             parameters,
             hidden,
-            "embedding_layer_norm",
+            "embedding_layer_norm.module",
             hidden_dim,
         )
         block_prefix = "transformer.layers.0.model."
@@ -251,7 +251,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         expected_mlm = _layer_norm(
             parameters,
             expected_mlm,
-            "mlm_layer_norm",
+            "mlm_layer_norm.module",
             hidden_dim,
         )
         expected_mlm = F.linear(
@@ -347,7 +347,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         hidden = _layer_norm(
             parameters,
             hidden,
-            "decoder_layer_norm",
+            "decoder_layer_norm.module",
             hidden_dim,
         )
         expected_logits = F.linear(hidden, parameters["token_embedding.weight"])
@@ -425,7 +425,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         encoder_hidden = _layer_norm(
             parameters,
             encoder_hidden,
-            "encoder_layer_norm",
+            "encoder_layer_norm.module",
             hidden_dim,
         )
         decoder_hidden = parameters["shared_embedding.weight"][
@@ -479,7 +479,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         decoder_hidden = _layer_norm(
             parameters,
             decoder_hidden,
-            "decoder_layer_norm",
+            "decoder_layer_norm.module",
             hidden_dim,
         )
         expected_logits = F.linear(

@@ -22,6 +22,7 @@ from emperor.layers._config import (
     MirroredLayerStackConfig,
 )
 from emperor.layers._layer import Layer
+from emperor.layers._layer.pipeline import LayerNormalizationDelegate
 from emperor.layers._monitoring.callbacks import (
     LayerControllerMonitorCallback,
     RecurrentLayerMonitorCallback,
@@ -45,6 +46,7 @@ __all__ = (
     "LayerConfig",
     "LayerGateOptions",
     "LayerNormPositionOptions",
+    "LayerNormalizationDelegate",
     "NormalizationOptions",
     "LayerStackConfig",
     "MirroredLayerStackConfig",

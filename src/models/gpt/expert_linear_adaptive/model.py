@@ -13,7 +13,12 @@ from emperor.embedding.hierarchical.decoder import (
     HierarchicalByteDecoderOutput,
 )
 from emperor.experiments.language_model import LanguageModelExperiment
-from emperor.layers import LayerConfig, LayerNormPositionOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    LayerState,
+)
 from emperor.transformer import TransformerDecoderLayerState
 from emperor.transformer.hierarchical import (
     HierarchicalLanguageModelBatch,
@@ -219,15 +224,19 @@ class Model(LanguageModelExperiment):
             return nn.Identity()
         return self.experiment_config.positional_embedding_config.build()
 
-    def __build_embedding_layer_norm(self) -> nn.Module:
-        if not self.boundary_config.embedding_options.layer_norm_flag:
-            return nn.Identity()
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.boundary_config.embedding_options.normalization,
-        ).build_normalization()
+    def __build_embedding_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=(
+                    LayerNormPositionOptions.BEFORE
+                    if self.boundary_config.embedding_options.layer_norm_flag
+                    else LayerNormPositionOptions.DISABLED
+                ),
+                normalization=self.boundary_config.embedding_options.normalization,
+            )
+        )
 
     def __build_embedding_dropout(self) -> nn.Dropout:
         return nn.Dropout(self.boundary_config.embedding_options.dropout_probability)
@@ -235,13 +244,15 @@ class Model(LanguageModelExperiment):
     def __build_decoder(self) -> nn.Module:
         return self.experiment_config.decoder_config.build()
 
-    def __build_decoder_layer_norm(self) -> nn.Module:
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.decoder_output_normalization,
-        ).build_normalization()
+    def __build_decoder_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.decoder_output_normalization,
+            )
+        )
 
     def __build_lm_head(self) -> nn.Linear:
         return nn.Linear(
@@ -301,7 +312,9 @@ class Model(LanguageModelExperiment):
                 input_ids
             )
             loss = hidden.new_zeros(())
-        hidden = self.embedding_layer_norm(hidden)
+        hidden = self.embedding_layer_norm.before_model(
+            LayerState(hidden=hidden)
+        ).hidden
         hidden = self.embedding_dropout(hidden)
         if getattr(self, "token_text_adapter", None) is not None:
             hidden = hidden * (attention_mask != 0).unsqueeze(-1)
@@ -319,7 +332,9 @@ class Model(LanguageModelExperiment):
                 target_key_padding_mask=attention_mask == 0,
             )
         )
-        sequence_output = self.decoder_layer_norm(decoder_state.hidden)
+        sequence_output = self.decoder_layer_norm.before_model(
+            LayerState(hidden=decoder_state.hidden)
+        ).hidden
         if align_to_input:
             sequence_output = decoder_state.gather_input_tokens(sequence_output)
         auxiliary_loss = (
