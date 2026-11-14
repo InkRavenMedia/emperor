@@ -11,6 +11,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
@@ -92,6 +93,7 @@ def resolve_projection_model(
             iteration_increment=1,
             forward_calls_before_iteration_increment=1,
             recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             block_config=projection_layer_config(
                 LinearLayerConfig(bias_flag=True if bias_flag is None else bias_flag)
             ),

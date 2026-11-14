@@ -27,6 +27,8 @@ from emperor.layers import (
     Layer,
     LayerConfig,
     LayerGateOptions,
+    LayerNormPositionOptions,
+    NormalizationOptions,
     TinyRecursiveModelRecurrentConfig,
     WeightedResidualConfig,
 )
@@ -1588,6 +1590,8 @@ def recurrent_expansion_config(variant, *, max_new_tokens=1, decoder=False):
         )
     elif variant in ("tiny", "hierarchical"):
         shared = dict(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             initial_iterations=1,

@@ -16,7 +16,6 @@ from emperor.layers._composition.recurrent.validation import (
     RecurrentCompositionValidator,
 )
 from emperor.layers._config import LayerConfig
-from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from emperor.layers._layer.pipeline import LayerNormalizationDelegate
 from emperor.layers._support import LayerModuleBase
 
@@ -42,14 +41,8 @@ class RecurrentUtilities(LayerModuleBase):
         self.residual_config = cfg.residual_config
         self.halting_config = cfg.halting_config
         self.memory_config = cfg.memory_config
-        self.recurrent_layer_norm_position = (
-            cfg.recurrent_layer_norm_position or LayerNormPositionOptions.DISABLED
-        )
-        self.recurrent_normalization = (
-            cfg.recurrent_normalization
-            if cfg.recurrent_normalization is not None
-            else NormalizationOptions.LAYER_NORM
-        )
+        self.recurrent_layer_norm_position = cfg.recurrent_layer_norm_position
+        self.recurrent_normalization = cfg.recurrent_normalization
         self.residual_transition_count = (
             cfg.max_steps if isinstance(cfg, RecurrentLayerConfig) else None
         )

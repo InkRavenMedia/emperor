@@ -5,7 +5,9 @@ import torch
 from emperor.attention import AttentionLayerState
 from emperor.layers import (
     InnerThinkingRecurrentConfig,
+    LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
 )
 from emperor.layers._composition.recurrent.variants.inner_thinking import (
     InnerThinkingRecurrent,
@@ -275,6 +277,8 @@ class TestInnerThinkingRecurrent(unittest.TestCase):
         from emperor.layers import RecurrentLayerConfig
 
         outer = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=2,

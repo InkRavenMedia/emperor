@@ -14,6 +14,7 @@ from emperor.layers import (
     LayerGateOptions,
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
     TinyRecursiveModelRecurrentConfig,
     WeightedResidualConfig,
@@ -455,6 +456,8 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
 
     def test_recurrent_validation_preserves_first_failure_across_variants(self):
         shared = dict(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             initial_iterations=1,

@@ -6,6 +6,7 @@ from emperor.config import ConfigBase
 from emperor.layers import (
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
 )
@@ -25,6 +26,7 @@ def make_config(**overrides) -> RecurrentLayerConfig:
         "iteration_increment": 1,
         "forward_calls_before_iteration_increment": 1,
         "recurrent_layer_norm_position": LayerNormPositionOptions.DISABLED,
+        "recurrent_normalization": NormalizationOptions.LAYER_NORM,
         "block_config": ConfigBase(),
         "gate_config": None,
         "residual_config": None,

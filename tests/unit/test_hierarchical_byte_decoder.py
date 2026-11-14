@@ -6,6 +6,7 @@ import unittest
 
 import torch
 
+from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from tests.support.hierarchical_decoding import decoder_config
 
 
@@ -72,6 +73,8 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
 
         cfg = decoder_config()
         cfg.decoder_config.decoder_stack_config = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=3,
@@ -239,6 +242,8 @@ class HierarchicalByteDecoderTests(unittest.TestCase):
             cfg.build()
         cfg = decoder_config(conditioning_dim=8)
         cfg.conditioning_projection_config = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=2,

@@ -6,7 +6,13 @@ import pytest
 import torch
 
 from emperor.experts import RoutingInitializationMode
-from emperor.layers import HierarchicalReasoningModelRecurrentConfig, LayerState
+from emperor.layers import (
+    HierarchicalReasoningModelRecurrentConfig,
+    LayerNormPositionOptions,
+    LayerState,
+    NormalizationOptions,
+)
+from support.recurrent import inner_thinking_config
 from tests.unit import test_recurrent_layer as recurrent_fixtures
 from tests.unit.test_attention_model_mixer import (
     _linear_stack,
@@ -18,9 +24,6 @@ from tests.unit.test_expert_soft_moe import (
 )
 from tests.unit.test_expert_soft_moe import (
     model_config as soft_model_config,
-)
-from tests.unit.test_recurrent_composition_inner_thinking import (
-    config as inner_thinking_config,
 )
 from tests.unit.test_recurrent_composition_tiny_recursive_model import (
     _config as tiny_recursive_config,
@@ -53,6 +56,8 @@ def sequence_model_config(kind):
         return tiny_recursive_config(model_dim=3, auxiliary_loss=0.1)
     if kind == "hierarchical":
         return HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=3,
             output_dim=3,
             high_block_config=_linear_stack(3, 3),

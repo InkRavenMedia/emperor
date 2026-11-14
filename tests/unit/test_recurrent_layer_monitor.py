@@ -15,6 +15,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     RecurrentLayerMonitorCallback,
@@ -145,6 +146,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         gate_activation: ActivationOptions | None = ActivationOptions.SIGMOID,
     ) -> RecurrentLayer:
         cfg = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=3,
@@ -176,6 +178,8 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
 
     def tiny_recursive_model(self, with_gate: bool = False):
         return TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             block_config=IncrementBlockConfig(
@@ -207,6 +211,8 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
             increment=0.25,
         )
         return HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             high_block_config=transition_config,
@@ -331,6 +337,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         )
         recurrent = (
             RecurrentLayerConfig(
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=dim,
                 output_dim=dim,
                 max_steps=5,
@@ -374,6 +381,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
 
     def test_smooth_handoff_reports_target_path_and_pre_forward_schedule(self):
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=3,
@@ -427,6 +435,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         self,
     ) -> None:
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=3,
@@ -464,6 +473,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         self,
     ) -> None:
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=3,
@@ -506,6 +516,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
 
     def test_failed_smooth_handoff_discards_partial_monitor_observation(self):
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=3,
@@ -549,6 +560,8 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         )
         recurrent_configs = (
             TinyRecursiveModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=4,
                 output_dim=4,
                 block_config=transition_config,
@@ -562,6 +575,8 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
                 initialization_standard_deviation=0.0,
             ),
             HierarchicalReasoningModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=4,
                 output_dim=4,
                 high_block_config=transition_config,

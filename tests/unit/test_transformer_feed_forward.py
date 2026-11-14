@@ -12,6 +12,7 @@ from emperor.layers import (
     LayerStackConfig,
     MirroredLayerStack,
     MirroredLayerStackConfig,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
 )
@@ -226,6 +227,7 @@ class TestFeedForward(unittest.TestCase):
             num_layers=2,
         ).stack_config
         recurrent_config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=2,

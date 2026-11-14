@@ -22,6 +22,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     ResidualConfig,
@@ -331,6 +332,7 @@ class LayerTensorInvocationTests(unittest.TestCase):
     def test_recurrence_recomputes_grouped_residual_context_each_transition(self):
         recurrent = RecurrentLayer(
             RecurrentLayerConfig(
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=2,
                 output_dim=2,
                 max_steps=2,
