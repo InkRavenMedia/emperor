@@ -51,7 +51,6 @@ _LAYER_CONFIG_CONSTRUCTOR_OWNERS = {
 }
 
 _LAYER_DELEGATE_INITIALIZER_OWNERS = {
-    ("_composition/recurrent/base.py", "RecurrentCompositionAbstract"),
     ("_layer/core.py", "Layer"),
     ("_stack/core.py", "LayerStack"),
 }

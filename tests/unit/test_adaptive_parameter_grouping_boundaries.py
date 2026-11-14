@@ -230,7 +230,7 @@ def test_sequence_grouping_preserves_individually_halted_tokens(hidden_state_mod
     adaptive_layer = model.block_model[0].model
     bias_model = adaptive_layer.adaptive_behaviour.bias_model
     generator = bias_model.model[0].model
-    halting_gate = model.halting_model.halting_gate_model[0].model
+    halting_gate = model.utilities.halting_model.halting_gate_model[0].model
     with torch.no_grad():
         adaptive_layer.weight_params.copy_(torch.eye(2))
         adaptive_layer.bias_params.zero_()

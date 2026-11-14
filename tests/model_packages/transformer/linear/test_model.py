@@ -393,11 +393,11 @@ class TestTransformerLinearModel(unittest.TestCase):
         self.assertTrue(
             any(parameter.grad is not None for parameter in transition_parameters)
         )
-        self.assertIsNotNone(model.encoder.recurrent_gate)
+        self.assertIsNotNone(model.encoder.utilities.recurrent_gate)
         self.assertTrue(
             any(
                 parameter.grad is not None
-                for parameter in model.encoder.recurrent_gate.parameters()
+                for parameter in model.encoder.utilities.recurrent_gate.parameters()
             )
         )
 
@@ -460,11 +460,11 @@ class TestTransformerLinearModel(unittest.TestCase):
                 for parameter in model.encoder.low_model.parameters()
             )
         )
-        self.assertIsNotNone(model.encoder.halting_model)
+        self.assertIsNotNone(model.encoder.utilities.halting_model)
         self.assertTrue(
             any(
                 parameter.grad is not None
-                for parameter in model.encoder.halting_model.parameters()
+                for parameter in model.encoder.utilities.halting_model.parameters()
             )
         )
 

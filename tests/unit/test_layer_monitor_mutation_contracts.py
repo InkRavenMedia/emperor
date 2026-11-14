@@ -616,7 +616,7 @@ class TestLayerMonitorMutationContracts(unittest.TestCase):
             model_config=_linear_stack_config(2),
         )
         recurrent = _recurrent(max_steps=1, gate_config=gate_config)
-        gate_layer = recurrent.recurrent_gate.model[0]
+        gate_layer = recurrent.utilities.recurrent_gate.model[0]
         with torch.no_grad():
             gate_layer.model.weight_params.copy_(torch.eye(2))
             gate_layer.model.bias_params.zero_()

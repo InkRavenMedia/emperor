@@ -17,6 +17,11 @@ from emperor.layers._composition.gate.validation import LayerGateValidator
 from emperor.layers._composition.residual.validation import (
     ResidualConnectionValidator,
 )
+from emperor.layers._layer.validation import (
+    LayerHaltingDelegateValidator,
+    LayerMemoryDelegateValidator,
+    LayerResidualDelegateValidator,
+)
 from emperor.layers._options import LayerNormPositionOptions
 from emperor.layers._validation.common import (
     _HALTING_CONFIG_FIELDS,
@@ -37,6 +42,7 @@ _RECURRENT_SHARED_OPTIONAL_FIELDS = {
 }
 
 if TYPE_CHECKING:
+    from emperor.halting import HaltingInterface, HaltingStateBase
     from emperor.layers._composition.recurrent.config import (
         RecurrentCompositionConfig,
     )
@@ -44,6 +50,8 @@ if TYPE_CHECKING:
         RecurrentResidualSchedule,
     )
     from emperor.layers._composition.residual.base import ResidualConnectionAbstract
+    from emperor.memory import MemoryInterface
+    from emperor.nn import Module
 
 
 def _validate_initialization_standard_deviation(value: object) -> None:
@@ -61,7 +69,6 @@ def _validate_initialization_standard_deviation(value: object) -> None:
 def _validate_variant_hidden(
     hidden: object,
     expected_feature_dim: int,
-    *,
     field_name: str,
     owner_name: str,
 ) -> None:
@@ -81,7 +88,6 @@ def _validate_variant_hidden(
 def _validate_variant_state(
     state: object,
     expected_feature_dim: int,
-    *,
     owner_name: str,
 ) -> None:
     from emperor.layers._state import LayerState
@@ -102,7 +108,6 @@ def _validate_variant_state(
 def _validate_variant_transition_output(
     output_state: object,
     transition_input: Tensor,
-    *,
     expected_feature_dim: int,
     owner_name: str,
     transition_name: str,
@@ -174,9 +179,39 @@ def _validate_recurrent_memory_config(memory_config: object, owner_name: str) ->
         )
 
 
-class _RecurrentCompositionValidator(ValidatorBase):
+class RecurrentCompositionValidator(ValidatorBase):
     GATE_VALIDATOR = LayerGateValidator
     RESIDUAL_VALIDATOR = ResidualConnectionValidator
+    RESIDUAL_DELEGATE_VALIDATOR = LayerResidualDelegateValidator
+    HALTING_DELEGATE_VALIDATOR = LayerHaltingDelegateValidator
+    MEMORY_DELEGATE_VALIDATOR = LayerMemoryDelegateValidator
+
+    @classmethod
+    def validate_built_residual_connection(
+        cls,
+        connection: Module | None,
+    ) -> ResidualConnectionAbstract | None:
+        return cls.RESIDUAL_DELEGATE_VALIDATOR.validate_built_residual_connection_type(
+            connection
+        )
+
+    @classmethod
+    def validate_built_halting_model(
+        cls,
+        model: Module | None,
+    ) -> HaltingInterface[HaltingStateBase] | None:
+        return cls.HALTING_DELEGATE_VALIDATOR.validate_built_halting_model_interface(
+            model
+        )
+
+    @classmethod
+    def validate_built_memory_model(
+        cls,
+        model: Module | None,
+    ) -> MemoryInterface | None:
+        return cls.MEMORY_DELEGATE_VALIDATOR.validate_built_memory_model_interface(
+            model
+        )
 
     @classmethod
     def _validate_recurrent_controller_config(
@@ -256,7 +291,6 @@ class _RecurrentCompositionValidator(ValidatorBase):
     def validate_initial_buffer(
         buffer: Tensor,
         hidden: Tensor,
-        *,
         name: str,
         expected_feature_dim: int,
     ) -> None:

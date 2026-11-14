@@ -8,7 +8,7 @@ from torch import Tensor
 from emperor.config import ConfigBase
 from emperor.layers._composition.recurrent.validation.common import (
     _RECURRENT_SHARED_OPTIONAL_FIELDS,
-    _RecurrentCompositionValidator,
+    RecurrentCompositionValidator,
 )
 from emperor.layers._composition.recurrent.validation.iteration_schedule import (
     _GRADIENT_WINDOW_FIELDS,
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from emperor.layers._state import LayerState
 
 
-class RecurrentLayerValidator(_RecurrentCompositionValidator):
+class RecurrentLayerValidator(RecurrentCompositionValidator):
     OPTIONAL_FIELDS = {
         *_RECURRENT_SHARED_OPTIONAL_FIELDS,
         "reinject_original_hidden_flag",

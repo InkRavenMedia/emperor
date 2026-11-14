@@ -94,7 +94,7 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             InspectionRequest(preset="recurrent-dual-gating"),
         )
         gating_nodes = {node.path: node for node in dual_gating.nodes}
-        self.assertIn("main_model.recurrent_gate", gating_nodes)
+        self.assertIn("main_model.utilities.recurrent_gate", gating_nodes)
         self.assertTrue(gating_nodes["main_model"].details["recurrent"]["gate"])
         self.assertTrue(gating_nodes["main_model.block_model.layers.0"].details["gate"])
 
@@ -103,7 +103,7 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             InspectionRequest(preset="recurrent-dual-halting"),
         )
         halting_nodes = {node.path: node for node in dual_halting.nodes}
-        self.assertIn("main_model.halting_model", halting_nodes)
+        self.assertIn("main_model.utilities.halting_model", halting_nodes)
         self.assertTrue(halting_nodes["main_model"].details["recurrent"]["halting"])
         self.assertTrue(
             halting_nodes["main_model.block_model.layers.0"].details["halting"]

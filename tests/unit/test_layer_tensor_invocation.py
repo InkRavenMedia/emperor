@@ -347,11 +347,8 @@ class LayerTensorInvocationTests(unittest.TestCase):
         )
         inputs = torch.randn(4, 2, requires_grad=True)
         contexts = []
-        generator = (
-            recurrent.residual_connection.model.adaptive_behaviour.bias_model.model[
-                0
-            ].model
-        )
+        residual = recurrent.utilities.residual_connection
+        generator = residual.model.adaptive_behaviour.bias_model.model[0].model
         hook = generator.register_forward_pre_hook(
             lambda _module, args: contexts.append(args[0].detach().clone())
         )

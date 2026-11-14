@@ -14,9 +14,6 @@ if TYPE_CHECKING:
 
     from emperor.halting import HaltingStateBase
     from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
-    from emperor.layers._composition.recurrent.runtime.residual_schedule import (
-        RecurrentResidualSchedule,
-    )
     from emperor.layers._composition.residual.base import ResidualState
 
 
@@ -56,7 +53,6 @@ class PreparedRecurrentTransition:
     halting_update_enabled: bool
     loss: Tensor | None = None
     residual_state: ResidualState | None = None
-    residual_schedule: RecurrentResidualSchedule | None = None
 
 
 _StateT = TypeVar("_StateT", bound=RecurrentExecutionState)
@@ -70,7 +66,6 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
         self,
         recurrent_state: _StateT,
         prepared_transition: PreparedRecurrentTransition,
-        *,
         transition_index: int = 0,
         observe_transition: bool = True,
     ) -> RecurrentTransitionResult: ...
@@ -79,7 +74,6 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
         self,
         recurrent_state: _StateT,
         prepared_transition: PreparedRecurrentTransition,
-        *,
         run_provisional_source_branch: Callable[
             [RecurrentTransitionResult],
             _ProvisionalSourceBranchOutput,
@@ -112,7 +106,6 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
     def _initialize_recurrent_execution_state(
         self,
         layer_state: LayerState,
-        *,
         branch_base_loss: Tensor | None,
     ) -> _StateT: ...
 
@@ -124,7 +117,6 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
     def _prepare_recurrent_transition(
         self,
         recurrent_state: _StateT,
-        *,
         tracks_gradients: bool,
     ) -> PreparedRecurrentTransition: ...
 
