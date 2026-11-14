@@ -44,7 +44,10 @@ class Model(LanguageModelExperiment):
         super().__init__(config)
         self.experiment_config: ExperimentConfig = experiment_config
         self.sequence_expansion_enabled = (
-            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.decoder_config, 0) > 0
+            _sequence_expansion.expanded_sequence_capacity(
+                self.experiment_config.decoder_config, 0
+            )
+            > 0
         )
         self.boundary_config: GptBoundaryConfig = boundary_config
         hierarchical = experiment_config.hierarchical_language_model_config
