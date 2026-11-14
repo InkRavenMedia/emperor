@@ -36,7 +36,12 @@ from emperor.augmentations.adaptive_parameters import (
 from emperor.augmentations.adaptive_parameters import (
     SummaryNormalizationOptions as Normalization,
 )
-from emperor.layers import LayerNormPositionOptions, LayerState, RecurrentLayerConfig
+from emperor.layers import (
+    LayerNormPositionOptions,
+    LayerState,
+    NormalizationOptions,
+    RecurrentLayerConfig,
+)
 from support.adaptive_grouping import bias_linear, combined_linear, linear_stack_config
 from support.adaptive_grouping_variants import (
     GROUPING_CONFIGS,
@@ -263,6 +268,7 @@ def test_recurrence_pools_each_current_transition_input():
     stack.layer_config.layer_model_config = adaptive.cfg
     recurrent = (
         RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=3,

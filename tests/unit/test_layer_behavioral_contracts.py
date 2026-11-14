@@ -22,6 +22,7 @@ from emperor.layers import (
     LayerStack,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     RecurrentLayerMonitorCallback,
@@ -97,6 +98,7 @@ class LayerBehavioralContractTests(unittest.TestCase):
         def recurrent_factory() -> RecurrentLayer:
             return RecurrentLayer(
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=2,
                     output_dim=2,
                     max_steps=2,

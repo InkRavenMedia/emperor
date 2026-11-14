@@ -16,6 +16,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     RecurrentLayerMonitorCallback,
@@ -85,6 +86,7 @@ def _recurrent(
 ) -> RecurrentLayer:
     recurrent = RecurrentLayer(
         RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=dim,
             output_dim=dim,
             max_steps=max_steps,

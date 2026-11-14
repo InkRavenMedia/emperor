@@ -7,7 +7,9 @@ import torch
 from emperor.config import ConfigBase, optional_field
 from emperor.layers import (
     InnerThinkingRecurrentConfig,
+    LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
 )
 from emperor.nn import Module
 from emperor.sampler import RouterConfig, TokenSamplerConfig
@@ -45,6 +47,8 @@ def inner_thinking_config(**changes):
     ratio = changes.pop("selection_ratio", 0.5)
     return replace(
         InnerThinkingRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=3,

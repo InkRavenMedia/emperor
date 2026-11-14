@@ -24,6 +24,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
@@ -80,6 +81,7 @@ def recurrent_config(
     threshold: float = 1.0,
 ) -> RecurrentLayerConfig:
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=dim,
         output_dim=dim,
         max_steps=max_steps,

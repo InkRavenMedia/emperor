@@ -14,6 +14,7 @@ from emperor.layers import (
     LayerStack,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
     WeightedBlendResidualConfig,
     WeightedResidualConfig,
@@ -197,6 +198,7 @@ def recurrent_config(
     memory_config: object | None = None,
 ) -> RecurrentLayerConfig:
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=2,
         output_dim=2,
         max_steps=1,

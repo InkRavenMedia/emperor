@@ -32,6 +32,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
 )
@@ -81,6 +82,7 @@ def _linear_stack(
 
 def _recurrent_stack(sequence_length: int, *, max_steps: int = 2):
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=sequence_length,
         output_dim=sequence_length,
         max_steps=max_steps,
@@ -523,6 +525,7 @@ class TestMixerAttention(unittest.TestCase):
 
     def test_recurrent_layer_state_auxiliary_loss_is_returned_unchanged(self):
         recurrent_config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=3,
             output_dim=3,
             max_steps=2,
@@ -643,6 +646,8 @@ class TestMixerAttention(unittest.TestCase):
 
         invalid_hierarchical_reasoning_model = (
             HierarchicalReasoningModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=3,
                 output_dim=3,
                 high_block_config=None,
@@ -892,6 +897,7 @@ class TestTransformerMixerAttention(unittest.TestCase):
 
     def test_encoder_uses_mixer_and_existing_feed_forward_branch(self):
         recurrent_config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=3,
             output_dim=3,
             max_steps=2,

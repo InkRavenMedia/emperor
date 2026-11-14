@@ -9,6 +9,7 @@ from emperor.augmentations.adaptive_parameters import (
     WeightDecayScheduleOptions,
 )
 from emperor.augmentations.adaptive_parameters._decay import DecayPolicy
+from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from emperor.nn import (
     ForwardSchedule,
     freeze_forward_schedules,
@@ -188,6 +189,8 @@ class ForwardScheduleTests(unittest.TestCase):
         decay.decay_schedule = WeightDecayScheduleOptions.EXPONENTIAL
         decay.decay_rate = 0.2
         config = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=4,
@@ -203,6 +206,8 @@ class ForwardScheduleTests(unittest.TestCase):
                 active_config = config
                 if nested:
                     active_config = RecurrentLayerConfig(
+                        recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                        recurrent_normalization=NormalizationOptions.LAYER_NORM,
                         input_dim=2,
                         output_dim=2,
                         max_steps=2,
@@ -287,6 +292,8 @@ class ForwardScheduleTests(unittest.TestCase):
         decay.decay_schedule = WeightDecayScheduleOptions.LINEAR
         decay.decay_rate = 0.1
         model = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=3,

@@ -16,6 +16,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    NormalizationOptions,
     RecurrentCompositionConfig,
     TinyRecursiveModelRecurrentConfig,
 )
@@ -119,6 +120,8 @@ def _encoder_block(
 def _runtime(block_config: TransformerEncoderBlockLayerConfig):
     model_dim = block_config.input_dim
     return TinyRecursiveModelRecurrentConfig(
+        recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=model_dim,
         output_dim=model_dim,
         block_config=block_config,
@@ -136,6 +139,8 @@ def _hierarchical_reasoning_model_runtime(
 ):
     model_dim = block_config.input_dim
     return HierarchicalReasoningModelRecurrentConfig(
+        recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=model_dim,
         output_dim=model_dim,
         high_block_config=block_config,
@@ -322,6 +327,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
     ) -> None:
         model_dim = 4
         recurrent = TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             block_config=_linear_stack(model_dim, model_dim),
@@ -351,6 +358,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
     ) -> None:
         model_dim = 4
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             high_block_config=_linear_stack(model_dim, model_dim),
@@ -382,6 +391,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
         model_dim = 4
         sequence_length = 3
         recurrent = TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=sequence_length,
             output_dim=sequence_length,
             block_config=_linear_stack(sequence_length, sequence_length),
@@ -414,6 +425,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
         model_dim = 4
         sequence_length = 3
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=sequence_length,
             output_dim=sequence_length,
             high_block_config=_linear_stack(sequence_length, sequence_length),
@@ -447,6 +460,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
         model_dim = 4
         sequence_length = 3
         recurrent = TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             block_config=_encoder_block(
@@ -487,6 +502,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
             _self_attention(model_dim, sequence_length),
         )
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             high_block_config=block_config,
@@ -521,6 +538,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
         model_dim = 4
         sequence_length = 3
         projection_recurrence = TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             block_config=_linear_stack(model_dim, model_dim),
@@ -560,6 +579,8 @@ class TestRecurrentCompositionConsumers(unittest.TestCase):
         model_dim = 4
         sequence_length = 3
         projection_recurrence = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=model_dim,
             output_dim=model_dim,
             high_block_config=_linear_stack(model_dim, model_dim),

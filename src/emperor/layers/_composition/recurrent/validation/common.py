@@ -22,7 +22,7 @@ from emperor.layers._layer.validation import (
     LayerMemoryDelegateValidator,
     LayerResidualDelegateValidator,
 )
-from emperor.layers._options import LayerNormPositionOptions
+from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from emperor.layers._validation.common import (
     _HALTING_CONFIG_FIELDS,
     _MEMORY_CONFIG_FIELDS,
@@ -33,8 +33,6 @@ from emperor.layers._validation.common import (
 
 _RECURRENT_SHARED_OPTIONAL_FIELDS = {
     "smooth_iteration_growth_flag",
-    "recurrent_layer_norm_position",
-    "recurrent_normalization",
     "gate_config",
     "residual_config",
     "halting_config",
@@ -141,17 +139,17 @@ def _validate_variant_transition_output(
         )
 
 
-def _validate_recurrent_normalization_position(config: object, owner_name: str) -> None:
-    recurrent_layer_norm_position = config.recurrent_layer_norm_position
-    if recurrent_layer_norm_position is not None and not isinstance(
-        recurrent_layer_norm_position,
-        LayerNormPositionOptions,
+def _validate_recurrent_normalization_config(config: object, owner_name: str) -> None:
+    for field_name, option_type in (
+        ("recurrent_layer_norm_position", LayerNormPositionOptions),
+        ("recurrent_normalization", NormalizationOptions),
     ):
-        raise TypeError(
-            "recurrent_layer_norm_position must be None or a "
-            "LayerNormPositionOptions value for "
-            f"{owner_name}, got {type(recurrent_layer_norm_position).__name__}."
-        )
+        value = getattr(config, field_name)
+        if not isinstance(value, option_type):
+            raise TypeError(
+                f"{field_name} must be a {option_type.__name__} value for "
+                f"{owner_name}, got {type(value).__name__}."
+            )
 
 
 def _validate_recurrent_halting_config(halting_config: object, owner_name: str) -> None:
@@ -227,7 +225,7 @@ class RecurrentCompositionValidator(ValidatorBase):
                     visit.config, path=visit.path, recurrent_config=config
                 )
         _validate_grouped_row_preservation(config, root=owner_name)
-        _validate_recurrent_normalization_position(config, owner_name)
+        _validate_recurrent_normalization_config(config, owner_name)
         cls.GATE_VALIDATOR.validate_recurrent_gate_config(
             config.gate_config,
             owner_name=f"{owner_name}.gate_config",

@@ -16,6 +16,7 @@ from emperor.layers import (
     AttentionResidualConfig,
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
     TinyRecursiveModelRecurrentConfig,
 )
@@ -201,6 +202,8 @@ def _config(
     if forward_calls_before_iteration_increment is None:
         forward_calls_before_iteration_increment = 1
     return TinyRecursiveModelRecurrentConfig(
+        recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=model_dim,
         output_dim=model_dim,
         block_config=_RecordingBlockConfig(
@@ -361,7 +364,7 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
                 "recurrent_layer_norm_position",
                 object(),
                 TypeError,
-                "recurrent_layer_norm_position must be None or a "
+                "recurrent_layer_norm_position must be a "
                 "LayerNormPositionOptions value",
             ),
             ("gate_config", object(), TypeError, "instance of GateConfig"),
@@ -473,6 +476,7 @@ class TestTinyRecursiveModelRecurrentValidation(unittest.TestCase):
             )
 
         standard_config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             max_steps=1,
@@ -786,6 +790,8 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             smooth: bool,
         ) -> TinyRecursiveModelRecurrent:
             return TinyRecursiveModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=1,
                 output_dim=1,
                 block_config=_StatefulDynamicBlockConfig(

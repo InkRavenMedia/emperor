@@ -27,6 +27,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     RecurrentLayerMonitorCallback,
@@ -162,6 +163,7 @@ class TrainableIncrementBlock(Module):
 def recurrent_layer() -> RecurrentLayer:
     recurrent = RecurrentLayer(
         RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=3,

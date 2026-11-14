@@ -23,6 +23,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
     TinyRecursiveModelRecurrentConfig,
     WeightedBlendResidualConfig,
@@ -1499,6 +1500,8 @@ assert semantic_module not in sys.modules
         self,
     ) -> None:
         recurrent = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             block_config=LinearLayerConfig(
@@ -1550,6 +1553,8 @@ assert semantic_module not in sys.modules
         self,
     ) -> None:
         recurrent = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             block_config=LayerConfig(
@@ -1603,6 +1608,8 @@ assert semantic_module not in sys.modules
         self,
     ) -> None:
         recurrent = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             block_config=LayerConfig(
@@ -1654,6 +1661,7 @@ assert semantic_module not in sys.modules
         self,
     ) -> None:
         recurrent = TinyRecursiveModelRecurrentConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             block_config=LinearLayerConfig(
@@ -1714,6 +1722,7 @@ assert semantic_module not in sys.modules
             bias_flag=False,
         )
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             high_block_config=transition_config,

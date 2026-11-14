@@ -19,6 +19,7 @@ from emperor.layers import (
     LayerStack,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
 )
@@ -267,6 +268,7 @@ def decoder_stack(
 
 def recurrent(stack_config: LayerStackConfig) -> RecurrentLayerConfig:
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=stack_config.input_dim,
         output_dim=stack_config.output_dim,
         max_steps=2,
