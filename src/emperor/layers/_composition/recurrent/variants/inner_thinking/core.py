@@ -19,18 +19,18 @@ from emperor.layers._composition.recurrent.config import InnerThinkingRecurrentC
 from emperor.layers._composition.recurrent.runtime.execution import (
     PreparedRecurrentTransition,
 )
-from emperor.layers._composition.recurrent.runtime.token_selection import (
-    RecurrentTokenSelection,
-)
 from emperor.layers._composition.recurrent.validation.inner_thinking import (
     InnerThinkingRecurrentValidator,
+)
+from emperor.layers._composition.recurrent.variants.inner_thinking.state import (
+    InnerThinkingTokenSelection,
 )
 from emperor.layers._composition.recurrent.variants.standard import RecurrentLayer
 from emperor.layers._state import LayerState
 
 if TYPE_CHECKING:
     from emperor.layers._composition.recurrent.variants.standard import (
-        _StandardRecurrentState,
+        StandardRecurrentState,
     )
 
 
@@ -60,7 +60,7 @@ class InnerThinkingRecurrent(RecurrentLayer):
         )
 
     def _prepare_recurrent_transition(
-        self, recurrent_state: _StandardRecurrentState, *, tracks_gradients: bool
+        self, recurrent_state: StandardRecurrentState, tracks_gradients: bool
     ) -> PreparedRecurrentTransition:
         prepared = super()._prepare_recurrent_transition(
             recurrent_state, tracks_gradients=tracks_gradients
@@ -75,7 +75,7 @@ class InnerThinkingRecurrent(RecurrentLayer):
         )
 
     def __run_thinking_transition(
-        self, state: LayerState, *, transition_index: int, previous_hidden: Tensor
+        self, state: LayerState, transition_index: int, previous_hidden: Tensor
     ) -> LayerState:
         transition_input = state.hidden
         self.VALIDATOR.validate_block_layout(self.block_model, transition_input)
@@ -105,7 +105,6 @@ class InnerThinkingRecurrent(RecurrentLayer):
         self,
         state: LayerState,
         transition_input: Tensor,
-        *,
         transition_index: int,
         previous_hidden: Tensor,
     ) -> LayerState:
@@ -115,7 +114,7 @@ class InnerThinkingRecurrent(RecurrentLayer):
         token_sample = self.samplers[transition_index - 1](
             transition_input, padding_mask
         )
-        selection = RecurrentTokenSelection(
+        selection = InnerThinkingTokenSelection(
             token_sample.indices, token_sample.valid, token_sample.sequence_length
         )
         selected_state = state.select_recurrent_tokens(
