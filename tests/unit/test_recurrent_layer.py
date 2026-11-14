@@ -78,6 +78,7 @@ from emperor.memory import (
 )
 from emperor.nn import Module
 from emperor.sampler import RouterConfig, SamplerConfig
+from support.recurrent import FailingStochasticStateBlockConfig
 
 
 @dataclass
@@ -466,37 +467,6 @@ class StochasticStateBlock(Module):
     def forward(self, state: LayerState) -> LayerState:
         self.call_count += 1
         state.hidden = state.hidden * self.scale + torch.rand_like(state.hidden)
-        return state
-
-
-@dataclass
-class FailingStochasticStateBlockConfig(ConfigBase):
-    input_dim: int | None = optional_field("Input feature dimension.")
-    output_dim: int | None = optional_field("Output feature dimension.")
-    fail_on_transition_step: int | None = optional_field(
-        "One-based mutable transition step that raises."
-    )
-
-    def _registry_owner(self) -> type:
-        return FailingStochasticStateBlock
-
-
-class FailingStochasticStateBlock(Module):
-    def __init__(
-        self,
-        cfg: FailingStochasticStateBlockConfig,
-        overrides: FailingStochasticStateBlockConfig | None = None,
-    ) -> None:
-        super().__init__()
-        self.cfg = self._override_config(cfg, overrides)
-        self.scale = torch.nn.Parameter(torch.tensor(1.0))
-        self.register_buffer("transition_step", torch.zeros(()))
-
-    def forward(self, state: LayerState) -> LayerState:
-        self.transition_step.add_(1.0)
-        state.hidden = state.hidden * self.scale + torch.rand_like(state.hidden)
-        if int(self.transition_step.item()) == self.cfg.fail_on_transition_step:
-            raise RuntimeError("target transition failed")
         return state
 
 
