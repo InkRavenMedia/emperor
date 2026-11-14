@@ -1,11 +1,14 @@
 import ast
 import importlib
 import inspect
+import pickle
 import textwrap
 import unittest
 from dataclasses import fields
 from pathlib import Path
+from unittest.mock import patch
 
+import torch
 from torch import nn
 
 from emperor.config import ConfigBase
@@ -13,6 +16,9 @@ from emperor.halting import HaltingConfig
 from emperor.layers import (
     HierarchicalReasoningModelRecurrentConfig,
     InnerThinkingRecurrentConfig,
+    LayerNormPositionOptions,
+    LayerState,
+    NormalizationOptions,
     RecurrentCompositionConfig,
     RecurrentLayer,
     RecurrentLayerConfig,
@@ -21,6 +27,7 @@ from emperor.layers import (
 from emperor.layers._composition.recurrent.base import (
     RecurrentCompositionAbstract,
 )
+from emperor.layers._composition.recurrent.runtime.execution import RecurrentExecution
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentIterationSchedule,
 )
@@ -37,6 +44,8 @@ from emperor.layers._composition.recurrent.variants.hierarchical_reasoning_model
 from emperor.layers._composition.recurrent.variants.tiny_recursive_model import (
     TinyRecursiveModelRecurrent,
 )
+from support.layers import IdentityBlockConfig
+from unit.test_recurrent_composition_inner_thinking import config as inner_thinking_config
 
 
 def _declared_protected_method_names(owner: type) -> set[str]:
@@ -51,6 +60,39 @@ def _declared_protected_method_names(owner: type) -> set[str]:
     }
 
 
+def _minimal_variant_configs():
+    shared_config = dict(
+        recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
+        input_dim=2,
+        output_dim=2,
+        initial_iterations=1,
+        iteration_increment=1,
+        forward_calls_before_iteration_increment=1,
+    )
+    return (
+        RecurrentLayerConfig(
+            **shared_config, max_steps=1, block_config=IdentityBlockConfig()
+        ),
+        inner_thinking_config(max_steps=1, initial_iterations=1),
+        TinyRecursiveModelRecurrentConfig(
+            **shared_config,
+            block_config=IdentityBlockConfig(),
+            latent_updates_per_answer_update=1,
+            answer_update_count=1,
+            initialization_standard_deviation=0.0,
+        ),
+        HierarchicalReasoningModelRecurrentConfig(
+            **shared_config,
+            high_block_config=IdentityBlockConfig(),
+            low_block_config=IdentityBlockConfig(),
+            high_cycles=1,
+            low_cycles=1,
+            initialization_standard_deviation=0.0,
+        ),
+    )
+
+
 class TestRecurrentCompositionConfig(unittest.TestCase):
     def test_usage_monitoring_does_not_enter_base_or_variant_contracts(self) -> None:
         emperor_root = Path(__file__).parents[2] / "src" / "emperor"
@@ -59,7 +101,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             emperor_root / "halting" / "_base.py",
             *(emperor_root / "halting" / "_variants").glob("*.py"),
             recurrent_root / "base.py",
-            *(recurrent_root / "variants").glob("*.py"),
+            *(recurrent_root / "variants").rglob("*.py"),
         )
 
         for source_path in source_paths:
@@ -301,16 +343,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                     "EXECUTION_ADAPTER",
                     vars(recurrent_variant),
                 )
-                normalized_source = " ".join(recurrent_variant_source.split())
-                self.assertIn(
-                    "return self.__recurrent_execution.execute( self, state, "
-                    "self.recurrent_iteration_schedule, )",
-                    normalized_source,
-                )
-                self.assertLess(
-                    normalized_source.index("self.VALIDATOR.validate_state"),
-                    normalized_source.index("self.__recurrent_execution.execute"),
-                )
                 for delegated_lifecycle_statement in (
                     "execution_plan()",
                     "record_successful_forward()",
@@ -325,17 +357,26 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                             recurrent_variant_source,
                         )
 
-        for shared_lifecycle_statement in (
-            "iteration_schedule.execution_plan()",
-            "layer_state.hidden = execution_result.hidden",
-            "layer_state.loss = execution_result.loss",
-            "iteration_schedule.record_successful_forward()",
-            "return layer_state",
-        ):
-            with self.subTest(
-                shared_lifecycle_statement=shared_lifecycle_statement,
-            ):
-                self.assertIn(shared_lifecycle_statement, execution_source)
+    def test_variants_validate_before_delegating_to_shared_execution(self):
+        for config in _minimal_variant_configs():
+            with self.subTest(variant=type(config).__name__):
+                model = config.build()
+                state = LayerState(torch.ones(1, 2))
+                with patch.object(
+                    RecurrentExecution, "execute", autospec=True, return_value=state
+                ) as execute:
+                    self.assertIs(model(state), state)
+                    execute.assert_called_once()
+                    executor, adapter, received_state, schedule = execute.call_args.args
+                    self.assertIsInstance(executor, RecurrentExecution)
+                    self.assertIs(adapter, model)
+                    self.assertIs(received_state, state)
+                    self.assertIs(schedule, model.recurrent_iteration_schedule)
+
+                    execute.reset_mock()
+                    with self.assertRaises(ValueError):
+                        model(LayerState(torch.ones(1, 3)))
+                    execute.assert_not_called()
 
     def test_halting_floor_policy_does_not_live_in_the_recurrent_package(self) -> None:
         recurrent_package = (
@@ -380,8 +421,64 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         self.assertTrue(issubclass(owner, RecurrentCompositionAbstract))
         self.assertEqual(
             owner.__module__,
-            "emperor.layers._composition.recurrent.variants.standard",
+            "emperor.layers._composition.recurrent.variants.standard.core",
         )
+
+    def test_variant_packages_export_named_classes_and_serialize(self):
+        for variant, runtime_name, state_name in (
+            ("standard", "RecurrentLayer", "StandardRecurrentState"),
+            (
+                "tiny_recursive_model",
+                "TinyRecursiveModelRecurrent",
+                "TinyRecursiveModelState",
+            ),
+            (
+                "hierarchical_reasoning_model",
+                "HierarchicalReasoningModelRecurrent",
+                "HierarchicalReasoningModelState",
+            ),
+            ("inner_thinking", "InnerThinkingRecurrent", "InnerThinkingTokenSelection"),
+        ):
+            with self.subTest(variant=variant):
+                package_name = (
+                    f"emperor.layers._composition.recurrent.variants.{variant}"
+                )
+                package = importlib.import_module(package_name)
+                core = importlib.import_module(f"{package_name}.core")
+                state_module = importlib.import_module(f"{package_name}.state")
+                runtime_class = getattr(core, runtime_name)
+                self.assertEqual(runtime_class.__module__, f"{package_name}.core")
+                self.assertEqual(package.__all__, (runtime_name, state_name))
+                state_class = getattr(state_module, state_name)
+                self.assertEqual(state_class.__module__, f"{package_name}.state")
+                for owned_class in (runtime_class, state_class):
+                    self.assertIs(getattr(package, owned_class.__name__), owned_class)
+                    self.assertIs(pickle.loads(pickle.dumps(owned_class)), owned_class)
+                    package_class_reference = (
+                        f"c{package_name}\n{owned_class.__name__}\n."
+                    ).encode()
+                    self.assertIs(pickle.loads(package_class_reference), owned_class)
+
+    def test_variant_forward_states_serialize_after_package_split(self):
+        for config in _minimal_variant_configs():
+            with self.subTest(variant=type(config).__name__):
+                model = config.build()
+                state = model._initialize_recurrent_execution_state(
+                    LayerState(torch.tensor([[1.0, -2.0]])), None
+                )
+
+                restored_state = pickle.loads(pickle.dumps(state))
+
+                self.assertIs(type(restored_state), type(state))
+                self.assertIs(
+                    restored_state.fixed_input, restored_state.context_state.hidden
+                )
+                torch.testing.assert_close(
+                    restored_state.output_hidden, state.output_hidden
+                )
+                self.assertEqual(
+                    restored_state.transition_index, state.transition_index
+                )
 
     def test_all_recurrent_configs_own_the_shared_iteration_schedule(self) -> None:
         for config_type in (
@@ -544,8 +641,8 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         expected_protected_methods = {
             RecurrentCompositionAbstract: {
                 "_accumulate_recurrent_losses",
-                "_build_recurrent_residual_schedule",
                 "_build_transition_model",
+                "_build_recurrent_residual_schedule",
                 "_expand_recurrent_initial",
                 "_finalize_recurrent_halting",
                 "_blend_recurrent_branch_losses",

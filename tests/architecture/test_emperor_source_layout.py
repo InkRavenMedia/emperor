@@ -15,14 +15,17 @@ _LAYER_CONFIG_CONSTRUCTOR_OWNERS = {
         "_composition/recurrent/runtime/iteration_schedule.py",
         "RecurrentIterationSchedule",
     ),
-    ("_composition/recurrent/variants/standard.py", "RecurrentLayer"),
-    ("_composition/recurrent/variants/inner_thinking.py", "InnerThinkingRecurrent"),
+    ("_composition/recurrent/variants/standard/core.py", "RecurrentLayer"),
     (
-        "_composition/recurrent/variants/tiny_recursive_model.py",
+        "_composition/recurrent/variants/inner_thinking/core.py",
+        "InnerThinkingRecurrent",
+    ),
+    (
+        "_composition/recurrent/variants/tiny_recursive_model/core.py",
         "TinyRecursiveModelRecurrent",
     ),
     (
-        "_composition/recurrent/variants/hierarchical_reasoning_model.py",
+        "_composition/recurrent/variants/hierarchical_reasoning_model/core.py",
         "HierarchicalReasoningModelRecurrent",
     ),
     ("_composition/residual/base.py", "ResidualConnectionAbstract"),
