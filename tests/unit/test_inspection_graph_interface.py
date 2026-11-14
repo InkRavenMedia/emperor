@@ -1525,6 +1525,11 @@ assert semantic_module not in sys.modules
         root = graph.nodes[0]
 
         self.assertEqual(root.type_name, "RecurrentLayer")
+        self.assertEqual(
+            root.description,
+            "Reuses a configured block for multiple recurrent steps, optionally "
+            "adding recurrent gating, normalization, halting, or memory.",
+        )
         self.assertIs(root.details["recurrent"]["diagnostics"], True)
         self.assertEqual(root.details["recurrent"]["min_steps"], 2)
         self.assertIsNotNone(root.configuration)
@@ -1532,7 +1537,7 @@ assert semantic_module not in sys.modules
         configuration = {field.key: field.value for field in root.configuration.fields}
         self.assertNotIn("min_steps", configuration)
         halting_node = next(
-            node for node in graph.nodes if node.path == "halting_model"
+            node for node in graph.nodes if node.path == "utilities.halting_model"
         )
         self.assertIsNotNone(halting_node.configuration)
         assert halting_node.configuration is not None
@@ -1669,6 +1674,11 @@ assert semantic_module not in sys.modules
         root = graph.nodes[0]
 
         self.assertEqual(root.type_name, "TinyRecursiveModelRecurrent")
+        self.assertEqual(
+            root.description,
+            "Reuses one transition block for Tiny Recursive Model latent and "
+            "answer updates across a fixed answer-update schedule.",
+        )
         self.assertIs(root.details["recurrent"]["diagnostics"], True)
         self.assertEqual(root.details["recurrent"]["max_steps"], 9)
         self.assertEqual(
@@ -1721,6 +1731,10 @@ assert semantic_module not in sys.modules
         root = graph.nodes[0]
 
         self.assertEqual(root.type_name, "HierarchicalReasoningModelRecurrent")
+        self.assertEqual(
+            root.description,
+            "Runs distinct low- and high-level transitions on nested recurrent clocks.",
+        )
         self.assertIs(root.details["recurrent"]["diagnostics"], True)
         self.assertEqual(root.details["recurrent"]["max_steps"], 8)
         self.assertEqual(

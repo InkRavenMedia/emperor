@@ -40,9 +40,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         )
         self.block_config: ConfigBase = self.cfg.block_config
 
-        self.recurrent_residual_schedule = self._build_recurrent_residual_schedule(
-            self.max_steps
-        )
         self.block_model = self._build_transition_model(self.block_config)
         self.__recurrent_execution: RecurrentExecution[StandardRecurrentState] = (
             RecurrentExecution()
@@ -75,12 +72,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         self,
         layer_state: LayerState,
     ) -> ResidualState | None:
-        residual_schedule = self.recurrent_residual_schedule
-        residual_connection = self.residual_connection
-        if residual_schedule is None or residual_connection is None:
-            return None
-        return residual_schedule.new_state(
-            residual_connection,
+        return self.utilities.initialize_residual_state(
             layer_state.hidden,
         )
 
@@ -97,7 +89,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
     def _prepare_recurrent_transition(
         self,
         recurrent_state: StandardRecurrentState,
-        *,
         tracks_gradients: bool,
     ) -> PreparedRecurrentTransition:
         previous_hidden = recurrent_state.hidden
@@ -112,7 +103,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
             halting_update_enabled=tracks_gradients,
             loss=recurrent_state.loss,
             residual_state=recurrent_state.residual_state,
-            residual_schedule=self.recurrent_residual_schedule,
         )
 
     def __maybe_reinject_original_hidden(
@@ -148,13 +138,11 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         self,
         recurrent_state: StandardRecurrentState,
     ) -> StandardRecurrentState:
-        residual_schedule = self.recurrent_residual_schedule
-        residual_state = recurrent_state.residual_state
-        if residual_schedule is None:
-            return replace(recurrent_state)
         return replace(
             recurrent_state,
-            residual_state=residual_schedule.fork_state(residual_state),
+            residual_state=self.utilities.fork_residual_state(
+                recurrent_state.residual_state
+            ),
         )
 
     @staticmethod

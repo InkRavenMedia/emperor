@@ -82,14 +82,15 @@ def _thinking_oracle(hidden, parameters, depth, gradient_count=None, controllers
                 update = update * parameters["thinking_step_weights"][step] * 0.3
                 candidate = hidden.scatter_add(-2, feature_indices, update)
             if controllers:
-                gate = "recurrent_gate.model.layers.0.model"
+                gate = "utilities.recurrent_gate.model.layers.0.model"
                 candidate = candidate + (
                     candidate @ parameters[f"{gate}.weight_params"]
                     + parameters[f"{gate}.bias_params"]
                 )
                 candidate = (
                     previous
-                    + parameters["residual_connection.raw_weight"].sigmoid() * candidate
+                    + parameters["utilities.residual_connection.raw_weight"].sigmoid()
+                    * candidate
                 )
             hidden = candidate
     return hidden
@@ -215,10 +216,12 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
         )
         set_router(model, 0, 0.4)
         _set_affine_parameters(
-            model.recurrent_gate.model, torch.eye(2) * 0.1, torch.ones(2) * 0.2
+            model.utilities.recurrent_gate.model,
+            torch.eye(2) * 0.1,
+            torch.ones(2) * 0.2,
         )
         with torch.no_grad():
-            model.residual_connection.raw_weight.fill_(0.5)
+            model.utilities.residual_connection.raw_weight.fill_(0.5)
             model.block_model.scale.fill_(0.75)
         parameters = dict(model.named_parameters())
         oracle_parameters = {

@@ -186,7 +186,7 @@ class _HistoryObserver(Callback):
         batch: object,
         batch_idx: int,
     ) -> None:
-        history = self.monitor._survival_history["recurrent.halting_model"]
+        history = self.monitor._survival_history["recurrent.utilities.halting_model"]
         self.lengths.append(len(history))
 
 
@@ -234,7 +234,7 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
     def test_real_trainer_logs_exact_survival_metrics_and_updates_gate(self) -> None:
         torch.manual_seed(7)
         model = _HaltingTrainingModule(max_steps=3, threshold=1.0)
-        output_weight = model.recurrent.halting_model.halting_gate_model[
+        output_weight = model.recurrent.utilities.halting_model.halting_gate_model[
             -1
         ].model.weight_params
         initial_weight = output_weight.detach().clone()
@@ -244,7 +244,7 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
             fit_trainer = trainer(Path(temporary_directory), [monitor])
             fit_trainer.fit(model, train_dataloaders=loader())
 
-        prefix = "recurrent.halting_model"
+        prefix = "recurrent.utilities.halting_model"
         expected_names = {f"{prefix}/{suffix}" for suffix in SCALAR_SUFFIXES}
         self.assertEqual(set(fit_trainer.logged_metrics), expected_names)
         self.assertEqual({name for _, name in model.logged_calls}, expected_names)
@@ -263,14 +263,14 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
             torch.tensor(1.0),
         )
         self.assertFalse(torch.equal(output_weight.detach(), initial_weight))
-        self.assertNotIn("_usage_tracker", model.recurrent.halting_model._modules)
+        self.assertNotIn("_usage_tracker", model.recurrent.utilities.halting_model._modules)
         self.assertNotIn(
             "update_halting_state",
-            model.recurrent.halting_model.__dict__,
+            model.recurrent.utilities.halting_model.__dict__,
         )
         self.assertNotIn(
             "finalize_weighted_accumulation",
-            model.recurrent.halting_model.__dict__,
+            model.recurrent.utilities.halting_model.__dict__,
         )
         self.assertEqual(monitor._halting_layers, [])
         self.assertEqual(monitor._survival_history, {})
@@ -320,7 +320,7 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
             events.Reload()
             tags = events.Tags()
 
-        prefix = "recurrent.halting_model"
+        prefix = "recurrent.utilities.halting_model"
         survival_tag = f"{prefix}/histogram/survival"
         ponder_tag = f"{prefix}/histogram/ponder_cost"
         heatmap_tag = f"{prefix}/heatmap/survival"
@@ -353,7 +353,7 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
             events.Reload()
 
         self.assertEqual(events.Tags()["histograms"], [])
-        prefix = "recurrent.halting_model"
+        prefix = "recurrent.utilities.halting_model"
         self.assertEqual(
             {name.removeprefix(f"{prefix}/") for name in fit_trainer.logged_metrics},
             set(SCALAR_SUFFIXES),
@@ -377,7 +377,7 @@ class HaltingMonitorLifecycleTests(unittest.TestCase):
             ):
                 fit_trainer.fit(model, train_dataloaders=loader())
 
-        halting_model = model.recurrent.halting_model
+        halting_model = model.recurrent.utilities.halting_model
         self.assertNotIn("_usage_tracker", halting_model._modules)
         self.assertNotIn("update_halting_state", halting_model.__dict__)
         self.assertNotIn(

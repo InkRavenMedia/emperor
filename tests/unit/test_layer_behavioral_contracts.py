@@ -615,7 +615,7 @@ class LayerBehavioralContractTests(unittest.TestCase):
         self,
     ) -> None:
         recurrent = RecurrentLayer(recurrent_config())
-        recurrent.recurrent_gate = SimpleNamespace(model=nn.Identity())
+        recurrent.utilities.recurrent_gate = SimpleNamespace(model=nn.Identity())
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         hook = callback._RecurrentLayerMonitorCallback__make_gate_hook(

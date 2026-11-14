@@ -132,7 +132,7 @@ def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_me
             )
             for component in (
                 attention.projector.source_memory,
-                model.transformer.halting_model,
+                model.transformer.utilities.halting_model,
             ):
                 assert any(
                     parameter.grad is not None and torch.count_nonzero(parameter.grad)

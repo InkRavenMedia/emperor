@@ -100,7 +100,8 @@ class RecurrentLayerMonitorCallback(Callback):
         recurrent_layer: Module,
         pl_module: LightningModule,
     ) -> None:
-        recurrent_gate = getattr(recurrent_layer, "recurrent_gate", None)
+        utilities = getattr(recurrent_layer, "utilities", None)
+        recurrent_gate = getattr(utilities, "recurrent_gate", None)
         gate_model = getattr(recurrent_gate, "model", None)
         if gate_model is None:
             return
@@ -181,7 +182,8 @@ class RecurrentLayerMonitorCallback(Callback):
         recurrent_layer: Module,
         gate_logits: Tensor,
     ) -> Tensor:
-        recurrent_gate = getattr(recurrent_layer, "recurrent_gate", None)
+        utilities = getattr(recurrent_layer, "utilities", None)
+        recurrent_gate = getattr(utilities, "recurrent_gate", None)
         if recurrent_gate is None or not hasattr(recurrent_gate, "effective_values"):
             return torch.sigmoid(gate_logits)
         return recurrent_gate.effective_values(gate_logits)

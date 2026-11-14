@@ -1,5 +1,8 @@
 """Recurrent validation exports."""
 
+from emperor.layers._composition.recurrent.validation.common import (
+    RecurrentCompositionValidator,
+)
 from emperor.layers._composition.recurrent.validation.execution import (
     RecurrentExecutionValidator,
 )
@@ -25,6 +28,7 @@ from emperor.layers._composition.recurrent.validation.tiny_recursive_model impor
 __all__ = [
     "HierarchicalReasoningModelRecurrentValidator",
     "InnerThinkingRecurrentValidator",
+    "RecurrentCompositionValidator",
     "RecurrentExecutionValidator",
     "RecurrentIterationScheduleValidator",
     "RecurrentLayerValidator",

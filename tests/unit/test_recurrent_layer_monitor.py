@@ -486,7 +486,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         ).build()
         for _ in range(4):
             recurrent(self.state())
-        recurrent.recurrent_gate.model = CountingGate()
+        recurrent.utilities.recurrent_gate.model = CountingGate()
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         callback.on_fit_start(TrainerStub(), module)
@@ -497,9 +497,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         actual_gate_means = torch.stack(
             [gate_values.mean() for gate_values in observation.gate_values]
         )
-        expected_target_gate_means = torch.sigmoid(
-            torch.tensor([1.0, 3.0, 4.0])
-        )
+        expected_target_gate_means = torch.sigmoid(torch.tensor([1.0, 3.0, 4.0]))
         torch.testing.assert_close(
             actual_gate_means,
             expected_target_gate_means,
@@ -766,7 +764,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
             gate_option=LayerGateOptions.MULTIPLIER,
             gate_activation=ActivationOptions.TANH,
         )
-        recurrent.recurrent_gate.model = ConstantGate(1.0)
+        recurrent.utilities.recurrent_gate.model = ConstantGate(1.0)
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         callback.on_fit_start(TrainerStub(), module)

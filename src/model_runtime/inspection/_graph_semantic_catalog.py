@@ -132,6 +132,11 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             graph_role="internal",
         ),
         _semantic_type_policy(
+            "emperor.layers._composition.recurrent.utilities.RecurrentUtilities",
+            "Owns recurrent gate, residual, halting, and memory controllers and applies their transition operations.",
+            graph_role="internal",
+        ),
+        _semantic_type_policy(
             "torch.nn.modules.loss.CrossEntropyLoss",
             "Runtime loss module for multi-class classification targets.",
             graph_role="runtime",

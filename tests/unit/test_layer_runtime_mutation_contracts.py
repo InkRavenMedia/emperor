@@ -190,13 +190,13 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
                 recurrent = RecurrentLayer(
                     recurrent_config(memory_config=memory_config)
                 )
-                configure_weighted_memory(recurrent.memory_model)
+                configure_weighted_memory(recurrent.utilities.memory_model)
                 hidden = hidden_values.clone().requires_grad_(True)
 
                 output = recurrent(LayerState(hidden=hidden)).hidden
 
-                self.assertEqual(recurrent.memory_model.input_dim, 2)
-                self.assertEqual(recurrent.memory_model.output_dim, 2)
+                self.assertEqual(recurrent.utilities.memory_model.input_dim, 2)
+                self.assertEqual(recurrent.utilities.memory_model.output_dim, 2)
                 self.assertEqual(memory_config.input_dim, 7)
                 self.assertEqual(memory_config.output_dim, 8)
                 torch.testing.assert_close(output, hidden * 1.75)
@@ -214,7 +214,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         ).eval()
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]])
         outer_halting_state = _run_identity_halting_step(
-            recurrent.halting_model,
+            recurrent.utilities.halting_model,
             hidden,
         )
         public_state = LayerState(
@@ -225,7 +225,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
 
         public_result = recurrent(public_state)
 
-        self.assertEqual(recurrent.halting_model.input_dim, 2)
+        self.assertEqual(recurrent.utilities.halting_model.input_dim, 2)
         self.assertEqual(halting_config.input_dim, 7)
         self.assertIs(public_result, public_state)
         self.assertIs(public_result.halting_state, outer_halting_state)
@@ -233,7 +233,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         torch.testing.assert_close(public_result.loss, torch.tensor(1.75))
 
         internal_halting_state = _run_identity_halting_step(
-            recurrent.halting_model,
+            recurrent.utilities.halting_model,
             hidden,
         )
         input_loss = torch.tensor(1.25)
@@ -246,7 +246,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         torch.testing.assert_close(finalized_hidden, hidden)
         torch.testing.assert_close(finalized_loss, torch.tensor(1.75))
 
-        recurrent.halting_model = None
+        recurrent.utilities.halting_model = None
         guarded_hidden, guarded_loss = recurrent._finalize_recurrent_halting(
             hidden,
             input_loss,
