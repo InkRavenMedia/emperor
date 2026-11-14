@@ -500,6 +500,12 @@ class TestRecurrentRuntimeControlScope(unittest.TestCase):
             for catalog_key, keys in supported_keys.items()
             if EXISTING_RECURRENT_CONTROL_KEYS <= keys
         }
+        minimum_and_ponder_packages = {
+            "gpt/expert_linear_adaptive",
+            "bert/expert_linear_adaptive",
+            "vit/expert_linear_adaptive",
+            "mlp_mixer/expert_linear_adaptive",
+        }
 
         self.assertEqual(recurrent_packages, RECURRENT_MODEL_PACKAGES)
         self.assertEqual(
@@ -508,17 +514,9 @@ class TestRecurrentRuntimeControlScope(unittest.TestCase):
                 for catalog_key in recurrent_packages
                 if MINIMUM_AND_PONDER_CONTROL_KEYS <= supported_keys[catalog_key]
             },
-            {
-                "gpt/expert_linear_adaptive",
-                "bert/expert_linear_adaptive",
-                "vit/expert_linear_adaptive",
-            },
+            minimum_and_ponder_packages,
         )
-        for catalog_key in recurrent_packages - {
-            "gpt/expert_linear_adaptive",
-            "bert/expert_linear_adaptive",
-            "vit/expert_linear_adaptive",
-        }:
+        for catalog_key in recurrent_packages - minimum_and_ponder_packages:
             with self.subTest(catalog_key=catalog_key):
                 self.assertTrue(
                     MINIMUM_AND_PONDER_CONTROL_KEYS.isdisjoint(
