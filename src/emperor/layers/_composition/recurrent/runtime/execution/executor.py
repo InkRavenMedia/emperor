@@ -1,15 +1,21 @@
-# Shared Recurrent Execution Module. Recurrent variant classes implement its
-# Adapter Interface while retaining variant-specific state and transition knowledge.
+"""Coordinate recurrent execution delegates and commit one forward result."""
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
 
 from dataclasses import replace
 from functools import partial
-from typing import TYPE_CHECKING, Generic
+from typing import TYPE_CHECKING, Generic, cast
 
-import torch
+from torch.nn import Module
 
+from emperor.layers._composition.recurrent.runtime.execution.branch import (
+    RecurrentBranchRunner,
+)
+from emperor.layers._composition.recurrent.runtime.execution.handoff import (
+    RecurrentBranchedHandoff,
+    RecurrentNestedHandoff,
+)
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentExecutionAdapter,
     RecurrentExecutionResult,
@@ -19,7 +25,6 @@ from emperor.layers._composition.recurrent.runtime.execution.runtime_state impor
     RecurrentRuntimeStateGuard,
 )
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
-    RecurrentBranchExecutionPlan,
     RecurrentIterationExecutionPlan,
     RecurrentIterationSchedule,
     RecurrentNestedSmoothHandoffExecutionPlan,
@@ -32,14 +37,19 @@ from emperor.layers._state import LayerState
 from emperor.nn import once_per_recurrent_run
 
 if TYPE_CHECKING:
-    from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
+    from collections.abc import Callable
 
 
 class RecurrentExecution(Generic[_StateT]):
-    """Execute and commit recurrent schedules for any recurrent state Adapter."""
+    """Select an execution delegate and commit its result for every variant."""
 
     VALIDATOR = RecurrentExecutionValidator
     __runtime_state_guard = RecurrentRuntimeStateGuard()
+
+    def __init__(self) -> None:
+        self.__branch_runner: RecurrentBranchRunner[_StateT] = RecurrentBranchRunner()
+        self.__branched_handoff = RecurrentBranchedHandoff(self.__branch_runner)
+        self.__nested_handoff = RecurrentNestedHandoff(self.__branch_runner)
 
     @once_per_recurrent_run()
     def execute(
@@ -51,45 +61,45 @@ class RecurrentExecution(Generic[_StateT]):
         self.VALIDATOR.validate_adapter_is_module(adapter)
         execution_plan = iteration_schedule.execution_plan()
         if isinstance(execution_plan, RecurrentNestedSmoothHandoffExecutionPlan):
-            return self.__execute_nested_smooth_depth_handoff(
+            run_handoff = partial(
+                self.__nested_handoff.execute, adapter, layer_state, execution_plan
+            )
+        elif isinstance(execution_plan, RecurrentSmoothHandoffExecutionPlan):
+            run_handoff = partial(
+                self.__branched_handoff.execute, adapter, layer_state, execution_plan
+            )
+        else:
+            execution_result = self.__execute_stable_plan(
                 adapter,
                 layer_state,
-                iteration_schedule,
                 execution_plan,
             )
-        if isinstance(execution_plan, RecurrentSmoothHandoffExecutionPlan):
-            return self.__execute_smooth_depth_handoff(
-                adapter,
+            return self.__commit_execution_result(
                 layer_state,
                 iteration_schedule,
-                execution_plan,
+                execution_result,
             )
-        execution_result = self.__execute_stable_plan(
+        return self.__execute_handoff(
             adapter,
             layer_state,
-            execution_plan,
-        )
-        return self.__commit_execution_result(
-            layer_state,
             iteration_schedule,
-            execution_result,
+            run_handoff,
         )
 
-    def __execute_nested_smooth_depth_handoff(
+    def __execute_handoff(
         self,
         adapter: RecurrentExecutionAdapter[_StateT],
         layer_state: LayerState,
         iteration_schedule: RecurrentIterationSchedule,
-        execution_plan: RecurrentNestedSmoothHandoffExecutionPlan,
+        run_handoff: Callable[[], RecurrentExecutionResult],
     ) -> LayerState:
+        """Keep handoff computation and commit inside one failure-restoration scope."""
         original_state = replace(layer_state)
         try:
-            with self.__runtime_state_guard.rollback_handoff_on_failure(adapter):
-                execution_result = self.__execute_committed_nested_smooth_depth_handoff(
-                    adapter,
-                    layer_state,
-                    execution_plan,
-                )
+            with self.__runtime_state_guard.rollback_handoff_on_failure(
+                cast(Module, adapter)
+            ):
+                execution_result = run_handoff()
                 return self.__commit_execution_result(
                     layer_state,
                     iteration_schedule,
@@ -101,83 +111,23 @@ class RecurrentExecution(Generic[_StateT]):
             layer_state.commit_recurrent_context(original_state)
             raise
 
-    def __execute_committed_nested_smooth_depth_handoff(
+    def __execute_stable_plan(
         self,
         adapter: RecurrentExecutionAdapter[_StateT],
         layer_state: LayerState,
-        execution_plan: RecurrentNestedSmoothHandoffExecutionPlan,
+        execution_plan: RecurrentIterationExecutionPlan,
     ) -> RecurrentExecutionResult:
         recurrent_state = adapter._initialize_recurrent_execution_state(
             layer_state,
-            branch_base_loss=None,
+            branch_base_loss=layer_state.loss,
         )
-        recurrent_state = self.__run_branch_suffix(
-            adapter,
-            recurrent_state,
-            execution_plan.source_branch,
-            observe_transitions=True,
-        )
-        source_result = self.__finalize_branch(adapter, recurrent_state)
-        if recurrent_state.all_items_halted:
-            return self.__accumulate_caller_loss_once(
-                adapter,
-                layer_state.loss,
-                source_result,
-            )
-
-        transition_index_before_target = recurrent_state.transition_index
-        recurrent_state = self.__run_branch_suffix(
+        recurrent_state = self.__branch_runner.run(
             adapter,
             recurrent_state,
             execution_plan.target_branch,
             observe_transitions=True,
         )
-        if recurrent_state.transition_index == transition_index_before_target:
-            return self.__accumulate_caller_loss_once(
-                adapter,
-                layer_state.loss,
-                source_result,
-            )
-
-        target_result = self.__finalize_branch(adapter, recurrent_state)
-        transition_weight = execution_plan.transition_weight
-        blended_result = RecurrentExecutionResult(
-            hidden=self.__blend_recurrent_branch_hidden(
-                source_result,
-                target_result,
-                transition_weight,
-            ),
-            loss=adapter._blend_recurrent_branch_losses(
-                source_result.loss,
-                source_result.loss,
-                target_result.loss,
-                transition_weight,
-            ),
-            context_state=(
-                source_result if transition_weight == 0 else target_result
-            ).context_state,
-        )
-        return self.__accumulate_caller_loss_once(
-            adapter,
-            layer_state.loss,
-            blended_result,
-        )
-
-    @staticmethod
-    def __accumulate_caller_loss_once(
-        adapter: RecurrentExecutionAdapter[_StateT],
-        caller_loss: torch.Tensor | None,
-        recurrent_result: RecurrentExecutionResult,
-    ) -> RecurrentExecutionResult:
-        if recurrent_result.loss is None:
-            return replace(recurrent_result, loss=caller_loss)
-        return replace(
-            recurrent_result,
-            loss=adapter._accumulate_auxiliary_loss(
-                caller_loss,
-                recurrent_result.loss,
-            ),
-        )
+        return self.__branch_runner.finalize(adapter, recurrent_state)
 
     @staticmethod
     def __commit_execution_result(
@@ -191,282 +141,3 @@ class RecurrentExecution(Generic[_StateT]):
             layer_state.commit_recurrent_context(execution_result.context_state)
         iteration_schedule.record_successful_forward()
         return layer_state
-
-    def __execute_stable_plan(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        layer_state: LayerState,
-        execution_plan: RecurrentIterationExecutionPlan,
-    ) -> RecurrentExecutionResult:
-        recurrent_state = adapter._initialize_recurrent_execution_state(
-            layer_state,
-            branch_base_loss=layer_state.loss,
-        )
-        recurrent_state = self.__run_branch_suffix(
-            adapter,
-            recurrent_state,
-            execution_plan.target_branch,
-            observe_transitions=True,
-        )
-        return self.__finalize_branch(adapter, recurrent_state)
-
-    def __execute_smooth_depth_handoff(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        layer_state: LayerState,
-        iteration_schedule: RecurrentIterationSchedule,
-        execution_plan: RecurrentSmoothHandoffExecutionPlan,
-    ) -> LayerState:
-        original_state = replace(layer_state)
-        try:
-            with self.__runtime_state_guard.rollback_handoff_on_failure(adapter):
-                execution_result = self.__execute_committed_smooth_depth_handoff(
-                    adapter,
-                    layer_state,
-                    execution_plan,
-                )
-                return self.__commit_execution_result(
-                    layer_state,
-                    iteration_schedule,
-                    execution_result,
-                )
-        except BaseException:
-            layer_state.hidden = original_state.hidden
-            layer_state.loss = original_state.loss
-            layer_state.commit_recurrent_context(original_state)
-            raise
-
-    def __execute_committed_smooth_depth_handoff(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        layer_state: LayerState,
-        execution_plan: RecurrentSmoothHandoffExecutionPlan,
-    ) -> RecurrentExecutionResult:
-        common_state = adapter._initialize_recurrent_execution_state(
-            layer_state,
-            branch_base_loss=None,
-        )
-        common_transition_count = execution_plan.common_prefix_transition_count
-        common_state = self.__run_branch_suffix(
-            adapter,
-            common_state,
-            RecurrentBranchExecutionPlan(
-                transition_count=common_transition_count,
-                no_gradient_transition_count=common_transition_count,
-            ),
-            observe_transitions=True,
-        )
-
-        source_result, target_state = (
-            self.__advance_handoff_branches_through_shared_boundary(
-                adapter,
-                common_state,
-                execution_plan.source_branch,
-            )
-        )
-
-        target_state = self.__run_branch_suffix(
-            adapter,
-            target_state,
-            execution_plan.target_branch,
-            observe_transitions=True,
-        )
-        target_result = self.__finalize_branch(adapter, target_state)
-        transition_weight = execution_plan.transition_weight
-        blended_hidden = self.__blend_recurrent_branch_hidden(
-            source_result,
-            target_result,
-            transition_weight,
-        )
-        blended_recurrent_loss = adapter._blend_recurrent_branch_losses(
-            adapter._recurrent_branch_loss(common_state),
-            source_result.loss,
-            target_result.loss,
-            transition_weight,
-        )
-        context_state = (
-            source_result if transition_weight == 0 else target_result
-        ).context_state
-        if blended_recurrent_loss is None:
-            return RecurrentExecutionResult(
-                blended_hidden, layer_state.loss, context_state
-            )
-        return RecurrentExecutionResult(
-            blended_hidden,
-            adapter._accumulate_auxiliary_loss(
-                layer_state.loss,
-                blended_recurrent_loss,
-            ),
-            context_state,
-        )
-
-    @staticmethod
-    def __blend_recurrent_branch_hidden(
-        source: RecurrentExecutionResult,
-        target: RecurrentExecutionResult,
-        transition_weight: float,
-    ) -> torch.Tensor:
-        if transition_weight == 0.0:
-            return source.hidden
-        if transition_weight == 1.0:
-            return target.hidden
-        source_hidden = source.hidden
-        if target.context_state is not None:
-            source_hidden = target.context_state.align_recurrent_hidden(
-                source_hidden, source_state=source.context_state
-            )
-        return (
-            1.0 - transition_weight
-        ) * source_hidden + transition_weight * target.hidden
-
-    def __advance_handoff_branches_through_shared_boundary(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        common_state: _StateT,
-        source_plan: RecurrentBranchExecutionPlan,
-    ) -> tuple[RecurrentExecutionResult, _StateT]:
-        source_boundary_state = self.__detach_state_at_gradient_boundary(
-            adapter,
-            common_state,
-            source_plan,
-        )
-        transition_index = source_boundary_state.transition_index
-        source_tracks_gradients = source_plan.tracks_gradients(transition_index)
-        target_state = None
-        target_residual_state = None
-        with source_plan.gradient_context(transition_index):
-            prepared_transition = adapter._prepare_recurrent_transition(
-                source_boundary_state,
-                tracks_gradients=source_tracks_gradients,
-            )
-            if prepared_transition.residual_state is not None:
-                target_state = adapter._fork_recurrent_handoff_state(
-                    source_boundary_state
-                )
-                with torch.no_grad():
-                    target_prepared_transition = adapter._prepare_recurrent_transition(
-                        target_state,
-                        tracks_gradients=False,
-                    )
-                target_residual_state = target_prepared_transition.residual_state
-            provisional_source_continuation = partial(
-                self.__continue_and_finalize_provisional_source_branch,
-                adapter,
-                source_boundary_state,
-                source_plan,
-            )
-
-            source_result, target_transition_result = (
-                adapter._run_shared_handoff_boundary_transition(
-                    source_boundary_state,
-                    prepared_transition,
-                    run_provisional_source_branch=provisional_source_continuation,
-                    target_residual_state=target_residual_state,
-                    transition_index=transition_index,
-                )
-            )
-
-        if target_state is None:
-            target_state = adapter._fork_recurrent_handoff_state(source_boundary_state)
-        target_state = adapter._apply_recurrent_transition_result(
-            target_state,
-            target_transition_result,
-        )
-        return source_result, target_state
-
-    def __continue_and_finalize_provisional_source_branch(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        source_boundary_state: _StateT,
-        source_plan: RecurrentBranchExecutionPlan,
-        source_transition_result: RecurrentTransitionResult,
-    ) -> RecurrentExecutionResult:
-        source_state = adapter._fork_recurrent_handoff_state(source_boundary_state)
-        source_state = adapter._apply_recurrent_transition_result(
-            source_state,
-            source_transition_result,
-        )
-        source_state = self.__run_branch_suffix(
-            adapter,
-            source_state,
-            source_plan,
-            observe_transitions=False,
-        )
-        return self.__finalize_branch(adapter, source_state)
-
-    def __run_branch_suffix(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        recurrent_state: _StateT,
-        branch_plan: RecurrentBranchExecutionPlan,
-        *,
-        observe_transitions: bool,
-    ) -> _StateT:
-        while (
-            recurrent_state.transition_index < branch_plan.transition_count
-            and not recurrent_state.all_items_halted
-        ):
-            recurrent_state = self.__run_planned_transition(
-                adapter,
-                recurrent_state,
-                branch_plan,
-                observe_transition=observe_transitions,
-            )
-        return recurrent_state
-
-    def __run_planned_transition(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        recurrent_state: _StateT,
-        branch_plan: RecurrentBranchExecutionPlan,
-        *,
-        observe_transition: bool,
-    ) -> _StateT:
-        recurrent_state = self.__detach_state_at_gradient_boundary(
-            adapter,
-            recurrent_state,
-            branch_plan,
-        )
-        transition_index = recurrent_state.transition_index
-        tracks_gradients = branch_plan.tracks_gradients(transition_index)
-        with branch_plan.gradient_context(transition_index):
-            prepared_transition = adapter._prepare_recurrent_transition(
-                recurrent_state,
-                tracks_gradients=tracks_gradients,
-            )
-            transition_result = adapter._run_recurrent_transition(
-                recurrent_state,
-                prepared_transition,
-                transition_index=transition_index,
-                observe_transition=observe_transition,
-            )
-            return adapter._apply_recurrent_transition_result(
-                recurrent_state,
-                transition_result,
-            )
-
-    def __detach_state_at_gradient_boundary(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        recurrent_state: _StateT,
-        branch_plan: RecurrentBranchExecutionPlan,
-    ) -> _StateT:
-        if not branch_plan.starts_gradient_suffix(recurrent_state.transition_index):
-            return recurrent_state
-        return adapter._detach_recurrent_execution_state(recurrent_state)
-
-    def __finalize_branch(
-        self,
-        adapter: RecurrentExecutionAdapter[_StateT],
-        recurrent_state: _StateT,
-    ) -> RecurrentExecutionResult:
-        finalized_hidden, finalized_loss = adapter._finalize_recurrent_halting(
-            recurrent_state.output_hidden,
-            adapter._recurrent_branch_loss(recurrent_state),
-            recurrent_state.halting_state,
-        )
-        return RecurrentExecutionResult(
-            finalized_hidden,
-            finalized_loss,
-            replace(recurrent_state.context_state, hidden=finalized_hidden),
-        )
