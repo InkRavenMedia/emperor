@@ -33,7 +33,10 @@ class Model(TranslationExperiment):
         super().__init__(config)
         self.experiment_config = config.experiment_config
         self.sequence_expansion_enabled = (
-            _sequence_expansion.expanded_sequence_capacity(self.experiment_config.decoder_config, 0) > 0
+            _sequence_expansion.expanded_sequence_capacity(
+                self.experiment_config.decoder_config, 0
+            )
+            > 0
         )
         experiment_config = self.experiment_config
         self.source_sequence_length = experiment_config.source_sequence_length
