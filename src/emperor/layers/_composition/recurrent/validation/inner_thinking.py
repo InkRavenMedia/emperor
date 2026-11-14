@@ -68,7 +68,6 @@ class InnerThinkingRecurrentValidator(RecurrentLayerValidator):
         mask: Tensor,
         indices: Tensor,
         sequence_length: int,
-        *,
         select_keys: bool,
         branch_count: int,
     ) -> None:
