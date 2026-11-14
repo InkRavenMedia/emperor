@@ -24,12 +24,14 @@ from emperor.transformer import (
     TransformerDecoderLayerState,
 )
 from support.layers import _set_affine_parameters, linear_stack_config
-from unit.test_recurrent_composition_inner_thinking import (
+from support.recurrent import (
+    FailingStochasticStateBlockConfig,
     RecordingBlockConfig,
-    config,
     set_router,
 )
-from unit.test_recurrent_layer import FailingStochasticStateBlockConfig
+from support.recurrent import (
+    inner_thinking_config as config,
+)
 
 
 @dataclass

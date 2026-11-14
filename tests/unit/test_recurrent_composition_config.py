@@ -45,7 +45,7 @@ from emperor.layers._composition.recurrent.variants.tiny_recursive_model import 
     TinyRecursiveModelRecurrent,
 )
 from support.layers import IdentityBlockConfig
-from unit.test_recurrent_composition_inner_thinking import config as inner_thinking_config
+from support.recurrent import inner_thinking_config
 
 
 def _declared_protected_method_names(owner: type) -> set[str]:
