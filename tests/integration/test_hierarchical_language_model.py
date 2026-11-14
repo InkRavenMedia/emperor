@@ -29,6 +29,88 @@ def language_model_config():
 
 
 class HierarchicalLanguageModelTests(unittest.TestCase):
+    def test_normalization_boundaries_preserve_positions_and_backbone_output(self):
+        from dataclasses import replace
+
+        from emperor.layers import (
+            LayerConfig,
+            LayerNormPositionOptions,
+            LayerState,
+            NormalizationOptions,
+        )
+        from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
+
+        class RecordingBackbone(torch.nn.Module):
+            def forward(self, state):
+                self.input_hidden = state.hidden
+                self.output_state = LayerState(
+                    hidden=state.hidden.square() + torch.arange(8),
+                    loss=state.hidden.new_tensor(0.25),
+                )
+                return self.output_state
+
+        def normalization_config(position):
+            if position is None:
+                return None
+            return LayerConfig(
+                input_dim=8,
+                output_dim=8,
+                layer_norm_position=position,
+                normalization=NormalizationOptions.LAYER_NORM,
+            )
+
+        def expected_normalization(hidden, position):
+            if position is None or position == LayerNormPositionOptions.DISABLED:
+                return hidden
+            return torch.nn.functional.layer_norm(hidden, (8,), eps=1e-5)
+
+        positions = LayerNormPositionOptions
+        for input_position, output_position in (
+            (None, None),
+            (positions.DISABLED, positions.DISABLED),
+            (positions.BEFORE, positions.AFTER),
+            (positions.DEFAULT, positions.BEFORE),
+            (positions.AFTER, positions.DEFAULT),
+        ):
+            with self.subTest(input=input_position, output=output_position):
+                config = replace(
+                    language_model_config(),
+                    embedding_normalization_config=normalization_config(input_position),
+                    output_normalization_config=normalization_config(output_position),
+                )
+                model = config.build().eval()
+                model.backbone = RecordingBackbone()
+                initial_hidden = torch.linspace(-2, 3, 8)
+                with torch.no_grad():
+                    model.beginning_of_document.copy_(initial_hidden)
+                    for parameter in model.positions.parameters():
+                        parameter.zero_()
+                batch = HierarchicalLanguageModelBatch.collate(
+                    [
+                        {
+                            "context_texts": [""],
+                            "target_texts": [None],
+                            "bos_mask": [True],
+                        }
+                    ]
+                )
+
+                result = model._condition(batch)
+
+                expected_input = expected_normalization(
+                    initial_hidden[None, None], input_position
+                )
+                backbone_output = expected_input.square() + torch.arange(8)
+                torch.testing.assert_close(model.backbone.input_hidden, expected_input)
+                torch.testing.assert_close(
+                    model.backbone.output_state.hidden, backbone_output
+                )
+                torch.testing.assert_close(
+                    result.hidden,
+                    expected_normalization(backbone_output, output_position),
+                )
+                torch.testing.assert_close(result.loss, torch.tensor(0.25))
+
     def test_invalid_bos_masks_do_not_silently_discard_context(self):
         from dataclasses import replace
 
