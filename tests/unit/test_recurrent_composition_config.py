@@ -4,7 +4,7 @@ import inspect
 import pickle
 import textwrap
 import unittest
-from dataclasses import fields
+from dataclasses import fields, replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -268,6 +268,55 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             "_RecurrentCompositionAbstract__initialize_delegates",
             vars(RecurrentCompositionAbstract),
         )
+
+    def test_every_variant_requires_explicit_normalization_settings(self) -> None:
+        for config in _minimal_variant_configs():
+            for field_name in (
+                "recurrent_layer_norm_position",
+                "recurrent_normalization",
+            ):
+                with self.subTest(variant=type(config).__name__, field=field_name):
+                    missing_setting = replace(config, **{field_name: None})
+                    with self.assertRaisesRegex(
+                        ValueError, f"{field_name} is required.*received None"
+                    ):
+                        missing_setting.build()
+
+    def test_every_variant_rejects_invalid_normalization_options(self) -> None:
+        for config in _minimal_variant_configs():
+            for field_name, wrong_enum in (
+                ("recurrent_layer_norm_position", NormalizationOptions.LAYER_NORM),
+                ("recurrent_normalization", LayerNormPositionOptions.DISABLED),
+            ):
+                for invalid_value in ("DISABLED", 0, wrong_enum):
+                    with self.subTest(
+                        variant=type(config).__name__,
+                        field=field_name,
+                        value=invalid_value,
+                    ):
+                        invalid_setting = replace(config, **{field_name: invalid_value})
+                        with self.assertRaisesRegex(
+                            TypeError, f"{field_name} must be a"
+                        ):
+                            invalid_setting.build()
+
+    def test_every_variant_keeps_explicit_normalization_choices(self) -> None:
+        for config in _minimal_variant_configs():
+            with self.subTest(variant=type(config).__name__):
+                model = replace(
+                    config,
+                    recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                    recurrent_normalization=NormalizationOptions.RMS_NORM,
+                ).build()
+                self.assertIs(
+                    model.utilities.recurrent_layer_norm_position,
+                    LayerNormPositionOptions.DISABLED,
+                )
+                self.assertIs(
+                    model.utilities.recurrent_normalization,
+                    NormalizationOptions.RMS_NORM,
+                )
+                self.assertIsNone(model.utilities.normalization.module)
 
     def test_variant_classes_are_adapters_for_shared_recurrent_execution(
         self,

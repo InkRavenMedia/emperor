@@ -24,6 +24,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
@@ -104,6 +105,7 @@ def make_adaptive_projection_model_config(
 
 def make_recurrent_projection_model_config() -> RecurrentLayerConfig:
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         max_steps=2,
         initial_iterations=2,
         iteration_increment=1,

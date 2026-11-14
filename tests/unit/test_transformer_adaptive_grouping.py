@@ -29,6 +29,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
 )
@@ -384,6 +385,7 @@ class TransformerAdaptiveGroupingTests(unittest.TestCase):
     def test_outer_recurrent_encoder_without_controllers_recomputes_each_step(self):
         model = RecurrentLayer(
             RecurrentLayerConfig(
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=4,
                 output_dim=4,
                 max_steps=2,

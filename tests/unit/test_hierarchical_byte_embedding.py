@@ -15,6 +15,7 @@ from emperor.layers import (
     InnerThinkingRecurrentConfig,
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
@@ -66,6 +67,8 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
 
         cfg = embedding_config()
         cfg.encoder_config.encoder_stack_config = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=3,
@@ -197,6 +200,8 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
     def test_allows_recurrent_growth_but_rejects_attention_on_flat_rows(self):
         cfg = embedding_config(output_dim=8)
         cfg.projection_config = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=2,
@@ -281,6 +286,7 @@ class TestHierarchicalByteEmbedding(unittest.TestCase):
     ):
         cfg = embedding_config()
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=8,
             output_dim=8,
             max_steps=2,

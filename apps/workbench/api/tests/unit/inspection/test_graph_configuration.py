@@ -23,6 +23,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStack,
     LayerStackConfig,
+    NormalizationOptions,
     RecurrentLayerConfig,
     WeightedBlendResidualConfig,
 )
@@ -278,6 +279,7 @@ class InspectionGraphConfigurationTests(unittest.TestCase):
             iteration_increment=1,
             forward_calls_before_iteration_increment=1,
             recurrent_layer_norm_position=LayerNormPositionOptions.AFTER,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             block_config=block_config,
             gate_config=GateConfig(
                 model_config=LayerStackConfig(

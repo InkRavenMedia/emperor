@@ -13,6 +13,7 @@ from emperor.layers import (
     HierarchicalReasoningModelRecurrentConfig,
     LayerNormPositionOptions,
     LayerState,
+    NormalizationOptions,
     TinyRecursiveModelRecurrentConfig,
 )
 from emperor.layers._composition.recurrent.base import (
@@ -182,6 +183,8 @@ class _TensorReturningBlock(Module):
 class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
     def test_gradient_suffix_requires_enough_complete_halting_updates(self) -> None:
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -212,6 +215,8 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
 
     def test_overrides_do_not_mutate_the_source_config(self) -> None:
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -245,6 +250,8 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
         self,
     ) -> None:
         values = {
+            "recurrent_layer_norm_position": LayerNormPositionOptions.DISABLED,
+            "recurrent_normalization": NormalizationOptions.LAYER_NORM,
             "input_dim": 1,
             "output_dim": 1,
             "high_block_config": _IncrementBlockConfig(
@@ -328,6 +335,8 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
 
     def test_config_builds_its_exact_private_runtime_owner(self) -> None:
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -364,6 +373,8 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
 
     def test_nested_recurrent_compositions_are_rejected(self) -> None:
         nested_recurrent = TinyRecursiveModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             block_config=_IncrementBlockConfig(
@@ -379,6 +390,8 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
             initialization_standard_deviation=0.0,
         )
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=nested_recurrent,
@@ -418,6 +431,8 @@ class TestHierarchicalReasoningModelRecurrentValidation(unittest.TestCase):
     @staticmethod
     def _config() -> HierarchicalReasoningModelRecurrentConfig:
         return HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -475,7 +490,7 @@ class TestHierarchicalReasoningModelRecurrentValidation(unittest.TestCase):
                 "recurrent_layer_norm_position",
                 object(),
                 TypeError,
-                "recurrent_layer_norm_position must be None or a "
+                "recurrent_layer_norm_position must be a "
                 "LayerNormPositionOptions value",
             ),
             ("gate_config", object(), TypeError, "instance of GateConfig"),
@@ -591,6 +606,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         smooth_iteration_growth_flag: bool | None = None,
     ) -> HierarchicalReasoningModelRecurrentConfig:
         return HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -617,6 +634,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_schedule_grows_only_by_complete_high_cycles(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -656,6 +675,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_fixed_gradient_suffix_tracks_scheduled_high_cycles(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -755,6 +776,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_full_gradient_smooth_growth_extends_one_high_cycle_chain(self) -> None:
         smooth = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -825,6 +848,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self,
     ) -> None:
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -907,6 +932,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
                 output_dim=1,
             )
             return HierarchicalReasoningModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=1,
                 output_dim=1,
                 high_block_config=block_config,
@@ -1006,6 +1033,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_residual_uses_the_previous_low_and_high_target_states(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1043,6 +1072,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self,
     ) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1082,6 +1113,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self,
     ) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1113,6 +1146,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self,
     ) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             high_block_config=_IncrementBlockConfig(
@@ -1152,6 +1187,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_empty_leading_dimensions_are_rejected(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1177,6 +1214,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_batched_execution_matches_independent_items(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1208,6 +1247,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_bfloat16_preserves_dtype_and_final_clock_gradients(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1241,6 +1282,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_transition_blocks_must_return_layer_state(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_TensorReturningBlockConfig(
@@ -1268,6 +1311,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_layer_state_metadata_and_auxiliary_losses_survive_all_clocks(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1308,6 +1353,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_initial_states_and_transition_parameters_round_trip_directly(self) -> None:
         config = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1355,6 +1402,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self,
     ) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1383,6 +1432,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_nested_low_and_high_clocks_return_the_final_high_state(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1422,6 +1473,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_only_the_final_low_high_pair_builds_an_autograd_graph(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(
@@ -1460,6 +1513,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
     def test_no_gradient_transition_count_can_split_a_low_high_cycle(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             high_block_config=_IncrementBlockConfig(

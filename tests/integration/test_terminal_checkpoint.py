@@ -21,6 +21,7 @@ from emperor.layers import (
     ActivationOptions,
     LayerConfig,
     LayerNormPositionOptions,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.linears import LinearLayerConfig
@@ -89,6 +90,7 @@ class _FullStateModule(LightningModule):
         super().__init__()
         self.linear = nn.Linear(2, 1)
         recurrent_layer = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=100,
@@ -315,9 +317,7 @@ class TerminalCheckpointIntegrationTests(unittest.TestCase):
                 map_location="cpu",
                 weights_only=False,
             )
-            recurrent_key = (
-                "recurrent_iteration_schedule.forward_call_progress"
-            )
+            recurrent_key = "recurrent_iteration_schedule.forward_call_progress"
 
             self.assertEqual(source_trainer.global_step, 3)
             self.assertEqual(source_payload["global_step"], 3)

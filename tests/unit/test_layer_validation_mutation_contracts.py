@@ -21,6 +21,7 @@ from emperor.layers import (
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayerConfig,
 )
 from emperor.layers._composition.gate.validation import LayerGateValidator
@@ -157,6 +158,7 @@ def _recurrent_config(
     memory_config: object | None = None,
 ) -> RecurrentLayerConfig:
     return RecurrentLayerConfig(
+        recurrent_normalization=NormalizationOptions.LAYER_NORM,
         input_dim=dim if input_dim is None else input_dim,
         output_dim=dim if output_dim is None else output_dim,
         max_steps=max_steps,
@@ -928,7 +930,7 @@ class TestLayerValidationMutationContracts(unittest.TestCase):
                 "recurrent_layer_norm_position",
                 object(),
                 TypeError,
-                "recurrent_layer_norm_position must be None or a "
+                "recurrent_layer_norm_position must be a "
                 "LayerNormPositionOptions value for RecurrentLayerConfig, got object.",
             ),
             (

@@ -1041,6 +1041,7 @@ class TestRecurrentLayer(unittest.TestCase):
         if forward_calls_before_iteration_increment is None:
             forward_calls_before_iteration_increment = 1
         return RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=dim,
             output_dim=dim,
             max_steps=max_steps,
@@ -1192,29 +1193,22 @@ class TestRecurrentLayer(unittest.TestCase):
         self.assertIsNone(model.utilities.normalization.module)
         torch.testing.assert_close(result.hidden, hidden + 2.0)
 
-    def test_omitted_recurrent_layer_norm_is_disabled(self):
+    def test_omitted_recurrent_layer_norm_position_is_rejected(self):
         dim = 3
-        hidden = torch.arange(6.0).view(2, dim)
-        model = RecurrentLayer(
-            RecurrentLayerConfig(
-                input_dim=dim,
-                output_dim=dim,
-                max_steps=1,
-                initial_iterations=1,
-                iteration_increment=1,
-                forward_calls_before_iteration_increment=1,
-                block_config=self.layer_block_config(increment=2.0),
-            )
+        config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
+            input_dim=dim,
+            output_dim=dim,
+            max_steps=1,
+            initial_iterations=1,
+            iteration_increment=1,
+            forward_calls_before_iteration_increment=1,
+            block_config=self.layer_block_config(increment=2.0),
         )
-
-        result = model(LayerState(hidden=hidden.clone()))
-
-        self.assertIs(
-            model.utilities.recurrent_layer_norm_position,
-            LayerNormPositionOptions.DISABLED,
-        )
-        self.assertIsNone(model.utilities.normalization.module)
-        torch.testing.assert_close(result.hidden, hidden + 2.0)
+        with self.assertRaisesRegex(
+            ValueError, "recurrent_layer_norm_position is required.*received None"
+        ):
+            RecurrentLayer(config)
 
     def test_recurrent_normalization_selection_preserves_gradients_and_disabling(self):
         expected_types = {
@@ -1603,6 +1597,8 @@ class TestRecurrentLayer(unittest.TestCase):
         override_block = self.layer_block_config(increment=3.0)
         override_gate = self.gate_config(value=0.5)
         overrides = RecurrentLayerConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=3,
             output_dim=3,
             max_steps=5,
@@ -1766,6 +1762,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "block_config_none",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1781,6 +1778,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "invalid_block_type",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1796,6 +1794,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "block_missing_input_dim",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1811,6 +1810,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "block_missing_output_dim",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1826,6 +1826,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "max_steps_zero",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=0,
@@ -1841,6 +1842,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "non_int_max_steps",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps="3",
@@ -1856,6 +1858,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "boolean_no_gradient_transition_count",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=2,
@@ -1872,6 +1875,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "negative_no_gradient_transition_count",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=2,
@@ -1888,6 +1892,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "no_gradient_transition_count_leaves_no_gradient_steps",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=2,
@@ -1904,6 +1909,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "mismatched_recurrent_dimensions",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim + 1,
                     max_steps=1,
@@ -1919,6 +1925,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "invalid_recurrent_layer_norm_position",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1934,6 +1941,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "invalid_gate_config",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1950,6 +1958,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "invalid_gate_option",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1966,6 +1975,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "abstract_residual_config",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -1981,6 +1991,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "nested_gate_config",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -2000,6 +2011,7 @@ class TestRecurrentLayer(unittest.TestCase):
             (
                 "invalid_halting_config",
                 RecurrentLayerConfig(
+                    recurrent_normalization=NormalizationOptions.LAYER_NORM,
                     input_dim=dim,
                     output_dim=dim,
                     max_steps=1,
@@ -2411,6 +2423,7 @@ class TestRecurrentLayer(unittest.TestCase):
 
     def test_reinjects_the_original_hidden_before_every_recurrent_block(self):
         recurrent = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
             output_dim=1,
             max_steps=3,
@@ -2579,6 +2592,7 @@ class TestRecurrentLayer(unittest.TestCase):
         self,
     ) -> None:
         model = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=7,
@@ -2901,6 +2915,7 @@ class TestRecurrentLayer(unittest.TestCase):
 
     def test_iteration_schedule_progress_round_trips_through_a_checkpoint(self):
         config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=7,
@@ -2991,6 +3006,7 @@ class TestRecurrentLayer(unittest.TestCase):
 
     def test_legacy_checkpoint_missing_only_schedule_progress_loads_strictly(self):
         config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=7,
@@ -3030,6 +3046,7 @@ class TestRecurrentLayer(unittest.TestCase):
 
     def test_checkpoint_progress_is_validated_and_clamped_to_saturation(self):
         config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=7,

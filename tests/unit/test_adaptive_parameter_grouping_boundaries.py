@@ -41,6 +41,7 @@ from emperor.layers import (
     LayerStack,
     LayerStackConfig,
     LayerState,
+    NormalizationOptions,
     RecurrentLayer,
     RecurrentLayerConfig,
     TinyRecursiveModelRecurrentConfig,
@@ -213,6 +214,7 @@ def test_sequence_grouping_preserves_individually_halted_tokens(hidden_state_mod
     )
     model = RecurrentLayer(
         RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=2,
             output_dim=2,
             max_steps=3,
@@ -493,6 +495,7 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
     ) -> None:
         model = RecurrentLayer(
             RecurrentLayerConfig(
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=2,
                 output_dim=2,
                 max_steps=2,
@@ -555,6 +558,7 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
 
     def test_outer_recurrent_transformer_controller_closes_fresh_layout_bypass(self):
         config = RecurrentLayerConfig(
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             max_steps=2,
@@ -579,6 +583,8 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
         block_config = grouped_encoder_block_config()
         configs = (
             TinyRecursiveModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=4,
                 output_dim=4,
                 block_config=block_config,
@@ -591,6 +597,8 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
                 memory_config=memory_config(4),
             ),
             HierarchicalReasoningModelRecurrentConfig(
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
                 input_dim=4,
                 output_dim=4,
                 high_block_config=block_config,
@@ -735,6 +743,8 @@ class AdaptiveParameterGroupingBoundaryTests(unittest.TestCase):
             layer_config=block_config,
         )
         recurrent = HierarchicalReasoningModelRecurrentConfig(
+            recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+            recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
             output_dim=4,
             high_block_config=transition_config,

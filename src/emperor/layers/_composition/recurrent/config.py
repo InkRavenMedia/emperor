@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
 from emperor.config import ConfigBase, optional_field
@@ -57,8 +57,8 @@ class RecurrentCompositionConfig(ConfigBase):
         "handoff."
     )
     recurrent_layer_norm_position: LayerNormPositionOptions | None = optional_field(
-        "Where layer normalization is applied within each recurrent transition. "
-        "Set to None to disable."
+        "Required position for normalization within each recurrent transition. "
+        "Choose a LayerNormPositionOptions value explicitly; use DISABLED to disable."
     )
     gate_config: GateConfig | None = optional_field(
         "Optional recurrent gate config. Set to None to disable."
@@ -74,14 +74,10 @@ class RecurrentCompositionConfig(ConfigBase):
         "Optional dynamic memory module applied around recurrent transition blocks. "
         "Set to None to disable memory."
     )
-    recurrent_normalization: NormalizationOptions | None = field(
-        default=None,
-        kw_only=True,
-        metadata={
-            "help": "Feature normalization used between recurrent transitions. "
-            "Defaults to LAYER_NORM for compatibility. Disabled through "
-            "recurrent_layer_norm_position."
-        },
+    recurrent_normalization: NormalizationOptions | None = optional_field(
+        "Required feature normalization used between recurrent transitions. "
+        "Choose a NormalizationOptions value explicitly, including when "
+        "recurrent_layer_norm_position is DISABLED."
     )
 
     def _registry_owner(self) -> type:
