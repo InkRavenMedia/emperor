@@ -48,7 +48,6 @@ class RecurrentResidualSchedule(nn.Module, ABC):
         transition_index: int,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None,
     ) -> None:
         """Replay a residual application to advance one forked recurrent branch."""
@@ -68,7 +67,6 @@ class RecurrentResidualSchedule(nn.Module, ABC):
         transition_index: int,
         current: Tensor,
         previous: Tensor,
-        *,
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         connection = self.connection_for_transition(

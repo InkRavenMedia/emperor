@@ -7,15 +7,17 @@ from torch import Tensor
 
 from emperor.config import ConfigBase
 from emperor.layers._composition.recurrent.validation.common import (
-    _GRADIENT_WINDOW_FIELDS,
     _RECURRENT_SHARED_OPTIONAL_FIELDS,
     _RecurrentCompositionValidator,
     _validate_initialization_standard_deviation,
-    _validate_recurrent_iteration_controls,
-    _validate_smooth_iteration_growth_controls,
     _validate_variant_hidden,
     _validate_variant_state,
     _validate_variant_transition_output,
+)
+from emperor.layers._composition.recurrent.validation.iteration_schedule import (
+    _GRADIENT_WINDOW_FIELDS,
+    _validate_recurrent_iteration_controls,
+    _validate_smooth_iteration_growth_controls,
 )
 from emperor.layers._validation.common import (
     _validate_halting_required_update_count,
@@ -173,7 +175,6 @@ class TinyRecursiveModelRecurrentValidator(_RecurrentCompositionValidator):
     def validate_hidden(
         hidden: object,
         expected_feature_dim: int,
-        *,
         field_name: str,
     ) -> None:
         _validate_variant_hidden(
@@ -187,7 +188,6 @@ class TinyRecursiveModelRecurrentValidator(_RecurrentCompositionValidator):
     def validate_initial_buffers(
         cls,
         hidden: Tensor,
-        *,
         answer_initial: Tensor,
         latent_initial: Tensor,
         expected_feature_dim: int,
@@ -208,7 +208,6 @@ class TinyRecursiveModelRecurrentValidator(_RecurrentCompositionValidator):
         cls,
         output_state: object,
         transition_input: Tensor,
-        *,
         expected_feature_dim: int,
     ) -> None:
         _validate_variant_transition_output(

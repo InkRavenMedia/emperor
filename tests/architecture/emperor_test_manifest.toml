@@ -363,6 +363,7 @@ modules = [
   "src/emperor/layers/_composition/recurrent/validation/hierarchical_reasoning_model.py",
   "src/emperor/layers/_composition/recurrent/validation/inner_thinking.py",
   "src/emperor/layers/_composition/recurrent/validation/iteration_schedule.py",
+  "src/emperor/layers/_composition/recurrent/validation/residual_schedule.py",
   "src/emperor/layers/_composition/recurrent/validation/standard.py",
   "src/emperor/layers/_composition/recurrent/validation/tiny_recursive_model.py",
   "src/emperor/layers/_composition/recurrent/variants/__init__.py",
