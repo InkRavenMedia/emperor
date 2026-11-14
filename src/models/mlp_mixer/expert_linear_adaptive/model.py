@@ -8,7 +8,9 @@ from emperor.experiments.classifier import ClassifierExperiment
 from emperor.layers import (
     Layer,
     LayerConfig,
+    LayerNormalizationDelegate,
     LayerNormPositionOptions,
+    LayerState,
 )
 from emperor.transformer import TransformerEncoderLayerState
 
@@ -24,12 +26,14 @@ class Model(ClassifierExperiment):
         self.experiment_config: ExperimentConfig = config.experiment_config
         self.patch = self.experiment_config.patch_config.build()
         self.transformer = self.experiment_config.encoder_config.build()
-        self.encoder_layer_norm = LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.encoder_output_normalization,
-        ).build_normalization()
+        self.encoder_layer_norm = LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.encoder_output_normalization,
+            )
+        )
         self.output = self.experiment_config.output_config.build()
 
     @property
@@ -41,7 +45,9 @@ class Model(ClassifierExperiment):
         encoder_state = self.transformer(
             TransformerEncoderLayerState(hidden=patch_tokens)
         )
-        normalized_tokens = self.encoder_layer_norm(encoder_state.hidden)
+        normalized_tokens = self.encoder_layer_norm.before_model(
+            LayerState(hidden=encoder_state.hidden)
+        ).hidden
         if encoder_state.key_padding_mask is None:
             pooled_hidden = normalized_tokens.mean(dim=1)
         else:

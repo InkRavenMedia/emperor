@@ -604,7 +604,7 @@ class TestTransformerGenericStacks(unittest.TestCase):
 
         with torch.no_grad():
             state = stack(AttentionLayerState(hidden=source))
-            expected = model.encoder_layer_norm(state.hidden)
+            expected = model.encoder_layer_norm.before_model(state).hidden
             actual, _ = model(source_token_embeddings=source)
 
         torch.testing.assert_close(actual, expected)

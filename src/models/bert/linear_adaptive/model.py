@@ -5,7 +5,13 @@ import torch.nn as nn
 from torch import Tensor
 
 from emperor.experiments.bert_pretraining import BertPretrainingExperiment
-from emperor.layers import ActivationOptions, LayerConfig, LayerNormPositionOptions
+from emperor.layers import (
+    ActivationOptions,
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    LayerState,
+)
 from emperor.transformer import TransformerEncoderLayerState
 from models import _sequence_expansion
 from models.bert.linear_adaptive._boundary_config_factory import BertBoundaryConfig
@@ -112,15 +118,19 @@ class Model(BertPretrainingExperiment):
             self.cfg.hidden_dim,
         )
 
-    def __build_embedding_layer_norm(self) -> nn.Module:
-        if not self.boundary_config.embedding_options.layer_norm_flag:
-            return nn.Identity()
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.boundary_config.embedding_options.normalization,
-        ).build_normalization()
+    def __build_embedding_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=(
+                    LayerNormPositionOptions.BEFORE
+                    if self.boundary_config.embedding_options.layer_norm_flag
+                    else LayerNormPositionOptions.DISABLED
+                ),
+                normalization=self.boundary_config.embedding_options.normalization,
+            )
+        )
 
     def __build_embedding_dropout(self) -> nn.Dropout:
         return nn.Dropout(self.boundary_config.embedding_options.dropout_probability)
@@ -128,18 +138,23 @@ class Model(BertPretrainingExperiment):
     def __build_encoder_model(self) -> nn.Module:
         return self.experiment_config.encoder_config.build()
 
-    def __build_encoder_layer_norm(self) -> nn.Module:
+    def __build_encoder_layer_norm(self) -> LayerNormalizationDelegate:
         encoder_config = self.experiment_config.encoder_config
         stack_config = getattr(encoder_config, "block_config", encoder_config)
         layer_config = stack_config.layer_config.layer_model_config
-        if layer_config.layer_norm_position == LayerNormPositionOptions.BEFORE:
-            return LayerConfig(
+        return LayerNormalizationDelegate(
+            LayerConfig(
                 input_dim=self.cfg.hidden_dim,
                 output_dim=self.cfg.hidden_dim,
-                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                layer_norm_position=(
+                    LayerNormPositionOptions.BEFORE
+                    if layer_config.layer_norm_position
+                    == LayerNormPositionOptions.BEFORE
+                    else LayerNormPositionOptions.DISABLED
+                ),
                 normalization=self.experiment_config.encoder_output_normalization,
-            ).build_normalization()
-        return nn.Identity()
+            )
+        )
 
     def __build_mlm_dense(self) -> nn.Linear:
         return nn.Linear(
@@ -153,15 +168,19 @@ class Model(BertPretrainingExperiment):
             self.boundary_config.mlm_head_options.activation
         )
 
-    def __build_mlm_layer_norm(self) -> nn.Module:
-        if not self.boundary_config.mlm_head_options.layer_norm_flag:
-            return nn.Identity()
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.boundary_config.mlm_head_options.normalization,
-        ).build_normalization()
+    def __build_mlm_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=(
+                    LayerNormPositionOptions.BEFORE
+                    if self.boundary_config.mlm_head_options.layer_norm_flag
+                    else LayerNormPositionOptions.DISABLED
+                ),
+                normalization=self.boundary_config.mlm_head_options.normalization,
+            )
+        )
 
     def __build_mlm_decoder(self) -> nn.Linear:
         return nn.Linear(self.cfg.hidden_dim, self.cfg.output_dim, bias=False)
@@ -242,7 +261,9 @@ class Model(BertPretrainingExperiment):
         )
         segment_embedding = self.token_type_embedding(token_type_ids)
         hidden = positioned_token_embeddings + segment_embedding
-        hidden = self.embedding_layer_norm(hidden)
+        hidden = self.embedding_layer_norm.before_model(
+            LayerState(hidden=hidden)
+        ).hidden
         processed_embeddings = self.embedding_dropout(hidden)
         return processed_embeddings, embedding_state.loss
 
@@ -258,7 +279,9 @@ class Model(BertPretrainingExperiment):
                 key_padding_mask=attention_mask == 0,
             )
         )
-        sequence_output = self.encoder_layer_norm(encoder_state.hidden)
+        sequence_output = self.encoder_layer_norm.before_model(
+            LayerState(hidden=encoder_state.hidden)
+        ).hidden
         if align_to_input:
             sequence_output = encoder_state.gather_input_tokens(sequence_output)
         auxiliary_loss = (
@@ -271,7 +294,9 @@ class Model(BertPretrainingExperiment):
     def __build_mlm_logits(self, sequence_output: Tensor) -> Tensor:
         mlm_hidden = self.mlm_dense(sequence_output)
         mlm_hidden = self.mlm_activation(mlm_hidden)
-        mlm_hidden = self.mlm_layer_norm(mlm_hidden)
+        mlm_hidden = self.mlm_layer_norm.before_model(
+            LayerState(hidden=mlm_hidden)
+        ).hidden
         mlm_logits = self.mlm_decoder(mlm_hidden)
         if self.mlm_decoder_bias is not None:
             mlm_logits = mlm_logits + self.mlm_decoder_bias

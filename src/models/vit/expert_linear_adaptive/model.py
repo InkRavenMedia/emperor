@@ -4,7 +4,12 @@ import torch.nn as nn
 from torch import Tensor
 
 from emperor.experiments.classifier import ClassifierExperiment
-from emperor.layers import LayerConfig, LayerNormPositionOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    LayerState,
+)
 from emperor.transformer import TransformerEncoderLayerState
 from models.vit.expert_linear_adaptive.experiment_config import ExperimentConfig
 
@@ -46,13 +51,15 @@ class Model(ClassifierExperiment):
     def __build_encoder_model(self) -> nn.Module:
         return self.experiment_config.encoder_config.build()
 
-    def __build_encoder_layer_norm(self) -> nn.Module:
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.encoder_output_normalization,
-        ).build_normalization()
+    def __build_encoder_layer_norm(self) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.encoder_output_normalization,
+            )
+        )
 
     def __build_output_model(self) -> nn.Module:
         return self.experiment_config.output_config.build()
@@ -66,7 +73,9 @@ class Model(ClassifierExperiment):
         hidden = self.positional_embedding(hidden)
 
         encoder_state = self.transformer(TransformerEncoderLayerState(hidden=hidden))
-        hidden = self.encoder_layer_norm(encoder_state.hidden)
+        hidden = self.encoder_layer_norm.before_model(
+            LayerState(hidden=encoder_state.hidden)
+        ).hidden
 
         cls_hidden = hidden[:, 0, :]
         logits = self.output(cls_hidden)

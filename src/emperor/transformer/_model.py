@@ -3,7 +3,12 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
-from emperor.layers import LayerConfig, LayerNormPositionOptions, NormalizationOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    NormalizationOptions,
+)
 from emperor.nn import Module
 from emperor.transformer._state import (
     TransformerDecoderLayerState,
@@ -48,13 +53,15 @@ class Transformer(Module):
     def __build_final_norm(self, stack_config: "ConfigBase | None"):
         if stack_config is None:
             return None
-        return LayerConfig(
-            input_dim=stack_config.output_dim,
-            output_dim=stack_config.output_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.cfg.final_normalization
-            or NormalizationOptions.LAYER_NORM,
-        ).build_normalization()
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=stack_config.output_dim,
+                output_dim=stack_config.output_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.cfg.final_normalization
+                or NormalizationOptions.LAYER_NORM,
+            )
+        )
 
     def forward(
         self,
@@ -110,8 +117,7 @@ class Transformer(Module):
             attention_mask=attention_mask,
         )
         state = self.encoder_model(state)
-        state.hidden = self.encoder_layer_norm(state.hidden)
-        return state
+        return self.encoder_layer_norm.before_model(state)
 
     def __expanded_encoder_padding_mask(
         self, state: TransformerEncoderLayerState, padding: Tensor | None
@@ -173,8 +179,7 @@ class Transformer(Module):
             cross_attention_mask=encoder_attention_mask,
         )
         state = self.decoder_model(state)
-        state.hidden = self.decoder_layer_norm(state.hidden)
-        return state
+        return self.decoder_layer_norm.before_model(state)
 
     @staticmethod
     def __sum_present_losses(

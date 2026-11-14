@@ -1128,7 +1128,7 @@ class TestGptLinearModel(unittest.TestCase):
         )
         model = Model(cfg)
         self.assertIsInstance(model, LanguageModelExperiment)
-        self.assertIsInstance(model.embedding_layer_norm, nn.Identity)
+        self.assertIsNone(model.embedding_layer_norm.module)
         self.assertEqual(model.embedding_dropout.p, 0.25)
         self.assertIsNot(model.lm_head.weight, model.token_embedding.weight)
         self.assertIsNotNone(model.lm_head.bias)
