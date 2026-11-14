@@ -8,7 +8,7 @@ from torch import Tensor
 from emperor.config import ConfigBase
 from emperor.layers._composition.recurrent.validation.common import (
     _RECURRENT_SHARED_OPTIONAL_FIELDS,
-    _RecurrentCompositionValidator,
+    RecurrentCompositionValidator,
     _validate_initialization_standard_deviation,
     _validate_variant_hidden,
     _validate_variant_state,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     )
 
 
-class TinyRecursiveModelRecurrentValidator(_RecurrentCompositionValidator):
+class TinyRecursiveModelRecurrentValidator(RecurrentCompositionValidator):
     OPTIONAL_FIELDS = {
         *_RECURRENT_SHARED_OPTIONAL_FIELDS,
         *_GRADIENT_WINDOW_FIELDS,

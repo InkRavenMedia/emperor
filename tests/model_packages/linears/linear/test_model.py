@@ -1726,7 +1726,8 @@ class TestLinearModelBehavior(unittest.TestCase):
         outer_halting_parameters = [
             parameter
             for name, parameter in model.named_parameters()
-            if name.startswith("main_model.halting_model") and parameter.requires_grad
+            if name.startswith("main_model.utilities.halting_model")
+            and parameter.requires_grad
         ]
         for scope, parameters in (
             ("inner", inner_halting_parameters),

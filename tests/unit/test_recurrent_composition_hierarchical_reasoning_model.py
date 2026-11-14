@@ -15,13 +15,16 @@ from emperor.layers import (
     LayerState,
     TinyRecursiveModelRecurrentConfig,
 )
-from emperor.layers._composition.recurrent.base import RecurrentCompositionAbstract
+from emperor.layers._composition.recurrent.base import (
+    RecurrentCompositionAbstract,
+    RecurrentTransitionResult,
+)
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
 )
 from emperor.layers._composition.recurrent.variants.hierarchical_reasoning_model import (
     HierarchicalReasoningModelRecurrent,
-    _HierarchicalReasoningModelState,
+    HierarchicalReasoningModelState,
 )
 from emperor.memory import MemoryPositionOptions
 from emperor.nn import Module
@@ -350,14 +353,14 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
         self.assertIs(type(runtime), HierarchicalReasoningModelRecurrent)
         self.assertIsInstance(runtime, RecurrentCompositionAbstract)
         self.assertIs(
-            runtime.recurrent_layer_norm_position,
+            runtime.utilities.recurrent_layer_norm_position,
             LayerNormPositionOptions.DISABLED,
         )
-        self.assertIsNone(runtime.recurrent_gate)
-        self.assertIsNone(runtime.residual_connection)
-        self.assertIsNone(runtime.halting_model)
-        self.assertIsNone(runtime.memory_model)
-        self.assertIsNone(runtime.recurrent_layer_norm_module)
+        self.assertIsNone(runtime.utilities.recurrent_gate)
+        self.assertIsNone(runtime.utilities.residual_connection)
+        self.assertIsNone(runtime.utilities.halting_model)
+        self.assertIsNone(runtime.utilities.memory_model)
+        self.assertIsNone(runtime.utilities.normalization.module)
 
     def test_nested_recurrent_compositions_are_rejected(self) -> None:
         nested_recurrent = TinyRecursiveModelRecurrentConfig(
@@ -851,8 +854,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         self.assertEqual(len(runtime.low_model.inputs), 2)
         self.assertEqual(len(runtime.high_model.inputs), 1)
-        self.assertEqual(len(runtime.halting_model.update_inputs), 1)
-        self.assertEqual(runtime.halting_model.finalize_calls, 1)
+        self.assertEqual(len(runtime.utilities.halting_model.update_inputs), 1)
+        self.assertEqual(runtime.utilities.halting_model.finalize_calls, 1)
 
     def test_smooth_checkpoint_restores_the_exact_next_high_cycle(self) -> None:
         config = self._smooth_oracle_config(
@@ -982,24 +985,24 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         config.halting_config = _RecordingHaltingConfig(halt_after_updates=1)
         runtime = config.build()
         tracker_manager = HaltingUsageTrackerManager()
-        tracker = tracker_manager.attach(runtime.halting_model)
+        tracker = tracker_manager.attach(runtime.utilities.halting_model)
         for _ in range(4):
             runtime(LayerState(hidden=torch.ones(1, 1)))
-        update_count_before = len(runtime.halting_model.update_inputs)
-        finalize_count_before = runtime.halting_model.finalize_calls
+        update_count_before = len(runtime.utilities.halting_model.update_inputs)
+        finalize_count_before = runtime.utilities.halting_model.finalize_calls
 
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(
-            len(runtime.halting_model.update_inputs) - update_count_before,
+            len(runtime.utilities.halting_model.update_inputs) - update_count_before,
             2,
         )
         self.assertEqual(
-            runtime.halting_model.finalize_calls - finalize_count_before,
+            runtime.utilities.halting_model.finalize_calls - finalize_count_before,
             2,
         )
         torch.testing.assert_close(tracker.last_step_count, torch.tensor(1.0))
-        tracker_manager.detach(runtime.halting_model)
+        tracker_manager.detach(runtime.utilities.halting_model)
 
     def test_residual_uses_the_previous_low_and_high_target_states(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
@@ -1071,8 +1074,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         self.assertEqual(len(recurrent.low_model.inputs), 4)
         self.assertEqual(len(recurrent.high_model.inputs), 2)
-        self.assertEqual(len(recurrent.halting_model.update_inputs), 2)
-        self.assertEqual(recurrent.halting_model.finalize_calls, 1)
+        self.assertEqual(len(recurrent.utilities.halting_model.update_inputs), 2)
+        self.assertEqual(recurrent.utilities.halting_model.finalize_calls, 1)
         self.assertIs(result.halting_state, owner_halting_state)
 
     def test_halting_restricts_one_internal_layout_for_low_and_high_transitions(
@@ -1138,11 +1141,11 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         recurrent(LayerState(hidden=inputs)).hidden.sum().backward()
 
-        self.assertIsNotNone(recurrent.memory_model)
+        self.assertIsNotNone(recurrent.utilities.memory_model)
         self.assertTrue(
             any(
                 parameter.grad is not None
-                for parameter in recurrent.memory_model.parameters()
+                for parameter in recurrent.utilities.memory_model.parameters()
             )
         )
         self.assertIsNotNone(inputs.grad)
@@ -1493,7 +1496,7 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         fixed_input = torch.ones(1, 1, requires_grad=True)
         high = fixed_input * 2.0
         low = fixed_input * 3.0
-        state = _HierarchicalReasoningModelState(
+        state = HierarchicalReasoningModelState(
             fixed_input=fixed_input,
             high=high,
             low=low,
@@ -1529,7 +1532,7 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         updated = recurrent._apply_recurrent_transition_result(
             state,
-            SimpleNamespace(
+            RecurrentTransitionResult(
                 hidden=torch.ones(1, 1),
                 loss=transition_loss,
                 halting_state=None,

@@ -356,6 +356,7 @@ modules = [
   "src/emperor/layers/_composition/recurrent/runtime/execution/runtime_state.py",
   "src/emperor/layers/_composition/recurrent/runtime/iteration_schedule.py",
   "src/emperor/layers/_composition/recurrent/runtime/residual_schedule.py",
+  "src/emperor/layers/_composition/recurrent/utilities.py",
   "src/emperor/layers/_composition/recurrent/validation/__init__.py",
   "src/emperor/layers/_composition/recurrent/validation/common.py",
   "src/emperor/layers/_composition/recurrent/validation/execution.py",

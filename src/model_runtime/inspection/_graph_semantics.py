@@ -273,16 +273,17 @@ class _LayerBehaviorDetailsAdapter:
         context: _SemanticDetailContext,
     ) -> None:
         module = context.module
+        controller_owner = getattr(module, "utilities", module)
         dropout = getattr(module, "dropout_probability", None)
         if dropout is not None:
             context.details["dropout"] = dropout
 
         self.__append_gate_details(
             context,
-            *(_optional_model(module, "gate_model")),
-            config_owner=module,
+            *(_optional_model(controller_owner, "gate_model")),
+            config_owner=controller_owner,
         )
-        halting_present, halting = _optional_model(module, "halting_model")
+        halting_present, halting = _optional_model(controller_owner, "halting_model")
         context.halting_model_present = halting_present
         context.halting_model = halting
         if halting_present:
@@ -460,10 +461,11 @@ class _RecurrentDetailsAdapter:
 
     @staticmethod
     def _gate_details(module: GraphModule) -> tuple[bool, Any | None]:
-        recurrent_gate = getattr(module, "recurrent_gate", None)
+        controller_owner = getattr(module, "utilities", module)
+        recurrent_gate = getattr(controller_owner, "recurrent_gate", None)
         gate_option = getattr(recurrent_gate, "option", None)
         if gate_option is None:
-            gate_config = getattr(module, "gate_config", None)
+            gate_config = getattr(controller_owner, "gate_config", None)
             gate_option = getattr(gate_config, "option", None)
         gate_option_name = (
             display_graph_value(gate_option) if gate_option is not None else None
@@ -543,7 +545,7 @@ class _RecurrentDetailsAdapter:
                 schedule_snapshot.no_gradient_transition_count
             )
         recurrent_layer_norm = getattr(
-            module,
+            getattr(module, "utilities", module),
             "recurrent_layer_norm_position",
             None,
         )

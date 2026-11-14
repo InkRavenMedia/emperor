@@ -340,11 +340,11 @@ class TestBertExpertLinearAdaptiveModel(unittest.TestCase):
 
         model = Model(cfg).eval()
         self.assertIsInstance(
-            model.transformer.residual_connection,
+            model.transformer.utilities.residual_connection,
             recurrent_config.residual_config.registry_owner(),
         )
         self.assertIsInstance(
-            model.transformer.halting_model,
+            model.transformer.utilities.halting_model,
             recurrent_config.halting_config.registry_owner(),
         )
         mlm_logits, nsp_logits, auxiliary_loss = model(*self._fake_bert_inputs(cfg))

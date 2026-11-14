@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Protocol, TypeVar, cast
+from typing import TYPE_CHECKING, Protocol, TypeVar
 
 import torch
 from torch import Tensor, nn
@@ -14,19 +14,12 @@ from emperor.layers._composition.recurrent.runtime.execution.runtime_state impor
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentIterationSchedule,
 )
-from emperor.layers._composition.recurrent.runtime.residual_schedule import (
-    RecurrentResidualSchedule,
-    build_recurrent_residual_schedule,
-)
-from emperor.layers._composition.residual.base import ResidualConnectionAbstract
-from emperor.layers._config import LayerConfig
-from emperor.layers._layer.pipeline import LayerNormalizationDelegate
-from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
+from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._support import LayerModuleBase
 from emperor.memory import MemoryPositionOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Iterator
+    from collections.abc import Callable, Generator, Iterable
 
     from emperor.config import ConfigBase
     from emperor.halting import HaltingStateBase
@@ -36,14 +29,15 @@ if TYPE_CHECKING:
     from emperor.layers._composition.recurrent.runtime.execution.interface import (
         PreparedRecurrentTransition,
     )
-    from emperor.layers._composition.residual.base import ResidualState
+    from emperor.layers._composition.residual.base import (
+        ResidualState,
+    )
     from emperor.layers._state import LayerState
-    from emperor.memory import MemoryInterface
     from emperor.nn import Module
 
 
 class _RecurrentTransitionContext(Protocol):
-    """Common schedule state consumed by the shared transition pipeline."""
+    """Forward-local state required by the shared transition pipeline."""
 
     @property
     def context_state(self) -> LayerState: ...
@@ -73,7 +67,7 @@ _ProvisionalSourceBranchOutput = TypeVar("_ProvisionalSourceBranchOutput")
 
 
 class RecurrentCompositionAbstract(LayerModuleBase, ABC):
-    """Private stable interface implemented by every recurrent variant."""
+    """Build shared controllers and execute individual recurrent transitions."""
 
     supports_recurrent_diagnostics = False
     __runtime_state_guard = RecurrentRuntimeStateGuard()
@@ -88,34 +82,12 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         self.VALIDATOR.validate(self)
         self.input_dim: int = self.cfg.input_dim
         self.output_dim: int = self.cfg.output_dim
-        self.recurrent_layer_norm_position: LayerNormPositionOptions = (
-            self.cfg.recurrent_layer_norm_position or LayerNormPositionOptions.DISABLED
-        )
-        self.recurrent_normalization = (
-            self.cfg.recurrent_normalization
-            if self.cfg.recurrent_normalization is not None
-            else NormalizationOptions.LAYER_NORM
-        )
-        self.gate_config = self.cfg.gate_config
-        self.residual_config = self.cfg.residual_config
-        self.halting_config = self.cfg.halting_config
-        self.memory_config = self.cfg.memory_config
-
-        self.__initialize_delegates()
+        self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
+        self.utilities = RecurrentUtilities(self.cfg)
         self._recurrent_diagnostic_observer: Callable[[Tensor, Tensor], None] | None = (
             None
         )
         self.__recurrent_diagnostic_observation_suppression_depth = 0
-
-    def __initialize_delegates(self) -> None:
-        self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
-        self.recurrent_gate = self.__build_recurrent_gate()
-        self.residual_connection: ResidualConnectionAbstract | None = (
-            self.__build_residual_connection()
-        )
-        self.halting_model = self.__build_halting_model()
-        self.memory_model = self.__build_memory_model()
-        self.recurrent_layer_norm_module = self.__build_recurrent_layer_norm()
 
     def _build_transition_model(self, transition_config: ConfigBase) -> Module:
         return self._build_from_config(
@@ -123,56 +95,6 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             input_dim=self.output_dim,
             output_dim=self.output_dim,
         )
-
-    def __build_recurrent_gate(self) -> Module | None:
-        return self._build_from_config(
-            self.gate_config,
-            gate_dim=self.output_dim,
-        )
-
-    def __build_residual_connection(self) -> ResidualConnectionAbstract | None:
-        return cast(
-            ResidualConnectionAbstract | None,
-            self._build_from_config(
-                self.residual_config,
-                residual_dim=self.output_dim,
-            ),
-        )
-
-    def _build_recurrent_residual_schedule(
-        self,
-        transition_count: int,
-    ) -> RecurrentResidualSchedule | None:
-        return build_recurrent_residual_schedule(
-            self.residual_connection,
-            transition_count,
-        )
-
-    def __build_halting_model(self) -> Module | None:
-        return self._build_from_config(
-            self.halting_config,
-            input_dim=self.output_dim,
-        )
-
-    def __build_memory_model(self) -> MemoryInterface | None:
-        return cast(
-            "MemoryInterface | None",
-            self._build_from_config(
-                self.memory_config,
-                input_dim=self.output_dim,
-                output_dim=self.output_dim,
-            ),
-        )
-
-    def __build_recurrent_layer_norm(self) -> nn.Module | None:
-        return LayerNormalizationDelegate(
-            LayerConfig(
-                input_dim=self.output_dim,
-                output_dim=self.output_dim,
-                layer_norm_position=self.recurrent_layer_norm_position,
-                normalization=self.recurrent_normalization,
-            )
-        ).module
 
     def _set_recurrent_diagnostic_observer(
         self,
@@ -196,9 +118,8 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
     @contextmanager
     def __recurrent_diagnostic_observation_context(
         self,
-        *,
         enabled: bool,
-    ) -> Iterator[None]:
+    ) -> Generator[None, None, None]:
         if enabled:
             yield
             return
@@ -209,11 +130,11 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             self.__recurrent_diagnostic_observation_suppression_depth -= 1
 
     def _new_recurrent_initial_buffer(self, standard_deviation: float) -> Tensor:
-        initial = torch.empty(self.output_dim)
+        initial_buffer = torch.empty(self.output_dim)
         if standard_deviation == 0:
-            return initial.zero_()
+            return initial_buffer.zero_()
         return nn.init.trunc_normal_(
-            initial,
+            initial_buffer,
             mean=0.0,
             std=standard_deviation,
             a=-2.0 * standard_deviation,
@@ -222,14 +143,13 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
 
     @staticmethod
     def _expand_recurrent_initial(initial: Tensor, hidden: Tensor) -> Tensor:
-        view_shape = (1,) * (hidden.ndim - 1) + (hidden.shape[-1],)
-        return initial.view(view_shape).expand_as(hidden)
+        initial_broadcast_shape = (1,) * (hidden.ndim - 1) + (hidden.shape[-1],)
+        return initial.view(initial_broadcast_shape).expand_as(hidden)
 
     def _run_recurrent_transition(
         self,
         recurrent_state: _RecurrentTransitionContext,
         prepared_transition: PreparedRecurrentTransition,
-        *,
         transition_index: int = 0,
         observe_transition: bool = True,
     ) -> RecurrentTransitionResult:
@@ -253,7 +173,6 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         self,
         recurrent_state: _RecurrentTransitionContext,
         prepared_transition: PreparedRecurrentTransition,
-        *,
         run_provisional_source_branch: Callable[
             [RecurrentTransitionResult],
             _ProvisionalSourceBranchOutput,
@@ -267,11 +186,10 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             prepared_transition,
             transition_index=transition_index,
         )
-        self.__advance_detached_target_residual_state(
+        self.utilities.advance_detached_target_residual_state(
             transition_candidate.residual_input,
             prepared_transition.previous_evolving_hidden,
             target_residual_state,
-            prepared_transition.residual_schedule,
             transition_index,
         )
         with self.__runtime_state_guard.isolate_provisional_branch(self):
@@ -285,16 +203,8 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             provisional_source_branch_output = run_provisional_source_branch(
                 source_result
             )
-        target_candidate = replace(
-            transition_candidate,
-            hidden=transition_candidate.hidden.detach(),
-            loss=(
-                None
-                if transition_candidate.loss is None
-                else transition_candidate.loss.detach()
-            ),
-            residual_input=transition_candidate.residual_input.detach(),
-            context_state=transition_candidate.context_state.detach_recurrent_context(),
+        target_candidate = self.__detach_recurrent_transition_candidate(
+            transition_candidate
         )
         target_result = self.__apply_halting_and_observe_recurrent_transition(
             recurrent_state,
@@ -305,200 +215,106 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         )
         return provisional_source_branch_output, target_result
 
+    @staticmethod
+    def __detach_recurrent_transition_candidate(
+        transition_candidate: _RecurrentTransitionCandidate,
+    ) -> _RecurrentTransitionCandidate:
+        """Detach the target continuation after the provisional source has finished."""
+        return replace(
+            transition_candidate,
+            hidden=transition_candidate.hidden.detach(),
+            loss=(
+                None
+                if transition_candidate.loss is None
+                else transition_candidate.loss.detach()
+            ),
+            residual_input=transition_candidate.residual_input.detach(),
+            context_state=transition_candidate.context_state.detach_recurrent_context(),
+        )
+
     def __compute_recurrent_transition_candidate(
         self,
         recurrent_state: _RecurrentTransitionContext,
         prepared_transition: PreparedRecurrentTransition,
-        *,
         transition_index: int,
     ) -> _RecurrentTransitionCandidate:
-        transition_model_input = self.__maybe_apply_layer_norm_before(
-            prepared_transition.transition_input
-        )
-        transition_model_input = self.__maybe_apply_memory_before(
-            transition_model_input
-        )
         transition_state = replace(
             recurrent_state.context_state,
-            hidden=transition_model_input,
+            hidden=prepared_transition.transition_input,
             loss=prepared_transition.loss,
             halting_state=None,
         )
+        transition_state = self.utilities.normalize_before_model(transition_state)
+        transition_model_input = self.utilities.apply_memory(
+            transition_state.hidden,
+            MemoryPositionOptions.BEFORE_AFFINE,
+        )
+        transition_state.hidden = transition_model_input
         output_state = prepared_transition.run_transition(transition_state)
         self.VALIDATOR.validate_transition_output(
             output_state,
             transition_model_input,
             expected_feature_dim=self.output_dim,
         )
-        candidate_hidden = self.__maybe_apply_memory_after(output_state.hidden)
-        candidate_hidden = self.__maybe_apply_layer_norm_default(candidate_hidden)
-        candidate_hidden = self.__maybe_apply_gate(
-            candidate_hidden,
+        candidate_hidden = self.utilities.apply_memory(
+            output_state.hidden,
+            MemoryPositionOptions.AFTER_AFFINE,
         )
-        residual_input = candidate_hidden
-        candidate_hidden = self.__maybe_apply_residual_connection(
-            candidate_hidden,
-            output_state.align_recurrent_hidden(
-                prepared_transition.previous_evolving_hidden,
-                source_state=recurrent_state.context_state,
-            ),
+        candidate_state = replace(output_state, hidden=candidate_hidden)
+        candidate_state = self.utilities.normalize_after_model(candidate_state)
+        candidate_state.hidden = self.utilities.apply_gate(candidate_state.hidden)
+        residual_input = candidate_state.hidden
+        aligned_previous_hidden = output_state.align_recurrent_hidden(
+            prepared_transition.previous_evolving_hidden,
+            source_state=recurrent_state.context_state,
+        )
+        candidate_state.hidden = self.utilities.apply_residual(
+            candidate_state.hidden,
+            aligned_previous_hidden,
             prepared_transition.residual_state,
-            prepared_transition.residual_schedule,
             transition_index,
         )
-        candidate_hidden = self.__maybe_apply_layer_norm_after(candidate_hidden)
+        candidate_state = self.utilities.normalize_after_residual(candidate_state)
         return _RecurrentTransitionCandidate(
-            hidden=candidate_hidden,
+            hidden=candidate_state.hidden,
             loss=output_state.loss,
             residual_input=residual_input,
-            context_state=replace(output_state, hidden=candidate_hidden),
+            context_state=candidate_state,
         )
-
-    def __advance_detached_target_residual_state(
-        self,
-        residual_input: Tensor,
-        previous_evolving_hidden: Tensor,
-        target_residual_state: ResidualState | None,
-        residual_schedule: RecurrentResidualSchedule | None,
-        transition_index: int,
-    ) -> None:
-        if target_residual_state is None:
-            return
-        residual_connection, residual_schedule = (
-            self.VALIDATOR.validate_forward_local_residual_runtime(
-                self.residual_connection,
-                residual_schedule,
-            )
-        )
-        with torch.no_grad():
-            residual_schedule.advance_state(
-                residual_connection,
-                transition_index,
-                residual_input.detach(),
-                previous_evolving_hidden.detach(),
-                residual_state=target_residual_state,
-            )
 
     def __apply_halting_and_observe_recurrent_transition(
         self,
         recurrent_state: _RecurrentTransitionContext,
         transition_candidate: _RecurrentTransitionCandidate,
-        *,
         previous_evolving_hidden: Tensor,
         halting_update_enabled: bool,
         observe_transition: bool,
     ) -> RecurrentTransitionResult:
-        halting_state, output_hidden = self.__maybe_apply_halting(
+        halting_state, output_hidden = self.utilities.apply_halting(
             recurrent_state.halting_state,
             transition_candidate.hidden,
             update_enabled=halting_update_enabled,
         )
         if observe_transition:
-            self._observe_recurrent_step(
+            aligned_previous_hidden = (
                 transition_candidate.context_state.align_recurrent_hidden(
                     previous_evolving_hidden,
                     source_state=recurrent_state.context_state,
-                ),
+                )
+            )
+            self._observe_recurrent_step(
+                aligned_previous_hidden,
                 output_hidden,
             )
         return RecurrentTransitionResult(
             hidden=output_hidden,
             loss=transition_candidate.loss,
             halting_state=halting_state,
-            all_items_halted=self.__all_items_halted(halting_state),
+            all_items_halted=self.utilities.all_items_halted(halting_state),
             context_state=replace(
                 transition_candidate.context_state, hidden=output_hidden
             ),
         )
-
-    def __maybe_apply_layer_norm_before(self, hidden: Tensor) -> Tensor:
-        if self.recurrent_layer_norm_position == LayerNormPositionOptions.BEFORE:
-            return self.recurrent_layer_norm_module(hidden)
-        return hidden
-
-    def __maybe_apply_memory_before(self, hidden: Tensor) -> Tensor:
-        return self.__maybe_apply_memory_by_position(
-            hidden,
-            MemoryPositionOptions.BEFORE_AFFINE,
-        )
-
-    def __maybe_apply_memory_after(self, hidden: Tensor) -> Tensor:
-        return self.__maybe_apply_memory_by_position(
-            hidden,
-            MemoryPositionOptions.AFTER_AFFINE,
-        )
-
-    def __maybe_apply_memory_by_position(
-        self,
-        hidden: Tensor,
-        position: MemoryPositionOptions,
-    ) -> Tensor:
-        memory_model = self.memory_model
-        if memory_model is None:
-            return hidden
-        if memory_model.memory_position_option != position:
-            return hidden
-        return memory_model(hidden)
-
-    def __maybe_apply_layer_norm_default(self, hidden: Tensor) -> Tensor:
-        if self.recurrent_layer_norm_position == LayerNormPositionOptions.DEFAULT:
-            return self.recurrent_layer_norm_module(hidden)
-        return hidden
-
-    def __maybe_apply_gate(
-        self,
-        candidate_hidden: Tensor,
-    ) -> Tensor:
-        if self.recurrent_gate is None:
-            return candidate_hidden
-        return self.recurrent_gate(candidate_hidden)
-
-    def __maybe_apply_residual_connection(
-        self,
-        candidate_hidden: Tensor,
-        previous_hidden: Tensor,
-        residual_state: ResidualState | None,
-        residual_schedule: RecurrentResidualSchedule | None,
-        transition_index: int,
-    ) -> Tensor:
-        residual_connection = self.residual_connection
-        if residual_connection is None:
-            return candidate_hidden
-        if residual_schedule is not None:
-            return residual_schedule.apply(
-                residual_connection,
-                transition_index,
-                candidate_hidden,
-                previous_hidden,
-                residual_state=residual_state,
-            )
-        return residual_connection(
-            candidate_hidden,
-            previous_hidden,
-            residual_state=residual_state,
-        )
-
-    def __maybe_apply_layer_norm_after(self, hidden: Tensor) -> Tensor:
-        if self.recurrent_layer_norm_position == LayerNormPositionOptions.AFTER:
-            return self.recurrent_layer_norm_module(hidden)
-        return hidden
-
-    def __maybe_apply_halting(
-        self,
-        previous_halting_state: HaltingStateBase | None,
-        candidate_hidden: Tensor,
-        *,
-        update_enabled: bool,
-    ) -> tuple[HaltingStateBase | None, Tensor]:
-        if self.halting_model is None or not update_enabled:
-            return previous_halting_state, candidate_hidden
-
-        updated_halting_state, output_hidden = self.halting_model.update_halting_state(
-            previous_halting_state,
-            candidate_hidden,
-        )
-        self.VALIDATOR.validate_halting_output(output_hidden, candidate_hidden)
-        return updated_halting_state, output_hidden
 
     def _finalize_recurrent_halting(
         self,
@@ -506,22 +322,7 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         loss: Tensor | None,
         halting_state: HaltingStateBase | None,
     ) -> tuple[Tensor, Tensor | None]:
-        if self.halting_model is None or halting_state is None:
-            return hidden, loss
-
-        finalized_hidden, halting_loss = (
-            self.halting_model.finalize_weighted_accumulation(halting_state, hidden)
-        )
-        reduced_halting_loss = self._reduce_auxiliary_loss(halting_loss)
-        return finalized_hidden, self._accumulate_auxiliary_loss(
-            loss, reduced_halting_loss
-        )
-
-    @staticmethod
-    def __all_items_halted(halting_state: HaltingStateBase | None) -> bool:
-        if halting_state is None or halting_state.halt_mask is None:
-            return False
-        return bool(halting_state.halt_mask.all().item())
+        return self.utilities.finalize_halting(hidden, loss, halting_state)
 
     def _accumulate_recurrent_losses(
         self,
@@ -555,14 +356,14 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         ):
             if branch_loss is None:
                 continue
-            branch_delta = (
+            branch_loss_delta = (
                 branch_loss if common_loss is None else branch_loss - common_loss
             )
-            weighted_delta = branch_weight * branch_delta
+            weighted_branch_loss_delta = branch_weight * branch_loss_delta
             blended_loss = (
-                weighted_delta
+                weighted_branch_loss_delta
                 if blended_loss is None
-                else blended_loss + weighted_delta
+                else blended_loss + weighted_branch_loss_delta
             )
         return blended_loss
 

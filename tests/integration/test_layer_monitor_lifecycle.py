@@ -185,7 +185,7 @@ def recurrent_layer() -> RecurrentLayer:
             memory_config=None,
         )
     )
-    gate_layer = recurrent.recurrent_gate.model[0]
+    gate_layer = recurrent.utilities.recurrent_gate.model[0]
     with torch.no_grad():
         gate_layer.model.weight_params.zero_()
         gate_layer.model.bias_params.zero_()

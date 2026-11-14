@@ -262,21 +262,11 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         )
         self.assertLess(
             max(assignment.end_lineno for assignment in config_assignments),
-            call_lines["self.__initialize_delegates"],
+            call_lines["RecurrentIterationSchedule"],
         )
-        delegate_initializer = vars(RecurrentCompositionAbstract)[
-            "_RecurrentCompositionAbstract__initialize_delegates"
-        ]
-        delegate_initializer_tree = ast.parse(
-            textwrap.dedent(inspect.getsource(delegate_initializer))
-        )
-        self.assertTrue(
-            any(
-                isinstance(call.func, ast.Name)
-                and call.func.id == "RecurrentIterationSchedule"
-                for call in ast.walk(delegate_initializer_tree)
-                if isinstance(call, ast.Call)
-            )
+        self.assertNotIn(
+            "_RecurrentCompositionAbstract__initialize_delegates",
+            vars(RecurrentCompositionAbstract),
         )
 
     def test_variant_classes_are_adapters_for_shared_recurrent_execution(
@@ -642,7 +632,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             RecurrentCompositionAbstract: {
                 "_accumulate_recurrent_losses",
                 "_build_transition_model",
-                "_build_recurrent_residual_schedule",
                 "_expand_recurrent_initial",
                 "_finalize_recurrent_halting",
                 "_blend_recurrent_branch_losses",
