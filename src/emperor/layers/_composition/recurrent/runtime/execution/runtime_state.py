@@ -24,6 +24,25 @@ class _BufferSnapshot:
     buffer: Tensor
     value: Tensor
 
+    def restore(self) -> None:
+        # A redundant copy invalidates tensors saved for backward. Compare bytes
+        # to preserve NaNs and signed zero exactly; native updates such as BatchNorm
+        # can change values without advancing the tensor's version counter.
+        if (
+            self.buffer.layout == torch.strided
+            and not self.buffer.is_quantized
+            and self.buffer.device.type != "meta"
+            and self.buffer.shape == self.value.shape
+        ):
+            current_value = self.buffer.detach().resolve_conj().resolve_neg()
+            current_bytes = current_value.reshape(-1).contiguous().view(torch.uint8)
+            saved_bytes = self.value.reshape(-1).contiguous().view(torch.uint8)
+            if torch.equal(current_bytes, saved_bytes):
+                return
+        # Other layouts retain the original unconditional restoration behavior.
+        with torch.no_grad():
+            self.buffer.copy_(self.value)
+
 
 @dataclass(frozen=True)
 class _NamedBufferSnapshot:
@@ -138,8 +157,7 @@ class RecurrentRuntimeStateGuard:
                 if buffer_snapshot is None:
                     snapshot.module._buffers[named_buffer_snapshot.name] = None
                 else:
-                    with torch.no_grad():
-                        buffer_snapshot.buffer.copy_(buffer_snapshot.value)
+                    buffer_snapshot.restore()
                     snapshot.module._buffers[named_buffer_snapshot.name] = (
                         buffer_snapshot.buffer
                     )
