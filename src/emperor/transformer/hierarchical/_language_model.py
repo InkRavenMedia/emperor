@@ -87,7 +87,10 @@ class HierarchicalLanguageModel(Module):
 
     @staticmethod
     def _build_normalization(config):
-        return nn.Identity() if config is None else config.build_normalization()
+        if config is None:
+            return nn.Identity()
+        normalization = config.build_normalization()
+        return nn.Identity() if normalization is None else normalization
 
     def _condition(self, batch):
         self.VALIDATOR.validate_batch(batch, self.cfg.sequence_length)
