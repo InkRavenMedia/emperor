@@ -8,7 +8,12 @@ import torch.nn as nn
 from torch import Tensor
 
 from emperor.experiments.translation import TranslationExperiment
-from emperor.layers import LayerConfig, LayerNormPositionOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    LayerState,
+)
 from emperor.transformer import (
     TransformerDecoderLayerState,
     TransformerEncoderLayerState,
@@ -61,18 +66,22 @@ class Model(TranslationExperiment):
         self.embedding_dropout = nn.Dropout(experiment_config.dropout_probability)
         self.encoder = experiment_config.encoder_config.build()
         self.decoder = experiment_config.decoder_config.build()
-        self.encoder_layer_norm = LayerConfig(
-            input_dim=experiment_config.model_dim,
-            output_dim=experiment_config.model_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.encoder_output_normalization,
-        ).build_normalization()
-        self.decoder_layer_norm = LayerConfig(
-            input_dim=experiment_config.model_dim,
-            output_dim=experiment_config.model_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=self.experiment_config.decoder_output_normalization,
-        ).build_normalization()
+        self.encoder_layer_norm = LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=experiment_config.model_dim,
+                output_dim=experiment_config.model_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.encoder_output_normalization,
+            )
+        )
+        self.decoder_layer_norm = LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=experiment_config.model_dim,
+                output_dim=experiment_config.model_dim,
+                layer_norm_position=LayerNormPositionOptions.BEFORE,
+                normalization=self.experiment_config.decoder_output_normalization,
+            )
+        )
         self.output_projection = nn.Linear(
             experiment_config.model_dim,
             experiment_config.vocab_size,
@@ -133,7 +142,9 @@ class Model(TranslationExperiment):
                 key_padding_mask=padding_mask,
             )
         )
-        output = self.encoder_layer_norm(state.hidden)
+        output = self.encoder_layer_norm.before_model(
+            LayerState(hidden=state.hidden)
+        ).hidden
         loss = state.loss if state.loss is not None else output.new_zeros(())
         return output, state.key_padding_mask, loss
 
@@ -167,7 +178,9 @@ class Model(TranslationExperiment):
                 encoder_padding_mask=source_padding_mask,
             )
         )
-        output = self.decoder_layer_norm(state.hidden)
+        output = self.decoder_layer_norm.before_model(
+            LayerState(hidden=state.hidden)
+        ).hidden
         if align_to_input:
             output = state.gather_input_tokens(output)
         loss = state.loss if state.loss is not None else output.new_zeros(())

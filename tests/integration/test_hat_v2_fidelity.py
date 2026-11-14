@@ -183,8 +183,12 @@ def test_each_live_gpt_factory_uses_reference_byte_blocks_and_dense_connectors()
             assert not any(
                 "bias" in name for name, parameter in component.named_parameters()
             )
-        assert isinstance(model.encoder.encoder.encoder_layer_norm, torch.nn.RMSNorm)
-        assert isinstance(model.decoder.decoder.decoder_layer_norm, torch.nn.RMSNorm)
+        assert isinstance(
+            model.encoder.encoder.encoder_layer_norm.module, torch.nn.RMSNorm
+        )
+        assert isinstance(
+            model.decoder.decoder.decoder_layer_norm.module, torch.nn.RMSNorm
+        )
         batch = HierarchicalLanguageModelBatch.collate(
             list(HierarchicalTextCodec(8).training_windows("a é", 4))
         )
@@ -229,7 +233,9 @@ def test_reference_composition_matches_unpacked_equations_with_unequal_widths():
     backbone = model.backbone(
         TransformerDecoderLayerState(hidden=torch.stack(word_vectors)[None])
     ).hidden
-    backbone = model.output_normalization(backbone)[0]
+    backbone = model.output_normalization.before_model(
+        TransformerDecoderLayerState(hidden=backbone)
+    ).hidden[0]
     expected = []
     for index, word in enumerate(("ab ", "é", None)):
         context = (

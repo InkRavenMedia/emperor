@@ -8,7 +8,7 @@ from emperor.embedding.hierarchical.decoder import (
     ByteGenerationOptions,
     HierarchicalByteDecoderOutput,
 )
-from emperor.layers import LayerState
+from emperor.layers import LayerNormalizationDelegate, LayerState
 from emperor.nn import Module, freeze_forward_schedules, grouped_forward_calls
 from emperor.transformer import TransformerDecoderLayerState
 
@@ -48,11 +48,15 @@ class HierarchicalLanguageModel(Module):
             if self.cfg.position_config is not None
             else None
         )
-        self.input_normalization = self._build_normalization(
-            self.cfg.embedding_normalization_config
+        self.input_normalization = (
+            LayerNormalizationDelegate(self.cfg.embedding_normalization_config)
+            if self.cfg.embedding_normalization_config is not None
+            else None
         )
-        self.output_normalization = self._build_normalization(
-            self.cfg.output_normalization_config
+        self.output_normalization = (
+            LayerNormalizationDelegate(self.cfg.output_normalization_config)
+            if self.cfg.output_normalization_config is not None
+            else None
         )
         self.dropout = nn.Dropout(self.cfg.dropout_probability)
         beginning_features = torch.empty(self.cfg.embedding_config.output_dim)
@@ -84,13 +88,6 @@ class HierarchicalLanguageModel(Module):
                 "Checkpoint contains conflicting shared character embeddings"
             )
         super()._load_from_state_dict(state_dict, prefix, *args, **kwargs)
-
-    @staticmethod
-    def _build_normalization(config):
-        if config is None:
-            return nn.Identity()
-        normalization = config.build_normalization()
-        return nn.Identity() if normalization is None else normalization
 
     def _condition(self, batch):
         self.VALIDATOR.validate_batch(batch, self.cfg.sequence_length)
@@ -149,12 +146,20 @@ class HierarchicalLanguageModel(Module):
                 device=token_features.device,
             )
             positioned_features = token_features + self.positions(position_ids)
-        normalized_features = self.input_normalization(positioned_features)
-        backbone_features = self.dropout(normalized_features)
+        normalized_input = LayerState(hidden=positioned_features)
+        if self.input_normalization is not None:
+            normalized_input = self.input_normalization.before_model(normalized_input)
+            normalized_input = self.input_normalization.after_model(normalized_input)
+            normalized_input = self.input_normalization.after_residual(normalized_input)
+        backbone_features = self.dropout(normalized_input.hidden)
         backbone_input = TransformerDecoderLayerState(hidden=backbone_features)
         decoded_state = self.backbone(backbone_input)
-        normalized_output = self.output_normalization(decoded_state.hidden)
-        return LayerState(hidden=normalized_output, loss=decoded_state.loss)
+        output_state = LayerState(hidden=decoded_state.hidden, loss=decoded_state.loss)
+        if self.output_normalization is not None:
+            output_state = self.output_normalization.before_model(output_state)
+            output_state = self.output_normalization.after_model(output_state)
+            output_state = self.output_normalization.after_residual(output_state)
+        return output_state
 
     def forward(
         self, batch: HierarchicalLanguageModelBatch

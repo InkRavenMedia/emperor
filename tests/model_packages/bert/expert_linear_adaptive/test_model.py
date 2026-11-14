@@ -109,11 +109,11 @@ class TestBertExpertLinearAdaptiveModel(unittest.TestCase):
         model = Model(cfg)
 
         self.assertEqual(model.token_type_embedding.num_embeddings, 4)
-        self.assertIsInstance(model.embedding_layer_norm, nn.Identity)
+        self.assertIsNone(model.embedding_layer_norm.module)
         self.assertEqual(model.embedding_dropout.p, 0.25)
         self.assertIsInstance(model.mlm_activation, nn.ReLU)
         self.assertIsNone(model.mlm_dense.bias)
-        self.assertIsInstance(model.mlm_layer_norm, nn.Identity)
+        self.assertIsNone(model.mlm_layer_norm.module)
         self.assertIsNone(model.mlm_decoder_bias)
         self.assertIsNot(model.mlm_decoder.weight, model.token_embedding.weight)
         self.assertIsInstance(model.pooler_activation, nn.ReLU)

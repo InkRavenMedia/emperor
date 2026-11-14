@@ -11,7 +11,13 @@ from emperor.embedding.hierarchical.decoder import (
     HierarchicalByteDecoderOutput,
 )
 from emperor.experiments.bert_pretraining import BertPretrainingExperiment
-from emperor.layers import LayerConfig, LayerNormPositionOptions, NormalizationOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    LayerState,
+    NormalizationOptions,
+)
 from emperor.transformer import TransformerEncoderLayerState
 
 from ._masked_word import greedy_word_matches
@@ -43,17 +49,20 @@ class MaskedWordModel(BertPretrainingExperiment):
         self.token_embedding = embedding.build()
         self.token_type_embedding = nn.Embedding(2, config.hidden_dim)
         self.positional_embedding = experiment.positional_embedding_config.build()
-        self.embedding_layer_norm = self._normalization(NormalizationOptions.LAYER_NORM)
+        self.embedding_layer_norm = self._normalization(
+            NormalizationOptions.LAYER_NORM, LayerNormPositionOptions.BEFORE
+        )
         self.embedding_dropout = nn.Dropout(experiment.embedding_dropout_probability)
         self.transformer = experiment.encoder_config.build()
         stack = getattr(
             experiment.encoder_config, "block_config", experiment.encoder_config
         )
-        self.encoder_layer_norm = (
-            self._normalization(experiment.encoder_output_normalization)
+        self.encoder_layer_norm = self._normalization(
+            experiment.encoder_output_normalization,
+            LayerNormPositionOptions.BEFORE
             if stack.layer_config.layer_model_config.layer_norm_position
             == LayerNormPositionOptions.BEFORE
-            else nn.Identity()
+            else LayerNormPositionOptions.DISABLED,
         )
         self.word_decoder = decoder.build()
         self.word_decoder.byte_embedding = self.token_embedding.byte_embedding
@@ -71,13 +80,17 @@ class MaskedWordModel(BertPretrainingExperiment):
     def mixer(self):
         return self.transformer
 
-    def _normalization(self, normalization):
-        return LayerConfig(
-            input_dim=self.cfg.hidden_dim,
-            output_dim=self.cfg.hidden_dim,
-            layer_norm_position=LayerNormPositionOptions.BEFORE,
-            normalization=normalization,
-        ).build_normalization()
+    def _normalization(
+        self, normalization: NormalizationOptions, position: LayerNormPositionOptions
+    ) -> LayerNormalizationDelegate:
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.cfg.hidden_dim,
+                output_dim=self.cfg.hidden_dim,
+                layer_norm_position=position,
+                normalization=normalization,
+            )
+        )
 
     def forward(self, batch: BertMaskedWordBatch):
         return self._masked_word_outputs(batch)[:3]
@@ -89,13 +102,17 @@ class MaskedWordModel(BertPretrainingExperiment):
         positions = batch.attention_mask.long()
         hidden = embedding.hidden + self.positional_embedding(positions)
         hidden = hidden + self.token_type_embedding(batch.token_type_ids)
-        hidden = self.embedding_dropout(self.embedding_layer_norm(hidden))
+        hidden = self.embedding_dropout(
+            self.embedding_layer_norm.before_model(LayerState(hidden=hidden)).hidden
+        )
         state = self.transformer(
             TransformerEncoderLayerState(
                 hidden=hidden, key_padding_mask=~batch.attention_mask.bool()
             )
         )
-        sequence_output = self.encoder_layer_norm(state.hidden)
+        sequence_output = self.encoder_layer_norm.before_model(
+            LayerState(hidden=state.hidden)
+        ).hidden
         conditioning = sequence_output[batch.prediction_mask].unsqueeze(1)
         predictions = (
             self.word_decoder(conditioning, batch.byte_prefix_ids, batch.byte_lengths)

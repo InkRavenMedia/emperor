@@ -20,6 +20,7 @@ from emperor.layers._composition.recurrent.runtime.residual_schedule import (
 )
 from emperor.layers._composition.residual.base import ResidualConnectionAbstract
 from emperor.layers._config import LayerConfig
+from emperor.layers._layer.pipeline import LayerNormalizationDelegate
 from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from emperor.layers._support import LayerModuleBase
 from emperor.memory import MemoryPositionOptions
@@ -164,12 +165,14 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         )
 
     def __build_recurrent_layer_norm(self) -> nn.Module | None:
-        return LayerConfig(
-            input_dim=self.output_dim,
-            output_dim=self.output_dim,
-            layer_norm_position=self.recurrent_layer_norm_position,
-            normalization=self.recurrent_normalization,
-        ).build_normalization()
+        return LayerNormalizationDelegate(
+            LayerConfig(
+                input_dim=self.output_dim,
+                output_dim=self.output_dim,
+                layer_norm_position=self.recurrent_layer_norm_position,
+                normalization=self.recurrent_normalization,
+            )
+        ).module
 
     def _set_recurrent_diagnostic_observer(
         self,

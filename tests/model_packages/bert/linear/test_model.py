@@ -1519,12 +1519,12 @@ class TestBertLinearModel(unittest.TestCase):
         self.assertIsInstance(model, BertPretrainingExperiment)
         self.assertIsInstance(model.token_type_embedding, nn.Embedding)
         self.assertEqual(model.token_type_embedding.num_embeddings, 2)
-        self.assertIsInstance(model.embedding_layer_norm, nn.LayerNorm)
+        self.assertIsInstance(model.embedding_layer_norm.module, nn.LayerNorm)
         self.assertEqual(
-            model.embedding_layer_norm.normalized_shape,
+            model.embedding_layer_norm.module.normalized_shape,
             (cfg.hidden_dim,),
         )
-        self.assertIsInstance(model.encoder_layer_norm, nn.Identity)
+        self.assertIsNone(model.encoder_layer_norm.module)
         self.assertIs(model.mlm_decoder.weight, model.token_embedding.weight)
         self.assertEqual(model.nsp_head.out_features, 2)
         state_dict = model.state_dict()
@@ -1538,12 +1538,12 @@ class TestBertLinearModel(unittest.TestCase):
                 "token_embedding.weight",
                 "token_type_embedding.weight",
                 "positional_embedding.embedding_model.weight",
-                "embedding_layer_norm.weight",
-                "embedding_layer_norm.bias",
+                "embedding_layer_norm.module.weight",
+                "embedding_layer_norm.module.bias",
                 "mlm_dense.weight",
                 "mlm_dense.bias",
-                "mlm_layer_norm.weight",
-                "mlm_layer_norm.bias",
+                "mlm_layer_norm.module.weight",
+                "mlm_layer_norm.module.bias",
                 "mlm_decoder.weight",
                 "pooler.weight",
                 "pooler.bias",
@@ -1559,12 +1559,12 @@ class TestBertLinearModel(unittest.TestCase):
                 cfg.sequence_length + 1,
                 cfg.hidden_dim,
             ),
-            "embedding_layer_norm.weight": (cfg.hidden_dim,),
-            "embedding_layer_norm.bias": (cfg.hidden_dim,),
+            "embedding_layer_norm.module.weight": (cfg.hidden_dim,),
+            "embedding_layer_norm.module.bias": (cfg.hidden_dim,),
             "mlm_dense.weight": (cfg.hidden_dim, cfg.hidden_dim),
             "mlm_dense.bias": (cfg.hidden_dim,),
-            "mlm_layer_norm.weight": (cfg.hidden_dim,),
-            "mlm_layer_norm.bias": (cfg.hidden_dim,),
+            "mlm_layer_norm.module.weight": (cfg.hidden_dim,),
+            "mlm_layer_norm.module.bias": (cfg.hidden_dim,),
             "mlm_decoder.weight": (cfg.output_dim, cfg.hidden_dim),
             "pooler.weight": (cfg.hidden_dim, cfg.hidden_dim),
             "pooler.bias": (cfg.hidden_dim,),
@@ -1624,11 +1624,11 @@ class TestBertLinearModel(unittest.TestCase):
             nsp_head_options,
         )
         self.assertEqual(model.token_type_embedding.num_embeddings, 4)
-        self.assertIsInstance(model.embedding_layer_norm, nn.Identity)
+        self.assertIsNone(model.embedding_layer_norm.module)
         self.assertEqual(model.embedding_dropout.p, 0.25)
         self.assertIsNone(model.mlm_dense.bias)
         self.assertIsInstance(model.mlm_activation, nn.Mish)
-        self.assertIsInstance(model.mlm_layer_norm, nn.Identity)
+        self.assertIsNone(model.mlm_layer_norm.module)
         self.assertIsNone(model.mlm_decoder_bias)
         self.assertIsNot(model.mlm_decoder.weight, model.token_embedding.weight)
         self.assertIsNone(model.pooler.bias)

@@ -252,8 +252,8 @@ def test_encoder_decoder_and_output_norms_select_independently(catalog_key):
         ]
         assert norms
         assert all(type(m).__name__ == expected for m in norms)
-    assert type(model.encoder_layer_norm).__name__ == "LayerNorm"
-    assert type(model.decoder_layer_norm).__name__ == "RMSNorm"
+    assert type(model.encoder_layer_norm.module).__name__ == "LayerNorm"
+    assert type(model.decoder_layer_norm.module).__name__ == "RMSNorm"
     assert all(torch.isfinite(tensor).all() for tensor in _forward(package, model))
 
 
@@ -273,7 +273,7 @@ def test_embedding_encoder_and_mlm_norms_select_independently(catalog_key):
         }
     )
     model = package.build_model(configuration)
-    assert type(model.embedding_layer_norm).__name__ == "DynamicTanh"
-    assert type(model.mlm_layer_norm).__name__ == "DynamicErf"
-    assert type(model.encoder_layer_norm).__name__ == "DynamicISRU"
+    assert type(model.embedding_layer_norm.module).__name__ == "DynamicTanh"
+    assert type(model.mlm_layer_norm.module).__name__ == "DynamicErf"
+    assert type(model.encoder_layer_norm.module).__name__ == "DynamicISRU"
     assert all(torch.isfinite(tensor).all() for tensor in _forward(package, model))

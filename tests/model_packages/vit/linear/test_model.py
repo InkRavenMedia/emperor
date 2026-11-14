@@ -1101,9 +1101,9 @@ class TestVitLinearModel(unittest.TestCase):
         model = Model(cfg)
 
         self.assertIsInstance(model, ClassifierExperiment)
-        self.assertIsInstance(model.encoder_layer_norm, nn.LayerNorm)
+        self.assertIsInstance(model.encoder_layer_norm.module, nn.LayerNorm)
         self.assertEqual(
-            model.encoder_layer_norm.normalized_shape,
+            model.encoder_layer_norm.module.normalized_shape,
             (cfg.hidden_dim,),
         )
 

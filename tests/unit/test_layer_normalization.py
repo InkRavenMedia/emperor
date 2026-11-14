@@ -6,7 +6,12 @@ from itertools import product
 
 import torch
 
-from emperor.layers import LayerConfig, LayerNormPositionOptions, NormalizationOptions
+from emperor.layers import (
+    LayerConfig,
+    LayerNormalizationDelegate,
+    LayerNormPositionOptions,
+    NormalizationOptions,
+)
 
 ELEMENTWISE_OPTIONS = (
     NormalizationOptions.DYNAMIC_TANH,
@@ -16,12 +21,14 @@ ELEMENTWISE_OPTIONS = (
 
 
 def make_normalization(option, input_dim=5, output_dim=5, position=None):
-    return LayerConfig(
-        input_dim=input_dim,
-        output_dim=output_dim,
-        layer_norm_position=position or LayerNormPositionOptions.DEFAULT,
-        normalization=option,
-    ).build_normalization()
+    return LayerNormalizationDelegate(
+        LayerConfig(
+            input_dim=input_dim,
+            output_dim=output_dim,
+            layer_norm_position=position or LayerNormPositionOptions.DEFAULT,
+            normalization=option,
+        )
+    ).module
 
 
 def reference_normalization(option, hidden, parameters):

@@ -647,7 +647,7 @@ class MlpMixerPackageContractMixin:
             model.transformer,
             patch_tokens,
         )
-        normalized_tokens = model.encoder_layer_norm(encoder_state.hidden)
+        normalized_tokens = model.encoder_layer_norm.before_model(encoder_state).hidden
         expected_pool = normalized_tokens.mean(dim=1)
         output_state = Layer.run_model_from_hidden(
             model.output,
