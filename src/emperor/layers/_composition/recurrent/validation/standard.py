@@ -7,9 +7,11 @@ from torch import Tensor
 
 from emperor.config import ConfigBase
 from emperor.layers._composition.recurrent.validation.common import (
-    _GRADIENT_WINDOW_FIELDS,
     _RECURRENT_SHARED_OPTIONAL_FIELDS,
     _RecurrentCompositionValidator,
+)
+from emperor.layers._composition.recurrent.validation.iteration_schedule import (
+    _GRADIENT_WINDOW_FIELDS,
     _validate_recurrent_iteration_controls,
     _validate_smooth_iteration_growth_controls,
 )
@@ -127,7 +129,6 @@ class RecurrentLayerValidator(_RecurrentCompositionValidator):
         cls,
         output_state: object,
         transition_input: Tensor,
-        *,
         expected_feature_dim: int,
     ) -> None:
         from emperor.layers._state import LayerState

@@ -81,14 +81,6 @@ class RecurrentNestedSmoothHandoffExecutionPlan(RecurrentIterationExecutionPlan)
 
 
 @dataclass(frozen=True)
-class _RecurrentIterationProfile:
-    iteration_unit: str
-    maximum_iterations: int
-    transitions_per_iteration: int
-    default_gradient_transition_count: int | None
-
-
-@dataclass(frozen=True)
 class _RecurrentIterationRuntime:
     settled_iterations: int
     active_iterations: int
@@ -115,36 +107,27 @@ class RecurrentIterationSchedule(nn.Module):
         self.cfg = config
         self.VALIDATOR.validate_config(self.cfg)
         if isinstance(self.cfg, RecurrentLayerConfig):
-            profile = _RecurrentIterationProfile(
-                iteration_unit="transition",
-                maximum_iterations=self.cfg.max_steps,
-                transitions_per_iteration=1,
-                default_gradient_transition_count=None,
-            )
+            self.iteration_unit = "transition"
+            self.maximum_iterations: int = self.cfg.max_steps
+            self.transitions_per_iteration: int = 1
+            self.__default_gradient_transition_count: int | None = None
         elif isinstance(self.cfg, TinyRecursiveModelRecurrentConfig):
-            transitions_per_iteration = self.cfg.latent_updates_per_answer_update + 1
-            profile = _RecurrentIterationProfile(
-                iteration_unit="answer_cycle",
-                maximum_iterations=self.cfg.answer_update_count,
-                transitions_per_iteration=transitions_per_iteration,
-                default_gradient_transition_count=transitions_per_iteration,
+            self.iteration_unit = "answer_cycle"
+            self.maximum_iterations = self.cfg.answer_update_count
+            self.transitions_per_iteration = (
+                self.cfg.latent_updates_per_answer_update + 1
             )
+            self.__default_gradient_transition_count = self.transitions_per_iteration
         elif isinstance(self.cfg, HierarchicalReasoningModelRecurrentConfig):
-            profile = _RecurrentIterationProfile(
-                iteration_unit="high_cycle",
-                maximum_iterations=self.cfg.high_cycles,
-                transitions_per_iteration=self.cfg.low_cycles + 1,
-                default_gradient_transition_count=2,
-            )
+            self.iteration_unit = "high_cycle"
+            self.maximum_iterations = self.cfg.high_cycles
+            self.transitions_per_iteration = self.cfg.low_cycles + 1
+            self.__default_gradient_transition_count = 2
         else:
             raise TypeError(
-                "recurrent iteration profiles require a concrete recurrent config, "
+                "recurrent iteration schedules require a concrete recurrent config, "
                 f"got {type(self.cfg).__name__}."
             )
-
-        self.iteration_unit = profile.iteration_unit
-        self.maximum_iterations = profile.maximum_iterations
-        self.transitions_per_iteration = profile.transitions_per_iteration
         self.maximum_transition_count = (
             self.maximum_iterations * self.transitions_per_iteration
         )
@@ -167,9 +150,6 @@ class RecurrentIterationSchedule(nn.Module):
             self.smooth_iteration_growth
             and self.__configured_no_gradient_transition_count == 0
             and self.gradient_transition_count is None
-        )
-        self.__default_gradient_transition_count = (
-            profile.default_gradient_transition_count
         )
         self.__saturation_progress = self.__compute_saturation_progress()
 
