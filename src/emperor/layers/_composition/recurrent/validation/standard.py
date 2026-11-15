@@ -96,7 +96,7 @@ class RecurrentLayerValidator(RecurrentCompositionValidator):
 
     @staticmethod
     def _validate_residual_execution(config: RecurrentLayerConfig) -> None:
-        """This owner supplies residual history and a connection at each depth."""
+        pass
 
     @staticmethod
     def __validate_runtime_owner(

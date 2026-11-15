@@ -1,11 +1,3 @@
-"""Generalized ITT-style recurrence with unchanged skipped-token residual states.
-
-The first transition transforms every token. Later transitions gather selected
-tokens, reuse the block, and scatter score/step-weighted residual contributions.
-Attention blocks therefore see a selected subsequence, without a persistent KV
-cache. Optional inherited controllers wrap the full reconstructed transition.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace

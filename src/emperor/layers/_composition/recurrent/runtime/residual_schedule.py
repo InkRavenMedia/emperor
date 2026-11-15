@@ -19,8 +19,6 @@ from emperor.layers._composition.residual.variants.attention import AttentionRes
 
 
 class RecurrentResidualSchedule(nn.Module, ABC):
-    """Own residual selection across recurrent transitions."""
-
     VALIDATOR = RecurrentResidualScheduleValidator
 
     def __init__(self, transition_count: int) -> None:
@@ -37,7 +35,6 @@ class RecurrentResidualSchedule(nn.Module, ABC):
 
     @staticmethod
     def fork_state(residual_state: ResidualState | None) -> ResidualState | None:
-        """Fork state for an independently evolving recurrent branch."""
         if residual_state is None:
             return None
         return residual_state.fork()
@@ -50,7 +47,6 @@ class RecurrentResidualSchedule(nn.Module, ABC):
         previous: Tensor,
         residual_state: ResidualState | None,
     ) -> None:
-        """Replay a residual application to advance one forked recurrent branch."""
         if residual_state is None:
             return
         self.apply(
@@ -96,12 +92,10 @@ class RecurrentResidualSchedule(nn.Module, ABC):
         primary_connection: ResidualConnectionAbstract,
         transition_index: int,
     ) -> ResidualConnectionAbstract:
-        """Return the connection assigned to one recurrent transition."""
+        pass
 
 
 class SharedRecurrentResidualSchedule(RecurrentResidualSchedule):
-    """Reuse the primary residual connection at every recurrent transition."""
-
     def _connection_for_transition(
         self,
         primary_connection: ResidualConnectionAbstract,
@@ -111,8 +105,6 @@ class SharedRecurrentResidualSchedule(RecurrentResidualSchedule):
 
 
 class DepthwiseRecurrentResidualSchedule(RecurrentResidualSchedule):
-    """Own one independent residual connection per recurrent transition."""
-
     def __init__(
         self,
         transition_count: int,

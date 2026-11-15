@@ -1,5 +1,3 @@
-"""Gather/scatter token states while preserving sequence order and attention masks."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace

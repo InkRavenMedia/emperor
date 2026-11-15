@@ -1,4 +1,3 @@
-"""Smooth depth handoff with provisional source and detached target branches."""
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
@@ -31,8 +30,6 @@ if TYPE_CHECKING:
 
 
 class RecurrentBranchedHandoff(Generic[_StateT]):
-    """Run the shared prefix, provisional source, and observed target in order."""
-
     def __init__(self, branch_runner: RecurrentBranchRunner[_StateT]) -> None:
         self.__branch_runner = branch_runner
 

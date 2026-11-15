@@ -28,8 +28,6 @@ if TYPE_CHECKING:
 
 
 class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
-    """Apply distinct high- and low-level transitions on nested clocks."""
-
     VALIDATOR = HierarchicalReasoningModelRecurrentValidator
     supports_recurrent_diagnostics = True
 

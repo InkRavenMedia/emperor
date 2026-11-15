@@ -1,5 +1,3 @@
-"""Forward-local state for Tiny Recursive Model recurrence."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

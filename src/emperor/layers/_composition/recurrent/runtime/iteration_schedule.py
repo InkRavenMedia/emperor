@@ -98,8 +98,6 @@ class _RecurrentSmoothHandoffRuntime(_RecurrentIterationRuntime):
 
 
 class RecurrentIterationSchedule(nn.Module):
-    """Own recurrent loop growth and its gradient-tracked suffix."""
-
     VALIDATOR = RecurrentIterationScheduleValidator
 
     def __init__(self, config: RecurrentCompositionConfig) -> None:
@@ -281,7 +279,6 @@ class RecurrentIterationSchedule(nn.Module):
         return self.__current_runtime().complete
 
     def record_successful_forward(self) -> None:
-        """Advance after one complete direct invocation of the recurrent owner."""
         runtime = self.__current_runtime()
         if runtime.complete:
             return

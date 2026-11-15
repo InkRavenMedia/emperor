@@ -1,5 +1,3 @@
-"""Tiny Recursive Model recurrent implementation and forward-local state exports."""
-
 from emperor.layers._composition.recurrent.variants.tiny_recursive_model.core import (
     TinyRecursiveModelRecurrent,
 )

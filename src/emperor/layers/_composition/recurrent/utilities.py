@@ -1,5 +1,3 @@
-"""Construction and operations for optional recurrent controllers."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -112,7 +110,6 @@ class RecurrentUtilities(LayerModuleBase):
         self,
         initial_hidden: Tensor,
     ) -> ResidualState | None:
-        """Create residual history for one forward pass using the owned schedule."""
         if self.residual_schedule is None or self.residual_connection is None:
             return None
         return self.residual_schedule.new_state(
@@ -123,7 +120,6 @@ class RecurrentUtilities(LayerModuleBase):
         self,
         residual_state: ResidualState | None,
     ) -> ResidualState | None:
-        """Fork residual history for an independently evolving recurrent branch."""
         if self.residual_schedule is None:
             return residual_state
         return self.residual_schedule.fork_state(residual_state)
