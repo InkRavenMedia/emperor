@@ -278,6 +278,10 @@ class RecurrentIterationSchedule(nn.Module):
     def complete(self) -> bool:
         return self.__current_runtime().complete
 
+    @property
+    def transitioning(self) -> bool:
+        return isinstance(self.__current_runtime(), _RecurrentSmoothHandoffRuntime)
+
     def record_successful_forward(self) -> None:
         runtime = self.__current_runtime()
         if runtime.complete:
