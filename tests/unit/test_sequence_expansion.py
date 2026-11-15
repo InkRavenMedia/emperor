@@ -1739,8 +1739,8 @@ def test_three_recurrent_passes_match_manual_loop_with_residual_and_reinjection(
     padding = torch.tensor([[False, False, True], [False, False, False]])
     observed = []
     with patch.object(
-        model,
-        "_observe_recurrent_step",
+        model.execution,
+        "diagnostic_observer",
         side_effect=lambda before, after: observed.append((before.shape, after.shape)),
     ):
         actual = model(

@@ -92,7 +92,7 @@ class RecurrentLayerMonitorCallback(Callback):
                 output_hidden,
             )
 
-        recurrent_layer._set_recurrent_diagnostic_observer(observe_step)
+        recurrent_layer.execution.set_diagnostic_observer(observe_step)
         self._observed_recurrent_layers.append(recurrent_layer)
 
     def __attach_recurrent_gate_hook(
@@ -200,7 +200,7 @@ class RecurrentLayerMonitorCallback(Callback):
         ) -> None:
             if (
                 not self.__should_sample(pl_module)
-                or not recurrent_layer._recurrent_diagnostic_observation_enabled
+                or not recurrent_layer.execution.diagnostic_observation_enabled
             ):
                 return
             gate_logits = _extract_hidden_tensor(output)
@@ -477,7 +477,7 @@ class RecurrentLayerMonitorCallback(Callback):
         _remove_hooks(self._hooks)
         _restore_method_replacements(self._wrapped_methods)
         for recurrent_layer in self._observed_recurrent_layers:
-            recurrent_layer._set_recurrent_diagnostic_observer(None)
+            recurrent_layer.execution.set_diagnostic_observer(None)
         self._observed_recurrent_layers.clear()
         self._observations.clear()
         self._delta_history.clear()

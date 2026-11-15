@@ -1,11 +1,14 @@
 from emperor.layers._composition.recurrent.runtime.execution.executor import (
     RecurrentExecution,
+    RecurrentTransitionExecution,
 )
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
     PreparedRecurrentTransition,
     RecurrentExecutionAdapter,
     RecurrentExecutionResult,
     RecurrentExecutionState,
+    RecurrentTransitionCandidate,
+    RecurrentTransitionResult,
 )
 
 __all__ = [
@@ -14,4 +17,7 @@ __all__ = [
     "RecurrentExecutionAdapter",
     "RecurrentExecutionResult",
     "RecurrentExecutionState",
+    "RecurrentTransitionCandidate",
+    "RecurrentTransitionExecution",
+    "RecurrentTransitionResult",
 ]

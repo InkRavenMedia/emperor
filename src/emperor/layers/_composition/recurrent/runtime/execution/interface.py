@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from emperor.halting import HaltingStateBase
-    from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
     from emperor.layers._composition.residual.base import ResidualState
 
 
@@ -20,6 +19,23 @@ class RecurrentExecutionResult:
     hidden: Tensor
     loss: Tensor | None
     context_state: LayerState | None = None
+
+
+@dataclass(frozen=True)
+class RecurrentTransitionResult:
+    hidden: Tensor
+    loss: Tensor | None
+    halting_state: HaltingStateBase | None
+    all_items_halted: bool
+    context_state: LayerState | None = None
+
+
+@dataclass(frozen=True)
+class RecurrentTransitionCandidate:
+    hidden: Tensor
+    loss: Tensor | None
+    residual_input: Tensor
+    context_state: LayerState
 
 
 class RecurrentExecutionState(Protocol):
