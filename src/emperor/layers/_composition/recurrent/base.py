@@ -6,9 +6,6 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
-from emperor.layers._composition.recurrent.runtime.execution.interface import (
-    RecurrentTransitionResult as RecurrentTransitionResult,
-)
 from emperor.layers._support import LayerModuleBase
 
 if TYPE_CHECKING:
@@ -50,11 +47,6 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
             a=-2.0 * standard_deviation,
             b=2.0 * standard_deviation,
         )
-
-    @staticmethod
-    def _expand_recurrent_initial(initial: Tensor, hidden: Tensor) -> Tensor:
-        initial_broadcast_shape = (1,) * (hidden.ndim - 1) + (hidden.shape[-1],)
-        return initial.view(initial_broadcast_shape).expand_as(hidden)
 
     @abstractmethod
     def forward(self, state: LayerState) -> LayerState:

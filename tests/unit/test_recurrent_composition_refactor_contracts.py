@@ -2,6 +2,7 @@
 
 import unittest
 from dataclasses import dataclass, replace
+from unittest.mock import patch
 
 import torch
 
@@ -342,6 +343,123 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
                 for name, value in model.named_buffers():
                     self.assertIs(value, buffer_identities[name])
                 self.assertTrue(torch.equal(torch.get_rng_state(), rng))
+
+    def test_every_handoff_can_retry_commit_failure_with_current_runtime_modules(self):
+        for controls in (
+            {"gradient_transition_count": 2},
+            {"no_gradient_transition_count": 0},
+        ):
+            common = dict(
+                input_dim=2,
+                output_dim=2,
+                initial_iterations=2,
+                iteration_increment=1,
+                forward_calls_before_iteration_increment=4,
+                smooth_iteration_growth_flag=True,
+                recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
+                recurrent_normalization=NormalizationOptions.LAYER_NORM,
+                **controls,
+            )
+            block = FailingStochasticStateBlockConfig(fail_on_transition_step=999)
+            variants = (
+                RecurrentLayerConfig(**common, max_steps=3, block_config=block),
+                config(**common, max_steps=3, block_config=block),
+                TinyRecursiveModelRecurrentConfig(
+                    **common,
+                    block_config=block,
+                    latent_updates_per_answer_update=1,
+                    answer_update_count=3,
+                    initialization_standard_deviation=0.1,
+                ),
+                HierarchicalReasoningModelRecurrentConfig(
+                    **common,
+                    high_block_config=block,
+                    low_block_config=block,
+                    low_cycles=1,
+                    high_cycles=3,
+                    initialization_standard_deviation=0.1,
+                ),
+            )
+            for variant in variants:
+                with self.subTest(variant=type(variant).__name__, controls=controls):
+                    model = variant.build().double().eval()
+                    model.add_module("late_runtime", torch.nn.Module())
+                    model.late_runtime.register_buffer("calls", torch.zeros(()))
+                    schedule = model.recurrent_iteration_schedule
+                    schedule.forward_call_progress.fill_(4)
+                    original_record_success = schedule.record_successful_forward
+
+                    def record_success_and_mutate_late_module(
+                        current_model=model, record_success=original_record_success
+                    ):
+                        current_model.late_runtime.calls.add_(1)
+                        record_success()
+
+                    initial_values = {
+                        name: value.clone()
+                        for name, value in model.state_dict().items()
+                    }
+                    buffer_identities = dict(model.named_buffers())
+                    hidden_values = torch.randn(1, 4, 2, dtype=torch.float64)
+                    rng = torch.get_rng_state()
+                    with patch.object(
+                        schedule,
+                        "record_successful_forward",
+                        side_effect=record_success_and_mutate_late_module,
+                    ):
+                        expected = model(
+                            LayerState(hidden_values.clone(), loss=torch.tensor(2.0))
+                        )
+                    expected_values = {
+                        name: value.clone()
+                        for name, value in model.state_dict().items()
+                    }
+                    expected_rng = torch.get_rng_state()
+                    model.load_state_dict(initial_values, strict=True)
+
+                    def record_then_fail(
+                        record_success=record_success_and_mutate_late_module,
+                    ):
+                        record_success()
+                        raise RuntimeError("schedule recording failed")
+
+                    for _ in range(2):
+                        hidden = hidden_values.clone()
+                        loss = torch.tensor(2.0)
+                        state = LayerState(hidden, loss=loss)
+                        torch.set_rng_state(rng)
+                        with (
+                            patch.object(
+                                schedule,
+                                "record_successful_forward",
+                                side_effect=record_then_fail,
+                            ),
+                            self.assertRaisesRegex(
+                                RuntimeError, "schedule recording failed"
+                            ),
+                        ):
+                            model(state)
+                        self.assertIs(state.hidden, hidden)
+                        self.assertIs(state.loss, loss)
+                        self.assertEqual(schedule.snapshot().forward_call_progress, 4)
+                        for name, value in model.named_buffers():
+                            self.assertIs(value, buffer_identities[name])
+                        torch.testing.assert_close(model.state_dict(), initial_values)
+                        self.assertTrue(torch.equal(torch.get_rng_state(), rng))
+
+                    torch.set_rng_state(rng)
+                    state = LayerState(hidden_values.clone(), loss=torch.tensor(2.0))
+                    with patch.object(
+                        schedule,
+                        "record_successful_forward",
+                        side_effect=record_success_and_mutate_late_module,
+                    ):
+                        actual = model(state)
+                    self.assertIs(actual, state)
+                    torch.testing.assert_close(actual.hidden, expected.hidden)
+                    torch.testing.assert_close(actual.loss, expected.loss)
+                    torch.testing.assert_close(model.state_dict(), expected_values)
+                    self.assertTrue(torch.equal(torch.get_rng_state(), expected_rng))
 
     def test_real_decoder_receives_selected_masks_and_preserves_encoder_context(self):
         from unit.test_transformer_layer import TestTransformerDecoderLayer
