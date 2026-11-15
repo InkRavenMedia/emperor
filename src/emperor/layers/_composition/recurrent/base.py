@@ -6,14 +6,9 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor, nn
 
-from emperor.layers._composition.recurrent.runtime.execution import RecurrentExecution
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentTransitionResult as RecurrentTransitionResult,
 )
-from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
-    RecurrentIterationSchedule,
-)
-from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._support import LayerModuleBase
 
 if TYPE_CHECKING:
@@ -36,9 +31,6 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         self.VALIDATOR.validate(self)
         self.input_dim: int = self.cfg.input_dim
         self.output_dim: int = self.cfg.output_dim
-        self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
-        self.utilities = RecurrentUtilities(self.cfg)
-        self.execution = RecurrentExecution(self.utilities, self.output_dim)
 
     def _build_transition_model(self, transition_config: ConfigBase) -> Module:
         return self._build_from_config(

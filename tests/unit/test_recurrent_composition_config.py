@@ -230,6 +230,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             f"{execution_package_module_name}.interface",
         )
 
+    def test_shared_initialization_validates_before_reading_configuration(self) -> None:
         base_initializer_tree = ast.parse(
             textwrap.dedent(inspect.getsource(RecurrentCompositionAbstract.__init__))
         )
@@ -260,10 +261,30 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             call_lines["self.VALIDATOR.validate"],
             min(assignment.lineno for assignment in config_assignments),
         )
-        self.assertLess(
-            max(assignment.end_lineno for assignment in config_assignments),
-            call_lines["RecurrentIterationSchedule"],
-        )
+        self.assertNotIn("RecurrentIterationSchedule", call_lines)
+        self.assertNotIn("RecurrentUtilities", call_lines)
+        for owner in (
+            RecurrentLayer,
+            TinyRecursiveModelRecurrent,
+            HierarchicalReasoningModelRecurrent,
+        ):
+            with self.subTest(variant=owner.__name__):
+                initializer_tree = ast.parse(
+                    textwrap.dedent(inspect.getsource(owner.__init__))
+                )
+                initializer_calls = {
+                    ast.unparse(node.func): node.lineno
+                    for node in ast.walk(initializer_tree)
+                    if isinstance(node, ast.Call)
+                }
+                self.assertLess(
+                    initializer_calls["super().__init__"],
+                    initializer_calls["RecurrentIterationSchedule"],
+                )
+                self.assertLess(
+                    initializer_calls["RecurrentIterationSchedule"],
+                    initializer_calls["RecurrentUtilities"],
+                )
         self.assertNotIn(
             "_RecurrentCompositionAbstract__initialize_delegates",
             vars(RecurrentCompositionAbstract),
