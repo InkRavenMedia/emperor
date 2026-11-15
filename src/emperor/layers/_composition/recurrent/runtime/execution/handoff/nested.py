@@ -10,6 +10,7 @@ from emperor.layers._composition.recurrent.runtime.execution.branch import (
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     accumulate_caller_loss_once,
     blend_recurrent_branch_hidden,
+    blend_recurrent_branch_losses,
 )
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentExecutionAdapter,
@@ -45,7 +46,6 @@ class RecurrentNestedHandoff(Generic[_StateT]):
         source_result = self.__branch_runner.finalize(adapter, recurrent_state)
         if recurrent_state.all_items_halted:
             return accumulate_caller_loss_once(
-                adapter,
                 layer_state.loss,
                 source_result,
             )
@@ -59,7 +59,6 @@ class RecurrentNestedHandoff(Generic[_StateT]):
         )
         if recurrent_state.transition_index == transition_index_before_target:
             return accumulate_caller_loss_once(
-                adapter,
                 layer_state.loss,
                 source_result,
             )
@@ -72,7 +71,7 @@ class RecurrentNestedHandoff(Generic[_StateT]):
                 target_result,
                 transition_weight,
             ),
-            loss=adapter._blend_recurrent_branch_losses(
+            loss=blend_recurrent_branch_losses(
                 source_result.loss,
                 source_result.loss,
                 target_result.loss,
@@ -83,7 +82,6 @@ class RecurrentNestedHandoff(Generic[_StateT]):
             ).context_state,
         )
         return accumulate_caller_loss_once(
-            adapter,
             layer_state.loss,
             blended_result,
         )

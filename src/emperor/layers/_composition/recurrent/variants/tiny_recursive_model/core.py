@@ -189,15 +189,6 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
     ) -> TinyRecursiveModelState:
         return replace(recurrent_state)
 
-    def _recurrent_branch_loss(
-        self,
-        recurrent_state: TinyRecursiveModelState,
-    ) -> Tensor | None:
-        return self._accumulate_recurrent_losses(
-            recurrent_state.initial_loss,
-            recurrent_state.auxiliary_losses,
-        )
-
     def __updates_answer(
         self,
         recurrent_state: TinyRecursiveModelState,
