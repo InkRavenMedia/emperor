@@ -52,7 +52,7 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from emperor.layers._composition.gate import LayerGate
-from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
+from emperor.layers._composition.recurrent.runtime.handoff.results import (
     blend_recurrent_branch_losses,
 )
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
@@ -2652,15 +2652,14 @@ class TestRecurrentLayer(unittest.TestCase):
         initial_loss = torch.tensor(3.0)
         state = LayerState(hidden=torch.zeros(1, 4), loss=initial_loss)
 
-        recurrent_state = model._initialize_recurrent_execution_state(
-            state, initial_loss
-        )
-        recurrent_state = model.run_branch(
-            recurrent_state, schedule.execution_plan().target_branch
-        )
-        execution_result = model.execution.finalize(recurrent_state)
         self.assertEqual(schedule.snapshot().forward_call_progress, 0)
-        result = model.execution.commit(state, schedule, execution_result)
+        with patch.object(
+            schedule,
+            "record_successful_forward",
+            wraps=schedule.record_successful_forward,
+        ) as record_success:
+            result = model(state)
+        record_success.assert_called_once()
 
         self.assertIs(result, state)
         torch.testing.assert_close(result.hidden, torch.ones(1, 4))
@@ -3214,6 +3213,9 @@ class TestRecurrentLayer(unittest.TestCase):
                     )
                 ).eval()
                 schedule = model.recurrent_iteration_schedule
+                schedule.load_state_dict(
+                    {"forward_call_progress": torch.tensor(4)}, strict=True
+                )
                 execution_plan = RecurrentNestedSmoothHandoffExecutionPlan(
                     source_branch=RecurrentBranchExecutionPlan(2, 0),
                     target_branch=RecurrentBranchExecutionPlan(3, 0),

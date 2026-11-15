@@ -22,7 +22,6 @@ from emperor.layers import (
 )
 from emperor.layers._composition.recurrent.base import (
     RecurrentCompositionAbstract,
-    RecurrentTransitionResult,
 )
 from emperor.layers._composition.recurrent.validation import (
     RecurrentLayerValidator,
@@ -1128,20 +1127,15 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             answer_update_count=1,
             auxiliary_loss=0.5,
         ).build()
-        state = runtime._initialize_recurrent_execution_state(
+        state = runtime.step.initialize(
             LayerState(hidden=torch.ones(1, 1)),
-            branch_base_loss=None,
         )
         transition_loss = torch.tensor(2.0, requires_grad=True)
 
-        updated = runtime._apply_recurrent_transition_result(
+        updated = runtime.step.update_state(
             state,
-            RecurrentTransitionResult(
-                hidden=torch.ones(1, 1),
-                loss=transition_loss,
-                halting_state=None,
-                all_items_halted=False,
-            ),
+            LayerState(hidden=torch.ones(1, 1), loss=transition_loss),
+            tracks_gradients=True,
         )
 
         self.assertEqual(state.auxiliary_losses, ())

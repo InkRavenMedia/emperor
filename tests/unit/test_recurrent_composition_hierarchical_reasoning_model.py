@@ -18,7 +18,6 @@ from emperor.layers import (
 )
 from emperor.layers._composition.recurrent.base import (
     RecurrentCompositionAbstract,
-    RecurrentTransitionResult,
 )
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
@@ -1577,20 +1576,15 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             high_cycles=1,
             initial_iterations=1,
         ).build()
-        state = recurrent._initialize_recurrent_execution_state(
+        state = recurrent.step.initialize(
             LayerState(hidden=torch.ones(1, 1)),
-            branch_base_loss=None,
         )
         transition_loss = torch.tensor(2.0, requires_grad=True)
 
-        updated = recurrent._apply_recurrent_transition_result(
+        updated = recurrent.step.update_state(
             state,
-            RecurrentTransitionResult(
-                hidden=torch.ones(1, 1),
-                loss=transition_loss,
-                halting_state=None,
-                all_items_halted=False,
-            ),
+            LayerState(hidden=torch.ones(1, 1), loss=transition_loss),
+            tracks_gradients=True,
         )
 
         self.assertEqual(state.auxiliary_losses, ())
