@@ -1112,9 +1112,7 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             context_state=LayerState(hidden=source),
             transition_index=2,
         )
-        detached = TinyRecursiveModelRecurrent._detach_recurrent_execution_state(
-            recurrent_state
-        )
+        detached = recurrent_state.detach()
 
         self.assertFalse(detached.answer.requires_grad)
         self.assertFalse(detached.latent.requires_grad)

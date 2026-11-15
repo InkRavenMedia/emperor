@@ -653,21 +653,18 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             RecurrentIterationSchedule: set(),
             RecurrentLayer: {
                 "_apply_recurrent_transition_result",
-                "_detach_recurrent_execution_state",
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",
             },
             TinyRecursiveModelRecurrent: {
                 "_apply_recurrent_transition_result",
-                "_detach_recurrent_execution_state",
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",
             },
             HierarchicalReasoningModelRecurrent: {
                 "_apply_recurrent_transition_result",
-                "_detach_recurrent_execution_state",
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",

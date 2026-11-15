@@ -1561,9 +1561,7 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             transition_index=2,
         )
 
-        detached = (
-            HierarchicalReasoningModelRecurrent._detach_recurrent_execution_state(state)
-        )
+        detached = state.detach()
 
         self.assertIs(detached.fixed_input, fixed_input)
         self.assertFalse(detached.high.requires_grad)
