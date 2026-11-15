@@ -26,3 +26,7 @@ class StandardRecurrentState:
     @property
     def output_hidden(self) -> Tensor:
         return self.hidden
+
+    @property
+    def branch_loss(self) -> Tensor | None:
+        return self.loss

@@ -85,7 +85,7 @@ class RecurrentBranchRunner(Generic[_StateT]):
     ) -> RecurrentExecutionResult:
         finalized_hidden, finalized_loss = adapter._finalize_recurrent_halting(
             recurrent_state.output_hidden,
-            adapter._recurrent_branch_loss(recurrent_state),
+            recurrent_state.branch_loss,
             recurrent_state.halting_state,
         )
         return RecurrentExecutionResult(

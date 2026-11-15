@@ -53,6 +53,9 @@ from emperor.layers import (
 )
 from emperor.layers._composition.gate import LayerGate
 from emperor.layers._composition.recurrent.runtime.execution import RecurrentExecution
+from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
+    blend_recurrent_branch_losses,
+)
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentBranchExecutionPlan,
     RecurrentNestedSmoothHandoffExecutionPlan,
@@ -3836,7 +3839,7 @@ class TestRecurrentLayer(unittest.TestCase):
         source_loss = torch.tensor(3.0)
         target_loss = torch.tensor(5.0)
 
-        blended_loss = RecurrentLayer._blend_recurrent_branch_losses(
+        blended_loss = blend_recurrent_branch_losses(
             common_loss,
             source_loss,
             target_loss,

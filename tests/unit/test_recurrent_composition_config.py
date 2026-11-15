@@ -332,7 +332,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             "_fork_recurrent_handoff_state",
             "_initialize_recurrent_execution_state",
             "_prepare_recurrent_transition",
-            "_recurrent_branch_loss",
         }
 
         recurrent_root = (
@@ -679,11 +678,9 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
     def test_only_subclass_extension_seams_are_protected(self) -> None:
         expected_protected_methods = {
             RecurrentCompositionAbstract: {
-                "_accumulate_recurrent_losses",
                 "_build_transition_model",
                 "_expand_recurrent_initial",
                 "_finalize_recurrent_halting",
-                "_blend_recurrent_branch_losses",
                 "_new_recurrent_initial_buffer",
                 "_observe_recurrent_step",
                 "_run_recurrent_transition",
@@ -715,7 +712,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",
-                "_recurrent_branch_loss",
             },
             TinyRecursiveModelRecurrent: {
                 "_apply_recurrent_transition_result",
@@ -723,7 +719,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",
-                "_recurrent_branch_loss",
             },
             HierarchicalReasoningModelRecurrent: {
                 "_apply_recurrent_transition_result",
@@ -731,7 +726,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 "_fork_recurrent_handoff_state",
                 "_initialize_recurrent_execution_state",
                 "_prepare_recurrent_transition",
-                "_recurrent_branch_loss",
             },
         }
 
