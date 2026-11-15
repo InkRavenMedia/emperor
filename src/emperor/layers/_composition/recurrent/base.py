@@ -67,8 +67,6 @@ _ProvisionalSourceBranchOutput = TypeVar("_ProvisionalSourceBranchOutput")
 
 
 class RecurrentCompositionAbstract(LayerModuleBase, ABC):
-    """Build shared controllers and execute individual recurrent transitions."""
-
     supports_recurrent_diagnostics = False
     __runtime_state_guard = RecurrentRuntimeStateGuard()
 
@@ -369,4 +367,4 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
 
     @abstractmethod
     def forward(self, state: LayerState) -> LayerState:
-        """Apply one configured recurrent composition to a LayerState."""
+        pass

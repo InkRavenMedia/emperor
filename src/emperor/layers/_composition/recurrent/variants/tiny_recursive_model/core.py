@@ -28,8 +28,6 @@ if TYPE_CHECKING:
 
 
 class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
-    """Apply one shared transition using the Tiny Recursive Model schedule."""
-
     VALIDATOR = TinyRecursiveModelRecurrentValidator
     supports_recurrent_diagnostics = True
 

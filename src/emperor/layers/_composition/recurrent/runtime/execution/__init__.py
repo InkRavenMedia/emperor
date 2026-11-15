@@ -1,5 +1,3 @@
-"""Package Interface for generalized Recurrent Execution."""
-
 from emperor.layers._composition.recurrent.runtime.execution.executor import (
     RecurrentExecution,
 )

@@ -1,4 +1,3 @@
-"""Full-gradient smooth depth handoff along one evolving recurrent state."""
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
@@ -24,8 +23,6 @@ from emperor.layers._state import LayerState
 
 
 class RecurrentNestedHandoff(Generic[_StateT]):
-    """Extend the source run to target depth without replaying its shared prefix."""
-
     def __init__(self, branch_runner: RecurrentBranchRunner[_StateT]) -> None:
         self.__branch_runner = branch_runner
 

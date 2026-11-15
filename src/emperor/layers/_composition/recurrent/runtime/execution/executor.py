@@ -1,4 +1,3 @@
-"""Coordinate recurrent execution delegates and commit one forward result."""
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations
@@ -41,8 +40,6 @@ if TYPE_CHECKING:
 
 
 class RecurrentExecution(Generic[_StateT]):
-    """Select an execution delegate and commit its result for every variant."""
-
     VALIDATOR = RecurrentExecutionValidator
     __runtime_state_guard = RecurrentRuntimeStateGuard()
 

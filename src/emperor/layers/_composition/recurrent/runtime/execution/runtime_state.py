@@ -1,5 +1,3 @@
-"""Transactional runtime-state isolation for recurrent execution."""
-
 # PyTorch's public buffer iteration omits registered None buffers and persistence
 # metadata. Exact identity-preserving rollback therefore uses Module registries.
 # pyright: reportPrivateUsage=false
@@ -65,14 +63,11 @@ class _RecurrentRuntimeStateSnapshot:
 
 
 class RecurrentRuntimeStateGuard:
-    """Isolate mutable module and RNG state across recurrent branch execution."""
-
     @contextmanager
     def isolate_provisional_branch(
         self,
         recurrent_module: nn.Module,
     ) -> Generator[None, None, None]:
-        """Restore runtime state after a provisional branch finishes or fails."""
         runtime_state_snapshot = self.__snapshot_runtime_state(recurrent_module)
         try:
             with preserve_forward_schedule_updates():
@@ -85,7 +80,6 @@ class RecurrentRuntimeStateGuard:
         self,
         recurrent_module: nn.Module,
     ) -> Generator[None, None, None]:
-        """Restore pre-handoff runtime state only when the handoff fails."""
         runtime_state_snapshot = self.__snapshot_runtime_state(recurrent_module)
         try:
             yield
