@@ -151,6 +151,7 @@ class TestRecurrentIterationSchedule(unittest.TestCase):
         observed = []
         for _ in range(11):
             snapshot = schedule.snapshot()
+            self.assertEqual(schedule.transitioning, snapshot.transitioning)
             observed.append(
                 (
                     snapshot.forward_call_progress,
