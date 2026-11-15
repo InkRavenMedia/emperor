@@ -1,9 +1,6 @@
 from emperor.layers._composition.recurrent.validation.common import (
     RecurrentCompositionValidator,
 )
-from emperor.layers._composition.recurrent.validation.execution import (
-    RecurrentExecutionValidator,
-)
 from emperor.layers._composition.recurrent.validation.hierarchical_reasoning_model import (
     HierarchicalReasoningModelRecurrentValidator,
 )
@@ -27,7 +24,6 @@ __all__ = [
     "HierarchicalReasoningModelRecurrentValidator",
     "InnerThinkingRecurrentValidator",
     "RecurrentCompositionValidator",
-    "RecurrentExecutionValidator",
     "RecurrentIterationScheduleValidator",
     "RecurrentLayerValidator",
     "RecurrentResidualScheduleValidator",

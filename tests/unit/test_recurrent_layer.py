@@ -55,7 +55,6 @@ from emperor.layers._composition.gate import LayerGate
 from emperor.layers._composition.recurrent.runtime.execution import (
     PreparedRecurrentTransition,
     RecurrentExecution,
-    RecurrentTransitionExecution,
 )
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     blend_recurrent_branch_losses,
@@ -71,7 +70,6 @@ from emperor.layers._composition.recurrent.runtime.residual_schedule import (
 )
 from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import (
-    RecurrentExecutionValidator,
     RecurrentResidualScheduleValidator,
 )
 from emperor.layers._composition.recurrent.variants.standard import (
@@ -2658,7 +2656,15 @@ class TestRecurrentLayer(unittest.TestCase):
         initial_loss = torch.tensor(3.0)
         state = LayerState(hidden=torch.zeros(1, 4), loss=initial_loss)
 
-        result = RecurrentExecution().execute(model, state, schedule)
+        recurrent_state = model._initialize_recurrent_execution_state(
+            state, initial_loss
+        )
+        recurrent_state = model.run_branch(
+            recurrent_state, schedule.execution_plan().target_branch
+        )
+        execution_result = model.execution.finalize(recurrent_state)
+        self.assertEqual(schedule.snapshot().forward_call_progress, 0)
+        result = model.execution.commit(state, schedule, execution_result)
 
         self.assertIs(result, state)
         torch.testing.assert_close(result.hidden, torch.ones(1, 4))
@@ -2668,9 +2674,7 @@ class TestRecurrentLayer(unittest.TestCase):
 
     def test_recurrent_execution_runs_without_a_recurrent_layer_owner(self) -> None:
         config = self.recurrent_config(dim=4, max_steps=1)
-        execution = RecurrentTransitionExecution(
-            RecurrentUtilities(config), output_dim=4
-        )
+        execution = RecurrentExecution(RecurrentUtilities(config), output_dim=4)
         hidden = torch.ones(1, 4, requires_grad=True)
         caller_loss = torch.tensor(3.0, requires_grad=True)
         context = LayerState(hidden=hidden, loss=caller_loss)
@@ -2699,63 +2703,6 @@ class TestRecurrentLayer(unittest.TestCase):
         (result.hidden.sum() + result.loss).backward()
         torch.testing.assert_close(hidden.grad, torch.full_like(hidden, 2))
         torch.testing.assert_close(caller_loss.grad, torch.ones_like(caller_loss))
-
-    def test_recurrent_execution_rejects_non_module_adapters_consistently(self) -> None:
-        stable_model = self.recurrent_config(
-            max_steps=2,
-            initial_iterations=1,
-            iteration_increment=1,
-            forward_calls_before_iteration_increment=1,
-        ).build()
-        smooth_model = self.recurrent_config(
-            max_steps=2,
-            initial_iterations=1,
-            gradient_transition_count=1,
-            iteration_increment=1,
-            forward_calls_before_iteration_increment=4,
-            smooth_iteration_growth_flag=True,
-        ).build()
-        smooth_model.recurrent_iteration_schedule.forward_call_progress.fill_(4)
-
-        for schedule in (
-            stable_model.recurrent_iteration_schedule,
-            smooth_model.recurrent_iteration_schedule,
-        ):
-            with (
-                self.subTest(plan_type=type(schedule.execution_plan()).__name__),
-                self.assertRaisesRegex(
-                    TypeError,
-                    "Recurrent Execution Adapter must be an nn.Module",
-                ),
-            ):
-                RecurrentExecution().execute(
-                    object(),
-                    LayerState(hidden=torch.zeros(1, 4)),
-                    schedule,
-                )
-
-    def test_recurrent_execution_dispatches_through_substituted_validator(
-        self,
-    ) -> None:
-        class RejectingValidator(RecurrentExecutionValidator):
-            @staticmethod
-            def validate_adapter_is_module(adapter: object) -> None:
-                raise RuntimeError("substituted execution validator was called")
-
-        class RejectingExecution(RecurrentExecution):
-            VALIDATOR = RejectingValidator
-
-        model = self.recurrent_config(max_steps=1, initial_iterations=1).build()
-
-        with self.assertRaisesRegex(
-            RuntimeError,
-            "substituted execution validator was called",
-        ):
-            RejectingExecution().execute(
-                model,
-                LayerState(hidden=torch.zeros(1, 4)),
-                model.recurrent_iteration_schedule,
-            )
 
     def test_recurrent_execution_uses_current_variant_transition_validator(
         self,

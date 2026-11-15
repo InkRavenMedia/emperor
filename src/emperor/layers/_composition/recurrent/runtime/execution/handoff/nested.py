@@ -1,75 +1,62 @@
-# pyright: reportPrivateUsage=false
-
 from __future__ import annotations
 
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
-from emperor.layers._composition.recurrent.runtime.execution.branch import (
-    RecurrentBranchRunner,
-)
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     accumulate_caller_loss_once,
     blend_recurrent_branch_hidden,
     blend_recurrent_branch_losses,
 )
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
-    RecurrentExecutionAdapter,
     RecurrentExecutionResult,
-    _StateT,
+    RecurrentStateT,
 )
-from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
-    RecurrentNestedSmoothHandoffExecutionPlan,
-)
-from emperor.layers._state import LayerState
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from emperor.layers._composition.recurrent.runtime.execution import (
+        RecurrentExecution,
+    )
+    from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
+        RecurrentBranchExecutionPlan,
+        RecurrentNestedSmoothHandoffExecutionPlan,
+    )
+    from emperor.layers._state import LayerState
 
 
-class RecurrentNestedHandoff(Generic[_StateT]):
-    def __init__(self, branch_runner: RecurrentBranchRunner[_StateT]) -> None:
-        self.__branch_runner = branch_runner
+class RecurrentNestedHandoff(Generic[RecurrentStateT]):
+    def __init__(self, execution: RecurrentExecution) -> None:
+        self.__execution = execution
 
     def execute(
         self,
-        adapter: RecurrentExecutionAdapter[_StateT],
+        recurrent_state: RecurrentStateT,
         layer_state: LayerState,
         execution_plan: RecurrentNestedSmoothHandoffExecutionPlan,
+        run_branch: Callable[
+            [RecurrentStateT, RecurrentBranchExecutionPlan, bool], RecurrentStateT
+        ],
     ) -> RecurrentExecutionResult:
-        recurrent_state = adapter._initialize_recurrent_execution_state(
-            layer_state,
-            branch_base_loss=None,
+        recurrent_state = run_branch(
+            recurrent_state, execution_plan.source_branch, True
         )
-        recurrent_state = self.__branch_runner.run(
-            adapter,
-            recurrent_state,
-            execution_plan.source_branch,
-            observe_transitions=True,
-        )
-        source_result = self.__branch_runner.finalize(adapter, recurrent_state)
+        source_result = self.__execution.finalize(recurrent_state)
         if recurrent_state.all_items_halted:
-            return accumulate_caller_loss_once(
-                layer_state.loss,
-                source_result,
-            )
+            return accumulate_caller_loss_once(layer_state.loss, source_result)
 
         transition_index_before_target = recurrent_state.transition_index
-        recurrent_state = self.__branch_runner.run(
-            adapter,
-            recurrent_state,
-            execution_plan.target_branch,
-            observe_transitions=True,
+        recurrent_state = run_branch(
+            recurrent_state, execution_plan.target_branch, True
         )
         if recurrent_state.transition_index == transition_index_before_target:
-            return accumulate_caller_loss_once(
-                layer_state.loss,
-                source_result,
-            )
+            return accumulate_caller_loss_once(layer_state.loss, source_result)
 
-        target_result = self.__branch_runner.finalize(adapter, recurrent_state)
+        target_result = self.__execution.finalize(recurrent_state)
         transition_weight = execution_plan.transition_weight
         blended_result = RecurrentExecutionResult(
             hidden=blend_recurrent_branch_hidden(
-                source_result,
-                target_result,
-                transition_weight,
+                source_result, target_result, transition_weight
             ),
             loss=blend_recurrent_branch_losses(
                 source_result.loss,
@@ -81,7 +68,4 @@ class RecurrentNestedHandoff(Generic[_StateT]):
                 source_result if transition_weight == 0 else target_result
             ).context_state,
         )
-        return accumulate_caller_loss_once(
-            layer_state.loss,
-            blended_result,
-        )
+        return accumulate_caller_loss_once(layer_state.loss, blended_result)

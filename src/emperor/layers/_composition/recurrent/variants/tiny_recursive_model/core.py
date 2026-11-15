@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import partial
 from typing import TYPE_CHECKING
 
 from torch import Tensor
@@ -8,7 +9,17 @@ from torch import Tensor
 from emperor.layers._composition.recurrent.base import RecurrentCompositionAbstract
 from emperor.layers._composition.recurrent.runtime.execution import (
     PreparedRecurrentTransition,
-    RecurrentExecution,
+    RecurrentExecutionResult,
+    RecurrentTransitionResult,
+)
+from emperor.layers._composition.recurrent.runtime.execution.handoff import (
+    RecurrentBranchedHandoff,
+    RecurrentNestedHandoff,
+)
+from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
+    RecurrentBranchExecutionPlan,
+    RecurrentNestedSmoothHandoffExecutionPlan,
+    RecurrentSmoothHandoffExecutionPlan,
 )
 from emperor.layers._composition.recurrent.validation import (
     TinyRecursiveModelRecurrentValidator,
@@ -16,10 +27,10 @@ from emperor.layers._composition.recurrent.validation import (
 from emperor.layers._composition.recurrent.variants.tiny_recursive_model.state import (
     TinyRecursiveModelState,
 )
+from emperor.nn import once_per_recurrent_run
 
 if TYPE_CHECKING:
     from emperor.config import ConfigBase
-    from emperor.layers._composition.recurrent.base import RecurrentTransitionResult
     from emperor.layers._composition.recurrent.config import (
         TinyRecursiveModelRecurrentConfig,
     )
@@ -54,8 +65,11 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
         self.__register_initial_buffer("answer_initial")
         self.__register_initial_buffer("latent_initial")
         self.block_model: Module = self._build_transition_model(self.block_config)
-        self.__recurrent_execution: RecurrentExecution[TinyRecursiveModelState] = (
-            RecurrentExecution()
+        self.__branched_handoff: RecurrentBranchedHandoff[TinyRecursiveModelState] = (
+            RecurrentBranchedHandoff(self.execution)
+        )
+        self.__nested_handoff: RecurrentNestedHandoff[TinyRecursiveModelState] = (
+            RecurrentNestedHandoff(self.execution)
         )
 
     def __register_initial_buffer(self, buffer_name: str) -> None:
@@ -73,11 +87,60 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
             expected_feature_dim=self.output_dim,
         )
 
-        return self.__recurrent_execution.execute(
-            self,
-            state,
-            self.recurrent_iteration_schedule,
-        )
+        with once_per_recurrent_run():
+            execution_plan = self.recurrent_iteration_schedule.execution_plan()
+            if isinstance(
+                execution_plan,
+                (
+                    RecurrentSmoothHandoffExecutionPlan,
+                    RecurrentNestedSmoothHandoffExecutionPlan,
+                ),
+            ):
+                return self.__run_smooth_handoff(state, execution_plan)
+
+            recurrent_state = self._initialize_recurrent_execution_state(
+                state, branch_base_loss=state.loss
+            )
+            recurrent_state = self.run_branch(
+                recurrent_state, execution_plan.target_branch
+            )
+            execution_result = self.execution.finalize(recurrent_state)
+            return self.execution.commit(
+                state, self.recurrent_iteration_schedule, execution_result
+            )
+
+    def run_branch(
+        self,
+        recurrent_state: TinyRecursiveModelState,
+        branch_plan: RecurrentBranchExecutionPlan,
+        observe_transitions: bool = True,
+    ) -> TinyRecursiveModelState:
+        while (
+            recurrent_state.transition_index < branch_plan.transition_count
+            and not recurrent_state.all_items_halted
+        ):
+            if branch_plan.starts_gradient_suffix(recurrent_state.transition_index):
+                recurrent_state = self._detach_recurrent_execution_state(
+                    recurrent_state
+                )
+            transition_index = recurrent_state.transition_index
+            tracks_gradients = branch_plan.tracks_gradients(transition_index)
+            with branch_plan.gradient_context(transition_index):
+                prepared_transition = self._prepare_recurrent_transition(
+                    recurrent_state,
+                    tracks_gradients=tracks_gradients,
+                )
+                transition_result = self.execution.run_transition(
+                    recurrent_state,
+                    prepared_transition,
+                    validate_output=self.VALIDATOR.validate_transition_output,
+                    transition_index=transition_index,
+                    observe_transition=observe_transitions,
+                )
+                recurrent_state = self._apply_recurrent_transition_result(
+                    recurrent_state, transition_result
+                )
+        return recurrent_state
 
     def _initialize_recurrent_execution_state(
         self,
@@ -198,3 +261,83 @@ class TinyRecursiveModelRecurrent(RecurrentCompositionAbstract):
         )
         phase_index = recurrent_state.transition_index % transitions_per_iteration
         return phase_index >= self.latent_updates_per_answer_update
+
+    def __run_smooth_handoff(
+        self,
+        state: LayerState,
+        execution_plan: RecurrentSmoothHandoffExecutionPlan
+        | RecurrentNestedSmoothHandoffExecutionPlan,
+    ) -> LayerState:
+        with self.execution.handoff(state, self.modules()):
+            recurrent_state = self._initialize_recurrent_execution_state(
+                state, branch_base_loss=None
+            )
+            if isinstance(execution_plan, RecurrentNestedSmoothHandoffExecutionPlan):
+                execution_result = self.__nested_handoff.execute(
+                    recurrent_state,
+                    state,
+                    execution_plan,
+                    run_branch=self.run_branch,
+                )
+            else:
+                execution_result = self.__branched_handoff.execute(
+                    recurrent_state,
+                    state,
+                    execution_plan,
+                    run_branch=self.run_branch,
+                    run_boundary=self.run_handoff_boundary,
+                )
+            return self.execution.commit(
+                state, self.recurrent_iteration_schedule, execution_result
+            )
+
+    def run_handoff_boundary(
+        self,
+        source_boundary_state: TinyRecursiveModelState,
+        source_plan: RecurrentBranchExecutionPlan,
+    ) -> tuple[RecurrentExecutionResult, TinyRecursiveModelState]:
+        if source_plan.starts_gradient_suffix(source_boundary_state.transition_index):
+            source_boundary_state = self._detach_recurrent_execution_state(
+                source_boundary_state
+            )
+        transition_index = source_boundary_state.transition_index
+        source_tracks_gradients = source_plan.tracks_gradients(transition_index)
+        with source_plan.gradient_context(transition_index):
+            prepared_transition = self._prepare_recurrent_transition(
+                source_boundary_state,
+                tracks_gradients=source_tracks_gradients,
+            )
+            source_result, target_transition = (
+                self.__branched_handoff.run_shared_transition(
+                    source_boundary_state,
+                    prepared_transition,
+                    run_source_branch=partial(
+                        self.__continue_source_branch,
+                        source_boundary_state,
+                        source_plan,
+                    ),
+                    runtime_modules=self.modules(),
+                    validate_output=self.VALIDATOR.validate_transition_output,
+                    transition_index=transition_index,
+                )
+            )
+        target_state = self._fork_recurrent_handoff_state(source_boundary_state)
+        target_state = self._apply_recurrent_transition_result(
+            target_state, target_transition
+        )
+        return source_result, target_state
+
+    def __continue_source_branch(
+        self,
+        source_boundary_state: TinyRecursiveModelState,
+        source_plan: RecurrentBranchExecutionPlan,
+        transition_result: RecurrentTransitionResult,
+    ) -> RecurrentExecutionResult:
+        source_state = self._fork_recurrent_handoff_state(source_boundary_state)
+        source_state = self._apply_recurrent_transition_result(
+            source_state, transition_result
+        )
+        source_state = self.run_branch(
+            source_state, source_plan, observe_transitions=False
+        )
+        return self.execution.finalize(source_state)
