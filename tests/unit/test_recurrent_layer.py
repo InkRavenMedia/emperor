@@ -52,10 +52,6 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from emperor.layers._composition.gate import LayerGate
-from emperor.layers._composition.recurrent.runtime.execution import (
-    PreparedRecurrentTransition,
-    RecurrentExecution,
-)
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     blend_recurrent_branch_losses,
 )
@@ -72,8 +68,8 @@ from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import (
     RecurrentResidualScheduleValidator,
 )
-from emperor.layers._composition.recurrent.variants.standard import (
-    StandardRecurrentState,
+from emperor.layers._composition.recurrent.variants.standard.step import (
+    StandardRecurrentStep,
 )
 from emperor.layers._composition.residual.base import (
     ResidualConnectionAbstract,
@@ -2672,31 +2668,25 @@ class TestRecurrentLayer(unittest.TestCase):
         self.assertEqual(schedule.snapshot().forward_call_progress, 1)
         self.assertEqual(schedule.active_iterations, 2)
 
-    def test_recurrent_execution_runs_without_a_recurrent_layer_owner(self) -> None:
+    def test_recurrent_step_runs_without_a_recurrent_layer_owner(self) -> None:
         config = self.recurrent_config(dim=4, max_steps=1)
-        execution = RecurrentExecution(RecurrentUtilities(config), output_dim=4)
+
+        class DoubleBlock(Module):
+            def forward(self, state: LayerState) -> LayerState:
+                return replace(state, hidden=state.hidden * 2)
+
+        modules = torch.nn.ModuleDict({"block_model": DoubleBlock()})
+        step = StandardRecurrentStep(
+            RecurrentUtilities(config),
+            4,
+            modules.get_submodule,
+            reinject_original_hidden=False,
+        )
         hidden = torch.ones(1, 4, requires_grad=True)
         caller_loss = torch.tensor(3.0, requires_grad=True)
         context = LayerState(hidden=hidden, loss=caller_loss)
-        recurrent_state = StandardRecurrentState(
-            hidden=hidden,
-            fixed_input=hidden,
-            loss=caller_loss,
-            context_state=context,
-            transition_index=0,
-        )
-        transition = PreparedRecurrentTransition(
-            run_transition=lambda state: replace(state, hidden=state.hidden * 2),
-            transition_input=hidden,
-            previous_evolving_hidden=hidden,
-            halting_update_enabled=True,
-            loss=caller_loss,
-        )
-        result = execution.run_transition(
-            recurrent_state,
-            transition,
-            RecurrentLayer.VALIDATOR.validate_transition_output,
-        )
+        recurrent_state = step.initialize(context)
+        result = step.forward(recurrent_state, tracks_gradients=True)
         torch.testing.assert_close(result.hidden, hidden * 2)
         self.assertIs(result.loss, caller_loss)
         self.assertIs(context.hidden, hidden)
