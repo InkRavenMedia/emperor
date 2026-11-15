@@ -130,7 +130,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         package_interface_path = execution_package_path / "__init__.py"
         execution_path = execution_package_path / "executor.py"
         interface_path = execution_package_path / "interface.py"
-        runtime_state_path = execution_package_path / "runtime_state.py"
+        runtime_state_path = recurrent_root / "runtime" / "runtime_state.py"
         execution_validation_path = recurrent_root / "validation" / "execution.py"
 
         self.assertTrue(package_interface_path.is_file())
