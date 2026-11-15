@@ -13,6 +13,7 @@ from emperor.layers._composition.recurrent.runtime.execution.branch import (
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     accumulate_caller_loss_once,
     blend_recurrent_branch_hidden,
+    blend_recurrent_branch_losses,
 )
 from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentExecutionAdapter,
@@ -75,8 +76,8 @@ class RecurrentBranchedHandoff(Generic[_StateT]):
             target_result,
             transition_weight,
         )
-        blended_recurrent_loss = adapter._blend_recurrent_branch_losses(
-            adapter._recurrent_branch_loss(common_state),
+        blended_recurrent_loss = blend_recurrent_branch_losses(
+            common_state.branch_loss,
             source_result.loss,
             target_result.loss,
             transition_weight,
@@ -85,7 +86,6 @@ class RecurrentBranchedHandoff(Generic[_StateT]):
             source_result if transition_weight == 0 else target_result
         ).context_state
         return accumulate_caller_loss_once(
-            adapter,
             layer_state.loss,
             RecurrentExecutionResult(
                 hidden=blended_hidden,

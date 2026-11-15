@@ -144,9 +144,3 @@ class RecurrentLayer(RecurrentCompositionAbstract):
                 recurrent_state.residual_state
             ),
         )
-
-    @staticmethod
-    def _recurrent_branch_loss(
-        recurrent_state: StandardRecurrentState,
-    ) -> Tensor | None:
-        return recurrent_state.loss

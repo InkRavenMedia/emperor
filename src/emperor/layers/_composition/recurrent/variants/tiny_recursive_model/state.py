@@ -25,3 +25,14 @@ class TinyRecursiveModelState:
     @property
     def output_hidden(self) -> Tensor:
         return self.answer
+
+    @property
+    def branch_loss(self) -> Tensor | None:
+        accumulated_loss = self.initial_loss
+        for auxiliary_loss in self.auxiliary_losses:
+            accumulated_loss = (
+                auxiliary_loss
+                if accumulated_loss is None
+                else accumulated_loss + auxiliary_loss
+            )
+        return accumulated_loss

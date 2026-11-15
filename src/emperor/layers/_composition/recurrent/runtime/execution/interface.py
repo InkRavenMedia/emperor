@@ -38,6 +38,9 @@ class RecurrentExecutionState(Protocol):
     @property
     def output_hidden(self) -> Tensor: ...
 
+    @property
+    def branch_loss(self) -> Tensor | None: ...
+
 
 @dataclass(frozen=True)
 class PreparedRecurrentTransition:
@@ -83,20 +86,6 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
         halting_state: HaltingStateBase | None,
     ) -> tuple[Tensor, Tensor | None]: ...
 
-    def _blend_recurrent_branch_losses(
-        self,
-        common_loss: Tensor | None,
-        source_loss: Tensor | None,
-        target_loss: Tensor | None,
-        transition_weight: float,
-    ) -> Tensor | None: ...
-
-    def _accumulate_auxiliary_loss(
-        self,
-        loss: Tensor | None,
-        auxiliary_loss: Tensor,
-    ) -> Tensor: ...
-
     def _initialize_recurrent_execution_state(
         self,
         layer_state: LayerState,
@@ -124,8 +113,3 @@ class RecurrentExecutionAdapter(Protocol[_StateT]):
         self,
         recurrent_state: _StateT,
     ) -> _StateT: ...
-
-    def _recurrent_branch_loss(
-        self,
-        recurrent_state: _StateT,
-    ) -> Tensor | None: ...

@@ -19,7 +19,7 @@ from emperor.layers._support import LayerModuleBase
 from emperor.memory import MemoryPositionOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Callable, Generator
 
     from emperor.config import ConfigBase
     from emperor.halting import HaltingStateBase
@@ -321,49 +321,6 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
         halting_state: HaltingStateBase | None,
     ) -> tuple[Tensor, Tensor | None]:
         return self.utilities.finalize_halting(hidden, loss, halting_state)
-
-    def _accumulate_recurrent_losses(
-        self,
-        initial_loss: Tensor | None,
-        auxiliary_losses: Iterable[Tensor],
-    ) -> Tensor | None:
-        accumulated_loss = initial_loss
-        for auxiliary_loss in auxiliary_losses:
-            accumulated_loss = self._accumulate_auxiliary_loss(
-                accumulated_loss,
-                auxiliary_loss,
-            )
-        return accumulated_loss
-
-    @staticmethod
-    def _blend_recurrent_branch_losses(
-        common_loss: Tensor | None,
-        source_loss: Tensor | None,
-        target_loss: Tensor | None,
-        transition_weight: float,
-    ) -> Tensor | None:
-        if transition_weight == 0.0:
-            return source_loss
-        if transition_weight == 1.0:
-            return target_loss
-
-        blended_loss = common_loss
-        for branch_loss, branch_weight in (
-            (source_loss, 1.0 - transition_weight),
-            (target_loss, transition_weight),
-        ):
-            if branch_loss is None:
-                continue
-            branch_loss_delta = (
-                branch_loss if common_loss is None else branch_loss - common_loss
-            )
-            weighted_branch_loss_delta = branch_weight * branch_loss_delta
-            blended_loss = (
-                weighted_branch_loss_delta
-                if blended_loss is None
-                else blended_loss + weighted_branch_loss_delta
-            )
-        return blended_loss
 
     @abstractmethod
     def forward(self, state: LayerState) -> LayerState:
