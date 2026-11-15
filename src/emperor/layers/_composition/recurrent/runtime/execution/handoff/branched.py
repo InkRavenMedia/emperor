@@ -14,11 +14,11 @@ from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentTransitionCandidate,
     RecurrentTransitionResult,
 )
-from emperor.layers._composition.recurrent.runtime.execution.runtime_state import (
-    RecurrentRuntimeStateGuard,
-)
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentBranchExecutionPlan,
+)
+from emperor.layers._composition.recurrent.runtime.runtime_state import (
+    RecurrentRuntimeStateGuard,
 )
 
 if TYPE_CHECKING:

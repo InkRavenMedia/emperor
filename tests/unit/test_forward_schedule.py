@@ -321,7 +321,7 @@ class ForwardScheduleTests(unittest.TestCase):
         self.assertEqual(policy.decay_step.item(), 1)
 
     def test_provisional_branch_rolls_back_deferred_decay_updates(self):
-        from emperor.layers._composition.recurrent.runtime.execution.runtime_state import (
+        from emperor.layers._composition.recurrent.runtime.runtime_state import (
             RecurrentRuntimeStateGuard,
         )
 
