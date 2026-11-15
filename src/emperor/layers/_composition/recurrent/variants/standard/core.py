@@ -12,6 +12,7 @@ from emperor.layers._composition.recurrent.base import RecurrentCompositionAbstr
 from emperor.layers._composition.recurrent.config import RecurrentLayerConfig
 from emperor.layers._composition.recurrent.runtime.execution import (
     PreparedRecurrentTransition,
+    RecurrentExecution,
     RecurrentExecutionResult,
     RecurrentTransitionResult,
 )
@@ -21,9 +22,11 @@ from emperor.layers._composition.recurrent.runtime.execution.handoff import (
 )
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentBranchExecutionPlan,
+    RecurrentIterationSchedule,
     RecurrentNestedSmoothHandoffExecutionPlan,
     RecurrentSmoothHandoffExecutionPlan,
 )
+from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import RecurrentLayerValidator
 from emperor.layers._composition.recurrent.variants.standard.state import (
     StandardRecurrentState,
@@ -46,6 +49,9 @@ class RecurrentLayer(RecurrentCompositionAbstract):
     ) -> None:
         super().__init__(cfg, overrides)
         self.cfg: RecurrentLayerConfig
+        self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
+        self.utilities = RecurrentUtilities(self.cfg)
+        self.execution = RecurrentExecution(self.utilities, self.output_dim)
         self.max_steps: int = self.cfg.max_steps
         self.reinject_original_hidden_flag: bool = (
             self.cfg.reinject_original_hidden_flag is True
