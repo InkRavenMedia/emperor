@@ -52,7 +52,11 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from emperor.layers._composition.gate import LayerGate
-from emperor.layers._composition.recurrent.runtime.execution import RecurrentExecution
+from emperor.layers._composition.recurrent.runtime.execution import (
+    PreparedRecurrentTransition,
+    RecurrentExecution,
+    RecurrentTransitionExecution,
+)
 from emperor.layers._composition.recurrent.runtime.execution.handoff.results import (
     blend_recurrent_branch_losses,
 )
@@ -65,9 +69,13 @@ from emperor.layers._composition.recurrent.runtime.residual_schedule import (
     RecurrentResidualSchedule,
     SharedRecurrentResidualSchedule,
 )
+from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import (
     RecurrentExecutionValidator,
     RecurrentResidualScheduleValidator,
+)
+from emperor.layers._composition.recurrent.variants.standard import (
+    StandardRecurrentState,
 )
 from emperor.layers._composition.residual.base import (
     ResidualConnectionAbstract,
@@ -2658,6 +2666,40 @@ class TestRecurrentLayer(unittest.TestCase):
         self.assertEqual(schedule.snapshot().forward_call_progress, 1)
         self.assertEqual(schedule.active_iterations, 2)
 
+    def test_recurrent_execution_runs_without_a_recurrent_layer_owner(self) -> None:
+        config = self.recurrent_config(dim=4, max_steps=1)
+        execution = RecurrentTransitionExecution(
+            RecurrentUtilities(config), output_dim=4
+        )
+        hidden = torch.ones(1, 4, requires_grad=True)
+        caller_loss = torch.tensor(3.0, requires_grad=True)
+        context = LayerState(hidden=hidden, loss=caller_loss)
+        recurrent_state = StandardRecurrentState(
+            hidden=hidden,
+            fixed_input=hidden,
+            loss=caller_loss,
+            context_state=context,
+            transition_index=0,
+        )
+        transition = PreparedRecurrentTransition(
+            run_transition=lambda state: replace(state, hidden=state.hidden * 2),
+            transition_input=hidden,
+            previous_evolving_hidden=hidden,
+            halting_update_enabled=True,
+            loss=caller_loss,
+        )
+        result = execution.run_transition(
+            recurrent_state,
+            transition,
+            RecurrentLayer.VALIDATOR.validate_transition_output,
+        )
+        torch.testing.assert_close(result.hidden, hidden * 2)
+        self.assertIs(result.loss, caller_loss)
+        self.assertIs(context.hidden, hidden)
+        (result.hidden.sum() + result.loss).backward()
+        torch.testing.assert_close(hidden.grad, torch.full_like(hidden, 2))
+        torch.testing.assert_close(caller_loss.grad, torch.ones_like(caller_loss))
+
     def test_recurrent_execution_rejects_non_module_adapters_consistently(self) -> None:
         stable_model = self.recurrent_config(
             max_steps=2,
@@ -2714,6 +2756,22 @@ class TestRecurrentLayer(unittest.TestCase):
                 LayerState(hidden=torch.zeros(1, 4)),
                 model.recurrent_iteration_schedule,
             )
+
+    def test_recurrent_execution_uses_current_variant_transition_validator(
+        self,
+    ) -> None:
+        model = self.recurrent_config(max_steps=1, initial_iterations=1).build()
+        with (
+            patch.object(
+                model.VALIDATOR,
+                "validate_transition_output",
+                side_effect=RuntimeError("substituted transition validator was called"),
+            ),
+            self.assertRaisesRegex(
+                RuntimeError, "substituted transition validator was called"
+            ),
+        ):
+            model(LayerState(hidden=torch.zeros(1, 4)))
 
     def test_schedule_recording_failure_rolls_back_complete_smooth_handoff(
         self,
