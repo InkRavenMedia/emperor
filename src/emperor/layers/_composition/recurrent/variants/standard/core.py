@@ -1,41 +1,29 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from functools import partial
+from contextlib import AbstractContextManager, nullcontext
 from typing import TYPE_CHECKING
 
 import torch
-from torch import Tensor
 
 from emperor.config import ConfigBase
 from emperor.layers._composition.recurrent.base import RecurrentCompositionAbstract
 from emperor.layers._composition.recurrent.config import RecurrentLayerConfig
-from emperor.layers._composition.recurrent.runtime.execution import (
-    PreparedRecurrentTransition,
-    RecurrentExecution,
-    RecurrentExecutionResult,
-    RecurrentTransitionResult,
-)
-from emperor.layers._composition.recurrent.runtime.execution.handoff import (
-    RecurrentBranchedHandoff,
-    RecurrentNestedHandoff,
-)
+from emperor.layers._composition.recurrent.runtime.handoff import RecurrentDepthHandoff
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
-    RecurrentBranchExecutionPlan,
     RecurrentIterationSchedule,
-    RecurrentNestedSmoothHandoffExecutionPlan,
-    RecurrentSmoothHandoffExecutionPlan,
 )
 from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import RecurrentLayerValidator
-from emperor.layers._composition.recurrent.variants.standard.state import (
-    StandardRecurrentState,
+from emperor.layers._composition.recurrent.variants.standard.step import (
+    StandardRecurrentStep,
 )
 from emperor.layers._state import LayerState
 from emperor.nn import once_per_recurrent_run
 
 if TYPE_CHECKING:
-    from emperor.layers._composition.residual.base import ResidualState
+    from emperor.layers._composition.recurrent.variants.standard.state import (
+        StandardRecurrentState,
+    )
 
 
 class RecurrentLayer(RecurrentCompositionAbstract):
@@ -51,7 +39,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         self.cfg: RecurrentLayerConfig
         self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
         self.utilities = RecurrentUtilities(self.cfg)
-        self.execution = RecurrentExecution(self.utilities, self.output_dim)
         self.max_steps: int = self.cfg.max_steps
         self.reinject_original_hidden_flag: bool = (
             self.cfg.reinject_original_hidden_flag is True
@@ -59,235 +46,72 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         self.block_config: ConfigBase = self.cfg.block_config
 
         self.block_model = self._build_transition_model(self.block_config)
-        self.__branched_handoff: RecurrentBranchedHandoff[StandardRecurrentState] = (
-            RecurrentBranchedHandoff(self.execution)
+        self.step = self._build_step()
+        self.handoff = RecurrentDepthHandoff(
+            self.step, self.recurrent_iteration_schedule
         )
-        self.__nested_handoff: RecurrentNestedHandoff[StandardRecurrentState] = (
-            RecurrentNestedHandoff(self.execution)
+
+    def _build_step(self) -> StandardRecurrentStep:
+        return StandardRecurrentStep(
+            utilities=self.utilities,
+            output_dim=self.output_dim,
+            get_module=self.get_submodule,
+            reinject_original_hidden=self.reinject_original_hidden_flag,
         )
 
     def forward(self, state: LayerState) -> LayerState:
         self.VALIDATOR.validate_state(state, self.input_dim)
         with once_per_recurrent_run():
-            execution_plan = self.recurrent_iteration_schedule.execution_plan()
-            if isinstance(
-                execution_plan,
-                (
-                    RecurrentSmoothHandoffExecutionPlan,
-                    RecurrentNestedSmoothHandoffExecutionPlan,
-                ),
-            ):
-                return self.__run_smooth_handoff(state, execution_plan)
-
-            recurrent_state = self._initialize_recurrent_execution_state(
-                state, branch_base_loss=state.loss
+            if self.recurrent_iteration_schedule.transitioning:
+                return self.handoff.run_and_blend_depth_results(
+                    state, runtime_modules=self.modules
+                )
+            step_limit = self.recurrent_iteration_schedule.active_transition_count
+            no_gradient_steps = (
+                self.recurrent_iteration_schedule.no_gradient_transition_count
             )
-            recurrent_state = self.run_branch(
-                recurrent_state, execution_plan.target_branch
-            )
-            execution_result = self.execution.finalize(recurrent_state)
-            return self.execution.commit(
-                state, self.recurrent_iteration_schedule, execution_result
+            return self.__run_recurrence_with_step_limit(
+                state, step_limit, no_gradient_steps
             )
 
-    def run_branch(
-        self,
-        recurrent_state: StandardRecurrentState,
-        branch_plan: RecurrentBranchExecutionPlan,
-        observe_transitions: bool = True,
-    ) -> StandardRecurrentState:
-        while (
-            recurrent_state.transition_index < branch_plan.transition_count
-            and not recurrent_state.all_items_halted
-        ):
-            if branch_plan.starts_gradient_suffix(recurrent_state.transition_index):
-                recurrent_state = recurrent_state.detach()
-            transition_index = recurrent_state.transition_index
-            tracks_gradients = branch_plan.tracks_gradients(transition_index)
-            with branch_plan.gradient_context(transition_index):
-                prepared_transition = self._prepare_recurrent_transition(
-                    recurrent_state,
-                    tracks_gradients=tracks_gradients,
-                )
-                transition_result = self.execution.run_transition(
-                    recurrent_state,
-                    prepared_transition,
-                    validate_output=self.VALIDATOR.validate_transition_output,
-                    transition_index=transition_index,
-                    observe_transition=observe_transitions,
-                )
-                recurrent_state = self._apply_recurrent_transition_result(
-                    recurrent_state, transition_result
-                )
-        return recurrent_state
-
-    def _initialize_recurrent_execution_state(
-        self,
-        layer_state: LayerState,
-        branch_base_loss: Tensor | None,
-    ) -> StandardRecurrentState:
-        residual_state = self.__initialize_recurrent_residual_state(layer_state)
-        return StandardRecurrentState(
-            hidden=layer_state.hidden,
-            fixed_input=layer_state.hidden,
-            loss=branch_base_loss,
-            context_state=layer_state,
-            transition_index=0,
-            residual_state=residual_state,
-        )
-
-    def __initialize_recurrent_residual_state(
-        self,
-        layer_state: LayerState,
-    ) -> ResidualState | None:
-        return self.utilities.initialize_residual_state(
-            layer_state.hidden,
-        )
-
-    def _prepare_recurrent_transition(
-        self,
-        recurrent_state: StandardRecurrentState,
-        tracks_gradients: bool,
-    ) -> PreparedRecurrentTransition:
-        previous_hidden = recurrent_state.hidden
-        transition_input = self.__maybe_reinject_original_hidden(
-            previous_hidden,
-            recurrent_state.fixed_input,
-        )
-        return PreparedRecurrentTransition(
-            run_transition=self.block_model,
-            transition_input=transition_input,
-            previous_evolving_hidden=previous_hidden,
-            halting_update_enabled=tracks_gradients,
-            loss=recurrent_state.loss,
-            residual_state=recurrent_state.residual_state,
-        )
-
-    def __maybe_reinject_original_hidden(
-        self,
-        hidden: Tensor,
-        fixed_input: Tensor,
-    ) -> Tensor:
-        if not self.reinject_original_hidden_flag:
-            return hidden
-        return hidden + fixed_input
-
-    @staticmethod
-    def _apply_recurrent_transition_result(
-        recurrent_state: StandardRecurrentState,
-        transition_result: RecurrentTransitionResult,
-    ) -> StandardRecurrentState:
-        context_state = transition_result.context_state or recurrent_state.context_state
-        return replace(
-            recurrent_state,
-            hidden=transition_result.hidden,
-            loss=transition_result.loss,
-            context_state=context_state,
-            fixed_input=context_state.align_recurrent_hidden(
-                recurrent_state.fixed_input,
-                source_state=recurrent_state.context_state,
-            ),
-            transition_index=recurrent_state.transition_index + 1,
-            halting_state=transition_result.halting_state,
-            all_items_halted=transition_result.all_items_halted,
-        )
-
-    def _fork_recurrent_handoff_state(
-        self,
-        recurrent_state: StandardRecurrentState,
-    ) -> StandardRecurrentState:
-        return replace(
-            recurrent_state,
-            residual_state=self.utilities.fork_residual_state(
-                recurrent_state.residual_state
-            ),
-        )
-
-    def __run_smooth_handoff(
-        self,
-        state: LayerState,
-        execution_plan: RecurrentSmoothHandoffExecutionPlan
-        | RecurrentNestedSmoothHandoffExecutionPlan,
+    def __run_recurrence_with_step_limit(
+        self, state: LayerState, step_limit: int, no_gradient_steps: int
     ) -> LayerState:
-        with self.execution.handoff(state, self.modules()):
-            recurrent_state = self._initialize_recurrent_execution_state(
-                state, branch_base_loss=None
-            )
-            if isinstance(execution_plan, RecurrentNestedSmoothHandoffExecutionPlan):
-                execution_result = self.__nested_handoff.execute(
-                    recurrent_state,
-                    state,
-                    execution_plan,
-                    run_branch=self.run_branch,
-                )
-            else:
-                execution_result = self.__branched_handoff.execute(
-                    recurrent_state,
-                    state,
-                    execution_plan,
-                    run_branch=self.run_branch,
-                    run_boundary=self.run_handoff_boundary,
-                )
-            return self.execution.commit(
-                state, self.recurrent_iteration_schedule, execution_result
-            )
+        recurrent_state = self.step.initialize(state)
+        while self.__has_remaining_steps_and_active_items(recurrent_state, step_limit):
+            if self.__is_first_step_after_no_gradient_prefix(
+                recurrent_state, no_gradient_steps
+            ):
+                recurrent_state = recurrent_state.detach()
+            tracks_gradients = recurrent_state.transition_index >= no_gradient_steps
+            with self.__gradient_context_for_step(tracks_gradients):
+                recurrent_state = self.step.forward(recurrent_state, tracks_gradients)
+        output_state = self.step.finalize(recurrent_state)
+        state.hidden = output_state.hidden
+        state.loss = output_state.loss
+        state.commit_recurrent_context(output_state)
+        self.recurrent_iteration_schedule.record_successful_forward()
+        return state
 
-    def run_handoff_boundary(
-        self,
-        source_boundary_state: StandardRecurrentState,
-        source_plan: RecurrentBranchExecutionPlan,
-    ) -> tuple[RecurrentExecutionResult, StandardRecurrentState]:
-        if source_plan.starts_gradient_suffix(source_boundary_state.transition_index):
-            source_boundary_state = source_boundary_state.detach()
-        target_state = None
-        target_residual_state = None
-        transition_index = source_boundary_state.transition_index
-        source_tracks_gradients = source_plan.tracks_gradients(transition_index)
-        with source_plan.gradient_context(transition_index):
-            prepared_transition = self._prepare_recurrent_transition(
-                source_boundary_state,
-                tracks_gradients=source_tracks_gradients,
-            )
-            if prepared_transition.residual_state is not None:
-                target_state = self._fork_recurrent_handoff_state(source_boundary_state)
-                with torch.no_grad():
-                    target_prepared_transition = self._prepare_recurrent_transition(
-                        target_state, tracks_gradients=False
-                    )
-                target_residual_state = target_prepared_transition.residual_state
-            source_result, target_transition = (
-                self.__branched_handoff.run_shared_transition(
-                    source_boundary_state,
-                    prepared_transition,
-                    run_source_branch=partial(
-                        self.__continue_source_branch,
-                        source_boundary_state,
-                        source_plan,
-                    ),
-                    runtime_modules=self.modules(),
-                    validate_output=self.VALIDATOR.validate_transition_output,
-                    target_residual_state=target_residual_state,
-                    transition_index=transition_index,
-                )
-            )
-        if target_state is None:
-            target_state = self._fork_recurrent_handoff_state(source_boundary_state)
-        target_state = self._apply_recurrent_transition_result(
-            target_state, target_transition
+    def __has_remaining_steps_and_active_items(
+        self, recurrent_state: StandardRecurrentState, step_limit: int
+    ) -> bool:
+        return (
+            recurrent_state.transition_index < step_limit
+            and not recurrent_state.all_items_halted
         )
-        return source_result, target_state
 
-    def __continue_source_branch(
-        self,
-        source_boundary_state: StandardRecurrentState,
-        source_plan: RecurrentBranchExecutionPlan,
-        transition_result: RecurrentTransitionResult,
-    ) -> RecurrentExecutionResult:
-        source_state = self._fork_recurrent_handoff_state(source_boundary_state)
-        source_state = self._apply_recurrent_transition_result(
-            source_state, transition_result
+    def __is_first_step_after_no_gradient_prefix(
+        self, recurrent_state: StandardRecurrentState, no_gradient_steps: int
+    ) -> bool:
+        return (
+            no_gradient_steps > 0
+            and recurrent_state.transition_index == no_gradient_steps
         )
-        source_state = self.run_branch(
-            source_state, source_plan, observe_transitions=False
-        )
-        return self.execution.finalize(source_state)
+
+    def __gradient_context_for_step(
+        self, tracks_gradients: bool
+    ) -> AbstractContextManager[None]:
+        if tracks_gradients:
+            return nullcontext()
+        return torch.no_grad()

@@ -259,13 +259,13 @@ def test_sequence_grouping_preserves_individually_halted_tokens(hidden_state_mod
 
     context_hook = bias_model.register_forward_hook(record_context)
     candidate_hook = model.block_model.register_forward_hook(record_candidate)
-    model.execution.set_diagnostic_observer(record_transition)
+    model.step.set_diagnostic_observer(record_transition)
     try:
         output = model(LayerState(hidden=inputs.reshape(200, 2)))
     finally:
         context_hook.remove()
         candidate_hook.remove()
-        model.execution.set_diagnostic_observer(None)
+        model.step.set_diagnostic_observer(None)
 
     assert output.hidden.shape == (200, 2)
     assert len(contexts) == len(transitions) == len(candidates) == 3
