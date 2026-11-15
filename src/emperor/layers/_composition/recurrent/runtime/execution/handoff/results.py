@@ -1,4 +1,3 @@
-"""Output alignment and loss accounting shared by both depth handoffs."""
 # pyright: reportPrivateUsage=false
 
 from __future__ import annotations

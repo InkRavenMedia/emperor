@@ -1,5 +1,3 @@
-"""Forward-local state for Hierarchical Reasoning Model recurrence."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

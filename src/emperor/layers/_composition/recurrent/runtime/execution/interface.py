@@ -1,5 +1,3 @@
-"""Shared Interface and records for generalized Recurrent Execution."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -25,8 +23,6 @@ class RecurrentExecutionResult:
 
 
 class RecurrentExecutionState(Protocol):
-    """State facts required by the generalized Recurrent Execution Interface."""
-
     @property
     def context_state(self) -> LayerState: ...
 
@@ -45,8 +41,6 @@ class RecurrentExecutionState(Protocol):
 
 @dataclass(frozen=True)
 class PreparedRecurrentTransition:
-    """Variant-prepared request for the shared recurrent transition pipeline."""
-
     run_transition: Callable[[LayerState], LayerState]
     transition_input: Tensor
     previous_evolving_hidden: Tensor

@@ -1,5 +1,3 @@
-"""Recurrent validation exports."""
-
 from emperor.layers._composition.recurrent.validation.common import (
     RecurrentCompositionValidator,
 )

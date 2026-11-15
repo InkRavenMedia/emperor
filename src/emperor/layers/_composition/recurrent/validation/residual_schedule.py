@@ -1,5 +1,3 @@
-"""Validation of residual connection selection across recurrent transitions."""
-
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
