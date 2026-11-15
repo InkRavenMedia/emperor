@@ -11,7 +11,7 @@ from emperor.layers._composition.recurrent.runtime.execution.interface import (
     RecurrentTransitionCandidate,
     RecurrentTransitionResult,
 )
-from emperor.layers._composition.recurrent.runtime.execution.runtime_state import (
+from emperor.layers._composition.recurrent.runtime.runtime_state import (
     RecurrentRuntimeStateGuard,
 )
 from emperor.memory import MemoryPositionOptions
