@@ -95,9 +95,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
             and not recurrent_state.all_items_halted
         ):
             if branch_plan.starts_gradient_suffix(recurrent_state.transition_index):
-                recurrent_state = self._detach_recurrent_execution_state(
-                    recurrent_state
-                )
+                recurrent_state = recurrent_state.detach()
             transition_index = recurrent_state.transition_index
             tracks_gradients = branch_plan.tracks_gradients(transition_index)
             with branch_plan.gradient_context(transition_index):
@@ -138,16 +136,6 @@ class RecurrentLayer(RecurrentCompositionAbstract):
     ) -> ResidualState | None:
         return self.utilities.initialize_residual_state(
             layer_state.hidden,
-        )
-
-    @staticmethod
-    def _detach_recurrent_execution_state(
-        recurrent_state: StandardRecurrentState,
-    ) -> StandardRecurrentState:
-        return replace(
-            recurrent_state,
-            hidden=recurrent_state.hidden.detach(),
-            context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
@@ -244,9 +232,7 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         source_plan: RecurrentBranchExecutionPlan,
     ) -> tuple[RecurrentExecutionResult, StandardRecurrentState]:
         if source_plan.starts_gradient_suffix(source_boundary_state.transition_index):
-            source_boundary_state = self._detach_recurrent_execution_state(
-                source_boundary_state
-            )
+            source_boundary_state = source_boundary_state.detach()
         target_state = None
         target_residual_state = None
         transition_index = source_boundary_state.transition_index

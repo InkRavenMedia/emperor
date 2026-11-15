@@ -120,9 +120,7 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
             and not recurrent_state.all_items_halted
         ):
             if branch_plan.starts_gradient_suffix(recurrent_state.transition_index):
-                recurrent_state = self._detach_recurrent_execution_state(
-                    recurrent_state
-                )
+                recurrent_state = recurrent_state.detach()
             transition_index = recurrent_state.transition_index
             tracks_gradients = branch_plan.tracks_gradients(transition_index)
             with branch_plan.gradient_context(transition_index):
@@ -156,17 +154,6 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
             auxiliary_losses=(),
             context_state=layer_state,
             transition_index=0,
-        )
-
-    @staticmethod
-    def _detach_recurrent_execution_state(
-        recurrent_state: HierarchicalReasoningModelState,
-    ) -> HierarchicalReasoningModelState:
-        return replace(
-            recurrent_state,
-            high=recurrent_state.high.detach(),
-            low=recurrent_state.low.detach(),
-            context_state=recurrent_state.context_state.detach_recurrent_context(),
         )
 
     def _prepare_recurrent_transition(
@@ -289,9 +276,7 @@ class HierarchicalReasoningModelRecurrent(RecurrentCompositionAbstract):
         source_plan: RecurrentBranchExecutionPlan,
     ) -> tuple[RecurrentExecutionResult, HierarchicalReasoningModelState]:
         if source_plan.starts_gradient_suffix(source_boundary_state.transition_index):
-            source_boundary_state = self._detach_recurrent_execution_state(
-                source_boundary_state
-            )
+            source_boundary_state = source_boundary_state.detach()
         transition_index = source_boundary_state.transition_index
         source_tracks_gradients = source_plan.tracks_gradients(transition_index)
         with source_plan.gradient_context(transition_index):
