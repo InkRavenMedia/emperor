@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Self
 
 from torch import Tensor
 
@@ -30,3 +30,10 @@ class StandardRecurrentState:
     @property
     def branch_loss(self) -> Tensor | None:
         return self.loss
+
+    def detach(self) -> Self:
+        return replace(
+            self,
+            hidden=self.hidden.detach(),
+            context_state=self.context_state.detach_recurrent_context(),
+        )

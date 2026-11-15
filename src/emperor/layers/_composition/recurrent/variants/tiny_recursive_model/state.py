@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, Self
 
 from torch import Tensor
 
@@ -36,3 +36,11 @@ class TinyRecursiveModelState:
                 else accumulated_loss + auxiliary_loss
             )
         return accumulated_loss
+
+    def detach(self) -> Self:
+        return replace(
+            self,
+            answer=self.answer.detach(),
+            latent=self.latent.detach(),
+            context_state=self.context_state.detach_recurrent_context(),
+        )
