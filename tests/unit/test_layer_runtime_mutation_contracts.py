@@ -237,7 +237,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
             hidden,
         )
         input_loss = torch.tensor(1.25)
-        finalized_hidden, finalized_loss = recurrent._finalize_recurrent_halting(
+        finalized_hidden, finalized_loss = recurrent.utilities.finalize_halting(
             hidden,
             input_loss,
             internal_halting_state,
@@ -247,7 +247,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         torch.testing.assert_close(finalized_loss, torch.tensor(1.75))
 
         recurrent.utilities.halting_model = None
-        guarded_hidden, guarded_loss = recurrent._finalize_recurrent_halting(
+        guarded_hidden, guarded_loss = recurrent.utilities.finalize_halting(
             hidden,
             input_loss,
             internal_halting_state,
