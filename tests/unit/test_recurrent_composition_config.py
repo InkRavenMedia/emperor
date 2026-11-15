@@ -176,8 +176,8 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         self.assertNotIn(
             "_rollback_recurrent_runtime_state_on_failure", interface_source
         )
-        self.assertNotIn("class RecurrentTransitionResult", interface_source)
-        self.assertIn("class RecurrentTransitionResult", base_source)
+        self.assertIn("class RecurrentTransitionResult", interface_source)
+        self.assertNotIn("class RecurrentTransitionResult", base_source)
         self.assertNotIn("class _RecurrentTransitionResult", base_source)
         self.assertIn("class RecurrentRuntimeStateGuard", runtime_state_source)
         for runtime_state_declaration in (
@@ -204,6 +204,13 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         execution_package = importlib.import_module(execution_package_module_name)
         expected_execution_symbol_modules = {
             "RecurrentExecution": (f"{execution_package_module_name}.executor"),
+            "RecurrentTransitionExecution": (
+                f"{execution_package_module_name}.executor"
+            ),
+            "RecurrentTransitionCandidate": (
+                f"{execution_package_module_name}.interface"
+            ),
+            "RecurrentTransitionResult": (f"{execution_package_module_name}.interface"),
             "PreparedRecurrentTransition": (
                 f"{execution_package_module_name}.interface"
             ),
@@ -227,7 +234,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         recurrent_base_module = importlib.import_module(recurrent_base_module_name)
         self.assertEqual(
             recurrent_base_module.RecurrentTransitionResult.__module__,
-            recurrent_base_module_name,
+            f"{execution_package_module_name}.interface",
         )
 
         base_initializer_tree = ast.parse(
@@ -682,10 +689,8 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 "_expand_recurrent_initial",
                 "_finalize_recurrent_halting",
                 "_new_recurrent_initial_buffer",
-                "_observe_recurrent_step",
                 "_run_recurrent_transition",
                 "_run_shared_handoff_boundary_transition",
-                "_set_recurrent_diagnostic_observer",
             },
             RecurrentCompositionConfig: {
                 "_map_transition_configs",

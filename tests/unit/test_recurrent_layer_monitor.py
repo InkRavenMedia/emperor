@@ -664,7 +664,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
             self.assertFalse(step_delta.requires_grad)
 
         callback.on_fit_end(TrainerStub(), module)
-        self.assertIsNone(recurrent._recurrent_diagnostic_observer)
+        self.assertIsNone(recurrent.execution.diagnostic_observer)
 
     def test_tiny_recursive_model_reports_shared_recurrent_gate_metrics(self):
         recurrent = self.tiny_recursive_model(with_gate=True)
@@ -715,7 +715,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         self.assertIsNotNone(hidden.grad)
 
         callback.on_fit_end(TrainerStub(), module)
-        self.assertIsNone(recurrent._recurrent_diagnostic_observer)
+        self.assertIsNone(recurrent.execution.diagnostic_observer)
 
     def test_logs_expected_finite_scalars(self):
         recurrent = self.recurrent()
@@ -873,7 +873,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
 
         callback.on_fit_start(TrainerStub(), module)
         self.assertIsNot(recurrent.forward, original_forward)
-        self.assertIsNotNone(recurrent._recurrent_diagnostic_observer)
+        self.assertIsNotNone(recurrent.execution.diagnostic_observer)
 
         callback.on_fit_end(TrainerStub(), module)
 
@@ -881,7 +881,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         self.assertEqual(callback._wrapped_methods, [])
         self.assertEqual(callback._observations, {})
         self.assertEqual(callback._observed_recurrent_layers, [])
-        self.assertIsNone(recurrent._recurrent_diagnostic_observer)
+        self.assertIsNone(recurrent.execution.diagnostic_observer)
 
 
 if __name__ == "__main__":
