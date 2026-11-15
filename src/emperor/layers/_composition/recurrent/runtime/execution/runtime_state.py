@@ -14,7 +14,7 @@ from torch import Tensor, nn
 from emperor.nn import preserve_forward_schedule_updates
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ class RecurrentRuntimeStateGuard:
     @contextmanager
     def isolate_provisional_branch(
         self,
-        recurrent_module: nn.Module,
+        recurrent_module: nn.Module | Iterable[nn.Module],
     ) -> Generator[None, None, None]:
         runtime_state_snapshot = self.__snapshot_runtime_state(recurrent_module)
         try:
@@ -78,7 +78,7 @@ class RecurrentRuntimeStateGuard:
     @contextmanager
     def rollback_handoff_on_failure(
         self,
-        recurrent_module: nn.Module,
+        recurrent_module: nn.Module | Iterable[nn.Module],
     ) -> Generator[None, None, None]:
         runtime_state_snapshot = self.__snapshot_runtime_state(recurrent_module)
         try:
@@ -89,7 +89,7 @@ class RecurrentRuntimeStateGuard:
 
     def __snapshot_runtime_state(
         self,
-        recurrent_module: nn.Module,
+        recurrent_module: nn.Module | Iterable[nn.Module],
     ) -> _RecurrentRuntimeStateSnapshot:
         return _RecurrentRuntimeStateSnapshot(
             module_buffers=self.__snapshot_module_buffers(recurrent_module),
@@ -110,8 +110,13 @@ class RecurrentRuntimeStateGuard:
 
     @staticmethod
     def __snapshot_module_buffers(
-        recurrent_module: nn.Module,
+        recurrent_module: nn.Module | Iterable[nn.Module],
     ) -> tuple[_ModuleBufferSnapshot, ...]:
+        modules = (
+            recurrent_module.modules()
+            if isinstance(recurrent_module, nn.Module)
+            else recurrent_module
+        )
         return tuple(
             _ModuleBufferSnapshot(
                 module=module,
@@ -133,7 +138,7 @@ class RecurrentRuntimeStateGuard:
                     module._non_persistent_buffers_set
                 ),
             )
-            for module in recurrent_module.modules()
+            for module in modules
         )
 
     @staticmethod

@@ -92,6 +92,25 @@ class TestRecurrentRuntimeStateGuard(unittest.TestCase):
         torch.testing.assert_close(self.module.progress, torch.tensor(2.0))
         torch.testing.assert_close(torch.rand(()), expected_next_random_value)
 
+    def test_explicit_module_traversal_restores_parent_and_child_buffers(self):
+        child = nn.Module()
+        child.register_buffer("value", torch.tensor(3.0))
+        self.module.add_module("child", child)
+
+        with self.guard.isolate_provisional_branch(self.module.modules()):
+            self.module.progress.add_(5.0)
+            child.value.zero_()
+
+        with self.assertRaisesRegex(RuntimeError, "handoff failed"):
+            with self.guard.rollback_handoff_on_failure(self.module.modules()):
+                self.module.progress.add_(7.0)
+                child.value.zero_()
+                raise RuntimeError("handoff failed")
+
+        self.assertIs(self.module.progress, self.progress_buffer)
+        torch.testing.assert_close(self.module.progress, torch.tensor(2.0))
+        torch.testing.assert_close(child.value, torch.tensor(3.0))
+
     def test_successful_handoff_commits_buffers_and_rng(self) -> None:
         torch.manual_seed(31)
         expected_values = torch.rand(2)
