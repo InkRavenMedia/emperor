@@ -52,6 +52,7 @@ async def post_archive(
     logs_root: Path,
     archive: bytes,
     filename: str = "logs.zip",
+    field_name: str = "archive",
     allow_unsafe_local_mutations: bool = True,
     allow_log_imports: bool | None = True,
     max_upload_size: int | None = None,
@@ -102,7 +103,7 @@ async def post_archive(
                 if headers is None
                 else headers
             ),
-            files={"archive": (filename, archive, "application/zip")},
+            files={field_name: (filename, archive, "application/zip")},
         )
 
 
@@ -964,6 +965,21 @@ class LogArchiveImportApiTests(unittest.TestCase):
                 (logs_root / "my_experiment/version_0/payload.bin").read_bytes(),
                 archived_content,
             )
+
+    def test_import_requires_the_archive_multipart_field(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            logs_root = Path(tmp) / "logs"
+            archive = zip_bytes({"field_probe/version_0/result.json": "{}"})
+            for field_name in ("file", "logs", "arbitrary"):
+                with self.subTest(field_name=field_name):
+                    response = asyncio.run(
+                        post_archive(
+                            logs_root=logs_root, archive=archive, field_name=field_name
+                        )
+                    )
+                    self.assertEqual(response.status_code, 400)
+                    self.assertIn("archive", response.json()["detail"])
+                    self.assertFalse((logs_root / "field_probe").exists())
 
     def test_malformed_multipart_upload_returns_clear_error(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

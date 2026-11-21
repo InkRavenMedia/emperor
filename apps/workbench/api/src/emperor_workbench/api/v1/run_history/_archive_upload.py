@@ -9,7 +9,6 @@ from typing import BinaryIO
 
 from emperor_workbench.api._errors import ApiError
 
-UPLOAD_FIELD_NAMES = {"archive", "file", "logs"}
 MULTIPART_HEADER_LIMIT = 64 * 1024
 MULTIPART_BOUNDARY_LIMIT = 200
 MULTIPART_SCAN_CHUNK_SIZE = 64 * 1024
@@ -186,17 +185,18 @@ def parse_multipart_log_archive_upload(
     body: BinaryIO,
     max_upload_size: int | None,
 ) -> LogArchiveUpload:
-    """Locate the first ZIP part without copying it out of the request spool."""
+    """Locate the archive field without copying it out of the request spool."""
 
     boundary = _multipart_boundary(content_type)
     body.seek(0)
     is_final = _seek_first_multipart_boundary(body, boundary)
-    fallback_upload: LogArchiveUpload | None = None
     while not is_final:
         headers = _multipart_part_headers(body)
         content_start = body.tell()
         content_end, is_final = _next_multipart_boundary(body, boundary)
         if headers.get_content_disposition() != "form-data":
+            continue
+        if headers.get_param("name", header="content-disposition") != "archive":
             continue
         filename = headers.get_filename()
         if not filename:
@@ -204,7 +204,7 @@ def parse_multipart_log_archive_upload(
         content_size = content_end - content_start
         if max_upload_size is not None and content_size > max_upload_size:
             raise _too_large_error(max_upload_size)
-        upload = LogArchiveUpload(
+        return LogArchiveUpload(
             filename=filename,
             content=_ArchiveSlice(
                 body,
@@ -213,15 +213,7 @@ def parse_multipart_log_archive_upload(
             ),
             size=content_size,
         )
-        field_name = headers.get_param("name", header="content-disposition")
-        if field_name in UPLOAD_FIELD_NAMES:
-            return upload
-        if fallback_upload is None:
-            fallback_upload = upload
-
-    if fallback_upload is not None:
-        return fallback_upload
-    raise ApiError("Log archive upload is required.")
+    raise ApiError("The 'archive' upload field is required.")
 
 
 __all__ = ["LogArchiveUpload", "parse_multipart_log_archive_upload"]
