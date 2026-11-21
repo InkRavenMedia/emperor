@@ -554,7 +554,7 @@ class CliWireRoundTripTests(unittest.TestCase):
             preset="baseline",
             dataset="Mnist",
             log_dir="logs/run/version_0",
-            payload={"metrics": {"validation_accuracy": 0.75}},
+            payload={"metrics": {"validation/accuracy": 0.75}},
         )
         random_source = random.Random(7)
 
@@ -1177,10 +1177,10 @@ class CliWireRoundTripTests(unittest.TestCase):
                 preset="baseline",
                 dataset="Mnist",
                 log_dir="logs/run/version_0",
-                payload={"metrics": {"validation_accuracy": 0.75}},
+                payload={"metrics": {"validation/accuracy": 0.75}},
             )
         )
-        result_payload["payload"]["metrics"]["validation_accuracy"] = over_limit
+        result_payload["payload"]["metrics"]["validation/accuracy"] = over_limit
 
         graph_details_payload = inspection_result_to_wire(_inspection_result())
         graph_details_payload["nodes"][1]["details"]["shape"] = over_limit

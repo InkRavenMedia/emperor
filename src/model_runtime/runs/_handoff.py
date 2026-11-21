@@ -45,7 +45,7 @@ class TrainingRunRequest:
 class TrainingRun:
     """Experiment-ready Run produced from one validated handoff request."""
 
-    experiment_task: ExperimentTask | None
+    experiment_task: ExperimentTask
     preset: BaseOptions
     dataset_type: type[Any]
     config: ModelConfig

@@ -147,7 +147,7 @@ class _Logger:
 
 class _Trainer:
     def __init__(self, *_args, **_kwargs) -> None:
-        self.callback_metrics = {"validation_accuracy": _Metric()}
+        self.callback_metrics = {"validation/accuracy": _Metric()}
         self.current_epoch = 0
         self.global_step = 1
 

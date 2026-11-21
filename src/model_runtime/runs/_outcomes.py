@@ -111,7 +111,7 @@ class RunRetryContext:
     package: ModelPackage
     plan: RunPlan
     requests: Sequence[TrainingRunRequest]
-    experiment_task: ExperimentTask | None
+    experiment_task: ExperimentTask
     artifacts: RunArtifacts
 
 

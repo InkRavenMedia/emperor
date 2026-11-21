@@ -128,7 +128,7 @@ class RunArtifacts(Protocol):
     def update_best_results(
         self,
         identity: ModelIdentity,
-        experiment_task: ExperimentTask | None,
+        experiment_task: ExperimentTask,
         result: Mapping[str, Any],
     ) -> dict[str, Any]: ...
 
@@ -292,7 +292,7 @@ class FilesystemRunArtifacts:
     def update_best_results(
         self,
         identity: ModelIdentity,
-        experiment_task: ExperimentTask | None,
+        experiment_task: ExperimentTask,
         result: Mapping[str, Any],
     ) -> dict[str, Any]:
         summary_path = self.best_results_path(identity)
@@ -301,41 +301,36 @@ class FilesystemRunArtifacts:
             dataset = str(result["dataset"])
             runs = list(merged.get(dataset, []))
             artifact_id = self._artifact_id(result)
-            if artifact_id is not None:
-                matching = self._artifact_matches(merged, artifact_id)
-                if matching:
-                    normalized = self._normalized_result(result)
-                    if any(
-                        candidate_dataset != dataset
-                        or self._normalized_result(candidate) != normalized
-                        for candidate_dataset, candidate in matching
-                    ):
-                        raise ValueError(
-                            "Best-results artifactId "
-                            f"'{artifact_id}' already has different content."
-                        )
-                    return merged
-            new_score = self._ranking_score(experiment_task, result)
-            worst_score = min(
-                (self._ranking_score(experiment_task, candidate) for candidate in runs),
-                default=(float("-inf"), float("-inf")),
+            matching = (
+                self._artifact_matches(merged, artifact_id) if artifact_id else ()
             )
-            if len(runs) < 5 or new_score > worst_score:
-                runs.append(dict(result))
-                merged[dataset] = [
-                    {**candidate, "rank": rank}
-                    for rank, candidate in enumerate(
-                        sorted(
-                            runs,
-                            key=lambda candidate: self._ranking_score(
-                                experiment_task,
-                                candidate,
-                            ),
-                            reverse=True,
-                        )[:5],
-                        start=1,
+            if matching:
+                normalized = self._normalized_result(result)
+                if any(
+                    candidate_dataset != dataset
+                    or self._normalized_result(candidate) != normalized
+                    for candidate_dataset, candidate in matching
+                ):
+                    raise ValueError(
+                        f"Best-results artifactId '{artifact_id}' already has different content."
                     )
-                ]
+            behavior = experiment_task_behavior(experiment_task)
+            scored: list[tuple[tuple[float, float], Mapping[str, Any]]] = []
+            candidates = runs if matching else (*runs, result)
+            for candidate in candidates:
+                score = behavior.ranking_score(candidate)
+                if score is not None:
+                    scored.append((score, candidate))
+            scored.sort(key=lambda entry: entry[0], reverse=True)
+            ranked = [
+                {**candidate, "rank": rank}
+                for rank, (_, candidate) in enumerate(scored[:5], start=1)
+            ]
+            if ranked != runs:
+                if ranked:
+                    merged[dataset] = ranked
+                else:
+                    del merged[dataset]
                 self._write_json_atomic(summary_path, merged, trailing_newline=True)
         return merged
 
@@ -370,14 +365,6 @@ class FilesystemRunArtifacts:
         payload = {key: value for key, value in result.items() if key != "rank"}
         require_finite_json(payload)
         return json.loads(json.dumps(payload, default=str, sort_keys=True))
-
-    @staticmethod
-    def _ranking_score(
-        experiment_task: ExperimentTask | None,
-        result: Mapping[str, Any],
-    ) -> tuple[float, float]:
-        task = experiment_task or ExperimentTask.IMAGE_CLASSIFICATION
-        return experiment_task_behavior(task).ranking_score(result)
 
     @staticmethod
     def _read_json_object(path: Path) -> dict[str, Any]:

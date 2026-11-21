@@ -92,7 +92,7 @@ class _Trainer:
         self.max_epochs = max_epochs
         self.logger = logger
         self.callbacks = callbacks
-        self.callback_metrics = {"validation_accuracy": _Metric(0.75)}
+        self.callback_metrics = {"validation/accuracy": _Metric(0.75)}
         self.current_epoch = 1
         self.global_step = 2
         self.is_global_zero = False
@@ -290,7 +290,7 @@ class RunsExecutionTests(unittest.TestCase):
             self.assertEqual(result.dataset, "Mnist")
             self.assertEqual(
                 result.payload["metrics"],
-                {"validation_accuracy": 0.75},
+                {"validation/accuracy": 0.75},
             )
             self.assertEqual(result.payload["params"], {})
             self.assertEqual(progress.events[0]["params"], {})

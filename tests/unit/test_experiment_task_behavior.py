@@ -12,19 +12,14 @@ from model_runtime.task_behavior import (
 
 
 class ExperimentTaskBehaviorTests(unittest.TestCase):
-    def test_legacy_positional_construction_keeps_empty_core_result_contract(
-        self,
-    ) -> None:
-        behavior = ExperimentTaskBehavior(
-            ExperimentTask.IMAGE_CLASSIFICATION,
-            lambda _dataset, _configuration: (),
-            (),
-            (),
-            (1.0, 0.0),
-        )
-
-        self.assertEqual(behavior.missing_ranking_score, (1.0, 0.0))
-        self.assertEqual(behavior.core_result_metric_keys, ())
+    def test_task_policy_requires_explicit_result_metric_keys(self) -> None:
+        with self.assertRaisesRegex(TypeError, "core_result_metric_keys"):
+            ExperimentTaskBehavior(
+                task=ExperimentTask.IMAGE_CLASSIFICATION,
+                synthetic_input_builder=lambda _dataset, _configuration: (),
+                dataset_arguments=(),
+                ranking_metrics=(),
+            )
 
     def test_registry_is_exhaustive_and_unique(self) -> None:
         self.assertEqual(set(EXPERIMENT_TASK_BEHAVIORS), set(ExperimentTask))
@@ -82,12 +77,12 @@ class ExperimentTaskBehaviorTests(unittest.TestCase):
         translation = experiment_task_behavior(ExperimentTask.TEXT_TRANSLATION)
 
         self.assertGreater(
-            classification.ranking_score({"metrics": {"validation_accuracy": 0.9}}),
+            classification.ranking_score({"metrics": {"validation/accuracy": 0.9}}),
             classification.ranking_score({"metrics": {"validation/accuracy": 0.7}}),
         )
         self.assertGreater(
             language_model.ranking_score({"metrics": {"validation/loss": 0.2}}),
-            language_model.ranking_score({"metrics": {"validation_loss": 0.8}}),
+            language_model.ranking_score({"metrics": {"validation/loss": 0.8}}),
         )
         self.assertGreater(
             translation.ranking_score({"metrics": {"validation/bleu": 1.0}}),
