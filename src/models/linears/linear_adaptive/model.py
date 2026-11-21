@@ -69,6 +69,14 @@ class Model(ClassifierExperiment):
         main_state = Layer.run_model_from_hidden(self.main_model, input_state.hidden)
         output_state = Layer.run_model_from_hidden(self.output_model, main_state.hidden)
         logits = output_state.hidden
-        if main_state.loss is not None:
-            return logits, main_state.loss
+        auxiliary_loss = None
+        for stage in (input_state, main_state, output_state):
+            if stage.loss is not None:
+                auxiliary_loss = (
+                    stage.loss
+                    if auxiliary_loss is None
+                    else auxiliary_loss + stage.loss
+                )
+        if auxiliary_loss is not None:
+            return logits, auxiliary_loss
         return logits
