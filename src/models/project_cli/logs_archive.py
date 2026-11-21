@@ -9,6 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 from zipfile import ZIP_DEFLATED, ZipFile
 
 USAGE = """Usage: mise run logs:archive -- [log_entry] [output_zip]
@@ -144,26 +145,36 @@ def _plan_archive(
 
 def _write_archive(plan: _ArchivePlan) -> int:
     plan.output.parent.mkdir(parents=True, exist_ok=True)
-    file_count = 0
-    with ZipFile(plan.output, "w", compression=ZIP_DEFLATED) as archive:
-        for path in sorted(plan.source.rglob("*")):
-            if _is_link_like(path):
-                raise SystemExit(
-                    "Error: refusing symlink, junction, or reparse point in "
-                    f"log archive: {path}"
-                )
-            resolved = path.resolve()
-            try:
-                relative = resolved.relative_to(plan.log_root)
-            except ValueError as exc:
-                raise SystemExit(
-                    f"Error: log archive entry resolves outside {plan.log_root}: {path}"
-                ) from exc
-            if resolved == plan.output:
-                continue
-            archive.write(path, relative.as_posix())
-            if path.is_file():
-                file_count += 1
+    staging = plan.output.parent / f".emperor-logs-{uuid4().hex}.tmp"
+    stream = staging.open("xb")
+    try:
+        file_count = 0
+        with stream, ZipFile(stream, "w", compression=ZIP_DEFLATED) as archive:
+            for path in sorted(plan.source.rglob("*")):
+                if _is_link_like(path):
+                    raise SystemExit(
+                        "Error: refusing symlink, junction, or reparse point in "
+                        f"log archive: {path}"
+                    )
+                resolved = path.resolve()
+                try:
+                    relative = resolved.relative_to(plan.log_root)
+                except ValueError as exc:
+                    raise SystemExit(
+                        f"Error: log archive entry resolves outside {plan.log_root}: {path}"
+                    ) from exc
+                if resolved == plan.output or re.fullmatch(
+                    r"\.emperor-logs-[0-9a-f]{32}\.tmp", path.name
+                ):
+                    continue
+                archive.write(path, relative.as_posix())
+                if path.is_file():
+                    file_count += 1
+        if plan.output.is_file():
+            staging.chmod(stat.S_IMODE(plan.output.stat().st_mode))
+        staging.replace(plan.output)
+    finally:
+        staging.unlink(missing_ok=True)
     return file_count
 
 

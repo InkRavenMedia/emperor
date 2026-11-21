@@ -105,6 +105,33 @@ class PortableLogArchiveCliTests(unittest.TestCase):
                 "Archive size: 0.00 MiB\n",
             )
 
+    def test_failed_export_preserves_the_previous_archive_and_cleans_staging(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._project(root)
+            logs = root / "logs"
+            logs.mkdir()
+            (logs / "event").write_text("first")
+            output = logs / "snapshot.zip"
+            archive_logs(["logs", str(output)], repository_root=root)
+            previous = output.read_bytes()
+            with patch.object(zipfile.ZipFile, "write", side_effect=OSError("full")):
+                with self.assertRaisesRegex(OSError, "full"):
+                    archive_logs(["logs", str(output)], repository_root=root)
+            self.assertEqual(output.read_bytes(), previous)
+            self.assertEqual(
+                {p.name for p in logs.iterdir()}, {"event", "snapshot.zip"}
+            )
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.namelist(), ["event"])
+            (logs / "event").write_text("second")
+            archive_logs(["logs", str(output)], repository_root=root)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.namelist(), ["event"])
+                self.assertEqual(archive.read("event"), b"second")
+
     def test_archive_rejects_symlink_escape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
