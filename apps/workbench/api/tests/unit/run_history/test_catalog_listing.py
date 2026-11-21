@@ -84,8 +84,7 @@ class RunHistoryCatalogListingTests(unittest.TestCase):
             workbench_run = write_tensorboard_run(
                 logs_root,
                 [
-                    "workbench-training",
-                    "job-123",
+                    "workbench_training",
                     "linears",
                     "linear",
                     "BASELINE",
@@ -181,8 +180,8 @@ class RunHistoryCatalogListingTests(unittest.TestCase):
         self.assertFalse(custom_summary.has_hparams)
         self.assertEqual(custom_summary.checkpoint_count, 0)
 
-        self.assertEqual(workbench_summary.group, "workbench-training/job-123")
-        self.assertEqual(workbench_summary.experiment, "workbench-training")
+        self.assertEqual(workbench_summary.group, "workbench_training")
+        self.assertEqual(workbench_summary.experiment, "workbench_training")
         self.assertEqual(workbench_summary.model, "linears/linear")
         self.assertEqual(workbench_summary.dataset, "FashionMNIST")
 

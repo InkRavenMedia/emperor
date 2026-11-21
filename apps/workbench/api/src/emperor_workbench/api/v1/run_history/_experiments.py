@@ -15,9 +15,8 @@ from emperor_workbench.api._mutations import (
     run_mutation_io,
 )
 from emperor_workbench.api.v1.run_history._contracts import (
-    DEFAULT_LOG_PAGE_LIMIT,
-    MAX_LOG_PAGE_LIMIT,
     LogExperimentDeleteResponse,
+    LogExperimentPageRequest,
     LogExperimentsResponse,
 )
 from emperor_workbench.api.v1.run_history._mapping import (
@@ -38,17 +37,12 @@ router = APIRouter()
 )
 async def logs_experiments(
     service: Annotated[RunHistoryService, Depends(get_run_history_service)],
-    limit: Annotated[int, Query(ge=1, le=MAX_LOG_PAGE_LIMIT)] = (
-        DEFAULT_LOG_PAGE_LIMIT
-    ),
-    offset: Annotated[int, Query(ge=0)] = 0,
-    include_legacy: Annotated[bool, Query(alias="includeLegacy")] = False,
+    pagination: Annotated[LogExperimentPageRequest, Query()],
 ) -> LogExperimentsResponse:
     page = await run_blocking_io(
         service.list_experiments,
-        limit=limit,
-        offset=offset,
-        include_legacy=include_legacy,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
     return LogExperimentsResponse.model_validate(log_experiment_page_to_payload(page))
 
