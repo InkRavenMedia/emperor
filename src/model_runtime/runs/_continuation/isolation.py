@@ -8,8 +8,8 @@ import unicodedata
 from collections.abc import Mapping
 from pathlib import Path
 
-from model_runtime.runs._checkpoint_receipt import CheckpointPayloadReceipt
-from model_runtime.runs._checkpoint_worker_protocol import (
+from model_runtime.runs._continuation.receipt import CheckpointPayloadReceipt
+from model_runtime.runs._continuation.worker_protocol import (
     MAX_CHECKPOINT_WORKER_RECEIPT_BYTES,
     CheckpointWorkerRejected,
     CheckpointWorkerRequest,
@@ -23,7 +23,7 @@ _WORKER_COMMAND = (
     sys.executable,
     "-P",
     "-m",
-    "model_runtime.runs._checkpoint_worker",
+    "model_runtime.runs._continuation.worker",
 )
 
 
@@ -43,7 +43,7 @@ def _semantic_worker_message(detail: str, source_path: Path) -> str:
     requested_path = _display_path(source_path)
     prefix = f"Checkpoint '{source_name}'"
     if detail.startswith(prefix):
-        return f"Checkpoint '{requested_path}'{detail[len(prefix):]}"
+        return f"Checkpoint '{requested_path}'{detail[len(prefix) :]}"
     return f"Checkpoint '{requested_path}' failed checkpoint continuation validation."
 
 
@@ -223,8 +223,7 @@ def _validate_controls(
         "fileSizeBytes": MAX_CHECKPOINT_WORKER_RECEIPT_BYTES,
     }
     if set(controls) != set(expected_maximums) or any(
-        value < 0 or value > expected_maximums[name]
-        for name, value in controls.items()
+        value < 0 or value > expected_maximums[name] for name, value in controls.items()
     ):
         raise ValueError("Checkpoint decoder did not attest every hard control.")
 

@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 from typing import BinaryIO, NoReturn
 
-from model_runtime.runs._checkpoint_receipt import CheckpointArchiveReceipt
+from model_runtime.runs._continuation.receipt import CheckpointArchiveReceipt
 from model_runtime.runs.checkpoint_admission import CheckpointAdmissionPolicy
 from model_runtime.runs.errors import InvalidCheckpointContinuation
 

@@ -8,17 +8,17 @@ from typing import Any, BinaryIO, Protocol, cast
 
 import torch
 
-from model_runtime.runs._checkpoint_archive import checkpoint_archive_receipt
-from model_runtime.runs._checkpoint_isolation import (
+from model_runtime.runs._continuation.archive import checkpoint_archive_receipt
+from model_runtime.runs._continuation.isolation import (
     decode_checkpoint_isolated,
     isolated_decode_available,
 )
-from model_runtime.runs._checkpoint_payload import (
+from model_runtime.runs._continuation.payload import (
     ValidatedCheckpointPayload,
     validate_checkpoint_payload,
 )
-from model_runtime.runs._checkpoint_receipt import CheckpointPayloadReceipt
-from model_runtime.runs._checkpoint_snapshot import (
+from model_runtime.runs._continuation.receipt import CheckpointPayloadReceipt
+from model_runtime.runs._continuation.snapshot import (
     CheckpointSnapshot,
     admit_checkpoint_snapshot,
 )
