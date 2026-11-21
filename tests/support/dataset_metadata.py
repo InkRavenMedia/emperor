@@ -31,6 +31,7 @@ from emperor.datasets.text.language_modeling import (
     PennTreebank,
     WikiText2,
     WikiText103,
+    WikiText103Hierarchical,
 )
 from emperor.datasets.text.translation import (
     Multi30kDeEn,
@@ -77,6 +78,7 @@ DATASET_TASKS = {
     PennTreebank: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText2: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     WikiText103: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
+    WikiText103Hierarchical: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     OpenWebText: ExperimentTask.CAUSAL_LANGUAGE_MODELING,
     Multi30kDeEn: ExperimentTask.TEXT_TRANSLATION,
     Multi30kEnDe: ExperimentTask.TEXT_TRANSLATION,
@@ -277,12 +279,22 @@ def offline_dataset_metadata(
             )
         return
 
-    if dataset_type in (WikiText103BertHierarchical, WikiText2BertHierarchical):
+    if dataset_type in (
+        WikiText103Hierarchical,
+        WikiText103BertHierarchical,
+        WikiText2BertHierarchical,
+    ):
         from datasets import Dataset as ArrowDataset
 
+        rows_by_split = BERT_OFFLINE_TEXT_SPLITS
+        if dataset_type is WikiText103Hierarchical:
+            rows_by_split = {
+                name: tuple(f"= {word} =\n" for word in ("Alpha", "Beta", "Gamma"))
+                for name in BERT_OFFLINE_TEXT_SPLITS
+            }
         sources = {
             split: ArrowDataset.from_dict({"text": list(rows)})
-            for split, rows in BERT_OFFLINE_TEXT_SPLITS.items()
+            for split, rows in rows_by_split.items()
         }
 
         def wiki_source(_data, split):

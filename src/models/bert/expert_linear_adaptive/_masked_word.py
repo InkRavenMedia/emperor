@@ -22,7 +22,28 @@ from emperor.transformer import (
     TransformerDecoderLayerConfig,
     TransformerEncoderBlockLayerConfig,
 )
-from models._bert_embedding import _linear_stack
+
+
+def validate_masked_word_attention(*, masked_words: bool, causal: bool) -> None:
+    if masked_words and causal:
+        raise ValueError("Masked-word BERT requires bidirectional sequence attention.")
+
+
+def _decoder_projection(input_dim: int, output_dim: int) -> LayerStackConfig:
+    return LayerStackConfig(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        hidden_dim=32,
+        num_layers=1,
+        last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
+        apply_output_postprocessing_flag=False,
+        layer_config=LayerConfig(
+            activation=ActivationOptions.RELU,
+            dropout_probability=0.0,
+            layer_norm_position=LayerNormPositionOptions.DISABLED,
+            layer_model_config=LinearLayerConfig(bias_flag=True),
+        ),
+    )
 
 
 def build_masked_word_decoder(

@@ -683,7 +683,13 @@ class TestResidualModelFlagCatalogContract(unittest.TestCase):
         for package in discover_model_packages():
             for preset in package.preset_type:
                 with self.subTest(package=package.catalog_key, preset=preset.name):
-                    configuration = package.build_configuration(preset)
+                    dataset = (
+                        package.resolve_dataset("WikiText103Hierarchical")
+                        if package.identity.model_type == "gpt"
+                        and preset.name == "HIERARCHICAL"
+                        else package.resolve_dataset(None)
+                    )
+                    configuration = package.build_configuration(preset, dataset)
                     for path, value in _walk_objects(configuration):
                         if isinstance(value, _SUPPORTED_MODEL_SELECTORS):
                             self.assertIsNone(value.model_config, path)
