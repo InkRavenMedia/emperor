@@ -132,11 +132,6 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             graph_role="internal",
         ),
         _semantic_type_policy(
-            "emperor.layers._composition.recurrent.utilities.RecurrentUtilities",
-            "Owns recurrent gate, residual, halting, and memory controllers and applies their transition operations.",
-            graph_role="internal",
-        ),
-        _semantic_type_policy(
             "torch.nn.modules.loss.CrossEntropyLoss",
             "Runtime loss module for multi-class classification targets.",
             graph_role="runtime",
@@ -217,31 +212,37 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             "Applies one configured layer block with optional activation, residuals, normalization, gating, halting, and memory hooks.",
         ),
         _semantic_type_policy(
-            "emperor.layers._layer.pipeline.postprocessing.LayerPostprocessingDelegate",
+            "emperor.layers._pipeline.core.LayerProcessingPipeline",
+            "Applies the owning layer's normalization, memory, activation, residual and halting operations.",
+            graph_role="internal",
+            shares_layer_configuration=True,
+        ),
+        _semantic_type_policy(
+            "emperor.layers._pipeline.delegates.postprocessing.LayerPostprocessingDelegate",
             "Internal Layer Pipeline Module that applies activation, gating, and dropout in order.",
             graph_role="internal",
             shares_layer_configuration=True,
         ),
         _semantic_type_policy(
-            "emperor.layers._layer.pipeline.halting.LayerHaltingDelegate",
+            "emperor.layers._pipeline.delegates.halting.LayerHaltingDelegate",
             "Internal Layer Pipeline Module that owns halting updates and finalization.",
             graph_role="internal",
             shares_layer_configuration=True,
         ),
         _semantic_type_policy(
-            "emperor.layers._layer.pipeline.memory.LayerMemoryDelegate",
+            "emperor.layers._pipeline.delegates.memory.LayerMemoryDelegate",
             "Internal Layer Pipeline Module that applies dynamic memory at its configured position.",
             graph_role="internal",
             shares_layer_configuration=True,
         ),
         _semantic_type_policy(
-            "emperor.layers._layer.pipeline.residual.LayerResidualDelegate",
+            "emperor.layers._pipeline.delegates.residual.LayerResidualDelegate",
             "Internal Layer Pipeline Module that owns residual state and composition.",
             graph_role="internal",
             shares_layer_configuration=True,
         ),
         _semantic_type_policy(
-            "emperor.layers._layer.pipeline.normalization.LayerNormalizationDelegate",
+            "emperor.layers._pipeline.delegates.normalization.LayerNormalizationDelegate",
             "Internal Layer Pipeline Module that applies normalization at its configured position.",
             graph_role="internal",
             shares_layer_configuration=True,
@@ -341,7 +342,7 @@ SEMANTIC_TYPE_CATALOG = SemanticTypeCatalog(
             "Blends current and previous hidden values with complementary weights, using the explicitly configured coefficient activation.",
         ),
         _semantic_type_policy(
-            "emperor.layers._composition.residual.variants.attention.AttentionResidual",
+            "emperor.layers._composition.residual.variants.attention.core.AttentionResidual",
             "Routes across forward-local residual-depth sources with learned attention.",
         ),
         _semantic_type_policy(

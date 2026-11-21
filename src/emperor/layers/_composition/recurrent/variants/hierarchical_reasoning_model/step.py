@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from emperor.layers._composition.recurrent.runtime.step import RecurrentStep
+from emperor.layers._composition.recurrent.state import new_recurrent_initial_buffer
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
 )
@@ -12,42 +12,55 @@ from emperor.layers._composition.recurrent.variants.hierarchical_reasoning_model
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from torch import Tensor
 
-    from torch import Tensor, nn
-
-    from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
+    from emperor.layers._composition.recurrent.config import (
+        HierarchicalReasoningModelRecurrentConfig,
+    )
     from emperor.layers._state import LayerState
+    from emperor.nn import Module
 
 
 class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelState]):
     VALIDATOR = HierarchicalReasoningModelRecurrentValidator
 
-    def __init__(
-        self,
-        utilities: RecurrentUtilities,
-        output_dim: int,
-        get_module: Callable[[str], nn.Module],
-        get_buffer: Callable[[str], Tensor],
-        low_cycles: int,
-    ) -> None:
-        super().__init__(utilities, output_dim)
-        self.low_cycles = low_cycles
-        self.__get_module = get_module
-        self.__get_buffer = get_buffer
+    if TYPE_CHECKING:
+        high_initial: Tensor
+        low_initial: Tensor
 
-    def initialize(
+    def __init__(self, cfg: HierarchicalReasoningModelRecurrentConfig) -> None:
+        super().__init__(cfg)
+        self.low_cycles: int = cfg.low_cycles
+        self.initialization_standard_deviation: float = (
+            cfg.initialization_standard_deviation
+        )
+        self.__register_initial_buffers()
+        self.high_model = self._build_transition_model(cfg.high_block_config)
+        self.low_model = self._build_transition_model(cfg.low_block_config)
+
+    def __register_initial_buffers(self) -> None:
+        for buffer_name in ("high_initial", "low_initial"):
+            initial_buffer = new_recurrent_initial_buffer(
+                self.cfg.output_dim, self.initialization_standard_deviation
+            )
+            self.register_buffer(buffer_name, initial_buffer, persistent=True)
+
+    def initialize_recurrent_state(
         self, state: LayerState, include_caller_loss: bool = True
     ) -> HierarchicalReasoningModelState:
+        self.VALIDATOR.validate_initial_buffers(
+            state.hidden,
+            high_initial=self.high_initial,
+            low_initial=self.low_initial,
+            expected_feature_dim=self.cfg.output_dim,
+        )
         initial_shape = (1,) * (state.hidden.ndim - 1) + (state.hidden.shape[-1],)
+        high = self.high_initial.view(initial_shape).expand_as(state.hidden)
+        low = self.low_initial.view(initial_shape).expand_as(state.hidden)
         return HierarchicalReasoningModelState(
             fixed_input=state.hidden,
-            high=self.__get_buffer("high_initial")
-            .view(initial_shape)
-            .expand_as(state.hidden),
-            low=self.__get_buffer("low_initial")
-            .view(initial_shape)
-            .expand_as(state.hidden),
+            high=high,
+            low=low,
             initial_loss=state.loss if include_caller_loss else None,
             auxiliary_losses=(),
             context_state=state,
@@ -71,28 +84,34 @@ class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelSta
         recurrent_state: HierarchicalReasoningModelState,
         target_state: HierarchicalReasoningModelState | None = None,
     ) -> LayerState:
-        updates_primary = self.__updates_high(recurrent_state.transition_index)
-        if updates_primary:
+        updates_high = self.__updates_high(recurrent_state.transition_index)
+        if updates_high:
             transition_input = recurrent_state.high + recurrent_state.low
             previous_hidden = recurrent_state.high
         else:
-            transition_input = (
-                recurrent_state.low + recurrent_state.high + recurrent_state.fixed_input
-            )
+            low_input = recurrent_state.low + recurrent_state.high
+            transition_input = low_input + recurrent_state.fixed_input
             previous_hidden = recurrent_state.low
-        transition_state = replace(
-            recurrent_state.context_state,
-            hidden=transition_input,
-            loss=None,
-            halting_state=None,
-        )
-        return self._compute_block_output(
+        transition_state = recurrent_state.layer_state_for_transition(transition_input)
+        block = self.high_model if updates_high else self.low_model
+        return self.pipeline.process_recurrent_transition(
             transition_state,
-            previous_hidden,
-            recurrent_state.context_state,
-            self.__get_module("high_model" if updates_primary else "low_model"),
-            recurrent_state.transition_index,
+            run_model=lambda state: self.__run_block(state, block),
+            recurrent_state=recurrent_state,
+            previous_hidden=previous_hidden,
         )
+
+    def __updates_high(self, transition_index: int) -> bool:
+        phase_index = transition_index % (self.low_cycles + 1)
+        return phase_index >= self.low_cycles
+
+    def __run_block(self, state: LayerState, block: Module) -> LayerState:
+        block_input = state.hidden
+        output_state = block(state)
+        self.VALIDATOR.validate_transition_output(
+            output_state, block_input, self.cfg.output_dim
+        )
+        return output_state
 
     def update_state(
         self,
@@ -101,54 +120,20 @@ class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelSta
         tracks_gradients: bool,
         observe_transition: bool = True,
     ) -> HierarchicalReasoningModelState:
-        updates_primary = self.__updates_high(recurrent_state.transition_index)
-        previous_hidden = (
-            recurrent_state.high if updates_primary else recurrent_state.low
-        )
-        halting_state, output_hidden = self._apply_halting(
+        updates_high = self.__updates_high(recurrent_state.transition_index)
+        previous_hidden = recurrent_state.high if updates_high else recurrent_state.low
+        update_halting = tracks_gradients and updates_high
+        halting_update = self._apply_halting(
             recurrent_state,
             output_state,
             previous_hidden,
-            tracks_gradients and updates_primary,
+            update_halting,
             observe_transition,
         )
-        auxiliary_losses = recurrent_state.auxiliary_losses
-        if output_state.loss is not None:
-            reduced_loss = (
-                output_state.loss
-                if output_state.loss.dim() == 0
-                else output_state.loss.mean()
-            )
-            auxiliary_losses = (*auxiliary_losses, reduced_loss)
-        context_state = replace(output_state, hidden=output_hidden)
-        high = context_state.align_recurrent_hidden(
-            recurrent_state.high,
-            initial=self.__get_buffer("high_initial"),
-            source_state=recurrent_state.context_state,
+        return recurrent_state.next_state_from_output(
+            output_state,
+            halting_update,
+            updates_high=updates_high,
+            high_initial=self.high_initial,
+            low_initial=self.low_initial,
         )
-        low = context_state.align_recurrent_hidden(
-            recurrent_state.low,
-            initial=self.__get_buffer("low_initial"),
-            source_state=recurrent_state.context_state,
-        )
-        if updates_primary:
-            high = output_hidden
-        else:
-            low = output_hidden
-        return replace(
-            recurrent_state,
-            high=high,
-            low=low,
-            context_state=context_state,
-            fixed_input=context_state.align_recurrent_hidden(
-                recurrent_state.fixed_input, source_state=recurrent_state.context_state
-            ),
-            auxiliary_losses=auxiliary_losses,
-            transition_index=recurrent_state.transition_index + 1,
-            halting_state=halting_state,
-            all_items_halted=self.utilities.all_items_halted(halting_state),
-        )
-
-    def __updates_high(self, transition_index: int) -> bool:
-        phase_index = transition_index % (self.low_cycles + 1)
-        return phase_index >= self.low_cycles

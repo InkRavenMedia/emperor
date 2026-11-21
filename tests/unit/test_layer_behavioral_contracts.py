@@ -307,7 +307,7 @@ class LayerBehavioralContractTests(unittest.TestCase):
             )
         )
         set_layer_identity(layer)
-        configure_weighted_memory(layer.memory.model)
+        configure_weighted_memory(layer.pipeline.memory.model)
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]], requires_grad=True)
 
         output = layer(LayerState(hidden=hidden)).hidden
@@ -318,7 +318,7 @@ class LayerBehavioralContractTests(unittest.TestCase):
         self.assertTrue(hidden.grad.ne(0).all())
         gradients = [
             parameter.grad
-            for parameter in layer.memory.model.parameters()
+            for parameter in layer.pipeline.memory.model.parameters()
             if parameter.requires_grad
         ]
         self.assertTrue(any(gradient is not None for gradient in gradients))
@@ -350,14 +350,14 @@ class LayerBehavioralContractTests(unittest.TestCase):
         stack = LayerStack(config)
         for layer in stack:
             set_layer_identity(layer)
-        shared_memory = stack[0].memory.model
+        shared_memory = stack[0].pipeline.memory.model
         configure_weighted_memory(shared_memory)
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]], requires_grad=True)
 
         output = stack(LayerState(hidden=hidden)).hidden
 
         self.assertIsNotNone(shared_memory)
-        self.assertTrue(all(layer.memory.model is shared_memory for layer in stack))
+        self.assertTrue(all(layer.pipeline.memory.model is shared_memory for layer in stack))
         torch.testing.assert_close(output, hidden * (1.75**2))
         output.sum().backward()
         memory_gradients = [
@@ -382,10 +382,10 @@ class LayerBehavioralContractTests(unittest.TestCase):
         layer = Layer(base_layer_config())
         state = LayerState(hidden=current)
 
-        result = layer.residual.apply_residual(state, previous)
+        result = layer.pipeline.residual.apply_residual(state, previous)
 
-        self.assertIsNone(layer.residual.config)
-        self.assertIsNone(layer.residual.connection)
+        self.assertIsNone(layer.pipeline.residual.config)
+        self.assertIsNone(layer.pipeline.residual.connection)
         self.assertIs(result, state)
         self.assertIs(result.hidden, current)
 
@@ -617,7 +617,7 @@ class LayerBehavioralContractTests(unittest.TestCase):
         self,
     ) -> None:
         recurrent = RecurrentLayer(recurrent_config())
-        recurrent.utilities.recurrent_gate = SimpleNamespace(model=nn.Identity())
+        recurrent.pipeline.postprocessing.gate = SimpleNamespace(model=nn.Identity())
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         hook = callback._RecurrentLayerMonitorCallback__make_gate_hook(
@@ -705,10 +705,10 @@ class LayerBehavioralContractTests(unittest.TestCase):
         )
         module = CaptureLightningModule(layer=layer)
         callback = LayerControllerMonitorCallback(log_every_n_steps=1)
-        original_activation = getattr(layer.postprocessing, ACTIVATION_METHOD_NAME)
+        original_activation = getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME)
         callback.on_fit_start(TrainerStub(), module)
         self.assertTrue(callback._wrapped_methods)
-        self.assertTrue(layer.residual.connection._forward_hooks)
+        self.assertTrue(layer.pipeline.residual.connection._forward_hooks)
 
         callback.on_exception(
             TrainerStub(),
@@ -718,11 +718,11 @@ class LayerBehavioralContractTests(unittest.TestCase):
 
         self.assertTrue(
             same_bound_method(
-                getattr(layer.postprocessing, ACTIVATION_METHOD_NAME),
+                getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME),
                 original_activation,
             )
         )
-        self.assertEqual(layer.residual.connection._forward_hooks, {})
+        self.assertEqual(layer.pipeline.residual.connection._forward_hooks, {})
         self.assertEqual(callback._hooks, [])
         self.assertEqual(callback._wrapped_methods, [])
 

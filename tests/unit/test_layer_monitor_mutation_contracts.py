@@ -345,7 +345,7 @@ class TestLayerMonitorMutationContracts(unittest.TestCase):
 
         activation_input = torch.tensor([[-1.0, 0.5]], requires_grad=True)
         apply_activation = getattr(
-            layer.postprocessing,
+            layer.pipeline.postprocessing,
             ACTIVATION_METHOD_NAME,
         )
         activation_output = apply_activation(hidden=activation_input)
@@ -359,7 +359,7 @@ class TestLayerMonitorMutationContracts(unittest.TestCase):
         current = torch.tensor([[3.0, 1.0]], requires_grad=True)
         previous = torch.tensor([[6.0, 8.0]], requires_grad=True)
         residual_state = LayerState(hidden=current)
-        residual_output = layer.residual.apply_residual(
+        residual_output = layer.pipeline.residual.apply_residual(
             state=residual_state,
             previous=previous,
         )
@@ -376,14 +376,14 @@ class TestLayerMonitorMutationContracts(unittest.TestCase):
             10.0 / math.sqrt(10.0),
         )
         positional_state = LayerState(hidden=current)
-        positional_output = layer.residual.apply_residual(
+        positional_output = layer.pipeline.residual.apply_residual(
             positional_state,
             previous,
         )
         self.assertIs(positional_output, positional_state)
         torch.testing.assert_close(positional_output.hidden, current + previous)
         mixed_state = LayerState(hidden=current)
-        mixed_output = layer.residual.apply_residual(
+        mixed_output = layer.pipeline.residual.apply_residual(
             mixed_state,
             previous=previous,
         )
@@ -618,7 +618,7 @@ class TestLayerMonitorMutationContracts(unittest.TestCase):
             model_config=_linear_stack_config(2),
         )
         recurrent = _recurrent(max_steps=1, gate_config=gate_config)
-        gate_layer = recurrent.utilities.recurrent_gate.model[0]
+        gate_layer = recurrent.pipeline.postprocessing.gate.model[0]
         with torch.no_grad():
             gate_layer.model.weight_params.copy_(torch.eye(2))
             gate_layer.model.bias_params.zero_()

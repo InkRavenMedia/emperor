@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from torch.nn import Module
     from torch.utils.hooks import RemovableHandle
 
+    from emperor.layers._composition.gate import LayerGate
     from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
         RecurrentIterationScheduleSnapshot,
     )
@@ -100,8 +101,7 @@ class RecurrentLayerMonitorCallback(Callback):
         recurrent_layer: Module,
         pl_module: LightningModule,
     ) -> None:
-        utilities = getattr(recurrent_layer, "utilities", None)
-        recurrent_gate = getattr(utilities, "recurrent_gate", None)
+        recurrent_gate = self.__recurrent_gate(recurrent_layer)
         gate_model = getattr(recurrent_gate, "model", None)
         if gate_model is None:
             return
@@ -110,6 +110,11 @@ class RecurrentLayerMonitorCallback(Callback):
                 self.__make_gate_hook(recurrent_layer, pl_module)
             )
         )
+
+    @staticmethod
+    def __recurrent_gate(recurrent_layer: Module) -> LayerGate | None:
+        pipeline = getattr(recurrent_layer, "pipeline", None)
+        return pipeline.postprocessing.gate if pipeline is not None else None
 
     def __wrap_forward(
         self,
@@ -182,8 +187,7 @@ class RecurrentLayerMonitorCallback(Callback):
         recurrent_layer: Module,
         gate_logits: Tensor,
     ) -> Tensor:
-        utilities = getattr(recurrent_layer, "utilities", None)
-        recurrent_gate = getattr(utilities, "recurrent_gate", None)
+        recurrent_gate = RecurrentLayerMonitorCallback.__recurrent_gate(recurrent_layer)
         if recurrent_gate is None or not hasattr(recurrent_gate, "effective_values"):
             return torch.sigmoid(gate_logits)
         return recurrent_gate.effective_values(gate_logits)

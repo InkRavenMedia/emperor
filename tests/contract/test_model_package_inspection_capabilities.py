@@ -72,7 +72,9 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             InspectionRequest(preset="weighted-residual"),
         )
         residual_nodes = {node.path: node for node in residual.nodes}
-        residual_node = residual_nodes["main_model.layers.0.residual.connection"]
+        pipeline_path = "main_model.layers.0.pipeline"
+        self.assertEqual(residual_nodes[pipeline_path].graph_role, "internal")
+        residual_node = residual_nodes[f"{pipeline_path}.residual.connection"]
         self.assertEqual(residual_node.type_name, "WeightedResidual")
         self.assertEqual(
             residual_node.configuration.type_name,
@@ -86,7 +88,7 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             "normalization",
         ):
             with self.subTest(delegate_path=delegate_path):
-                delegate_node = residual_nodes[f"main_model.layers.0.{delegate_path}"]
+                delegate_node = residual_nodes[f"{pipeline_path}.{delegate_path}"]
                 self.assertEqual(delegate_node.graph_role, "internal")
 
         dual_gating = inspect_model(
@@ -94,19 +96,26 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             InspectionRequest(preset="recurrent-dual-gating"),
         )
         gating_nodes = {node.path: node for node in dual_gating.nodes}
-        self.assertIn("main_model.utilities.recurrent_gate", gating_nodes)
+        self.assertIn("main_model.step.pipeline.postprocessing.gate", gating_nodes)
         self.assertTrue(gating_nodes["main_model"].details["recurrent"]["gate"])
-        self.assertTrue(gating_nodes["main_model.block_model.layers.0"].details["gate"])
+        self.assertTrue(
+            gating_nodes["main_model.step.block_model.layers.0"].details["gate"]
+        )
+        controller_path = "main_model.step.pipeline.postprocessing"
+        self.assertEqual(
+            gating_nodes[controller_path].details["gate_option"],
+            gating_nodes["main_model"].details["recurrent"]["gate_option"],
+        )
 
         dual_halting = inspect_model(
             self.package,
             InspectionRequest(preset="recurrent-dual-halting"),
         )
         halting_nodes = {node.path: node for node in dual_halting.nodes}
-        self.assertIn("main_model.utilities.halting_model", halting_nodes)
+        self.assertIn("main_model.step.pipeline.halting.model", halting_nodes)
         self.assertTrue(halting_nodes["main_model"].details["recurrent"]["halting"])
         self.assertTrue(
-            halting_nodes["main_model.block_model.layers.0"].details["halting"]
+            halting_nodes["main_model.step.block_model.layers.0"].details["halting"]
         )
 
         memory = inspect_model(
@@ -114,7 +123,7 @@ class ModelPackageInspectionCapabilityTests(unittest.TestCase):
             InspectionRequest(preset="element-wise-weighted-memory"),
         )
         memory_nodes = {node.path: node for node in memory.nodes}
-        memory_node = memory_nodes["main_model.layers.0.memory.model"]
+        memory_node = memory_nodes[f"{pipeline_path}.memory.model"]
         self.assertEqual(memory_node.type_name, "ElementWiseWeightedDynamicMemory")
         self.assertEqual(
             memory_node.configuration.type_name,

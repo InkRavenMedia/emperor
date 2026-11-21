@@ -20,13 +20,13 @@ from emperor.layers import (
 from emperor.layers._composition.residual.base import (
     ResidualConnectionAbstract,
 )
-from emperor.layers._composition.residual.variants.additive import AdditiveResidual
-from emperor.layers._composition.residual.variants.attention import AttentionResidual
-from emperor.layers._composition.residual.variants.weighted import WeightedResidual
-from emperor.layers._composition.residual.variants.weighted_blend import (
+from emperor.layers._composition.residual.variants import (
+    AdditiveResidual,
+    AttentionResidual,
     WeightedBlendResidual,
+    WeightedResidual,
 )
-from emperor.layers._layer.pipeline.residual import LayerResidualDelegate
+from emperor.layers._pipeline.delegates import LayerResidualDelegate
 from emperor.linears import LinearLayerConfig
 
 

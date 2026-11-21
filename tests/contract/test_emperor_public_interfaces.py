@@ -59,6 +59,19 @@ class EmperorPublicInterfaceContractTests(unittest.TestCase):
                 with self.assertRaises(AttributeError):
                     attrgetter("__emperor_undeclared_interface_export__")(module)
 
+    def test_layer_composition_entry_points_import_independently(self) -> None:
+        for entry in (
+            "from emperor.layers import Layer",
+            "from emperor.layers._layer import Layer\n"
+            "from emperor.layers import Layer as PublicLayer, LayerConfig\n"
+            "assert Layer is PublicLayer is LayerConfig().registry_owner()",
+            "from emperor.layers._pipeline import LayerProcessingPipeline",
+            "from emperor.halting import HaltingConfig",
+        ):
+            with self.subTest(entry=entry):
+                completed = self.run_fresh_python(entry)
+                self.assertEqual(completed.returncode, 0, completed.stderr)
+
     def test_all_interfaces_are_owner_identical_in_a_fresh_interpreter(self) -> None:
         contracts = {
             module_name: (

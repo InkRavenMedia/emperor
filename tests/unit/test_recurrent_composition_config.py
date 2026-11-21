@@ -29,6 +29,7 @@ from emperor.layers._composition.recurrent.base import (
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentIterationSchedule,
 )
+from emperor.layers._composition.recurrent.state import RecurrentState
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
     RecurrentIterationScheduleValidator,
@@ -41,6 +42,7 @@ from emperor.layers._composition.recurrent.variants.hierarchical_reasoning_model
 from emperor.layers._composition.recurrent.variants.tiny_recursive_model import (
     TinyRecursiveModelRecurrent,
 )
+from emperor.layers._pipeline import LayerProcessingPipeline
 from support.layers import IdentityBlockConfig
 from support.recurrent import inner_thinking_config
 
@@ -175,11 +177,11 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             min(assignment.lineno for assignment in config_assignments),
         )
         self.assertNotIn("RecurrentIterationSchedule", call_lines)
-        self.assertNotIn("RecurrentUtilities", call_lines)
-        for owner in (
-            RecurrentLayer,
-            TinyRecursiveModelRecurrent,
-            HierarchicalReasoningModelRecurrent,
+        self.assertNotIn("LayerProcessingPipeline", call_lines)
+        for owner, step_builder in (
+            (RecurrentLayer, "self._build_step"),
+            (TinyRecursiveModelRecurrent, "self.__build_step"),
+            (HierarchicalReasoningModelRecurrent, "self.__build_step"),
         ):
             with self.subTest(variant=owner.__name__):
                 initializer_tree = ast.parse(
@@ -196,8 +198,9 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 )
                 self.assertLess(
                     initializer_calls["RecurrentIterationSchedule"],
-                    initializer_calls["RecurrentUtilities"],
+                    initializer_calls[step_builder],
                 )
+                self.assertNotIn("LayerProcessingPipeline", initializer_calls)
         self.assertNotIn(
             "_RecurrentCompositionAbstract__initialize_delegates",
             vars(RecurrentCompositionAbstract),
@@ -243,14 +246,14 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                     recurrent_normalization=NormalizationOptions.RMS_NORM,
                 ).build()
                 self.assertIs(
-                    model.utilities.recurrent_layer_norm_position,
+                    model.pipeline.normalization.position,
                     LayerNormPositionOptions.DISABLED,
                 )
                 self.assertIs(
-                    model.utilities.recurrent_normalization,
+                    model.pipeline.normalization.normalization,
                     NormalizationOptions.RMS_NORM,
                 )
-                self.assertIsNone(model.utilities.normalization.module)
+                self.assertIsNone(model.pipeline.normalization.module)
 
     def test_variants_own_the_ordinary_loop_without_execution_plans(self):
         for owner in (
@@ -267,7 +270,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 self.assertTrue(
                     any(isinstance(node, ast.While) for node in ast.walk(branch_tree))
                 )
-                self.assertIn("self.step.forward", branch_source)
+                self.assertIn("self.step(", branch_source)
                 self.assertNotIn("execution_plan", branch_source)
                 self.assertNotIn("execution_plan", inspect.getsource(owner.forward))
 
@@ -395,7 +398,9 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
         for config in _minimal_variant_configs():
             with self.subTest(variant=type(config).__name__):
                 model = config.build()
-                state = model.step.initialize(LayerState(torch.tensor([[1.0, -2.0]])))
+                state = model.step.initialize_recurrent_state(
+                    LayerState(torch.tensor([[1.0, -2.0]]))
+                )
 
                 restored_state = pickle.loads(pickle.dumps(state))
 
@@ -409,6 +414,18 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 self.assertEqual(
                     restored_state.transition_index, state.transition_index
                 )
+
+    def test_variants_build_keyword_only_recurrent_states(self) -> None:
+        for config in _minimal_variant_configs():
+            with self.subTest(variant=type(config).__name__):
+                layer_state = LayerState(torch.ones(1, 2))
+                step = config.build().step
+                recurrent_state = step.initialize_recurrent_state(layer_state)
+
+                self.assertIsInstance(recurrent_state, RecurrentState)
+                self.assertIs(recurrent_state.fixed_input, layer_state.hidden)
+                self.assertIs(recurrent_state.context_state, layer_state)
+                self.assertTrue(all(field.kw_only for field in fields(recurrent_state)))
 
     def test_all_recurrent_configs_own_the_shared_iteration_schedule(self) -> None:
         for config_type in (
@@ -494,14 +511,51 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             with self.subTest(validator=validator.__name__):
                 self.assertEqual(validator.__module__, expected_module)
 
-    def test_step_helpers_reuse_utilities_without_registering_duplicate_modules(self):
+    def test_step_registers_its_pipeline_and_transition_blocks_once(self):
         for config in _minimal_variant_configs():
             with self.subTest(variant=type(config).__name__):
                 model = config.build()
-                self.assertIs(model.step.utilities, model.utilities)
-                self.assertEqual(model.step.output_dim, model.output_dim)
-                self.assertNotIn("step", dict(model.named_modules()))
+                self.assertIs(model.step, model.get_submodule("step"))
+                self.assertNotIn("utilities", dict(model.named_children()))
+                block_names = ("block_model",)
+                if isinstance(config, HierarchicalReasoningModelRecurrentConfig):
+                    block_names = ("high_model", "low_model")
+                for name in ("pipeline", *block_names):
+                    component = getattr(model.step, name)
+                    self.assertIs(getattr(model, name), component)
+                    component_paths = [
+                        path
+                        for path, module in model.named_modules(remove_duplicate=False)
+                        if module is component
+                    ]
+                    self.assertEqual(component_paths, [f"step.{name}"])
+                self.assertIs(model.step.cfg, model.cfg)
+                self.assertIs(model.step.pipeline.config, model.step.cfg)
                 self.assertFalse(hasattr(model, "execution"))
+
+    def test_each_variant_runs_the_outer_pipeline_once_per_transition(self):
+        for config in _minimal_variant_configs():
+            with self.subTest(variant=type(config).__name__):
+                model = config.build()
+                pipeline = model.pipeline
+                self.assertIsInstance(pipeline, LayerProcessingPipeline)
+                transitions = model.recurrent_iteration_schedule.active_transition_count
+                state = LayerState(torch.ones(1, 2))
+                with (
+                    patch.object(
+                        pipeline,
+                        "process_recurrent_transition",
+                        wraps=pipeline.process_recurrent_transition,
+                    ) as process_transition,
+                    patch.object(
+                        pipeline,
+                        "process_normal_layer",
+                        wraps=pipeline.process_normal_layer,
+                    ) as process_layer,
+                ):
+                    self.assertIs(model(state), state)
+                self.assertEqual(process_transition.call_count, transitions)
+                process_layer.assert_not_called()
 
     def test_recurrent_controller_fields_belong_to_the_family_config(self) -> None:
         controller_field_names = {
@@ -563,7 +617,6 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
     def test_only_subclass_extension_seams_are_protected(self) -> None:
         expected_protected_methods = {
             RecurrentCompositionAbstract: {
-                "_build_transition_model",
                 "_new_recurrent_initial_buffer",
             },
             RecurrentCompositionConfig: {
@@ -602,6 +655,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             "emperor.layers._validation.recurrent",
             "emperor.layers._composition.recurrent.variants.hrm",
             "emperor.layers._composition.recurrent.variants.trm",
+            "emperor.layers._composition.recurrent.utilities",
         ):
             with (
                 self.subTest(module_name=module_name),

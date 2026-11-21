@@ -89,6 +89,7 @@ def controlled_layer() -> Layer:
             residual_config=AdditiveResidualConfig(),
             dropout_probability=1.0,
             layer_norm_position=LayerNormPositionOptions.BEFORE,
+            normalization=NormalizationOptions.LAYER_NORM,
             gate_config=GateConfig(
                 gate_dim=2,
                 option=LayerGateOptions.MULTIPLIER,
@@ -105,7 +106,7 @@ def controlled_layer() -> Layer:
         )
     )
     set_linear_identity(layer)
-    gate_layer = layer.postprocessing.gate.model[0]
+    gate_layer = layer.pipeline.postprocessing.gate.model[0]
     with torch.no_grad():
         gate_layer.model.weight_params.zero_()
         gate_layer.model.bias_params.zero_()
@@ -187,7 +188,7 @@ def recurrent_layer() -> RecurrentLayer:
             memory_config=None,
         )
     )
-    gate_layer = recurrent.utilities.recurrent_gate.model[0]
+    gate_layer = recurrent.pipeline.postprocessing.gate.model[0]
     with torch.no_grad():
         gate_layer.model.weight_params.zero_()
         gate_layer.model.bias_params.zero_()
@@ -316,7 +317,7 @@ class LayerMonitorLifecycleTests(unittest.TestCase):
         model = LayerTrainingModule()
         callback = LayerControllerMonitorCallback(log_every_n_steps=1)
         original_activation = getattr(
-            model.controlled.postprocessing,
+            model.controlled.pipeline.postprocessing,
             ACTIVATION_METHOD_NAME,
         )
         initial_weight = model.trainable.model.weight_params.detach().clone()
@@ -372,13 +373,13 @@ class LayerMonitorLifecycleTests(unittest.TestCase):
         self.assertTrue(
             same_bound_method(
                 getattr(
-                    model.controlled.postprocessing,
+                    model.controlled.pipeline.postprocessing,
                     ACTIVATION_METHOD_NAME,
                 ),
                 original_activation,
             )
         )
-        self.assertEqual(model.controlled.residual.connection._forward_hooks, {})
+        self.assertEqual(model.controlled.pipeline.residual.connection._forward_hooks, {})
 
     @pytest.mark.training
     def test_real_trainer_logs_exact_recurrent_metrics_visuals_and_updates(
@@ -467,7 +468,7 @@ class LayerMonitorLifecycleTests(unittest.TestCase):
         layer_model = LayerTrainingModule(fail_after_forward=True)
         layer_callback = LayerControllerMonitorCallback(log_every_n_steps=1)
         layer_activation = getattr(
-            layer_model.controlled.postprocessing,
+            layer_model.controlled.pipeline.postprocessing,
             ACTIVATION_METHOD_NAME,
         )
 
@@ -484,14 +485,14 @@ class LayerMonitorLifecycleTests(unittest.TestCase):
         self.assertTrue(
             same_bound_method(
                 getattr(
-                    layer_model.controlled.postprocessing,
+                    layer_model.controlled.pipeline.postprocessing,
                     ACTIVATION_METHOD_NAME,
                 ),
                 layer_activation,
             )
         )
         self.assertEqual(
-            layer_model.controlled.residual.connection._forward_hooks,
+            layer_model.controlled.pipeline.residual.connection._forward_hooks,
             {},
         )
 

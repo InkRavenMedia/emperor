@@ -20,7 +20,7 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from emperor.layers._composition.residual.validation import ResidualConnectionValidator
-from emperor.layers._composition.residual.variants.additive import AdditiveResidual
+from emperor.layers._composition.residual.variants import AdditiveResidual
 from emperor.layers._stack.shared_controllers import LayerStackSharedControllers
 from emperor.layers._stack.validation import LayerStackValidator
 from emperor.linears import LinearLayerConfig

@@ -496,7 +496,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         ).build()
         for _ in range(4):
             recurrent(self.state())
-        recurrent.utilities.recurrent_gate.model = CountingGate()
+        recurrent.pipeline.postprocessing.gate.model = CountingGate()
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         callback.on_fit_start(TrainerStub(), module)
@@ -779,7 +779,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
             gate_option=LayerGateOptions.MULTIPLIER,
             gate_activation=ActivationOptions.TANH,
         )
-        recurrent.utilities.recurrent_gate.model = ConstantGate(1.0)
+        recurrent.pipeline.postprocessing.gate.model = ConstantGate(1.0)
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
         callback.on_fit_start(TrainerStub(), module)

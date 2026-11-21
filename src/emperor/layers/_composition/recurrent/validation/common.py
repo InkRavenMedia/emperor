@@ -17,11 +17,6 @@ from emperor.layers._composition.gate.validation import LayerGateValidator
 from emperor.layers._composition.residual.validation import (
     ResidualConnectionValidator,
 )
-from emperor.layers._layer.validation import (
-    LayerHaltingDelegateValidator,
-    LayerMemoryDelegateValidator,
-    LayerResidualDelegateValidator,
-)
 from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 from emperor.layers._validation.common import (
     _HALTING_CONFIG_FIELDS,
@@ -40,16 +35,9 @@ _RECURRENT_SHARED_OPTIONAL_FIELDS = {
 }
 
 if TYPE_CHECKING:
-    from emperor.halting import HaltingInterface, HaltingStateBase
     from emperor.layers._composition.recurrent.config import (
         RecurrentCompositionConfig,
     )
-    from emperor.layers._composition.recurrent.runtime.residual_schedule import (
-        RecurrentResidualSchedule,
-    )
-    from emperor.layers._composition.residual.base import ResidualConnectionAbstract
-    from emperor.memory import MemoryInterface
-    from emperor.nn import Module
 
 
 def _validate_initialization_standard_deviation(value: object) -> None:
@@ -180,36 +168,6 @@ def _validate_recurrent_memory_config(memory_config: object, owner_name: str) ->
 class RecurrentCompositionValidator(ValidatorBase):
     GATE_VALIDATOR = LayerGateValidator
     RESIDUAL_VALIDATOR = ResidualConnectionValidator
-    RESIDUAL_DELEGATE_VALIDATOR = LayerResidualDelegateValidator
-    HALTING_DELEGATE_VALIDATOR = LayerHaltingDelegateValidator
-    MEMORY_DELEGATE_VALIDATOR = LayerMemoryDelegateValidator
-
-    @classmethod
-    def validate_built_residual_connection(
-        cls,
-        connection: Module | None,
-    ) -> ResidualConnectionAbstract | None:
-        return cls.RESIDUAL_DELEGATE_VALIDATOR.validate_built_residual_connection_type(
-            connection
-        )
-
-    @classmethod
-    def validate_built_halting_model(
-        cls,
-        model: Module | None,
-    ) -> HaltingInterface[HaltingStateBase] | None:
-        return cls.HALTING_DELEGATE_VALIDATOR.validate_built_halting_model_interface(
-            model
-        )
-
-    @classmethod
-    def validate_built_memory_model(
-        cls,
-        model: Module | None,
-    ) -> MemoryInterface | None:
-        return cls.MEMORY_DELEGATE_VALIDATOR.validate_built_memory_model_interface(
-            model
-        )
 
     @classmethod
     def _validate_recurrent_controller_config(
@@ -255,17 +213,6 @@ class RecurrentCompositionValidator(ValidatorBase):
             config.residual_config,
             owner_name=type(config).__name__,
         )
-
-    @staticmethod
-    def validate_forward_local_residual_runtime(
-        residual_connection: ResidualConnectionAbstract | None,
-        residual_schedule: RecurrentResidualSchedule | None,
-    ) -> tuple[ResidualConnectionAbstract, RecurrentResidualSchedule]:
-        if residual_connection is None or residual_schedule is None:
-            raise RuntimeError(
-                "forward-local residual state requires a recurrent residual schedule."
-            )
-        return residual_connection, residual_schedule
 
     @staticmethod
     def validate_halting_output(

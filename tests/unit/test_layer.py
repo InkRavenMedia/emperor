@@ -569,32 +569,32 @@ class TestLayer(unittest.TestCase):
 
         self.assertIsInstance(layer, Layer)
         for delegate in (
-            layer.postprocessing,
-            layer.halting,
-            layer.memory,
-            layer.residual,
-            layer.normalization,
+            layer.pipeline.postprocessing,
+            layer.pipeline.halting,
+            layer.pipeline.memory,
+            layer.pipeline.residual,
+            layer.pipeline.normalization,
         ):
             with self.subTest(delegate=type(delegate).__name__):
                 self.assertIsInstance(delegate, Module)
         self.assertEqual(layer.input_dim, cfg.input_dim)
         self.assertEqual(layer.output_dim, cfg.output_dim)
         self.assertIs(layer.cfg, cfg)
-        self.assertEqual(layer.postprocessing.activation_function, cfg.activation)
-        self.assertEqual(layer.residual.config, cfg.residual_config)
+        self.assertEqual(layer.pipeline.postprocessing.activation_function, cfg.activation)
+        self.assertEqual(layer.pipeline.residual.config, cfg.residual_config)
         self.assertEqual(
-            layer.postprocessing.dropout_probability,
+            layer.pipeline.postprocessing.dropout_probability,
             cfg.dropout_probability,
         )
-        self.assertEqual(layer.normalization.position, cfg.layer_norm_position)
-        self.assertEqual(layer.postprocessing.gate_config, cfg.gate_config)
-        self.assertIsNotNone(layer.postprocessing.gate)
-        self.assertEqual(layer.postprocessing.gate.gate_dim, cfg.output_dim)
-        self.assertEqual(layer.postprocessing.gate.option, LayerGateOptions.MULTIPLIER)
-        self.assertEqual(layer.halting.config, cfg.halting_config)
-        self.assertEqual(layer.memory.config, cfg.memory_config)
+        self.assertEqual(layer.pipeline.normalization.position, cfg.layer_norm_position)
+        self.assertEqual(layer.pipeline.postprocessing.gate_config, cfg.gate_config)
+        self.assertIsNotNone(layer.pipeline.postprocessing.gate)
+        self.assertEqual(layer.pipeline.postprocessing.gate.gate_dim, cfg.output_dim)
+        self.assertEqual(layer.pipeline.postprocessing.gate.option, LayerGateOptions.MULTIPLIER)
+        self.assertEqual(layer.pipeline.halting.config, cfg.halting_config)
+        self.assertEqual(layer.pipeline.memory.config, cfg.memory_config)
         self.assertEqual(layer.cfg.layer_model_config, cfg.layer_model_config)
-        self.assertFalse(layer.halting.is_terminal)
+        self.assertFalse(layer.pipeline.halting.is_terminal)
         for retired_attribute in (
             "activation_function",
             "dropout_module",
@@ -612,11 +612,11 @@ class TestLayer(unittest.TestCase):
         layer = Layer(self.preset(input_dim=8, output_dim=8))
 
         for delegate in (
-            layer.postprocessing,
-            layer.halting,
-            layer.memory,
-            layer.residual,
-            layer.normalization,
+            layer.pipeline.postprocessing,
+            layer.pipeline.halting,
+            layer.pipeline.memory,
+            layer.pipeline.residual,
+            layer.pipeline.normalization,
         ):
             protected_methods = sorted(
                 method_name
@@ -635,9 +635,9 @@ class TestLayer(unittest.TestCase):
 
         self.assertEqual(layer.input_dim, 16)
         self.assertEqual(layer.output_dim, 32)
-        self.assertEqual(layer.postprocessing.activation_function, cfg.activation)
+        self.assertEqual(layer.pipeline.postprocessing.activation_function, cfg.activation)
         self.assertEqual(
-            layer.postprocessing.dropout_probability,
+            layer.pipeline.postprocessing.dropout_probability,
             cfg.dropout_probability,
         )
 
@@ -784,7 +784,7 @@ class TestLayer(unittest.TestCase):
                 layer_model_config=spatial_config,
             )
         )
-        self.assertIsNone(layer.normalization.module)
+        self.assertIsNone(layer.pipeline.normalization.module)
 
     def test_residual_connection_rejects_strided_spatial_model(self):
         dim = 3
@@ -815,14 +815,14 @@ class TestLayer(unittest.TestCase):
                 layer_model_config=spatial_config,
             )
         )
-        self.assertIsNone(layer.residual.connection)
+        self.assertIsNone(layer.pipeline.residual.connection)
 
     def test_mark_as_last_layer_is_private_stack_integration(self):
         layer = Layer(self.preset())
 
-        self.assertFalse(layer.halting.is_terminal)
+        self.assertFalse(layer.pipeline.halting.is_terminal)
         layer._mark_as_last_layer()
-        self.assertTrue(layer.halting.is_terminal)
+        self.assertTrue(layer.pipeline.halting.is_terminal)
         self.assertFalse(hasattr(layer, "mark_as_last_layer"))
 
     def test_disabled_residual_connection_builds_no_module(self):
@@ -841,10 +841,10 @@ class TestLayer(unittest.TestCase):
             )
         )
 
-        self.assertIsNone(disabled_layer.residual.connection)
-        self.assertIsNotNone(enabled_layer.residual.connection)
+        self.assertIsNone(disabled_layer.pipeline.residual.connection)
+        self.assertIsNotNone(enabled_layer.pipeline.residual.connection)
         self.assertEqual(
-            type(enabled_layer.residual.connection.cfg),
+            type(enabled_layer.pipeline.residual.connection.cfg),
             AdditiveResidualConfig,
         )
 
@@ -928,9 +928,9 @@ class TestLayer(unittest.TestCase):
         enabled = Layer(self.preset(input_dim=8, output_dim=8))
         disabled = Layer(self.bare_config())
 
-        self.assertIsInstance(enabled.postprocessing.gate, LayerGate)
-        self.assertIsInstance(enabled.postprocessing.gate.model, LayerStack)
-        self.assertIsNone(disabled.postprocessing.gate)
+        self.assertIsInstance(enabled.pipeline.postprocessing.gate, LayerGate)
+        self.assertIsInstance(enabled.pipeline.postprocessing.gate.model, LayerStack)
+        self.assertIsNone(disabled.pipeline.postprocessing.gate)
 
     def test_halting_delegate_builds_optional_model(self):
         dim = 4
@@ -943,8 +943,8 @@ class TestLayer(unittest.TestCase):
         )
         disabled = Layer(self.bare_config(input_dim=dim, output_dim=dim))
 
-        self.assertIsNotNone(enabled.halting.model)
-        self.assertIsNone(disabled.halting.model)
+        self.assertIsNotNone(enabled.pipeline.halting.model)
+        self.assertIsNone(disabled.pipeline.halting.model)
 
     def test_postprocessing_delegate_initializes_dropout(self):
         dropout_probabilities = [0.0, 0.2, 0.5]
@@ -954,7 +954,7 @@ class TestLayer(unittest.TestCase):
             with self.subTest(msg=message):
                 cfg = self.preset(dropout_probability=dropout_probability)
                 layer = Layer(cfg)
-                result = layer.postprocessing.dropout
+                result = layer.pipeline.postprocessing.dropout
 
                 if dropout_probability > 0.0:
                     self.assertIsNotNone(result)
@@ -978,14 +978,14 @@ class TestLayer(unittest.TestCase):
                     layer_norm_position=position,
                 )
                 layer = Layer(cfg)
-                result = layer.normalization.dimension
+                result = layer.pipeline.normalization.dimension
 
                 self.assertEqual(result, expected_dim)
                 if expected_dim is not None:
-                    self.assertIsInstance(layer.normalization.module, nn.RMSNorm)
-                    self.assertEqual(layer.normalization.module.eps, 1e-5)
+                    self.assertIsInstance(layer.pipeline.normalization.module, nn.RMSNorm)
+                    self.assertEqual(layer.pipeline.normalization.module.eps, 1e-5)
                     self.assertEqual(
-                        set(layer.normalization.module.state_dict()), {"weight"}
+                        set(layer.pipeline.normalization.module.state_dict()), {"weight"}
                     )
 
     def test_normalization_options_round_trip_by_name(self):
@@ -1003,9 +1003,9 @@ class TestLayer(unittest.TestCase):
             cfg, LayerConfig(normalization=NormalizationOptions.RMS_NORM)
         )
 
-        self.assertIsInstance(inherited.normalization.module, nn.LayerNorm)
-        self.assertEqual(inherited.normalization.module.normalized_shape, (4,))
-        self.assertIsInstance(overridden.normalization.module, nn.RMSNorm)
+        self.assertIsInstance(inherited.pipeline.normalization.module, nn.LayerNorm)
+        self.assertEqual(inherited.pipeline.normalization.module.normalized_shape, (4,))
+        self.assertIsInstance(overridden.pipeline.normalization.module, nn.RMSNorm)
         self.assertIs(cfg.normalization, NormalizationOptions.LAYER_NORM)
 
     def test_postprocessing_delegate_stores_activation_option(self):
@@ -1021,7 +1021,7 @@ class TestLayer(unittest.TestCase):
                 cfg = self.preset(activation=activation)
                 layer = Layer(cfg)
                 self.assertEqual(
-                    layer.postprocessing.activation_function,
+                    layer.pipeline.postprocessing.activation_function,
                     activation,
                 )
 
@@ -1123,7 +1123,7 @@ class TestLayer(unittest.TestCase):
             layer.model.weight_params.copy_(torch.eye(dim))
             layer.model.bias_params.copy_(torch.tensor([1.0, -5.0]))
         gate_values = torch.tensor([[2.0, 3.0]])
-        layer.postprocessing.gate.model = ConstantGate(gate_values)
+        layer.pipeline.postprocessing.gate.model = ConstantGate(gate_values)
         x = torch.tensor([[1.0, -2.0], [3.0, 4.0]])
         state = LayerState(hidden=x)
 
@@ -1134,7 +1134,7 @@ class TestLayer(unittest.TestCase):
         gate = torch.sigmoid(gate_values.expand_as(activated))
         expected = gate * activated + x
         torch.testing.assert_close(
-            layer.postprocessing.gate.model.received_hidden, activated
+            layer.pipeline.postprocessing.gate.model.received_hidden, activated
         )
         torch.testing.assert_close(result.hidden, expected)
 
@@ -1183,7 +1183,7 @@ class TestLayer(unittest.TestCase):
 
         result = layer(LayerState(hidden=x.clone()))
 
-        expected = layer.normalization.module(x) + x
+        expected = layer.pipeline.normalization.module(x) + x
         torch.testing.assert_close(result.hidden, expected)
 
     def test_forward_layer_norm_after_normalizes_after_residual(self):
@@ -1202,7 +1202,7 @@ class TestLayer(unittest.TestCase):
 
         result = layer(LayerState(hidden=x.clone()))
 
-        expected = layer.normalization.module(2.0 * x + x)
+        expected = layer.pipeline.normalization.module(2.0 * x + x)
         torch.testing.assert_close(result.hidden, expected)
 
     def test_postprocessing_delegate_applies_configured_activation(self):
@@ -1226,7 +1226,7 @@ class TestLayer(unittest.TestCase):
                 )
                 layer = Layer(cfg)
                 x = torch.randn(batch_size, input_dim)
-                result = layer.postprocessing.process(LayerState(hidden=x)).hidden
+                result = layer.pipeline.postprocessing.process(LayerState(hidden=x)).hidden
 
                 self.assertEqual(result.shape, (batch_size, input_dim))
                 if activation == ActivationOptions.DISABLED:
@@ -1287,11 +1287,11 @@ class TestLayer(unittest.TestCase):
                 x = torch.randn(batch_size, dim)
                 model_output = torch.randn(batch_size, dim)
                 state = LayerState(hidden=model_output)
-                result = layer.residual.apply_residual(state, x)
+                result = layer.pipeline.residual.apply_residual(state, x)
                 if residual_model_config is None:
                     expected = expected_fn(model_output, x)
                 else:
-                    raw_coefficients = layer.residual.connection.model(
+                    raw_coefficients = layer.pipeline.residual.connection.model(
                         torch.cat((model_output, x), dim=-1)
                     )
                     if option is WeightedResidualConfig:
@@ -1352,7 +1352,7 @@ class TestLayer(unittest.TestCase):
                 residual_model_config=model_config,
             )
         )
-        connection = layer.residual.connection
+        connection = layer.pipeline.residual.connection
 
         self.assertEqual(connection.model_config, model_config)
         self.assertIsNot(connection.model_config, model_config)
@@ -1529,7 +1529,7 @@ class TestLayer(unittest.TestCase):
 
         self.assertIsNone(connection.new_state(torch.ones(1, 2)))
 
-    def test_legacy_residual_ignores_optional_attention_residual_state(self):
+    def test_additive_residual_ignores_optional_attention_history(self):
         connection = AdditiveResidualConfig().build()
         current = torch.tensor([[2.0, 3.0]])
         previous = torch.tensor([[5.0, 7.0]])
@@ -1625,12 +1625,12 @@ class TestLayer(unittest.TestCase):
             residual_connection_option=WeightedResidualConfig,
         )
         layer = Layer(cfg)
-        layer.residual.connection.raw_weight.data.fill_(0.5)
+        layer.pipeline.residual.connection.raw_weight.data.fill_(0.5)
         current = torch.full((2, dim), 3.0)
         previous = torch.full((2, dim), 2.0)
         state = LayerState(hidden=current)
 
-        result = layer.residual.apply_residual(state, previous)
+        result = layer.pipeline.residual.apply_residual(state, previous)
 
         expected = previous + torch.sigmoid(torch.tensor(0.5)) * current
         self.assertIs(result, state)
@@ -1647,7 +1647,7 @@ class TestLayer(unittest.TestCase):
         layer = Layer(cfg)
         with torch.no_grad():
             layer.model.weight_params.copy_(2.0 * torch.eye(dim))
-            layer.postprocessing.gate.model[0].model.weight_params.copy_(
+            layer.pipeline.postprocessing.gate.model[0].model.weight_params.copy_(
                 0.5 * torch.eye(dim)
             )
         x = torch.tensor(
@@ -1662,7 +1662,7 @@ class TestLayer(unittest.TestCase):
         self.assertTrue(torch.any(x.grad.abs() > 0))
         self.assertIsNotNone(layer.model.weight_params.grad)
         self.assertTrue(torch.any(layer.model.weight_params.grad.abs() > 0))
-        gate_weight_grad = layer.postprocessing.gate.model[0].model.weight_params.grad
+        gate_weight_grad = layer.pipeline.postprocessing.gate.model[0].model.weight_params.grad
         self.assertIsNotNone(gate_weight_grad)
         self.assertTrue(torch.any(gate_weight_grad.abs() > 0))
 
@@ -1678,7 +1678,7 @@ class TestLayer(unittest.TestCase):
         layer = Layer(cfg)
         with torch.no_grad():
             layer.model.weight_params.copy_(2.0 * torch.eye(dim))
-            layer.postprocessing.gate.model[0].model.weight_params.copy_(
+            layer.pipeline.postprocessing.gate.model[0].model.weight_params.copy_(
                 0.5 * torch.eye(dim)
             )
         x = torch.tensor(
@@ -1689,7 +1689,7 @@ class TestLayer(unittest.TestCase):
         result = layer(LayerState(hidden=x))
         result.hidden.sum().backward()
 
-        gate_weight_grad = layer.postprocessing.gate.model[0].model.weight_params.grad
+        gate_weight_grad = layer.pipeline.postprocessing.gate.model[0].model.weight_params.grad
         self.assertIsNotNone(gate_weight_grad)
         self.assertTrue(torch.any(gate_weight_grad.abs() > 0))
 
@@ -1719,9 +1719,9 @@ class TestLayer(unittest.TestCase):
                 result = layer(LayerState(hidden=x))
                 result.hidden.sum().backward()
 
-                self.assertIsNotNone(layer.residual.connection.raw_weight.grad)
+                self.assertIsNotNone(layer.pipeline.residual.connection.raw_weight.grad)
                 self.assertTrue(
-                    torch.any(layer.residual.connection.raw_weight.grad.abs() > 0)
+                    torch.any(layer.pipeline.residual.connection.raw_weight.grad.abs() > 0)
                 )
 
     def test_postprocessing_dropout_respects_training_mode(self):
@@ -1744,7 +1744,7 @@ class TestLayer(unittest.TestCase):
                     layer = Layer(cfg)
                     layer.train() if training else layer.eval()
                     x = torch.randn(batch_size, dim)
-                    dropout = layer.postprocessing.dropout
+                    dropout = layer.pipeline.postprocessing.dropout
                     result = x if dropout is None else dropout(x)
 
                     self.assertEqual(result.shape, x.shape)
@@ -1789,14 +1789,14 @@ class TestLayer(unittest.TestCase):
                     -3, 4, math.prod(shape), dtype=torch.float64
                 ).reshape(shape)
                 x.requires_grad_()
-                module = layer.normalization.module
+                module = layer.pipeline.normalization.module
                 if module is not None:
                     module.double()
                     with torch.no_grad():
                         module.weight.copy_(torch.linspace(0.5, 1.5, dim))
                         if getattr(module, "bias", None) is not None:
                             module.bias.fill_(0.25)
-                method = getattr(layer.normalization, method_name)
+                method = getattr(layer.pipeline.normalization, method_name)
                 state = LayerState(hidden=x)
                 expected = x
                 if position == active_position:
@@ -1822,7 +1822,7 @@ class TestLayer(unittest.TestCase):
 
         layer_with_gate = Layer(cfg_with_gate)
         layer_without_gate = Layer(cfg_without_gate)
-        layer_without_gate.postprocessing.gate = None
+        layer_without_gate.pipeline.postprocessing.gate = None
 
         layers = [
             (layer_with_gate, True),
@@ -1832,13 +1832,13 @@ class TestLayer(unittest.TestCase):
             message = f"has_gate={has_gate}"
             with self.subTest(msg=message):
                 x = torch.randn(batch_size, dim)
-                gate_module = layer.postprocessing.gate
+                gate_module = layer.pipeline.postprocessing.gate
                 result = x if gate_module is None else gate_module(x)
 
                 self.assertEqual(result.shape, x.shape)
                 if has_gate:
                     gate_state = Layer.run_model_from_hidden(
-                        layer.postprocessing.gate.model, x
+                        layer.pipeline.postprocessing.gate.model, x
                     )
                     gate_output = gate_state.hidden
                     gate = torch.sigmoid(gate_output)
@@ -1857,10 +1857,10 @@ class TestLayer(unittest.TestCase):
             )
         )
         gate_values = torch.tensor([[-1.0, 0.0, 2.0]])
-        layer.postprocessing.gate.model = ConstantGate(gate_values)
+        layer.pipeline.postprocessing.gate.model = ConstantGate(gate_values)
         x = torch.tensor([[2.0, -3.0, 4.0], [-1.0, 5.0, 0.5]])
 
-        result = layer.postprocessing.gate(x)
+        result = layer.pipeline.postprocessing.gate(x)
 
         gate = torch.sigmoid(gate_values.expand_as(x))
         expected = gate * x
@@ -1893,11 +1893,11 @@ class TestLayer(unittest.TestCase):
                 output_dim=dim,
             )
         )
-        self.assertIsNone(layer.postprocessing.gate)
+        self.assertIsNone(layer.pipeline.postprocessing.gate)
         x = torch.tensor([[2.0, -3.0, 4.0], [-1.0, 5.0, 0.5]])
         state = LayerState(hidden=x)
 
-        result = layer.postprocessing.process(state)
+        result = layer.pipeline.postprocessing.process(state)
 
         self.assertIs(result, state)
         torch.testing.assert_close(result.hidden, x)
@@ -1911,10 +1911,10 @@ class TestLayer(unittest.TestCase):
                 gate_config=self.gate_stack_config(dim),
             )
         )
-        layer.postprocessing.gate.model = None
+        layer.pipeline.postprocessing.gate.model = None
 
         with self.assertRaisesRegex(ValueError, "LayerGate requires a gate model"):
-            layer.postprocessing.gate(torch.ones(2, dim))
+            layer.pipeline.postprocessing.gate(torch.ones(2, dim))
 
     def test_layer_gate_rejects_invalid_model_output(self):
         class ObjectGate(nn.Module):
@@ -1947,10 +1947,10 @@ class TestLayer(unittest.TestCase):
                         gate_config=self.gate_stack_config(dim),
                     )
                 )
-                layer.postprocessing.gate.model = gate_model
+                layer.pipeline.postprocessing.gate.model = gate_model
 
                 with self.assertRaisesRegex(error_type, message):
-                    layer.postprocessing.gate(current)
+                    layer.pipeline.postprocessing.gate(current)
 
     def test_layer_gate_options_apply_expected_formula(self):
         current = torch.tensor([[2.0, -3.0, 4.0], [-1.0, 5.0, 0.5]])
@@ -1993,9 +1993,9 @@ class TestLayer(unittest.TestCase):
                         ),
                     )
                 )
-                layer.postprocessing.gate.model = ConstantGate(gate_values)
+                layer.pipeline.postprocessing.gate.model = ConstantGate(gate_values)
 
-                result = layer.postprocessing.gate(current)
+                result = layer.pipeline.postprocessing.gate(current)
 
                 torch.testing.assert_close(result, expected)
 
@@ -2017,9 +2017,9 @@ class TestLayer(unittest.TestCase):
                         gate_activation=ActivationOptions.SIGMOID,
                     )
                 )
-                layer.postprocessing.gate.model = ConstantGate(gate_values)
+                layer.pipeline.postprocessing.gate.model = ConstantGate(gate_values)
 
-                result = layer.postprocessing.gate(current)
+                result = layer.pipeline.postprocessing.gate(current)
 
                 torch.testing.assert_close(result, expected)
 
@@ -2097,10 +2097,10 @@ class TestLayer(unittest.TestCase):
         dim = 4
         layer = Layer(self.preset(input_dim=dim, output_dim=dim))
         spy = SpyGate()
-        layer.postprocessing.gate.model = spy
+        layer.pipeline.postprocessing.gate.model = spy
         x = torch.randn(batch_size, dim)
 
-        result = layer.postprocessing.gate(x)
+        result = layer.pipeline.postprocessing.gate(x)
 
         self.assertIs(type(spy.received_state), LayerState)
         self.assertIs(spy.received_hidden, x)
@@ -2331,7 +2331,7 @@ class TestLayer(unittest.TestCase):
             halt_mask=torch.tensor([False, False]),
         )
         fake_halting = FakeHaltingModel(fake_halting_state)
-        layer.halting.model = fake_halting
+        layer.pipeline.halting.model = fake_halting
         existing_loss = torch.tensor(5.0)
         x = torch.tensor([[1.0, 2.0, 3.0], [-1.0, 0.5, 4.0]])
         state = LayerState(hidden=x.clone(), loss=existing_loss)
@@ -2364,7 +2364,7 @@ class TestLayer(unittest.TestCase):
         state = LayerState(hidden=torch.randn(batch_size, dim))
         result = layer(state)
 
-        self.assertFalse(layer.halting.is_terminal)
+        self.assertFalse(layer.pipeline.halting.is_terminal)
 
         self.assertTrue(result.halting_state.halt_mask.all().item())
         self.assertIsNotNone(result.loss)
@@ -2392,7 +2392,7 @@ class TestLayer(unittest.TestCase):
         layer = LifecycleLayer(self.bare_config(input_dim=dim, output_dim=dim))
         layer.model = AddConstantModel(100.0)
         fake_halting_state = FakeHaltingState(halt_mask=torch.ones(2, dtype=torch.bool))
-        layer.halting.model = FakeHaltingModel(fake_halting_state)
+        layer.pipeline.halting.model = FakeHaltingModel(fake_halting_state)
         hidden = torch.tensor([[1.0, 2.0, 3.0], [-1.0, 0.5, 4.0]])
         loss = torch.tensor(2.0)
         state = LayerState(
@@ -2408,8 +2408,8 @@ class TestLayer(unittest.TestCase):
         self.assertIs(result.loss, loss)
         self.assertIs(result.halting_state, fake_halting_state)
         self.assertEqual(layer.model.calls, 0)
-        self.assertIsNone(layer.postprocessing.gate)
-        self.assertEqual(layer.halting.model.update_calls, 0)
+        self.assertIsNone(layer.pipeline.postprocessing.gate)
+        self.assertEqual(layer.pipeline.halting.model.update_calls, 0)
         self.assertEqual(lifecycle_events, [])
 
     def test_halting_skips_layer_when_all_items_already_halted(self):

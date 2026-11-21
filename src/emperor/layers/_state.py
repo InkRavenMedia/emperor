@@ -73,3 +73,9 @@ class _MaskedInputLayerState(LayerState):
     """Zero inactive inputs before each model, including after normalization."""
 
     input_mask: Tensor
+
+
+def are_all_items_halted(halting_state: HaltingStateBase | None) -> bool:
+    if halting_state is None or halting_state.halt_mask is None:
+        return False
+    return bool(halting_state.halt_mask.all().item())

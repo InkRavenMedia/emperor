@@ -6,6 +6,7 @@ import torch
 
 from emperor.config import ConfigBase, optional_field
 from emperor.halting import (
+    HaltingBase,
     HaltingConfig,
     HaltingHiddenStateModeOptions,
     HaltingUsageTrackerManager,
@@ -131,7 +132,7 @@ class _RecordingHaltingConfig(HaltingConfig):
         return _RecordingHalting
 
 
-class _RecordingHalting(Module):
+class _RecordingHalting(HaltingBase[_RecordingHaltingState]):
     def __init__(
         self,
         cfg: _RecordingHaltingConfig,
@@ -141,10 +142,6 @@ class _RecordingHalting(Module):
         self.cfg = self._override_config(cfg, overrides)
         self.update_inputs: list[torch.Tensor] = []
         self.finalize_calls = 0
-
-    @classmethod
-    def implements_halting_interface(cls) -> bool:
-        return True
 
     def update_halting_state(
         self,
@@ -254,7 +251,7 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
 
         runtime = config.build()
 
-        self.assertEqual(runtime.utilities.halting_model.min_steps, 2)
+        self.assertEqual(runtime.pipeline.halting.model.min_steps, 2)
 
     def test_config_builds_its_exact_private_runtime_owner(self) -> None:
         config = _config()
@@ -268,14 +265,14 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
         runtime = _config().build()
 
         self.assertIs(
-            runtime.utilities.recurrent_layer_norm_position,
+            runtime.pipeline.normalization.position,
             LayerNormPositionOptions.DISABLED,
         )
-        self.assertIsNone(runtime.utilities.recurrent_gate)
-        self.assertIsNone(runtime.utilities.residual_connection)
-        self.assertIsNone(runtime.utilities.halting_model)
-        self.assertIsNone(runtime.utilities.memory_model)
-        self.assertIsNone(runtime.utilities.normalization.module)
+        self.assertIsNone(runtime.pipeline.postprocessing.gate)
+        self.assertIsNone(runtime.pipeline.residual.connection)
+        self.assertIsNone(runtime.pipeline.halting.model)
+        self.assertIsNone(runtime.pipeline.memory.model)
+        self.assertIsNone(runtime.pipeline.normalization.module)
 
     def test_abbreviated_schedule_field_names_are_not_supported(self) -> None:
         for retired_field_name in ("n", "T"):
@@ -740,8 +737,8 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(len(runtime.block_model.inputs), 3)
-        self.assertEqual(len(runtime.utilities.halting_model.update_inputs), 1)
-        self.assertEqual(runtime.utilities.halting_model.finalize_calls, 1)
+        self.assertEqual(len(runtime.pipeline.halting.model.update_inputs), 1)
+        self.assertEqual(runtime.pipeline.halting.model.finalize_calls, 1)
 
     def test_smooth_checkpoint_restores_the_exact_next_answer_cycle(self) -> None:
         config = _config(
@@ -904,9 +901,9 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             offset=20.0,
             position=MemoryPositionOptions.BEFORE_AFFINE,
         )
-        runtime.utilities.normalization.position = LayerNormPositionOptions.BEFORE
-        runtime.utilities.normalization.module = normalization
-        runtime.utilities.memory_model = memory
+        runtime.pipeline.normalization.position = LayerNormPositionOptions.BEFORE
+        runtime.pipeline.normalization.module = normalization
+        runtime.pipeline.memory.model = memory
 
         result = runtime(LayerState(hidden=torch.ones(1, 1)))
 
@@ -940,8 +937,8 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         result = runtime(state)
 
         self.assertEqual(len(runtime.block_model.inputs), 6)
-        self.assertEqual(len(runtime.utilities.halting_model.update_inputs), 2)
-        self.assertEqual(runtime.utilities.halting_model.finalize_calls, 1)
+        self.assertEqual(len(runtime.pipeline.halting.model.update_inputs), 2)
+        self.assertEqual(runtime.pipeline.halting.model.finalize_calls, 1)
         self.assertIs(result.halting_state, owner_halting_state)
 
     def test_halting_monitor_preserves_answer_update_depth_semantics(self) -> None:
@@ -953,12 +950,12 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         config.halting_config = _RecordingHaltingConfig(halt_after_updates=2)
         runtime = config.build()
         tracker_manager = HaltingUsageTrackerManager()
-        tracker = tracker_manager.attach(runtime.utilities.halting_model)
+        tracker = tracker_manager.attach(runtime.pipeline.halting.model)
 
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         torch.testing.assert_close(tracker.last_step_count, torch.tensor(2.0))
-        tracker_manager.detach(runtime.utilities.halting_model)
+        tracker_manager.detach(runtime.pipeline.halting.model)
 
     def test_smooth_growth_commits_only_target_branch_halting_usage(self) -> None:
         config = _config(
@@ -972,23 +969,23 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         config.halting_config = _RecordingHaltingConfig(halt_after_updates=1)
         runtime = config.build()
         tracker_manager = HaltingUsageTrackerManager()
-        tracker = tracker_manager.attach(runtime.utilities.halting_model)
+        tracker = tracker_manager.attach(runtime.pipeline.halting.model)
         for _ in range(4):
             runtime(LayerState(hidden=torch.ones(1, 1)))
-        update_count_before = len(runtime.utilities.halting_model.update_inputs)
-        finalize_count_before = runtime.utilities.halting_model.finalize_calls
+        update_count_before = len(runtime.pipeline.halting.model.update_inputs)
+        finalize_count_before = runtime.pipeline.halting.model.finalize_calls
 
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(
-            len(runtime.utilities.halting_model.update_inputs) - update_count_before,
+            len(runtime.pipeline.halting.model.update_inputs) - update_count_before,
             2,
         )
         self.assertEqual(
-            runtime.utilities.halting_model.finalize_calls - finalize_count_before, 2
+            runtime.pipeline.halting.model.finalize_calls - finalize_count_before, 2
         )
         torch.testing.assert_close(tracker.last_step_count, torch.tensor(1.0))
-        tracker_manager.detach(runtime.utilities.halting_model)
+        tracker_manager.detach(runtime.pipeline.halting.model)
 
     def test_halting_starts_on_the_first_eligible_trainable_answer(self) -> None:
         config = _config(
@@ -1001,8 +998,8 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(runtime.block_model.grad_modes, [False] * 6 + [True] * 3)
-        self.assertEqual(len(runtime.utilities.halting_model.update_inputs), 1)
-        self.assertEqual(runtime.utilities.halting_model.finalize_calls, 1)
+        self.assertEqual(len(runtime.pipeline.halting.model.update_inputs), 1)
+        self.assertEqual(runtime.pipeline.halting.model.finalize_calls, 1)
 
     def test_halting_restricts_one_internal_layout_without_replacing_the_owner_layout(
         self,
@@ -1028,8 +1025,8 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             no_gradient_transition_count=2,
         ).build()
         normalization = _RecordingTransform(offset=1.0)
-        runtime.utilities.normalization.position = LayerNormPositionOptions.BEFORE
-        runtime.utilities.normalization.module = normalization
+        runtime.pipeline.normalization.position = LayerNormPositionOptions.BEFORE
+        runtime.pipeline.normalization.module = normalization
         fixed_input = torch.ones(1, 1, requires_grad=True)
 
         result = runtime(LayerState(hidden=fixed_input))
@@ -1057,11 +1054,11 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         result = runtime(LayerState(hidden=fixed_input))
         result.hidden.sum().backward()
 
-        self.assertIsNotNone(runtime.utilities.memory_model)
+        self.assertIsNotNone(runtime.pipeline.memory.model)
         self.assertTrue(
             any(
                 parameter.grad is not None
-                for parameter in runtime.utilities.memory_model.parameters()
+                for parameter in runtime.pipeline.memory.model.parameters()
             )
         )
         self.assertIsNotNone(fixed_input.grad)
@@ -1127,7 +1124,7 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
             answer_update_count=1,
             auxiliary_loss=0.5,
         ).build()
-        state = runtime.step.initialize(
+        state = runtime.step.initialize_recurrent_state(
             LayerState(hidden=torch.ones(1, 1)),
         )
         transition_loss = torch.tensor(2.0, requires_grad=True)
@@ -1163,10 +1160,12 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
                 "recurrent_iteration_schedule.forward_call_progress",
                 "answer_initial",
                 "latent_initial",
-                "block_model.scale",
+                "step.block_model.scale",
             },
         )
-        self.assertEqual(dict(runtime.named_parameters()).keys(), {"block_model.scale"})
+        self.assertEqual(
+            dict(runtime.named_parameters()).keys(), {"step.block_model.scale"}
+        )
         torch.testing.assert_close(result.loss, torch.tensor(4.0))
         result.loss.backward()
         torch.testing.assert_close(initial_loss.grad, torch.tensor(1.0))

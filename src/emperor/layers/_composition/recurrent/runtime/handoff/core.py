@@ -53,7 +53,9 @@ class RecurrentDepthHandoff(Generic[RecurrentStateT]):
             with self.__runtime_state_guard.rollback_handoff_on_failure(
                 runtime_modules()
             ):
-                recurrent_state = self.step.initialize(state, include_caller_loss=False)
+                recurrent_state = self.step.initialize_recurrent_state(
+                    state, include_caller_loss=False
+                )
                 if isinstance(
                     execution_plan, RecurrentNestedSmoothHandoffExecutionPlan
                 ):
@@ -92,7 +94,7 @@ class RecurrentDepthHandoff(Generic[RecurrentStateT]):
                 recurrent_state = recurrent_state.detach()
             tracks_gradients = recurrent_state.transition_index >= no_gradient_steps
             with self.__gradient_context_for_step(tracks_gradients):
-                recurrent_state = self.step.forward(
+                recurrent_state = self.step(
                     recurrent_state, tracks_gradients, observe_transitions
                 )
         return recurrent_state

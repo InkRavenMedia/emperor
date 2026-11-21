@@ -1,4 +1,4 @@
-"""Private owner package for Layer construction and execution."""
+"""Private owners for Layer execution and validation."""
 
 from emperor.layers._layer.core import Layer
 

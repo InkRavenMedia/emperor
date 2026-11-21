@@ -7,18 +7,13 @@ import torch
 import torch.nn.functional as F
 
 from emperor.layers import LayerState
+from emperor.layers._composition.residual import variants
 from emperor.layers._composition.residual.base import ResidualState
 from emperor.layers._composition.residual.config import AttentionResidualConfig
 from emperor.layers._composition.residual.variants import attention as attention_variant
 from emperor.layers._composition.residual.variants.attention import (
     AttentionResidual,
     AttentionResidualState,
-)
-from emperor.layers._composition.residual.variants.attention.core import (
-    AttentionResidual as CoreAttentionResidual,
-)
-from emperor.layers._composition.residual.variants.attention.state import (
-    AttentionResidualState as OwnedAttentionResidualState,
 )
 from emperor.linears import LinearLayerConfig
 
@@ -55,18 +50,17 @@ class TestAttentionResidualPackage(unittest.TestCase):
             attention_variant.__all__,
             ("AttentionResidual", "AttentionResidualState"),
         )
-        self.assertIs(AttentionResidual, CoreAttentionResidual)
-        self.assertIs(AttentionResidualState, OwnedAttentionResidualState)
+        self.assertIs(variants.AttentionResidual, AttentionResidual)
 
         config = AttentionResidualConfig(
             block_size=1, rms_norm_epsilon=1e-6, residual_dim=2
         )
-        self.assertIs(config.registry_owner(), CoreAttentionResidual)
+        self.assertIs(config.registry_owner(), AttentionResidual)
         residual = config.build()
-        self.assertIs(type(residual), CoreAttentionResidual)
+        self.assertIs(type(residual), AttentionResidual)
         initial_source = torch.ones(1, 2)
         state = residual.new_state(initial_source)
-        self.assertIs(type(state), OwnedAttentionResidualState)
+        self.assertIs(type(state), AttentionResidualState)
         output = residual(
             torch.full((1, 2), 3.0),
             initial_source,
@@ -77,8 +71,8 @@ class TestAttentionResidualPackage(unittest.TestCase):
     def test_serialized_objects_resolve_current_class_owners(self):
         package_name = "emperor.layers._composition.residual.variants.attention"
         for module_name, expected_class in (
-            ("core", CoreAttentionResidual),
-            ("state", OwnedAttentionResidualState),
+            ("core", AttentionResidual),
+            ("state", AttentionResidualState),
         ):
             with self.subTest(class_name=expected_class.__name__):
                 self.assertEqual(
@@ -97,8 +91,8 @@ class TestAttentionResidualPackage(unittest.TestCase):
         restored_residual, restored_state = pickle.loads(
             pickle.dumps((residual, state))
         )
-        self.assertIs(type(restored_residual), CoreAttentionResidual)
-        self.assertIs(type(restored_state), OwnedAttentionResidualState)
+        self.assertIs(type(restored_residual), AttentionResidual)
+        self.assertIs(type(restored_state), AttentionResidualState)
         current = torch.tensor([[-0.5, 1.0]])
         expected = residual(current, initial, residual_state=state)
         actual = restored_residual(current, initial, residual_state=restored_state)

@@ -296,7 +296,7 @@ class LayerTensorInvocationTests(unittest.TestCase):
             layer.model.bias_params.zero_()
         inputs = torch.arange(8, dtype=torch.float32).reshape(4, 2).requires_grad_()
         contexts = []
-        generator = layer.residual.connection.model.adaptive_behaviour.bias_model.model[
+        generator = layer.pipeline.residual.connection.model.adaptive_behaviour.bias_model.model[
             0
         ].model
         hook = generator.register_forward_pre_hook(
@@ -349,7 +349,7 @@ class LayerTensorInvocationTests(unittest.TestCase):
         )
         inputs = torch.randn(4, 2, requires_grad=True)
         contexts = []
-        residual = recurrent.utilities.residual_connection
+        residual = recurrent.pipeline.residual.connection
         generator = residual.model.adaptive_behaviour.bias_model.model[0].model
         hook = generator.register_forward_pre_hook(
             lambda _module, args: contexts.append(args[0].detach().clone())
@@ -368,16 +368,16 @@ class LayerTensorInvocationTests(unittest.TestCase):
             residual_config=AttentionResidualConfig(block_size=1, rms_norm_epsilon=1e-6)
         )
         inputs = torch.zeros(4, 2)
-        residual_state = layer.residual.connection.new_state(inputs)
+        residual_state = layer.pipeline.residual.connection.new_state(inputs)
         layer(LayerState(hidden=inputs, residual_state=residual_state))
         self.assertEqual(len(residual_state.sources), 2)
 
     def test_controller_delegates_retain_state_and_hidden(self):
         layer = plain_layer()
-        layer.halting.model = PassthroughHalting()
-        layer.memory.model = PassthroughMemory()
+        layer.pipeline.halting.model = PassthroughHalting()
+        layer.pipeline.memory.model = PassthroughMemory()
         inputs = torch.zeros(4, 2)
-        for process in (layer.halting.apply_halting, layer.memory.before_model):
+        for process in (layer.pipeline.halting.apply_halting, layer.pipeline.memory.before_model):
             state = LayerState(hidden=inputs)
             self.assertIs(process(state), state)
             self.assertIs(state.hidden, inputs)
