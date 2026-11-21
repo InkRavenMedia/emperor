@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Final, cast
 
 from emperor.layers import ActivationOptions, LastLayerBiasOptions
+from model_runtime.packages.configuration import require_finite_learning_rate
 from models.linears.linear import config
 from models.linears.linear._residual import (
     ResidualStackOptions,
@@ -86,6 +87,7 @@ def _runtime_dimensions(
     reader: RuntimeOverrideReader,
 ) -> RuntimeDimensionsValues:
     dimensions = read_runtime_dimensions(reader)
+    require_finite_learning_rate("LEARNING_RATE", dimensions.learning_rate)
     for key, value in (
         ("batch_size", dimensions.batch_size),
         ("learning_rate", dimensions.learning_rate),
