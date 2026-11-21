@@ -23,7 +23,9 @@ from emperor_workbench.api._mutations._context import (
     deterministic_mutation_resource_id,
 )
 from emperor_workbench.api._mutations._journal import (
+    MutationDecision,
     MutationJournal,
+    ReplayMutation,
     StoredMutationResponse,
 )
 from emperor_workbench.api._mutations._policy import (
@@ -392,15 +394,14 @@ class MutationExecutionMiddleware:
             key=key,
         )
 
-        if admission.action == "in_progress":
+        if admission is MutationDecision.IN_PROGRESS:
             await JSONResponse(
                 {"detail": IDEMPOTENCY_KEY_IN_PROGRESS_DETAIL},
                 status_code=409,
                 headers={"Retry-After": "1"},
             )(scope, receive, send)
             return
-        if admission.action == "replay":
-            assert admission.response is not None
+        if isinstance(admission, ReplayMutation):
             request_hash = await _consume_request_hash(scope, receive)
             if request_hash != admission.request_hash:
                 await JSONResponse(
@@ -409,6 +410,11 @@ class MutationExecutionMiddleware:
                 )(scope, receive, send)
                 return
             await _send_stored(admission.response, send)
+            return
+        if admission is not MutationDecision.EXECUTE:
+            await JSONResponse(
+                {"detail": MUTATION_ADMISSION_UNAVAILABLE_DETAIL}, status_code=503
+            )(scope, receive, send)
             return
 
         digest = _request_digest(scope)
