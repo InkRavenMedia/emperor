@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -12,7 +13,7 @@ from model_runtime.runs._progress_events import (
     MODEL_RUNTIME_PROGRESS_EVENT_FIELDS,
     MODEL_RUNTIME_PROGRESS_EVENT_TYPES,
     MODEL_RUNTIME_PROGRESS_OPTIONAL_FIELDS,
-    RunProgressEventInput,
+    RunProgressEvent,
     project_run_progress_context,
     project_run_progress_event,
 )
@@ -25,9 +26,9 @@ DEFAULT_PROGRESS_STRING_VALUE_LIMIT = 20_000
 
 @runtime_checkable
 class RunProgress(Protocol):
-    """Destination accepting typed Run events or explicit legacy wire mappings."""
+    """Destination for the portable records produced by a contextual Run."""
 
-    def write_event(self, event: RunProgressEventInput) -> None: ...
+    def write_record(self, record: Mapping[str, Any]) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,15 +58,15 @@ class ContextualRunProgress:
     def with_log_dir(self, log_dir: str) -> ContextualRunProgress:
         return replace(self, context=self.context.with_log_dir(log_dir))
 
-    def write_event(self, event: RunProgressEventInput) -> None:
-        self.destination.write_event(
+    def write_event(self, event: RunProgressEvent) -> None:
+        self.destination.write_record(
             project_run_progress_event(event, context=self.context)
         )
 
 
 def require_run_progress(progress: object) -> RunProgress:
     if not isinstance(progress, RunProgress):
-        raise TypeError("Runs progress must define write_event(event).")
+        raise TypeError("Runs progress must define write_record(record).")
     return progress
 
 
@@ -109,8 +110,8 @@ class JsonlRunProgress:
             max(0, int(self.string_value_limit)),
         )
 
-    def write_event(self, event: RunProgressEventInput) -> None:
-        event_payload = self._sanitize_event(event)
+    def write_record(self, record: Mapping[str, Any]) -> None:
+        event_payload = self._sanitize_record(record)
         payload = {
             "timestamp": datetime.now(UTC).isoformat(),
             **event_payload,
@@ -121,8 +122,8 @@ class JsonlRunProgress:
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, default=str) + "\n")
 
-    def _sanitize_event(self, event: RunProgressEventInput) -> dict[str, Any]:
-        payload = project_run_progress_event(event)
+    def _sanitize_record(self, record: Mapping[str, Any]) -> dict[str, Any]:
+        payload = dict(record)
         for key in ("error", "traceback"):
             value = payload.get(key)
             if isinstance(value, str):

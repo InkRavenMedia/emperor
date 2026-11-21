@@ -171,7 +171,6 @@ RunProgressEvent: TypeAlias = (
     | NeuronAddedEvent
     | NeuronsAddedEvent
 )
-RunProgressEventInput: TypeAlias = RunProgressEvent | Mapping[str, Any]
 
 
 class _RunProgressContext(Protocol):
@@ -380,12 +379,12 @@ def project_run_progress_context(context: _RunProgressContext) -> dict[str, Any]
 
 
 def project_run_progress_event(
-    event: RunProgressEventInput,
+    event: RunProgressEvent,
     *,
     context: _RunProgressContext | None = None,
 ) -> dict[str, Any]:
-    """Project a typed Run event or explicit legacy mapping to portable wire data."""
-    payload = dict(event) if isinstance(event, Mapping) else _typed_event_payload(event)
+    """Serialize one domain event and its Run context for a progress destination."""
+    payload = _typed_event_payload(event)
     if context is not None:
         payload.update(project_run_progress_context(context))
     return payload
@@ -404,7 +403,6 @@ __all__ = [
     "NeuronAddedEvent",
     "NeuronsAddedEvent",
     "RunProgressEvent",
-    "RunProgressEventInput",
     "RunProgressEventType",
     "StepEvent",
     "TestCompletedEvent",
