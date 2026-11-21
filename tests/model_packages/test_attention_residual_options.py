@@ -277,6 +277,7 @@ def assert_model_residual_options(
 
 @pytest.mark.parametrize("catalog_key", PACKAGES)
 @pytest.mark.parametrize("selector,modeled,block_size", MODES)
+@pytest.mark.training
 def test_model_residual_options_forward_update_and_checkpoint(
     catalog_key, selector, modeled, block_size
 ):
@@ -297,6 +298,7 @@ ADDITIONAL_PLACEMENTS = tuple(
 @pytest.mark.parametrize(
     "modeled,block_size", [(False, 1), (True, 1), (False, 2), (True, 2)]
 )
+@pytest.mark.training
 def test_main_and_recurrent_attention_placements_forward_update_and_checkpoint(
     catalog_key, placement, modeled, block_size
 ):
