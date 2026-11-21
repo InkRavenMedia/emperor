@@ -153,11 +153,6 @@ export const workbenchQueryKeys = {
       selectedPreset,
       normalizedStringSet(selectedTrainingPresets),
     ] as const,
-  historicalSummaryInspection: (
-    model: string,
-    preset: string,
-    dataset: string,
-  ) => ["inspect", "historical-summary", model, preset, dataset] as const,
   previewInspections: () => ["inspect", "preview"] as const,
   previewInspection: (requestKey: string) =>
     [...workbenchQueryKeys.previewInspections(), requestKey] as const,
@@ -199,20 +194,6 @@ export const monitorQueryKeys = {
     [
       "monitor-parameter-status",
       "historical-run-group",
-      normalizedStringSet(runIds),
-    ] as const,
-  historicalParameterSummary: (
-    model: string,
-    preset: string,
-    dataset: string,
-    runIds: StringList,
-  ) =>
-    [
-      "monitor-parameter-summary",
-      "historical-run-group",
-      model,
-      preset,
-      dataset,
       normalizedStringSet(runIds),
     ] as const,
 };
