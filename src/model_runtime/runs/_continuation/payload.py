@@ -8,7 +8,7 @@ from typing import Any, NoReturn, cast
 
 import torch
 
-from model_runtime.runs._checkpoint_receipt import (
+from model_runtime.runs._continuation.receipt import (
     CheckpointArchiveReceipt,
     CheckpointPayloadReceipt,
 )
@@ -224,7 +224,9 @@ def _mapping_children(value: Mapping[object, object]) -> Iterator[object]:
         yield item
 
 
-def _sequence_children(value: list[object] | tuple[object, ...] | set[object] | frozenset[object]) -> Iterator[object]:
+def _sequence_children(
+    value: list[object] | tuple[object, ...] | set[object] | frozenset[object],
+) -> Iterator[object]:
     yield from value
 
 
@@ -348,7 +350,9 @@ class _PayloadInventory:
             _raise_limit(self.path, "contains unsupported raw tensor storage.")
         elif isinstance(value, Mapping):
             mapping = cast(Mapping[object, object], value)
-            self._record_container(mapping, depth, _mapping_children(mapping), iterators)
+            self._record_container(
+                mapping, depth, _mapping_children(mapping), iterators
+            )
         elif isinstance(value, (list, tuple, set, frozenset)):
             sequence = cast(
                 list[object] | tuple[object, ...] | set[object] | frozenset[object],

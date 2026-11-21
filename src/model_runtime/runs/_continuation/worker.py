@@ -10,8 +10,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, BinaryIO, Protocol, cast
 
 if TYPE_CHECKING:
-    from model_runtime.runs._checkpoint_receipt import CheckpointArchiveReceipt
-    from model_runtime.runs._checkpoint_worker_protocol import CheckpointWorkerRequest
+    from model_runtime.runs._continuation.receipt import CheckpointArchiveReceipt
+    from model_runtime.runs._continuation.worker_protocol import CheckpointWorkerRequest
 
 
 class _ResourceModule(Protocol):
@@ -79,12 +79,7 @@ def _opened_snapshot(path: str):
 
 
 def _write_response(path: str, response: bytes) -> None:
-    flags = (
-        os.O_WRONLY
-        | os.O_CREAT
-        | os.O_EXCL
-        | getattr(os, "O_CLOEXEC", 0)
-    )
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0)
     descriptor = os.open(path, flags, 0o600)
     try:
         with os.fdopen(descriptor, "wb", closefd=True) as output:
@@ -100,7 +95,7 @@ def _write_response(path: str, response: bytes) -> None:
 
 
 def _read_request() -> CheckpointWorkerRequest | None:
-    from model_runtime.runs._checkpoint_worker_protocol import (
+    from model_runtime.runs._continuation.worker_protocol import (
         MAX_CHECKPOINT_WORKER_REQUEST_BYTES,
         decode_worker_request,
     )
@@ -128,7 +123,7 @@ def _load_snapshot(
 ) -> tuple[object, str, CheckpointArchiveReceipt]:
     import torch
 
-    from model_runtime.runs._checkpoint_archive import checkpoint_archive_receipt
+    from model_runtime.runs._continuation.archive import checkpoint_archive_receipt
 
     snapshot_file, metadata = _opened_snapshot(str(request.snapshot_path))
     with snapshot_file:
@@ -151,8 +146,8 @@ def _decode_response(
     request: CheckpointWorkerRequest,
     controls: Mapping[str, int],
 ) -> bytes:
-    from model_runtime.runs._checkpoint_payload import validate_checkpoint_payload
-    from model_runtime.runs._checkpoint_worker_protocol import (
+    from model_runtime.runs._continuation.payload import validate_checkpoint_payload
+    from model_runtime.runs._continuation.worker_protocol import (
         encode_worker_error,
         encode_worker_receipt,
     )
@@ -182,7 +177,7 @@ def _decode_response(
 
 
 def _control_failure_response() -> bytes:
-    from model_runtime.runs._checkpoint_worker_protocol import encode_worker_error
+    from model_runtime.runs._continuation.worker_protocol import encode_worker_error
 
     return encode_worker_error(
         "controls-unavailable",
@@ -195,7 +190,7 @@ def main() -> int:
     if request is None:
         return 70
     try:
-        from model_runtime.runs._checkpoint_worker_protocol import (
+        from model_runtime.runs._continuation.worker_protocol import (
             MAX_CHECKPOINT_WORKER_RECEIPT_BYTES,
         )
 

@@ -219,8 +219,7 @@ def _copy_private_snapshot(
         if isinstance(exception, InvalidCheckpointContinuation):
             raise
         raise InvalidCheckpointContinuation(
-            f"Checkpoint '{display_path}' could not be copied into a private "
-            "snapshot."
+            f"Checkpoint '{display_path}' could not be copied into a private snapshot."
         ) from exception
 
 
