@@ -14,6 +14,12 @@ from model_runtime.inspection import ConfigurationField, ConfigurationSchema
 from model_runtime.packages import ModelIdentity
 
 from emperor_workbench.api import create_app
+from emperor_workbench.failures import FailureKind
+from emperor_workbench.model_packages import (
+    ModelPackageCatalog,
+    ModelPackageFailure,
+    SelectedModelPackage,
+)
 from emperor_workbench.settings import WorkbenchApiSettings
 
 # Synthetic config schema so the API tests stay fast and model-independent while
@@ -154,6 +160,29 @@ class ConfigSnapshotApiTests(unittest.TestCase):
                 "overrides": overrides,
             },
         )
+
+    def test_create_preserves_model_availability_and_timeout_http_status(self) -> None:
+        for kind, status in (
+            (FailureKind.UNAVAILABLE, 503),
+            (FailureKind.TIMEOUT, 408),
+        ):
+            for capability, name in (
+                (ModelPackageCatalog, "select"),
+                (SelectedModelPackage, "serialize_overrides"),
+            ):
+                with (
+                    self.subTest(kind=kind, name=name),
+                    mock.patch.object(
+                        capability,
+                        name,
+                        side_effect=ModelPackageFailure(
+                            "project unavailable", kind=kind
+                        ),
+                    ),
+                ):
+                    response = self._create(learning_rate="0.1")
+                    self.assertEqual(response.status_code, status, response.text)
+                    self.assertEqual(response.json()["detail"], "project unavailable")
 
     def test_create_then_list_persists_snapshot(self) -> None:
         response = self._create(learning_rate="0.01", batch_size="128")
