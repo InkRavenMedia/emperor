@@ -1,69 +1,72 @@
 {
   "canonicalJson": {
     "ensureAscii": false,
-    "separators": [",", ":"],
+    "separators": [
+      ",",
+      ":"
+    ],
     "sortKeys": false
   },
   "graphs": {
     "simple-baseline": {
-      "sha256": "a9412835ce90f24c069aa071a478fd127868801781ea72ad45fe35dfa1d0cc27",
-      "bytes": 47833,
+      "sha256": "1ee98be726d00d42cd50283f2f065996027746c9198d37e7e4332b849a4023fa",
+      "bytes": 53271,
       "model": "linears/linear",
       "preset": "baseline",
       "dataset": "Mnist",
       "experimentTask": "image-classification",
-      "nodeCount": 65,
-      "edgeCount": 64
+      "nodeCount": 72,
+      "edgeCount": 71
     },
     "simple-gating": {
-      "sha256": "1e1e309096bb2f027cb59368490f1a676af8affcd6b5719e2dcef13d65223234",
-      "bytes": 145297,
+      "sha256": "98ab8a122747499b0a8343f52b5ac42c32ab2b040635a10e1872bcba86bd9665",
+      "bytes": 166025,
       "model": "linears/linear",
       "preset": "gating",
       "dataset": "FashionMNIST",
       "experimentTask": "image-classification",
-      "nodeCount": 155,
-      "edgeCount": 154
+      "nodeCount": 172,
+      "edgeCount": 171
     },
     "adaptive-full-stack": {
-      "sha256": "a2e3bf2d6fbbafd24128eef0010bd478e5ae6c61d9fc96715089cdd33ffd70ea",
-      "bytes": 764164,
+      "sha256": "49cc2d3982e5a94e6f94053b7d311a0a7156fc00b4360cbc5582011892ed1f2c",
+      "bytes": 828942,
       "model": "linears/linear_adaptive",
       "preset": "full-stack",
       "dataset": "Cifar10",
       "experimentTask": "image-classification",
-      "nodeCount": 635,
-      "edgeCount": 634
+      "nodeCount": 697,
+      "edgeCount": 696
     },
     "bert-task": {
-      "sha256": "66ae4217c903612201b3c9229a6cce59b586b7848b9a1ed0a31be436091fcf2c",
-      "bytes": 534971,
+      "sha256": "d8517388dc8e5b37911ebebf81691e400906650b6fa24a8eb884ee37ebad8c7c",
+      "bytes": 583197,
       "model": "bert/linear",
       "preset": "baseline",
       "dataset": "PennTreebankBertPretraining",
       "experimentTask": "bert-pretraining",
-      "nodeCount": 425,
-      "edgeCount": 424
+      "nodeCount": 472,
+      "edgeCount": 471
     },
     "gpt-task": {
-      "sha256": "f7b49b1fa3bdd254b45eb40f3d80a7187fb9c068583074663c773055ab164298",
-      "bytes": 547663,
+      "sha256": "77e3259203df57ab6ae6cad7024be3747ef1d502ba7fa1001c83c951a7bdde2c",
+      "bytes": 595390,
       "model": "gpt/linear",
       "preset": "baseline",
       "dataset": "WikiText2",
       "experimentTask": "causal-language-modeling",
-      "nodeCount": 443,
-      "edgeCount": 442
+      "nodeCount": 489,
+      "edgeCount": 488
     },
     "translation-task": {
-      "sha256": "e70144c347c0aff439e2a31af35084889081d9fb2188b44eba46679f36ce9b62",
-      "bytes": 854780,
+      "sha256": "4444015cd2662963cd1bf805ccd573276c5fdd62e644c275c7aa7fb9f0f183ff",
+      "bytes": 928597,
       "model": "transformer/linear",
       "preset": "baseline",
       "dataset": "Multi30kDeEn",
       "experimentTask": "text-translation",
-      "nodeCount": 665,
-      "edgeCount": 664
+      "nodeCount": 736,
+      "edgeCount": 735
     }
   },
   "schemas": {
@@ -71,9 +74,9 @@
       "model": "linears/linear",
       "preset": "baseline",
       "presets": null,
-      "configSha256": "94589a11165eb9bbbca54081585ed9d6ec52892bdafb074b08a68a1dbcc06d53",
-      "configBytes": 105510,
-      "fieldCount": 176,
+      "configSha256": "6f4fbda6b140f0287974bd4e78058f2386a46a868448b5384f7efde3f3087807",
+      "configBytes": 130336,
+      "fieldCount": 178,
       "searchSha256": "7b8e914cc40224288e423ea70813b4e063e96008333a8a50dfe033d8a204f566",
       "searchBytes": 2183,
       "axisCount": 7
@@ -82,9 +85,9 @@
       "model": "linears/linear",
       "preset": "gating",
       "presets": null,
-      "configSha256": "04dc67e26ea3f48592445b6ee948ef6953e76902d6358617e2681d3b3f0ec7cb",
-      "configBytes": 105581,
-      "fieldCount": 176,
+      "configSha256": "8b01516960bd6b966ec527094e7eea0fa852767797f78bd730170ab7d34381f0",
+      "configBytes": 130407,
+      "fieldCount": 178,
       "searchSha256": "37b1a2aa54f412b3b105f8b0129a49450691bfe74409f7d8e853cb459d7f28bc",
       "searchBytes": 2181,
       "axisCount": 7
@@ -93,46 +96,120 @@
       "model": "linears/linear_adaptive",
       "preset": "full-stack",
       "presets": null,
-      "configSha256": "c8a6867ad7abbce5e42b1b564db2811e331312dd2a67682b10ae7f0d8fc09f95",
-      "configBytes": 389579,
-      "fieldCount": 579,
-      "searchSha256": "c888ac8dd430d392b8c7e59e8be87e101854b7fc4cbfd16bfb501357ad33d88c",
-      "searchBytes": 12450,
+      "configSha256": "fcef9cfd2327913c0127b66a7267c121a6231c6e04b3ecec91857f0f5a78daf0",
+      "configBytes": 461396,
+      "fieldCount": 584,
+      "searchSha256": "8f9b451b1535fc386ccdafe0230b280af101d08a70ee1608d26eef77c0ed7ffc",
+      "searchBytes": 12502,
       "axisCount": 33
     },
     "adaptive-union": {
       "model": "linears/linear_adaptive",
       "preset": "baseline",
-      "presets": ["full-stack", "dual-weight-gating"],
-      "configSha256": "e2b79c61ed6003414ac8624b8744892e81f630df4b07c544cd6c5facf9b13c2b",
-      "configBytes": 388868,
-      "fieldCount": 579,
-      "searchSha256": "d643050708baebdb1c1ff966ece19324d2bf4cb0fcac61e96fb4dd607720bb8a",
-      "searchBytes": 12637,
+      "presets": [
+        "full-stack",
+        "dual-weight-gating"
+      ],
+      "configSha256": "466233c8f91c23b9df28523249b9ed0823a5e96154db666207309eaf9a5f5142",
+      "configBytes": 460685,
+      "fieldCount": 584,
+      "searchSha256": "d0bb4d0c1f970474345925d2c643f42a4f36bdfbdd3609a95decf6c76a345c98",
+      "searchBytes": 12689,
       "axisCount": 33
     }
   },
   "discovery": {
-    "linears/linear": ["cfe122a94b689b08965adebb83122f1ae6948531cba9d7fe3d94e3a03bfe1a98", 7497, 35, 1, 5],
-    "linears/linear_adaptive": ["3f1854e66057b64b91d76f0f7bfb916fd596a85dde69e7b521cda95cdb380eef", 14345, 70, 1, 7],
-    "bert/linear": ["999ebdf0014f4f2902c8d5c2770ca69ad08bb1bffb8afb5845a911a1b13c3aa4", 5378, 28, 1, 4],
-    "gpt/linear": ["95021b583fd3e4bf6fb0f9b23453e6650408c94d4420054f53f0399f9d102354", 5671, 28, 1, 4],
-    "transformer/linear": ["ea42fa102fc245bd6b7a77c9d65073128eb125c79175835c479b57f5e5aca389", 4181, 27, 1, 4]
+    "linears/linear": [
+      "f569c324c5caa0feb46574c80a01d68eeffa6434065e60c32c6f5e67cd29b6f7",
+      7500,
+      35,
+      1,
+      5
+    ],
+    "linears/linear_adaptive": [
+      "3f1854e66057b64b91d76f0f7bfb916fd596a85dde69e7b521cda95cdb380eef",
+      14345,
+      70,
+      1,
+      7
+    ],
+    "bert/linear": [
+      "999ebdf0014f4f2902c8d5c2770ca69ad08bb1bffb8afb5845a911a1b13c3aa4",
+      5378,
+      28,
+      1,
+      4
+    ],
+    "gpt/linear": [
+      "95021b583fd3e4bf6fb0f9b23453e6650408c94d4420054f53f0399f9d102354",
+      5671,
+      28,
+      1,
+      4
+    ],
+    "transformer/linear": [
+      "ea42fa102fc245bd6b7a77c9d65073128eb125c79175835c479b57f5e5aca389",
+      4181,
+      27,
+      1,
+      4
+    ]
   },
-  "catalog": ["e29a170d3b663c97390f5fb93e0ff0ceba38b7a39f726eb4547dea66cd2baeeb", 759, 31],
+  "catalog": [
+    "e29a170d3b663c97390f5fb93e0ff0ceba38b7a39f726eb4547dea66cd2baeeb",
+    759,
+    31
+  ],
   "errors": {
-    "unknown-model": ["Unknown model: unknown/model", 400],
-    "unknown-override": ["Unknown override 'NO_SUCH_FIELD'.", 400],
-    "malformed-override": ["Invalid value for override 'HIDDEN_DIM': 'not-an-int'. invalid literal for int() with base 10: 'not-an-int'", 400],
-    "locked-override": ["Preset 'gating' does not allow overriding locked fields: stack_gate_flag (Locked by the GATING preset because this preset locks `stack_gate_flag`.)", 400],
-    "incompatible-dataset": ["Failed to build preset 'baseline' for model 'linears/linear': Unknown dataset 'WikiText2' for model 'linears/linear'. Valid datasets: Mnist, FashionMNIST, Cifar10, Cifar100.", 400],
-    "incompatible-task": ["Failed to build preset 'baseline' for model 'linears/linear': Unknown experiment task 'causal-language-modeling' for model 'linears/linear'. Valid tasks: image-classification.", 400],
-    "path-dataset": ["Failed to build preset 'baseline' for model 'linears/linear': Dataset input '../Mnist' for model 'linears/linear' looks like a filesystem path. Use a server-known dataset name instead. Valid datasets: Mnist, FashionMNIST, Cifar10, Cifar100.", 400]
+    "unknown-model": [
+      "Unknown model: unknown/model",
+      400
+    ],
+    "unknown-override": [
+      "Unknown override 'NO_SUCH_FIELD'.",
+      400
+    ],
+    "malformed-override": [
+      "Invalid value for override 'HIDDEN_DIM': 'not-an-int'. invalid literal for int() with base 10: 'not-an-int'",
+      400
+    ],
+    "locked-override": [
+      "Preset 'gating' does not allow overriding locked fields: stack_gate_flag (Locked by the GATING preset because this preset locks `stack_gate_flag`.)",
+      400
+    ],
+    "incompatible-dataset": [
+      "Failed to build preset 'baseline' for model 'linears/linear': Unknown dataset 'WikiText2' for model 'linears/linear'. Valid datasets: Mnist, FashionMNIST, Cifar10, Cifar100.",
+      400
+    ],
+    "incompatible-task": [
+      "Failed to build preset 'baseline' for model 'linears/linear': Unknown experiment task 'causal-language-modeling' for model 'linears/linear'. Valid tasks: image-classification.",
+      400
+    ],
+    "path-dataset": [
+      "Failed to build preset 'baseline' for model 'linears/linear': Dataset input '../Mnist' for model 'linears/linear' looks like a filesystem path. Use a server-known dataset name instead. Valid datasets: Mnist, FashionMNIST, Cifar10, Cifar100.",
+      400
+    ]
   },
   "cliErrors": {
-    "unknown-model": [1, "Unknown model: --model-type unknown --model model", false],
-    "invalid-preset": [2, "cli.py: error: argument --preset: invalid choice: 'nope' (choose from baseline, gating, halting, memory, gating-halting, gating-memory, halting-memory, gating-halting-memory, residual, post-norm, residual-post-norm, residual-gating, residual-halting, residual-memory, recurrent, recurrent-gating, recurrent-halting, recurrent-memory, recurrent-gating-halting, recurrent-gating-memory, recurrent-halting-memory, recurrent-gating-halting-memory, recurrent-residual, recurrent-post-norm, weighted-residual, weighted-blend-residual, attention-residual, recurrent-layer-gating, recurrent-dual-gating, recurrent-layer-halting, recurrent-dual-halting, weighted-memory, element-wise-weighted-memory, no-norm, pre-activation-norm)", false],
-    "locked-override": [1, "Preset 'gating' does not allow overriding locked fields: stack_gate_flag (Locked by the GATING preset because this preset locks `stack_gate_flag`.)", false],
-    "pre-inspection-malformed-override": [1, "ValueError: invalid literal for int() with base 10: 'not-an-int'", true]
+    "unknown-model": [
+      1,
+      "Unknown model: --model-type unknown --model model",
+      false
+    ],
+    "invalid-preset": [
+      2,
+      "cli.py inspect: error: argument --preset: invalid choice: 'nope' (choose from baseline, gating, halting, memory, gating-halting, gating-memory, halting-memory, gating-halting-memory, residual, post-norm, residual-post-norm, residual-gating, residual-halting, residual-memory, recurrent, recurrent-gating, recurrent-halting, recurrent-memory, recurrent-gating-halting, recurrent-gating-memory, recurrent-halting-memory, recurrent-gating-halting-memory, recurrent-residual, recurrent-post-norm, weighted-residual, weighted-blend-residual, attention-residual, recurrent-layer-gating, recurrent-dual-gating, recurrent-layer-halting, recurrent-dual-halting, weighted-memory, element-wise-weighted-memory, no-norm, pre-activation-norm)",
+      false
+    ],
+    "locked-override": [
+      1,
+      "Preset 'gating' does not allow overriding locked fields: stack_gate_flag (Locked by the GATING preset because this preset locks `stack_gate_flag`.)",
+      false
+    ],
+    "pre-inspection-malformed-override": [
+      1,
+      "invalid literal for int() with base 10: 'not-an-int'",
+      false
+    ]
   }
 }
