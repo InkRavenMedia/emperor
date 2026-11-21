@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from torch.nn import Sequential
 
@@ -27,6 +27,8 @@ class LayerStack(LayerModuleBase):
         cfg: LayerStackConfig,
         overrides: LayerStackConfig | None = None,
     ):
+        if not isinstance(cfg, LayerStackConfig):
+            raise TypeError("LayerStack requires a LayerStackConfig.")
         super().__init__()
         self.cfg = self._override_config(cfg, overrides)
         self.VALIDATOR.validate(self)
