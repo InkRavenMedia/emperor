@@ -20,12 +20,11 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
-from models.neuron.expert_linear_adaptive._hidden._projection_config_factory import (
-    AdaptiveBoundaryModelOptions,
+from models.neuron.expert_linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
 )
 from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsAdaptiveGeneratorStackOptions,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,

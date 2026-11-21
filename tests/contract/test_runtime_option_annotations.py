@@ -40,3 +40,29 @@ def test_runtime_option_annotations_accept_every_default_none_value() -> None:
             mismatches.append(f"{package.catalog_key}: {mismatch}")
 
     assert not mismatches, "Runtime annotation mismatches:\n" + "\n".join(mismatches)
+
+
+def test_optional_generator_stacks_resolve_to_the_package_source_record() -> None:
+    from importlib import import_module
+
+    packages = (
+        "bert.linear_adaptive",
+        "bert.expert_linear_adaptive",
+        "gpt.linear_adaptive",
+        "gpt.expert_linear_adaptive",
+        "vit.linear_adaptive",
+        "vit.expert_linear_adaptive",
+        "experts.linear_adaptive",
+        "neuron.expert_linear_adaptive",
+    )
+    for package in packages:
+        generation = import_module(f"models.{package}._generation")
+        source = generation.AdaptiveGeneratorStackSource
+        for options in (
+            generation.WeightGenerationOptions,
+            generation.BiasGenerationOptions,
+        ):
+            assert (
+                get_type_hints(options)["mixture_router_generator_stack"]
+                == source | None
+            )

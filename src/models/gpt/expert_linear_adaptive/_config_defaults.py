@@ -8,9 +8,9 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
+from models.gpt.expert_linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.gpt.expert_linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,
     HiddenAdaptiveMaskOptions,

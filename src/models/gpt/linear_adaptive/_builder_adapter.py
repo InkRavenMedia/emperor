@@ -9,6 +9,7 @@ from models import _sequence_expansion
 from models.gpt.linear_adaptive import _config_defaults as config_defaults
 from models.gpt.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.gpt.linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     apply_generation_options,
     generation_keys,
 )
@@ -27,7 +28,6 @@ from models.gpt.linear_adaptive._residual import (
 )
 from models.gpt.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     DynamicMemoryOptions,
     GptEmbeddingOptions,
     GptLmHeadOptions,

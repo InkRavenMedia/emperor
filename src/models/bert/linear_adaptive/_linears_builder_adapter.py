@@ -8,9 +8,9 @@ from models.bert.linear_adaptive import _config_defaults as config_defaults
 from models.bert.linear_adaptive._flat_updates import (
     pop_updates as _pop_updates,
 )
+from models.bert.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.bert.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,
     HiddenAdaptiveMaskOptions,

@@ -47,6 +47,7 @@ from models.bert.expert_linear_adaptive._controller_stack_config import (
     build_controller_stack_config,
 )
 from models.bert.expert_linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     mixture_generation_fields,
     weight_generation_fields,
 )
@@ -55,7 +56,6 @@ from models.bert.expert_linear_adaptive._router_controller_config import (
 )
 from models.bert.expert_linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
     ExpertsMixtureOptions,

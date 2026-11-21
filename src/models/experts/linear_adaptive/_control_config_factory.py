@@ -45,6 +45,7 @@ from models.experts.linear_adaptive._control_support import (
     build_controller_stack,
 )
 from models.experts.linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     mixture_generation_fields,
     weight_generation_fields,
 )
@@ -53,7 +54,6 @@ from models.experts.linear_adaptive._router_controller_config import (
 )
 from models.experts.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
     ExpertsMixtureOptions,
