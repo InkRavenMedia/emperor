@@ -286,8 +286,8 @@ owners = ["emperor.transformer.sequence_expansion._model", "emperor.transformer.
 [[interfaces]]
 module = "emperor.datasets.image.classification"
 kind = "runtime"
-exports = ["Mnist", "FashionMNIST", "Cifar10", "Cifar100"]
-owners = ["emperor.datasets.image.classification._mnist", "emperor.datasets.image.classification._fashion_mnist", "emperor.datasets.image.classification._cifar_10", "emperor.datasets.image.classification._cifar_100"]
+exports = ["Mnist", "FashionMNIST", "Cifar10", "Cifar100", "JointImageBatch", "JointImageClassification"]
+owners = ["emperor.datasets.image.classification._mnist", "emperor.datasets.image.classification._fashion_mnist", "emperor.datasets.image.classification._cifar_10", "emperor.datasets.image.classification._cifar_100", "emperor.datasets.image.classification._joint", "emperor.datasets.image.classification._joint"]
 
 [[interfaces]]
 module = "emperor.datasets.text.bert_pretraining"
@@ -316,8 +316,8 @@ owners = ["emperor.experiments.bert_pretraining._experiment"]
 [[interfaces]]
 module = "emperor.experiments.classifier"
 kind = "runtime"
-exports = ["ClassifierExperiment"]
-owners = ["emperor.experiments.classifier._experiment"]
+exports = ["ClassifierExperiment", "JointImageClassifier", "JointImageClassifierConfig"]
+owners = ["emperor.experiments.classifier._experiment", "emperor.experiments.classifier._joint", "emperor.experiments.classifier._joint"]
 
 [[interfaces]]
 module = "emperor.experiments.language_model"

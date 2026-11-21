@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import traceback
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, NewType, cast
 
@@ -26,7 +26,10 @@ from model_runtime.runs._progress_events import (
     RunProgressEvent,
     TrainingErrorEvent,
 )
-from model_runtime.runs._terminal_checkpoint import save_terminal_last_checkpoint
+from model_runtime.runs._terminal_checkpoint import (
+    TrainEndModelCheckpoint,
+    save_terminal_last_checkpoint,
+)
 from model_runtime.runs._trainer_settings import (
     RuntimeSettings,
     TrainerSettings,
@@ -68,6 +71,7 @@ class _TrainingExecutionState:
     options: TrainingExecutionRequest
     run_progress: ContextualRunProgress | None
     outcome: TrainingOutcomeObserver
+    fit_metrics: dict[str, Any] = field(default_factory=dict[str, Any])
 
 
 class ExperimentBase:
@@ -107,6 +111,17 @@ class ExperimentBase:
     ) -> TrainerSettings:
         runtime_defaults = self.model_package.runtime_defaults_spec
         config_overrides = config_overrides or {}
+        if self.experiment_task is ExperimentTask.JOINT_IMAGE_CLASSIFICATION:
+            # A joint run saves all four heads and the encoder in one checkpoint.
+            checkpoint_enabled = config_overrides.get(
+                "trainer_enable_checkpointing",
+                config_overrides.get("callback_checkpoint_flag", True),
+            )
+            config_overrides = {
+                "trainer_enable_checkpointing": checkpoint_enabled,
+                "callback_checkpoint_flag": checkpoint_enabled,
+                **config_overrides,
+            }
         checkpoint = self._checkpoint_callback(runtime_defaults, config_overrides)
         return {
             "trainer_args": self._trainer_args(runtime_defaults, config_overrides),
@@ -115,7 +130,9 @@ class ExperimentBase:
                 config_overrides,
                 checkpoint,
             ),
-            "terminal_checkpoint_callback": checkpoint,
+            "terminal_checkpoint_callback": (
+                None if isinstance(checkpoint, TrainEndModelCheckpoint) else checkpoint
+            ),
         }
 
     def _trainer_callbacks(
@@ -191,7 +208,12 @@ class ExperimentBase:
         if not checkpoint_flag:
             return None
         metric, mode = self._monitor_policy(runtime_defaults, config_overrides)
-        return ModelCheckpoint(
+        checkpoint_type = (
+            TrainEndModelCheckpoint
+            if self.experiment_task is ExperimentTask.JOINT_IMAGE_CLASSIFICATION
+            else ModelCheckpoint
+        )
+        return checkpoint_type(
             monitor=metric,
             save_top_k=1,
             save_last=True,
@@ -463,6 +485,15 @@ class ExperimentBase:
         runtime: _TrainingRuntime,
         started: _StartedTrainingRun,
     ) -> Trainer:
+        trainer_args: dict[str, Any] = dict(runtime.trainer_config["trainer_args"])
+        if (
+            state.training_run.experiment_task
+            is ExperimentTask.JOINT_IMAGE_CLASSIFICATION
+            and isinstance(trainer_args.get("devices"), int)
+            and trainer_args["devices"] != 1
+        ):
+            # Spawn inside fit/test so each worker operates on the same reserved run.
+            trainer_args["strategy"] = "ddp_spawn_find_unused_parameters_true"
         return Trainer(
             max_epochs=state.training_run.num_epochs,
             logger=started.logger,
@@ -471,7 +502,7 @@ class ExperimentBase:
                 *state.options.callbacks,
                 *started.progress_callbacks,
             ],
-            **runtime.trainer_config["trainer_args"],
+            **trainer_args,
         )
 
     @staticmethod
@@ -492,6 +523,12 @@ class ExperimentBase:
         if runtime.terminal_checkpoint_callback is not None:
             save_terminal_last_checkpoint(trainer, runtime.terminal_checkpoint_callback)
         if runtime.runtime_config["run_test_after_fit"]:
+            if (
+                state.training_run.experiment_task
+                is ExperimentTask.JOINT_IMAGE_CLASSIFICATION
+            ):
+                # Lightning clears validation scores when it starts the test loop.
+                state.fit_metrics = dict(trainer.callback_metrics)
             trainer.test(runtime.model, datamodule=runtime.dataset)
 
     def _complete_training_execution(
@@ -506,6 +543,9 @@ class ExperimentBase:
             trainer,
             resumed_from=state.options.resumed_from,
         )
+        if state.fit_metrics:
+            metrics = {**state.fit_metrics, **trainer.callback_metrics}
+            result.update(self.run_artifacts.result_metrics_payload(metrics))
         result.update(state.outcome.receipt_fields(state.training_run.run_id))
         log_dir = started.logger.log_dir
         committed_result = state.outcome.prepare_commit(result)

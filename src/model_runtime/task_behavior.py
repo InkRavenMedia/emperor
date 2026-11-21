@@ -171,6 +171,10 @@ def _image_inputs(dataset: type, _configuration: Any) -> tuple[Any, ...]:
     return (torch.zeros((1, channels, height, width), dtype=torch.float32),)
 
 
+def _joint_image_inputs(dataset: type, configuration: Any) -> tuple[Any, ...]:
+    return (*_image_inputs(dataset, configuration), "mnist")
+
+
 def _token_inputs(_dataset: type, configuration: Any) -> tuple[Any, ...]:
     sequence_length = _positive_integer(
         getattr(configuration, "sequence_length", None),
@@ -367,6 +371,23 @@ _DECLARED_BEHAVIORS = (
         dataset_arguments=(_BATCH_SIZE,),
         ranking_metrics=(_VALIDATION_ACCURACY,),
         core_result_metric_keys=_IMAGE_CLASSIFICATION_RESULT_METRIC_KEYS,
+    ),
+    ExperimentTaskBehavior(
+        task=ExperimentTask.JOINT_IMAGE_CLASSIFICATION,
+        synthetic_input_builder=_joint_image_inputs,
+        dataset_arguments=(_BATCH_SIZE,),
+        ranking_metrics=(_VALIDATION_ACCURACY,),
+        core_result_metric_keys=(
+            *_stage_metric_keys("accuracy", "loss"),
+            *(
+                f"{stage}/{name}/{metric}"
+                for stage in ("validation", "test")
+                for name in ("mnist", "fashion-mnist", "cifar10", "cifar100")
+                for metric in ("loss", "accuracy")
+            ),
+            "validation/macro_accuracy",
+            "test/macro_accuracy",
+        ),
     ),
     ExperimentTaskBehavior(
         task=ExperimentTask.BERT_PRETRAINING,
