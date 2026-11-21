@@ -25,7 +25,7 @@ def _entry_path(entry: Mapping[str, Any]) -> tuple[str, ...]:
     if not isinstance(raw_path, list) or any(
         not isinstance(item, str) for item in raw_path
     ):
-        raise ValueError("Legacy metadata sectionPath must be a string list.")
+        raise ValueError("Source metadata sectionPath must be a string list.")
     return tuple(cast(list[str], raw_path))
 
 
@@ -33,11 +33,11 @@ def _field(key: str, entry: Mapping[str, Any]) -> _Field:
     line = entry.get("line")
     sort_key = entry.get("sortKey")
     if type(line) is not int:
-        raise ValueError(f"Legacy metadata field {key!r} has an invalid line.")
+        raise ValueError(f"Source metadata field {key!r} has an invalid line.")
     if not isinstance(sort_key, list) or any(
         type(item) is not int for item in sort_key
     ):
-        raise ValueError(f"Legacy metadata field {key!r} has an invalid sortKey.")
+        raise ValueError(f"Source metadata field {key!r} has an invalid sortKey.")
     return key, line, tuple(cast(list[int], sort_key))
 
 
