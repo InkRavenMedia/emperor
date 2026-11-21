@@ -11,6 +11,7 @@ from model_runtime.packages import (
     abstract_config_class_error,
     normalize_key,
 )
+from model_runtime.runs._search_options import resolve_search_options
 from model_runtime.runs.errors import InvalidRunRequest, PlanTooLarge
 from model_runtime.runs.records import PlanningBudget, SearchAxisSelection, SearchSpec
 from model_runtime.runs.search import PreparedSearch
@@ -81,8 +82,6 @@ def _request_error(exc: Exception) -> InvalidRunRequest:
 
 
 def _validate_search_spec(spec: SearchSpec, budget: PlanningBudget) -> None:
-    if spec.mode not in {"grid", "random"}:
-        raise InvalidRunRequest("Training search mode must be 'grid' or 'random'.")
     if spec.axes == ():
         raise InvalidRunRequest("Training search requires at least one selected axis.")
     if (
@@ -372,12 +371,6 @@ def _parse_axes(
     return tuple(normalized), tuple(parsed)
 
 
-def _random_samples(spec: SearchSpec) -> int | None:
-    if spec.mode != "random":
-        return None
-    return 10 if spec.random_samples is None else spec.random_samples
-
-
 def parse_search(
     package: ModelPackage,
     preset_name: str,
@@ -386,6 +379,7 @@ def parse_search(
 ) -> ParsedSearch | None:
     if spec is None:
         return None
+    mode, random_samples = resolve_search_options(spec.mode, spec.random_samples)
     _validate_search_spec(spec, budget)
     context = _search_context(package, preset_name, budget)
     selections = _selected_axes(context, spec)
@@ -394,17 +388,16 @@ def parse_search(
         selections,
         implicit_full_search=spec.axes is None,
     )
-    random_samples = _random_samples(spec)
     return ParsedSearch(
         spec=SearchSpec(
-            mode=spec.mode,
+            mode=mode,
             axes=normalized,
             random_samples=random_samples,
         ),
         axes=parsed_axes,
         prepared=PreparedSearch(
             axes=tuple(axis.values for axis in parsed_axes),
-            mode=spec.mode,
+            mode=mode,
             random_samples=random_samples,
         ),
     )

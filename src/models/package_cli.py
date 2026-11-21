@@ -13,6 +13,7 @@ from model_runtime.runs import (
     SearchSpec,
     execute_runs,
     plan_runs,
+    resolve_search_options,
 )
 from models.catalog import model_package
 from models.cli_selection import resolve_cli_selection
@@ -51,15 +52,8 @@ def _search_spec(mode) -> SearchSpec | None:
         else:
             selections[position] = selection
     axes = tuple(selections) if selections else None
-    if mode.search_mode == "random":
-        return SearchSpec(
-            mode="random",
-            axes=axes,
-            random_samples=mode.random_samples,
-        )
-    if mode.search_mode == "grid":
-        return SearchSpec(mode="grid", axes=axes)
-    raise ValueError(f"Unsupported search mode: {mode.search_mode!r}")
+    search_mode, count = resolve_search_options(mode.search_mode, mode.random_samples)
+    return SearchSpec(mode=search_mode, axes=axes, random_samples=count)
 
 
 def _checkpoint_continuation(args) -> CheckpointContinuation | None:

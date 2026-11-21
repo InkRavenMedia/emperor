@@ -217,3 +217,52 @@ class RunsSearchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_search_admission_and_defaults_agree_at_wire_plan_and_execution():
+    import pytest
+
+    from model_runtime.cli.wire import WireCodecError, search_spec_from_wire
+    from model_runtime.runs import (
+        RunRequest,
+        SearchAxisSelection,
+        SearchSpec,
+        plan_runs,
+    )
+    from models.catalog import model_package
+
+    package = model_package("linears/linear")
+    assert package is not None
+    axes = (SearchAxisSelection("hidden_dim", (64, 128), allow_custom_values=True),)
+    for mode, count, field in (
+        ("grid", 1, "random_samples"),
+        ("random", True, "random_samples"),
+        ("random", 0, "random_samples"),
+        ("other", None, "mode"),
+    ):
+        with pytest.raises(WireCodecError, match=field):
+            search_spec_from_wire({"mode": mode, "random_samples": count})
+        with pytest.raises(InvalidRunRequest, match=field):
+            plan_runs(
+                package,
+                RunRequest(
+                    ("baseline",), ("Mnist",), search=SearchSpec(mode, axes, count)
+                ),
+            )
+        with pytest.raises(InvalidRunRequest, match=field):
+            PreparedSearch(((64, 128),), mode, count)
+    for mode, count, expected in (
+        ("random", None, 10),
+        ("random", 1, 1),
+        ("grid", None, None),
+    ):
+        decoded = search_spec_from_wire({"mode": mode, "random_samples": count})
+        assert decoded is not None
+        spec = SearchSpec(decoded.mode, axes, decoded.random_samples)
+        plan = plan_runs(
+            package,
+            RunRequest(("baseline",), ("Mnist",), search=spec),
+            random_source=random.Random(0),
+        )
+        assert plan.search is not None and plan.search.random_samples == expected
+        assert PreparedSearch(((64, 128),), mode, count).random_samples == expected

@@ -4,6 +4,10 @@ from importlib import import_module
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from model_runtime.runs._search_options import (
+        SearchOptionError,
+        resolve_search_options,
+    )
     from model_runtime.runs.artifacts import FilesystemRunArtifacts, RunArtifacts
     from model_runtime.runs.checkpoint_admission import (
         DEFAULT_CHECKPOINT_ADMISSION_POLICY,
@@ -40,6 +44,7 @@ if TYPE_CHECKING:
         RunResult,
         RunSpec,
         SearchAxisSelection,
+        SearchMode,
         SearchSpec,
         SubmittedRun,
     )
@@ -70,7 +75,10 @@ __all__ = [
     "RunSpec",
     "RunsError",
     "SearchAxisSelection",
+    "SearchMode",
     "SearchSpec",
+    "SearchOptionError",
+    "resolve_search_options",
     "SubmittedRun",
     "accept_run_plan",
     "execute_runs",
@@ -114,9 +122,11 @@ _RECORD_EXPORTS = {
     "RunResult",
     "RunSpec",
     "SearchAxisSelection",
+    "SearchMode",
     "SearchSpec",
     "SubmittedRun",
 }
+_SEARCH_EXPORTS = {"SearchOptionError", "resolve_search_options"}
 _PLANNING_EXPORTS = {"accept_run_plan", "plan_runs"}
 _EXECUTION_EXPORTS = {"execute_runs"}
 _EXPERIMENT_EXPORTS = {"ExperimentBase"}
@@ -132,6 +142,7 @@ _EXPORT_MODULES = {
     **dict.fromkeys(_PROGRESS_EXPORTS, "model_runtime.runs.progress"),
     **dict.fromkeys(_JSON_VALUE_EXPORTS, "model_runtime.runs.json_values"),
     **dict.fromkeys(_RECORD_EXPORTS, "model_runtime.runs.records"),
+    **dict.fromkeys(_SEARCH_EXPORTS, "model_runtime.runs._search_options"),
     **dict.fromkeys(_PLANNING_EXPORTS, "model_runtime.runs.planning"),
     **dict.fromkeys(_EXECUTION_EXPORTS, "model_runtime.runs.execution"),
     **dict.fromkeys(_EXPERIMENT_EXPORTS, "model_runtime.runs.experiment"),
