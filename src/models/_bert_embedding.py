@@ -95,7 +95,7 @@ def resolve_runtime_defaults(
         "hidden_dim", getattr(encoder_options, "hidden_dim", config_module.HIDDEN_DIM)
     )
     sequence_length = kwargs.get("sequence_length", config_module.SEQUENCE_LENGTH)
-    if hierarchical["hierarchical_embedding_flag"] and _uses_native_config(
+    if hierarchical["hierarchical_embedding_flag"] and _needs_generated_embedding_config(
         kwargs, config_module, "hierarchical_embedding_config"
     ):
         kwargs["hierarchical_embedding_config"] = build_hierarchical_embedding_config(
@@ -110,7 +110,7 @@ def resolve_runtime_defaults(
             byte_num_heads=hierarchical["hierarchical_byte_num_heads"],
             max_token_bytes=hierarchical["hierarchical_max_token_bytes"],
         )
-    if contextual["contextual_embedding_flag"] and _uses_native_config(
+    if contextual["contextual_embedding_flag"] and _needs_generated_embedding_config(
         kwargs, config_module, "contextual_embedding_config"
     ):
         kwargs["contextual_embedding_config"] = _build_contextual_embedding_config(
@@ -133,12 +133,12 @@ def _pop_native_settings(
     }
 
 
-def _uses_native_config(
-    kwargs: dict[str, Any], config_module: ModuleType, legacy_key: str
+def _needs_generated_embedding_config(
+    kwargs: dict[str, Any], config_module: ModuleType, config_field: str
 ) -> bool:
-    default_config = getattr(config_module, legacy_key.upper())
-    configured = getattr(kwargs.get("embedding_options"), legacy_key, default_config)
-    return kwargs.get(legacy_key, configured) is None
+    default_config = getattr(config_module, config_field.upper())
+    configured = getattr(kwargs.get("embedding_options"), config_field, default_config)
+    return kwargs.get(config_field, configured) is None
 
 
 def _linear_stack(
