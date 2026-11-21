@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 import tempfile
 import unittest
@@ -868,6 +869,7 @@ def _distributed_ddp_growth_history_worker(
         init_method=f"file://{init_file}",
         rank=rank,
         world_size=world_size,
+        timeout=timedelta(seconds=30),
     )
     try:
         torch.manual_seed(0)
@@ -891,6 +893,9 @@ def _distributed_ddp_growth_history_worker(
             grew_on_second_forward,
             parent_counter_after_growth,
         )
+        # Release the reducer and circular cluster delegates before peers leave Gloo.
+        del distributed_module, module
+        gc.collect()
         gathered_results = [None] * world_size
         torch.distributed.all_gather_object(gathered_results, local_result)
         assert gathered_results == [(1, False, True, 0)] * world_size, (
