@@ -17,28 +17,48 @@ from tests.unit.inspection._historical_support import (
 
 class CheckpointShapeExtractionTests(unittest.TestCase):
     def test_checkpoint_shape_extractor_counts_recurrent_block_layers(self) -> None:
-        checkpoint_shapes = checkpoint_graph_shapes_from_state_dict(
-            checkpoint_state_dict(
-                input_dim=8,
-                hidden_dim=16,
-                output_dim=4,
-                layer_count=2,
-                stack_prefix="main_model.block_model.layers",
-            )
-        )
+        for stack in ("main_model.step.block_model", "main_model.block_model"):
+            with self.subTest(stack=stack):
+                stack_prefix = f"{stack}.layers"
+                state = checkpoint_state_dict(
+                    input_dim=8,
+                    hidden_dim=16,
+                    output_dim=4,
+                    layer_count=2,
+                    stack_prefix=stack_prefix,
+                )
+                gate_path = f"{stack_prefix}.0.pipeline.postprocessing.gate.model"
+                state[f"{gate_path}.layers.0.model.weight_params"] = torch.zeros(16, 16)
+                state[
+                    "main_model.recurrent_iteration_schedule.forward_call_progress"
+                ] = torch.tensor(0)
+                checkpoint_shapes = checkpoint_graph_shapes_from_state_dict(state)
 
-        self.assertIsNotNone(checkpoint_shapes)
-        if checkpoint_shapes is None:
-            self.fail("Expected checkpoint shape extraction to succeed.")
-        self.assertEqual(
-            checkpoint_shapes.config_overrides,
-            {
-                "input_dim": 8,
-                "output_dim": 4,
-                "hidden_dim": 16,
-                "stack_num_layers": 2,
-            },
-        )
+                if checkpoint_shapes is None:
+                    self.fail("Expected checkpoint shape extraction to succeed.")
+                self.assertEqual(
+                    checkpoint_shapes.config_overrides,
+                    {
+                        "input_dim": 8,
+                        "output_dim": 4,
+                        "hidden_dim": 16,
+                        "stack_num_layers": 2,
+                        "stack_gate_flag": True,
+                        "gate_stack_independent_flag": True,
+                        "gate_stack_num_layers": 1,
+                    },
+                )
+                graph_block = "main_model.step.block_model"
+                self.assertEqual(
+                    checkpoint_shapes.parameter_shapes[f"{graph_block}.layers.0.model"][
+                        "weightShape"
+                    ],
+                    "16 x 16",
+                )
+                self.assertEqual(
+                    checkpoint_shapes.coverage_counts["main_model.step"],
+                    checkpoint_shapes.coverage_counts[graph_block],
+                )
 
     def test_checkpoint_shape_extractor_infers_optional_controller_counts(
         self,
@@ -53,19 +73,19 @@ class CheckpointShapeExtractionTests(unittest.TestCase):
             for gate_index in range(3):
                 state_dict[
                     "main_model.layers."
-                    f"{outer_index}.postprocessing.gate.model.layers.{gate_index}."
+                    f"{outer_index}.pipeline.postprocessing.gate.model.layers.{gate_index}."
                     "model.weight_params"
                 ] = torch.zeros(16, 16)
             for halting_index in range(4):
                 state_dict[
                     "main_model.layers."
-                    f"{outer_index}.halting.model.halting_gate_model.layers."
+                    f"{outer_index}.pipeline.halting.model.halting_gate_model.layers."
                     f"{halting_index}.model.weight_params"
                 ] = torch.zeros(16, 2 if halting_index == 3 else 16)
             for memory_index in range(2):
                 state_dict[
                     "main_model.layers."
-                    f"{outer_index}.memory.model.memory_model.layers."
+                    f"{outer_index}.pipeline.memory.model.memory_model.layers."
                     f"{memory_index}.model.weight_params"
                 ] = torch.zeros(16, 16)
 
@@ -101,14 +121,14 @@ class CheckpointShapeExtractionTests(unittest.TestCase):
             layer_count=1,
         )
         state_dict[
-            "main_model.layers.0.postprocessing.gate.model.layers.0.model.weight_params"
+            "main_model.layers.0.pipeline.postprocessing.gate.model.layers.0.model.weight_params"
         ] = torch.zeros(16, 16)
         state_dict[
-            "main_model.layers.0.halting.model.halting_gate_model.layers.0."
+            "main_model.layers.0.pipeline.halting.model.halting_gate_model.layers.0."
             "model.weight_params"
         ] = torch.zeros(16, 2)
         state_dict[
-            "main_model.layers.0.memory.model.memory_model.layers.0.model.weight_params"
+            "main_model.layers.0.pipeline.memory.model.memory_model.layers.0.model.weight_params"
         ] = torch.zeros(16, 16)
 
         checkpoint_shapes = checkpoint_graph_shapes_from_state_dict(state_dict)
@@ -125,21 +145,35 @@ class CheckpointShapeExtractionTests(unittest.TestCase):
             checkpoint_shapes.config_overrides["memory_stack_num_layers"],
             1,
         )
+        unregistered = {
+            key.replace(".pipeline.", "."): value for key, value in state_dict.items()
+        }
+        unregistered_shapes = checkpoint_graph_shapes_from_state_dict(unregistered)
+        if unregistered_shapes is None:
+            self.fail("Expected the remaining current layer weights to be readable.")
+        self.assertTrue(
+            {
+                "gate_stack_num_layers",
+                "halting_stack_num_layers",
+                "memory_stack_num_layers",
+            }.isdisjoint(unregistered_shapes.config_overrides)
+        )
 
     def test_layer_component_shapes_keep_delegated_graph_paths(
         self,
     ) -> None:
+        pipeline = "main_model.layers.0.pipeline"
         checkpoint_shapes = checkpoint_graph_shapes_from_state_dict(
             {
-                "main_model.layers.0.postprocessing.gate.model.layers.0.model."
+                f"{pipeline}.postprocessing.gate.model.layers.0.model."
                 "weight_params": torch.zeros(16, 16),
-                "main_model.layers.0.halting.model.halting_gate_model.layers.0."
+                f"{pipeline}.halting.model.halting_gate_model.layers.0."
                 "model.weight_params": torch.zeros(16, 2),
-                "main_model.layers.0.memory.model.memory_model.layers.0.model."
+                f"{pipeline}.memory.model.memory_model.layers.0.model."
                 "weight_params": torch.zeros(16, 16),
-                "main_model.layers.0.residual.connection.raw_weight": torch.zeros(()),
-                "main_model.layers.0.normalization.module.weight": torch.zeros(16),
-                "main_model.layers.0.postprocessing.dropout.marker": torch.zeros(()),
+                f"{pipeline}.residual.connection.raw_weight": torch.zeros(()),
+                f"{pipeline}.normalization.module.weight": torch.zeros(16),
+                f"{pipeline}.postprocessing.dropout.marker": torch.zeros(()),
             }
         )
 
@@ -147,12 +181,12 @@ class CheckpointShapeExtractionTests(unittest.TestCase):
         if checkpoint_shapes is None:
             self.fail("Expected checkpoint shape extraction to succeed.")
         component_paths = (
-            "main_model.layers.0.postprocessing.gate.model.layers.0.model",
-            "main_model.layers.0.halting.model.halting_gate_model.layers.0.model",
-            "main_model.layers.0.memory.model.memory_model.layers.0.model",
-            "main_model.layers.0.residual.connection",
-            "main_model.layers.0.normalization.module",
-            "main_model.layers.0.postprocessing.dropout",
+            f"{pipeline}.postprocessing.gate.model.layers.0.model",
+            f"{pipeline}.halting.model.halting_gate_model.layers.0.model",
+            f"{pipeline}.memory.model.memory_model.layers.0.model",
+            f"{pipeline}.residual.connection",
+            f"{pipeline}.normalization.module",
+            f"{pipeline}.postprocessing.dropout",
         )
         for component_path in component_paths:
             with self.subTest(component_path=component_path):
@@ -206,32 +240,32 @@ class CheckpointShapeExtractionTests(unittest.TestCase):
         for outer_index in range(2):
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.postprocessing.gate.model.layers.0."
+                f"{outer_index}.pipeline.postprocessing.gate.model.layers.0."
                 "model.weight_params"
             ] = torch.zeros(16, 32)
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.postprocessing.gate.model.layers.1."
+                f"{outer_index}.pipeline.postprocessing.gate.model.layers.1."
                 "model.weight_params"
             ] = torch.zeros(32, 16)
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.memory.model.memory_model.layers.0."
+                f"{outer_index}.pipeline.memory.model.memory_model.layers.0."
                 "model.weight_params"
             ] = torch.zeros(16, 32)
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.memory.model.memory_model.layers.1."
+                f"{outer_index}.pipeline.memory.model.memory_model.layers.1."
                 "model.weight_params"
             ] = torch.zeros(32, 16)
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.halting.model.halting_gate_model.layers.0."
+                f"{outer_index}.pipeline.halting.model.halting_gate_model.layers.0."
                 "model.weight_params"
             ] = torch.zeros(16, 24)
             state_dict[
                 "main_model.layers."
-                f"{outer_index}.halting.model.halting_gate_model.layers.2."
+                f"{outer_index}.pipeline.halting.model.halting_gate_model.layers.2."
                 "model.weight_params"
             ] = torch.zeros(24, 2)
 
