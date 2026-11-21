@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from typing import Any, get_args, get_type_hints
 
@@ -19,6 +20,10 @@ def _none_annotation_mismatches(root: object) -> list[str]:
         if id(value) in visited:
             continue
         visited.add(id(value))
+        if isinstance(value, Mapping):
+            pending.extend((f"{path}[{key!r}]", item) for key, item in value.items())
+        elif isinstance(value, (tuple, list)):
+            pending.extend((f"{path}[{i}]", item) for i, item in enumerate(value))
         if not is_dataclass(value) or isinstance(value, type):
             continue
         annotations = get_type_hints(type(value))
@@ -28,7 +33,7 @@ def _none_annotation_mismatches(root: object) -> list[str]:
             annotation = annotations[dataclass_field.name]
             if field_value is None and not _allows_none(annotation):
                 mismatches.append(f"{field_path}: {annotation}")
-            elif is_dataclass(field_value) and not isinstance(field_value, type):
+            else:
                 pending.append((field_path, field_value))
     return mismatches
 

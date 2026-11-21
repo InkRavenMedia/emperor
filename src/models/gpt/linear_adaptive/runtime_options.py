@@ -39,6 +39,7 @@ from emperor.memory import (
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
 from models import _attention_source_memory as _source_memory
 from models import _sequence_expansion
+from models.gpt.linear_adaptive import _generation
 from models.gpt.linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
@@ -75,7 +76,7 @@ class SubmoduleStackOptions:
     normalization: NormalizationOptions = field(
         default=NormalizationOptions.RMS_NORM, kw_only=True
     )
-    residual_connection_option: type[ResidualConfig]
+    residual_connection_option: type[ResidualConfig] | None
     residual_model_flag: bool = field(default=False, kw_only=True)
     residual_block_size: int | None = field(default=None, kw_only=True)
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
@@ -291,7 +292,7 @@ class AdaptiveGeneratorStackOptions:
     )
     num_layers: int
     activation: ActivationOptions
-    residual_connection_option: type[ResidualConfig]
+    residual_connection_option: type[ResidualConfig] | None
     residual_model_flag: bool = field(default=False, kw_only=True)
     residual_block_size: int | None = field(default=None, kw_only=True)
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
