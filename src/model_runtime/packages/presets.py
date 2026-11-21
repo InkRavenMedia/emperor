@@ -8,7 +8,10 @@ from typing import Any, cast
 
 from emperor.config import ModelConfig
 from emperor.datasets.image.classification import JointImageClassification, Mnist
-from model_runtime.packages.configuration import config_key_to_model_param
+from model_runtime.packages.configuration import (
+    config_key_to_model_param,
+    require_finite_learning_rate,
+)
 
 
 @dataclass(frozen=True)
@@ -168,6 +171,8 @@ class ExperimentPresetsBase:
         self,
         config_overrides: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        for key, value in (config_overrides or {}).items():
+            require_finite_learning_rate(key.upper(), value)
         return {
             key: value
             for key, value in (config_overrides or {}).items()

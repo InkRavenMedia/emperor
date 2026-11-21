@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import fields
 from enum import Enum, StrEnum
@@ -30,6 +31,12 @@ SKIP_CONFIG_KEYS = {
 
 class ConfigValueError(ValueError):
     """A Runtime Defaults value cannot be interpreted through its public type."""
+
+
+def require_finite_learning_rate(config_key: str, value: object) -> None:
+    if config_key.removeprefix("SEARCH_SPACE_") == "LEARNING_RATE":
+        if isinstance(value, float) and not math.isfinite(value):
+            raise ConfigValueError(f"{config_key} must be finite, got {value!r}")
 
 
 def normalize_key(key: str) -> str:
@@ -209,6 +216,7 @@ def parse_config_value(
         annotation,
         raw_value,
     )
+    require_finite_learning_rate(key, parsed)
     return parsed
 
 

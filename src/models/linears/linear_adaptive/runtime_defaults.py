@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Final
 
 from emperor.layers import LastLayerBiasOptions
+from model_runtime.packages.configuration import require_finite_learning_rate
 from models.linears.linear_adaptive._residual import (
     ResidualStackOptions,
     ResidualStackSource,
@@ -81,6 +82,7 @@ def _probability(key: str, value: int | float) -> None:
 
 def _validate_required_positive(values: RuntimeDefaultValues) -> None:
     dimensions = values.dimensions
+    require_finite_learning_rate("LEARNING_RATE", dimensions.learning_rate)
     for field, value in (
         (_DIMENSION_FIELDS.batch_size, dimensions.batch_size),
         (_DIMENSION_FIELDS.learning_rate, dimensions.learning_rate),

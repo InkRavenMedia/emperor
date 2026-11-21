@@ -23,6 +23,7 @@ from model_runtime.packages.configuration import (
     abstract_config_class_error,
     config_key_to_model_param,
     iter_supported_config_keys,
+    require_finite_learning_rate,
 )
 
 
@@ -634,6 +635,7 @@ def validate_runtime_default_value_types(
         return
     for key, value in values.items():
         config_key = accepted[key]
+        require_finite_learning_rate(config_key, value)
         annotation = _runtime_annotation(config_module, config_key)
         validate_annotated_runtime_value(annotation, value, package=package, key=key)
     _validate_runtime_value_constraints(
