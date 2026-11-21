@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { useState } from "react";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -22,6 +23,7 @@ const field: ConfigField = {
   flag: "--hidden-size",
   label: "Hidden size",
   section: "Model",
+  ...configFieldSectionFixture(["Model"]),
   sectionPath: ["Model"],
   type: "int",
   default: 64,

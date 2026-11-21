@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../tests/fixtures/config-sections";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -337,6 +338,7 @@ const successfulConfigSchemaResponse = {
       flag: "--learning-rate",
       label: "Learning rate",
       section: "Optimisation",
+      ...configFieldSectionFixture(["Optimisation"]),
       sectionPath: ["Optimisation"],
       type: "float",
       default: 0.01,
@@ -353,6 +355,7 @@ const successfulConfigSchemaResponse = {
       flag: "--checkpoint",
       label: "Checkpoint",
       section: "Runtime",
+      ...configFieldSectionFixture(["Runtime"]),
       sectionPath: ["Runtime"],
       type: "str",
       default: null,
@@ -900,6 +903,17 @@ describe("successful API fixtures", () => {
       "learning_rate",
       "checkpoint",
     ]);
+  });
+
+  it("requires the schema identity and control metadata supplied by the current API", async () => {
+    const [first] = successfulConfigSchemaResponse.fields;
+    for (const field of ["sectionIdPath", "sectionControlFieldKey", "hasFlatControls"]) {
+      const incomplete = Object.fromEntries(Object.entries(first!).filter(([name]) => name !== field));
+      await expect(validateSuccessfulFixture(
+        { ...successfulConfigSchemaResponse, fields: [incomplete] },
+        () => fetchConfigSchema(linearIdentity, "baseline"),
+      )).rejects.toThrow(field);
+    }
   });
 
   it("accepts a search-space response fixture", async () => {
@@ -1938,6 +1952,7 @@ describe("URL and query construction", () => {
       flag: "--recurrent-max-steps",
       label: "recurrent max steps",
       section: "Recurrent Layer Options",
+      ...configFieldSectionFixture(["Controller Options", "Recurrent Layer Options"]),
       sectionPath: ["Controller Options", "Recurrent Layer Options"],
       description: "Maximum recurrent steps.",
       type: "int",

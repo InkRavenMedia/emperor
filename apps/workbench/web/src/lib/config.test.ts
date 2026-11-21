@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -262,6 +263,7 @@ function field(overrides: Partial<ConfigField> & Pick<ConfigField, "key">): Conf
     flag: overrides.flag ?? `--${overrides.key.replace(/_/g, "-")}`,
     label: overrides.label ?? overrides.key,
     section,
+    ...configFieldSectionFixture(overrides.sectionPath ?? fixtureSectionPath(section)),
     sectionPath: overrides.sectionPath ?? fixtureSectionPath(section),
     type: overrides.type ?? "int",
     default: "default" in overrides ? overrides.default ?? null : 0,
@@ -467,6 +469,7 @@ describe("inherited hidden model field hint", () => {
       default: 32,
     });
     const stackSection: ConfigSection = {
+      idPath: ["stack_num_layers"],
       title: "Layer Stack Options",
       fields: [
         field({
@@ -487,6 +490,7 @@ describe("inherited hidden model field hint", () => {
 
   it("does not show the hint when the stack owns its own hidden dim", () => {
     const stackSection: ConfigSection = {
+      idPath: ["stack_num_layers"],
       title: "Layer Stack Options",
       fields: [
         field({
@@ -676,7 +680,7 @@ describe("config section controls", () => {
       stack_gate_flag: "false",
     });
 
-    expect(controller.controlFieldKey).toBeUndefined();
+    expect(controller.controlFieldKey).toBeNull();
     expect(recurrent?.controlFieldKey).toBe("recurrent_flag");
     expect(disabled.has("recurrent_flag")).toBe(false);
     expect(disabled.get("recurrent_composition_option")).toContain(
@@ -1122,6 +1126,7 @@ describe("config section controls", () => {
 
   it("does not report inheritance hints for non-inherited sections", () => {
     const section: ConfigSection = {
+      idPath: ["stack_num_layers"],
       title: "Layer Stack Options",
       fields: [
         field({
@@ -1261,7 +1266,7 @@ describe("config section controls", () => {
     expect(routerSection?.children?.map((section) => section.title)).toEqual([
       "Router Stack Options",
     ]);
-    expect(routerStackSection?.controlFieldKey).toBeUndefined();
+    expect(routerStackSection?.controlFieldKey).toBeNull();
     expect(routerStackSection?.fields.map((item) => item.key)).toEqual([
       "router_stack_hidden_dim",
       "router_stack_num_layers",
@@ -1645,7 +1650,7 @@ describe("config section controls", () => {
     expect(mixtureSection.children?.map((section) => section.title)).toEqual([
       "Expert Stack Options",
     ]);
-    expect(expertStackSection?.controlFieldKey).toBeUndefined();
+    expect(expertStackSection?.controlFieldKey).toBeNull();
     expect(expertStackSection?.fields.map((item) => item.key)).toEqual(
       expertStackFields.map((item) => item.key),
     );
@@ -2214,6 +2219,7 @@ describe("config section controls", () => {
   it("keeps layer stack fields on their owning section", () => {
     const sections: ConfigSection[] = [
       {
+        idPath: ["stack_num_layers"],
         title: "Layer Stack Options",
         fields: [
           field({
@@ -2612,6 +2618,7 @@ describe("config section controls", () => {
   it("uses divider groups for boundary model sections", () => {
     const sections: ConfigSection[] = [
       {
+        idPath: ["input_layer_weight_option"],
         title: "Input Boundary Model Options",
         fields: [
           field({
@@ -2652,6 +2659,7 @@ describe("config section controls", () => {
         ],
       },
       {
+        idPath: ["output_layer_weight_option"],
         title: "Output Boundary Model Options",
         fields: [
           field({
@@ -2671,8 +2679,8 @@ describe("config section controls", () => {
       inputSection.fields,
     );
 
-    expect(inputSection.controlFieldKey).toBeUndefined();
-    expect(outputSection.controlFieldKey).toBeUndefined();
+    expect(inputSection.controlFieldKey).toBeNull();
+    expect(outputSection.controlFieldKey).toBeNull();
     expect(inputSection.children ?? []).toEqual([]);
     expect(outputSection.children ?? []).toEqual([]);
     expect(groups?.map((group) => group.title)).toEqual([

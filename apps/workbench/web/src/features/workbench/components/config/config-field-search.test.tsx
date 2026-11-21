@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { useState } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -24,6 +25,7 @@ function option(index: number): RuntimeDefaultsSearchOptionPresentation {
         flag: `--${key.replaceAll("_", "-")}`,
         label,
         section: "Model",
+        ...configFieldSectionFixture(["Model"]),
         sectionPath: ["Model"],
         type: "int",
         default: 1,

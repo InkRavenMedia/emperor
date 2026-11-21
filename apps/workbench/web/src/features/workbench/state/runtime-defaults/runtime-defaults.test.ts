@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 import { type ConfigField } from "@/lib/api/models";
 import { isEnabledConfigValue } from "@/lib/config";
@@ -19,6 +20,7 @@ function field(
     flag: overrides.flag ?? `--${overrides.key.replace(/_/g, "-")}`,
     label: overrides.label ?? overrides.key,
     section,
+    ...configFieldSectionFixture(overrides.sectionPath ?? [section]),
     sectionPath: overrides.sectionPath ?? [section],
     type: overrides.type ?? "int",
     default: "default" in overrides ? overrides.default ?? null : 0,

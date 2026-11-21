@@ -124,7 +124,7 @@ export type RuntimeDefaultsSchemaPresentation = {
 };
 
 function shouldPresentConfigField(field: ConfigField, overrides: OverrideValues) {
-  if (field.type !== "json" || field.legacyJson !== true) {
+  if (field.type !== "json" || !field.hasFlatControls) {
     return true;
   }
   return (

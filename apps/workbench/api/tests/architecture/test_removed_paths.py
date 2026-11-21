@@ -92,6 +92,9 @@ class SchemaCompatibilityImportTests(unittest.TestCase):
                 "GraphNodeResponse",
                 "InspectRequest",
                 "InspectResponse",
+                "graph_edge_payload",
+                "graph_node_payload",
+                "inspection_response",
                 "router",
             ],
         )
