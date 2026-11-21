@@ -38,9 +38,11 @@ def write_fake_event_run(
 
 
 class RunHistoryTensorBoardQueryTests(unittest.TestCase):
-    def test_run_history_reads_tensorboard_media_summaries(self) -> None:
+    def test_run_history_reads_lightning_scalars_and_tensorboard_diagnostics(
+        self,
+    ) -> None:
         import torch
-        from torch.utils.tensorboard import SummaryWriter
+        from lightning.pytorch.loggers import TensorBoardLogger
 
         with tempfile.TemporaryDirectory() as tmp:
             logs_root = Path(tmp) / "logs"
@@ -52,8 +54,17 @@ class RunHistoryTensorBoardQueryTests(unittest.TestCase):
                 "diagnostics_20260613_120000",
                 "version_0",
             )
-            writer = SummaryWriter(log_dir=str(run_dir))
-            writer.add_scalar("gap/accuracy", 0.12, 1)
+            logger = TensorBoardLogger(
+                save_dir=str(logs_root),
+                name=run_dir.parent.relative_to(logs_root).as_posix(),
+                version=0,
+            )
+            logger.log_metrics({"gap/accuracy": 0.125}, step=1)
+            logger.log_metrics({"gap/accuracy": 0.25}, step=2)
+            writer = logger.experiment
+            writer.add_histogram(
+                "validation/probabilities", torch.tensor([0.25, 0.75]), 2
+            )
             writer.add_image(
                 "validation/examples/predictions",
                 torch.zeros(3, 8, 8),
@@ -71,6 +82,9 @@ class RunHistoryTensorBoardQueryTests(unittest.TestCase):
             query = LogRunQueryService(scanner=scanner)
             run = scanner.list_runs()[0]
             tags = query.tags_for_runs([run.id])[0]
+            series = query.read_scalar_series_batch(
+                run_dir, ["gap/accuracy", "validation/probabilities", "gap/accuracy"]
+            )
             media = query.media_for_runs(
                 run_ids=[run.id],
                 image_tags=["validation/examples/predictions"],
@@ -78,6 +92,14 @@ class RunHistoryTensorBoardQueryTests(unittest.TestCase):
             )
 
         self.assertEqual(tags.scalar_tags, ("gap/accuracy",))
+        self.assertEqual(tags.histogram_tags, ("validation/probabilities",))
+        self.assertEqual(list(series), ["gap/accuracy", "validation/probabilities"])
+        self.assertEqual(series["gap/accuracy"].source_point_count, 2)
+        self.assertEqual(
+            [(point.step, point.value) for point in series["gap/accuracy"].points],
+            [(1, 0.125), (2, 0.25)],
+        )
+        self.assertEqual(series["validation/probabilities"].source_point_count, 0)
         self.assertEqual(tags.image_tags, ("validation/examples/predictions",))
         self.assertEqual(
             tags.text_tags,
