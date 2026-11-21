@@ -343,7 +343,7 @@ class CaptureRunProgress:
     def __init__(self):
         self.events = []
 
-    def write_event(self, event):
+    def write_record(self, event):
         self.events.append(dict(event))
 
 
@@ -958,7 +958,7 @@ class TestExperimentTraining(unittest.TestCase):
                 raise RuntimeError("primary training failure")
 
         class FailingProgress:
-            def write_event(self, event):
+            def write_record(self, event):
                 raise OSError("progress sink failure")
 
         experiment = FailingPreparationExperiment(
@@ -984,7 +984,7 @@ class TestExperimentTraining(unittest.TestCase):
             def __init__(self):
                 self.events = []
 
-            def write_event(self, event):
+            def write_record(self, event):
                 payload = dict(event)
                 if payload["type"] == "dataset_started":
                     raise OSError("dataset-started sink failure")
@@ -1039,7 +1039,7 @@ class TestExperimentTraining(unittest.TestCase):
             def __init__(self):
                 self.events = []
 
-            def write_event(self, event):
+            def write_record(self, event):
                 payload = dict(event)
                 if payload["type"] == "dataset_completed":
                     raise OSError("dataset-completed sink failure")
@@ -1103,7 +1103,7 @@ class TestExperimentTraining(unittest.TestCase):
             def __init__(self):
                 self.events = []
 
-            def write_event(self, event):
+            def write_record(self, event):
                 payload = dict(event)
                 if payload["type"] == "dataset_completed":
                     raise OSError("completion projection failed")
