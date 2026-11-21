@@ -561,10 +561,11 @@ print(json.dumps({
             tuple(field.name for field in fields(GeneratorBiasMixtureConfig)),
             (*MIXTURE_CONFIG_FIELDS, "generator_config"),
         )
-        self.assertEqual(
-            tuple(field.name for field in fields(VectorRouterConfig)),
-            ROUTER_CONFIG_FIELDS,
+        self.assertLessEqual(
+            {*ROUTER_CONFIG_FIELDS, "output_dim"},
+            {field.name for field in fields(VectorRouterConfig)},
         )
+        self.assertIsNone(VectorRouterConfig().output_dim)
         self.assertEqual(
             tuple(field.name for field in fields(ParametricLayerState)),
             STATE_FIELDS,

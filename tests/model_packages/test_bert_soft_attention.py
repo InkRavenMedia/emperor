@@ -5,18 +5,14 @@ import copy
 import pytest
 import torch
 
-from emperor.attention._variants.mixture.layer import MixtureOfAttentionHeads
-from emperor.attention._variants.mixture.soft import (
-    SoftMixtureOfAttentionHeadsProjector,
-)
+from emperor.attention import MixtureOfAttentionHeadsConfig
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     CombinedDynamicDiagonalConfig,
     DualModelDynamicWeightConfig,
     GeneratorDynamicBiasConfig,
 )
-from emperor.experts import SoftMoEConfig
-from emperor.experts._layers.mixture import MixtureOfExperts
+from emperor.experts import MixtureOfExpertsConfig, SoftMoEConfig
 from emperor.experts._routing.soft import SoftMoERouter
 from emperor.sampler import RouterConfig
 from models.catalog import model_package
@@ -64,14 +60,15 @@ def test_shared_adaptive_routers_inherit_expert_generators_with_independent_para
     attention = next(
         module
         for module in model.modules()
-        if isinstance(module, MixtureOfAttentionHeads)
+        if isinstance(module, MixtureOfAttentionHeadsConfig().registry_owner())
     )
     mixture_owners = [
         (attention.projector.soft_router, attention.projector.query_model[0]),
         *[
             (module.soft_router, module.expert_modules[0])
             for module in model.modules()
-            if isinstance(module, MixtureOfExperts) and module.soft_router is not None
+            if isinstance(module, MixtureOfExpertsConfig().registry_owner())
+            and module.soft_router is not None
         ],
     ]
     assert len(mixture_owners) >= 2
@@ -136,10 +133,10 @@ def test_attention_and_feed_forward_routing_are_independent(
     attention = next(
         module
         for module in model.modules()
-        if isinstance(module, MixtureOfAttentionHeads)
+        if isinstance(module, MixtureOfAttentionHeadsConfig().registry_owner())
     )
     assert (
-        isinstance(attention.projector, SoftMixtureOfAttentionHeadsProjector)
+        isinstance(getattr(attention.projector, "soft_router", None), SoftMoERouter)
         == soft_attention
     )
     feed_forward_routers = [
