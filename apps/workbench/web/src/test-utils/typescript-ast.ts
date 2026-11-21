@@ -144,7 +144,7 @@ export function typeLiteralPropertyNames(
   });
 }
 
-export function useStateSetterNames(sourceFile: ts.SourceFile) {
+export function declaredUseStateSetters(sourceFile: ts.SourceFile) {
   return findNodes(
     sourceFile,
     (node): node is ts.VariableDeclaration =>
