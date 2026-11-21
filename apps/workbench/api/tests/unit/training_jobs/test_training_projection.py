@@ -68,6 +68,7 @@ def _job(root: Path) -> TrainingJobRecord:
             is_random_search=False,
             runs=runs,
             summary=RunPlanProgressProjector.summarize(runs),
+            preset_searches={"baseline": None},
         ),
         monitors=["linear"],
         log_folder="projection-test",
@@ -197,6 +198,31 @@ class TrainingProjectionParityTests(unittest.TestCase):
     ) -> dict[str, Any]:
         projection = cache.project(job, snapshot)
         return training_job_payload(projector.project_snapshot(job, projection))
+
+    def test_only_a_current_run_id_can_update_a_plan_row(self) -> None:
+        with TemporaryDirectory() as tmp:
+            job = _job(Path(tmp))
+        plan = job.run_plan
+        row = plan.runs[0]
+        by_id = RunPlanProgressProjector.index(plan.runs)
+        event = {
+            "type": "dataset_started",
+            "status": "running",
+            "dataset": row.dataset,
+            "preset": row.preset,
+        }
+        for identity in ({"runIndex": 0}, {"runIndex": 1}, {"runId": "missing"}):
+            with self.subTest(identity=identity):
+                self.assertIs(
+                    RunPlanProgressProjector.apply(
+                        plan=plan, run_by_id=by_id, event=event | identity
+                    ),
+                    plan,
+                )
+        started = RunPlanProgressProjector.apply(
+            plan=plan, run_by_id=by_id, event=event | {"runId": row.id}
+        )
+        self.assertEqual(started.runs[0].status, "Running")
 
     def test_replay_and_incremental_fold_match_after_every_event_prefix(self) -> None:
         with TemporaryDirectory() as tmp:

@@ -67,7 +67,7 @@ def main() -> None:
         }
         if context.experiment_task:
             started_event["experimentTask"] = context.experiment_task
-        progress.write_event(started_event)
+        progress.write_record(started_event)
 
         plan = execute_project_run_plan(
             payload,
@@ -83,18 +83,21 @@ def main() -> None:
         }
         if experiment_task is not None:
             completed_event["experimentTask"] = experiment_task
-        progress.write_event(completed_event)
+        progress.write_record(completed_event)
     except Exception as exc:
         error_event = {
             "type": "error",
             "status": "failed",
             "jobId": payload.get("id"),
-            "error": str(exc),
-            "traceback": traceback.format_exc(),
+            "error": str(exc)[:2048],
+            "traceback": traceback.format_exc()[-2048:],
         }
+        error_event.update(
+            RunPlanWorkerAcceptance.failure_progress_fields(exc, raw_plan)
+        )
         if experiment_task is not None:
             error_event["experimentTask"] = experiment_task
-        progress.write_event(error_event)
+        progress.write_record(error_event)
         traceback.print_exc()
         raise SystemExit(1) from exc
 
