@@ -3,9 +3,10 @@ import unittest
 import torch
 from torch import nn
 
-from emperor.sampler import SamplerConfig, SamplerModel, SamplerMonitorCallback
+from emperor.sampler import SamplerModel, SamplerMonitorCallback
 from emperor.sampler._usage import SamplerUsageTrackerManager
 from support.monitor import orchestration_calls
+from support.sampler import sampler_config
 
 
 class FakeExperiment:
@@ -71,23 +72,6 @@ class TestSamplerMonitorCallback(unittest.TestCase):
             ),
         )
 
-    def sampler_config(self, **overrides) -> SamplerConfig:
-        values = {
-            "top_k": 2,
-            "threshold": 0.0,
-            "filter_above_threshold": False,
-            "num_topk_samples": 0,
-            "normalize_probabilities_flag": False,
-            "noisy_topk_flag": False,
-            "num_experts": 4,
-            "coefficient_of_variation_loss_weight": 0.0,
-            "switch_loss_weight": 0.0,
-            "zero_centred_loss_weight": 0.0,
-            "mutual_information_loss_weight": 0.0,
-            "router_config": None,
-        }
-        values.update(overrides)
-        return SamplerConfig(**values)
 
     def build_module_with_sampler(
         self,
@@ -95,7 +79,7 @@ class TestSamplerMonitorCallback(unittest.TestCase):
         global_step: int = 0,
         **sampler_overrides,
     ) -> tuple[FakeLightningModule, SamplerModel]:
-        sampler = SamplerModel(self.sampler_config(**sampler_overrides))
+        sampler = SamplerModel(sampler_config(**sampler_overrides))
         module = FakeLightningModule(
             sampler, experiment=experiment, global_step=global_step
         )

@@ -2,11 +2,12 @@ import unittest
 
 import torch
 
-from emperor.sampler import SamplerConfig, SamplerModel
+from emperor.sampler import SamplerModel
 from emperor.sampler._usage import (
     SamplerUsageTracker,
     SamplerUsageTrackerManager,
 )
+from support.sampler import sampler_config
 
 
 class TestSamplerUsageTracker(unittest.TestCase):
@@ -115,26 +116,9 @@ class TestSamplerUsageTracker(unittest.TestCase):
 
 
 class TestSamplerUsageTrackerManager(unittest.TestCase):
-    def sampler_config(self, **overrides) -> SamplerConfig:
-        values = {
-            "top_k": 2,
-            "threshold": 0.0,
-            "filter_above_threshold": False,
-            "num_topk_samples": 0,
-            "normalize_probabilities_flag": False,
-            "noisy_topk_flag": False,
-            "num_experts": 4,
-            "coefficient_of_variation_loss_weight": 0.0,
-            "switch_loss_weight": 0.0,
-            "zero_centred_loss_weight": 0.0,
-            "mutual_information_loss_weight": 0.0,
-            "router_config": None,
-        }
-        values.update(overrides)
-        return SamplerConfig(**values)
 
     def test_attach_installs_tracker_module(self):
-        sampler = SamplerModel(self.sampler_config())
+        sampler = SamplerModel(sampler_config())
         manager = SamplerUsageTrackerManager()
 
         tracker = manager.attach(sampler)
@@ -144,7 +128,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         self.assertEqual(tracker.num_experts, sampler.num_experts)
 
     def test_attach_is_idempotent(self):
-        sampler = SamplerModel(self.sampler_config())
+        sampler = SamplerModel(sampler_config())
         manager = SamplerUsageTrackerManager()
 
         first = manager.attach(sampler)
@@ -153,7 +137,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         self.assertIs(first, second)
 
     def test_detach_removes_tracker_module(self):
-        sampler = SamplerModel(self.sampler_config())
+        sampler = SamplerModel(sampler_config())
         manager = SamplerUsageTrackerManager()
         manager.attach(sampler)
 
@@ -165,7 +149,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         )
 
     def test_detach_when_no_tracker_is_noop(self):
-        sampler = SamplerModel(self.sampler_config())
+        sampler = SamplerModel(sampler_config())
         manager = SamplerUsageTrackerManager()
 
         manager.detach(sampler)
@@ -173,7 +157,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         self.assertIsNone(sampler.usage_tracker)
 
     def test_maybe_record_sampler_output_skips_when_no_tracker(self):
-        sampler = SamplerModel(self.sampler_config())
+        sampler = SamplerModel(sampler_config())
         output = (
             torch.tensor([[0.6, 0.4]]),
             torch.tensor([[0, 1]]),
@@ -186,7 +170,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         self.assertIsNone(sampler.usage_tracker)
 
     def test_maybe_record_sampler_output_records_when_attached(self):
-        sampler = SamplerModel(self.sampler_config(num_experts=3, top_k=2))
+        sampler = SamplerModel(sampler_config(num_experts=3, top_k=2))
         manager = SamplerUsageTrackerManager()
         manager.attach(sampler)
         probabilities = torch.tensor([[0.7, 0.3]])
@@ -201,7 +185,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         )
 
     def test_end_to_end_sample_records_usage_when_tracker_attached(self):
-        sampler = SamplerModel(self.sampler_config(top_k=2, num_experts=4))
+        sampler = SamplerModel(sampler_config(top_k=2, num_experts=4))
         SamplerUsageTrackerManager().attach(sampler)
 
         logits = torch.tensor(
@@ -238,7 +222,7 @@ class TestSamplerUsageTrackerManager(unittest.TestCase):
         torch.testing.assert_close(tracker.cumulative_expert_usage_mass, expected_mass)
 
     def test_tracker_preserves_exact_state_keys_and_counters_on_strict_roundtrip(self):
-        cfg = self.sampler_config(top_k=2, num_experts=4)
+        cfg = sampler_config(top_k=2, num_experts=4)
         source = SamplerModel(cfg)
         SamplerUsageTrackerManager().attach(source)
         source.sample_probabilities_and_indices(
