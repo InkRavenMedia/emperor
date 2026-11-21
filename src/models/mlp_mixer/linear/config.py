@@ -41,6 +41,7 @@ from emperor.memory import (
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages import runtime_values, soft_moe
 from models import _component_defaults
+from model_runtime.packages.metric_direction import MetricDirection
 
 #########################################################################
 # Global
@@ -84,6 +85,7 @@ SEED: int | None = None
 # Callback
 CALLBACK_EARLY_STOPPING_PATIENCE: int = 0
 CALLBACK_EARLY_STOPPING_METRIC: str = "validation/accuracy"
+CALLBACK_EARLY_STOPPING_MODE: MetricDirection | None = None  # Optional min/max direction for the monitored metric.
 CALLBACK_EARLY_STOPPING_MIN_DELTA: float = 0.0
 CALLBACK_EARLY_STOPPING_STRICT: bool = True
 CALLBACK_EARLY_STOPPING_CHECK_FINITE: bool = True

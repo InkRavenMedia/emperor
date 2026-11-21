@@ -2995,3 +2995,60 @@ class RunsExecutionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_both_callbacks_apply_the_selected_metric_direction():
+    from model_runtime.runs import ExperimentBase
+
+    package = model_package("gpt/linear")
+    assert package is not None
+    experiment = ExperimentBase(model_package=package)
+    cases = (
+        ("validation/perplexity", None, "min"),
+        ("validation/loss", None, "min"),
+        ("validation/bits_per_byte", None, "min"),
+        ("validation/accuracy", None, "max"),
+        ("validation/custom", "min", "min"),
+        ("custom_loss", "max", "max"),
+    )
+    for metric, override, expected in cases:
+        cfg = experiment._load_trainer_config(
+            {
+                "callback_early_stopping_patience": 2,
+                "callback_checkpoint_flag": True,
+                "callback_early_stopping_metric": metric,
+                "callback_early_stopping_mode": override,
+            }
+        )
+        monitored = [cb for cb in cfg["callbacks"] if hasattr(cb, "monitor")]
+        assert [(cb.monitor, cb.mode) for cb in monitored] == [
+            (metric, expected),
+            (metric, expected),
+        ]
+
+
+def test_monitor_direction_choices_are_checked_at_request_admission():
+    import pytest
+
+    from model_runtime.inspection import configuration_schema, parse_overrides
+    from model_runtime.inspection.errors import InspectionError
+    from model_runtime.packages.metric_direction import MetricDirection
+
+    package = model_package("gpt/linear")
+    assert package is not None
+    field = next(
+        f
+        for f in configuration_schema(package).fields
+        if f.key == "CALLBACK_EARLY_STOPPING_MODE"
+    )
+    assert field.value_type == "enum" and {"MIN", "MAX"}.issubset(field.choices)
+    assert (
+        package.runtime_defaults_spec.parse_value(field.key, "min")
+        is MetricDirection.MIN
+    )
+    assert (
+        package.runtime_defaults_spec.parse_value(field.key, "MAX")
+        is MetricDirection.MAX
+    )
+    with pytest.raises(InspectionError, match="MetricDirection"):
+        parse_overrides(package, {"callback_early_stopping_mode": "minimum"})

@@ -4,7 +4,7 @@ import traceback
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NewType, cast
+from typing import Any, Literal, NewType, cast
 
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -30,6 +30,7 @@ from model_runtime.runs._terminal_checkpoint import save_terminal_last_checkpoin
 from model_runtime.runs._trainer_settings import (
     RuntimeSettings,
     TrainerSettings,
+    metric_mode,
     trainer_arguments,
 )
 from model_runtime.runs.artifacts import FilesystemRunArtifacts, RunArtifacts
@@ -151,14 +152,9 @@ class ExperimentBase:
         )
         if early_stopping_patience <= 0:
             return None
-        early_stopping_metric = self._trainer_config_value(
-            runtime_defaults,
-            config_overrides,
-            "CALLBACK_EARLY_STOPPING_METRIC",
-            "validation/loss",
-        )
+        metric, mode = self._monitor_policy(runtime_defaults, config_overrides)
         return EarlyStopping(
-            monitor=early_stopping_metric,
+            monitor=metric,
             patience=early_stopping_patience,
             min_delta=self._trainer_config_value(
                 runtime_defaults,
@@ -178,7 +174,7 @@ class ExperimentBase:
                 "CALLBACK_EARLY_STOPPING_CHECK_FINITE",
                 True,
             ),
-            mode="min" if "loss" in early_stopping_metric else "max",
+            mode=mode,
         )
 
     def _checkpoint_callback(
@@ -194,18 +190,31 @@ class ExperimentBase:
         )
         if not checkpoint_flag:
             return None
-        early_stopping_metric = self._trainer_config_value(
+        metric, mode = self._monitor_policy(runtime_defaults, config_overrides)
+        return ModelCheckpoint(
+            monitor=metric,
+            save_top_k=1,
+            save_last=True,
+            mode=mode,
+        )
+
+    def _monitor_policy(
+        self,
+        runtime_defaults: RuntimeDefaultsSpec,
+        config_overrides: dict[str, Any],
+    ) -> tuple[str, Literal["min", "max"]]:
+        metric = self._trainer_config_value(
             runtime_defaults,
             config_overrides,
             "CALLBACK_EARLY_STOPPING_METRIC",
             "validation/loss",
         )
-        return ModelCheckpoint(
-            monitor=early_stopping_metric,
-            save_top_k=1,
-            save_last=True,
-            mode="min" if "loss" in early_stopping_metric else "max",
+        mode = self._trainer_config_value(
+            runtime_defaults,
+            config_overrides,
+            "CALLBACK_EARLY_STOPPING_MODE",
         )
+        return metric, metric_mode(metric, mode)
 
     def _trainer_config_value(
         self,
