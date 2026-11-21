@@ -6,6 +6,7 @@ class ExperimentTask(BaseOptions):
     BERT_PRETRAINING = 2
     TEXT_TRANSLATION = 3
     CAUSAL_LANGUAGE_MODELING = 4
+    JOINT_IMAGE_CLASSIFICATION = 5
 
 
 def experiment_task_name(task: ExperimentTask) -> str:

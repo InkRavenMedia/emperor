@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from lightning import Trainer
+from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
@@ -13,6 +13,14 @@ class _CheckpointWriter(ModelCheckpoint):
     @staticmethod
     def save(callback: ModelCheckpoint, trainer: Trainer, target: str) -> None:
         cast(_CheckpointWriter, callback)._save_checkpoint(trainer, target)
+
+
+class TrainEndModelCheckpoint(ModelCheckpoint):
+    """Write the final optimizer and model state in the process that owns the fit."""
+
+    def on_train_end(self, trainer: Trainer, pl_module: LightningModule) -> None:
+        super().on_train_end(trainer, pl_module)
+        save_terminal_last_checkpoint(trainer, self)
 
 
 def save_terminal_last_checkpoint(

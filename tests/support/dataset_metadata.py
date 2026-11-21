@@ -3,8 +3,9 @@ from __future__ import annotations
 import gzip
 import hashlib
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
@@ -12,7 +13,13 @@ from unittest.mock import patch
 from PIL import Image
 from torch.utils.data import Dataset
 
-from emperor.datasets.image.classification import Cifar10, Cifar100, FashionMNIST, Mnist
+from emperor.datasets.image.classification import (
+    Cifar10,
+    Cifar100,
+    FashionMNIST,
+    JointImageClassification,
+    Mnist,
+)
 from emperor.datasets.text.bert_pretraining import (
     PennTreebankBertPretraining,
     WikiText2BertHierarchical,
@@ -58,6 +65,7 @@ BERT_OFFLINE_TEXT_SPLITS = {
 }
 
 DATASET_TASKS = {
+    JointImageClassification: ExperimentTask.JOINT_IMAGE_CLASSIFICATION,
     Mnist: ExperimentTask.IMAGE_CLASSIFICATION,
     FashionMNIST: ExperimentTask.IMAGE_CLASSIFICATION,
     Cifar10: ExperimentTask.IMAGE_CLASSIFICATION,
@@ -133,8 +141,9 @@ class _OfflineVisionDataset(Dataset):
         self,
         *,
         train: bool,
-        transform,
+        transform=None,
         spec: _VisionSpec,
+        **_kwargs,
     ) -> None:
         self.train = train
         self.transform = transform
@@ -234,13 +243,21 @@ def offline_dataset_metadata(
     *,
     seed: int | None,
 ) -> Iterator[object]:
-    if dataset_type in _VISION_SPECS:
-        spec = _VISION_SPECS[dataset_type]
-
-        def source(*_args, train=True, transform=None, **_kwargs):
-            return _OfflineVisionDataset(train=train, transform=transform, spec=spec)
-
-        with patch(spec.patch_target, side_effect=source):
+    if dataset_type is JointImageClassification or dataset_type in _VISION_SPECS:
+        sources = (
+            JointImageClassification.sources.values()
+            if dataset_type is JointImageClassification
+            else (dataset_type,)
+        )
+        with ExitStack() as patches:
+            for source_type in sources:
+                spec = _VISION_SPECS[source_type]
+                patches.enter_context(
+                    patch(
+                        spec.patch_target,
+                        side_effect=partial(_OfflineVisionDataset, spec=spec),
+                    )
+                )
             dataset = dataset_type(batch_size=2, seed=seed)
             dataset.root = str(root)
             dataset.num_workers = 0

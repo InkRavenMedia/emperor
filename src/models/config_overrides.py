@@ -5,6 +5,7 @@ import inspect
 from enum import Enum
 from typing import Any
 
+from emperor.experiments import ExperimentTask
 from model_runtime.inspection.field_descriptions import config_field_description
 from model_runtime.packages import (
     ModelPackage,
@@ -192,7 +193,9 @@ def dataset_option_names(catalog_key: str) -> list[str]:
     package = _selected_package(catalog_key)
     seen: set[str] = set()
     names: list[str] = []
-    for datasets in package.dataset_metadata.values():
+    for task, datasets in package.dataset_metadata.items():
+        if task is ExperimentTask.JOINT_IMAGE_CLASSIFICATION:
+            continue  # The joint task selects its four sources automatically.
         for dataset in datasets:
             name = _dataset_cli_name(dataset)
             if name not in seen:

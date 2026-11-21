@@ -9,6 +9,10 @@ from pathlib import Path
 
 import torch
 
+from emperor.datasets.image.classification import (
+    JointImageBatch,
+    JointImageClassification,
+)
 from emperor.datasets.text.bert_pretraining import BertMaskedWordBatch
 from emperor.datasets.text.language_modeling import (
     OpenWebText,
@@ -121,9 +125,15 @@ class DatasetMetadataContractTests(unittest.TestCase):
                             batches.append(next(iter(loader)))
 
                 self.assertEqual(loader_seeds, [SEED, SEED])
-                if isinstance(batches[0], BertMaskedWordBatch):
+                if isinstance(batches[0], JointImageBatch):
+                    self.assertEqual(batches[0].dataset_id, batches[1].dataset_id)
+                    torch.testing.assert_close(batches[0].images, batches[1].images)
+                    torch.testing.assert_close(batches[0].labels, batches[1].labels)
+                elif isinstance(batches[0], BertMaskedWordBatch):
                     first, second = map(asdict, batches)
-                    self.assertEqual(first.pop("input_words"), second.pop("input_words"))
+                    self.assertEqual(
+                        first.pop("input_words"), second.pop("input_words")
+                    )
                     torch.testing.assert_close(first, second)
                 else:
                     self.assertEqual(len(batches[0]), len(batches[1]))
@@ -138,6 +148,14 @@ class DatasetMetadataContractTests(unittest.TestCase):
         dataset_type: type,
         batch,
     ) -> None:
+        if task == ExperimentTask.JOINT_IMAGE_CLASSIFICATION:
+            self.assertIsInstance(batch, JointImageBatch)
+            self.assertEqual(batch.images.shape, (BATCH_SIZE, 3, 32, 32))
+            source = JointImageClassification.sources[batch.dataset_id]
+            self.assertTrue(
+                torch.all((batch.labels >= 0) & (batch.labels < source.num_classes))
+            )
+            return
         if task == ExperimentTask.IMAGE_CLASSIFICATION:
             inputs, labels = batch
             self.assertEqual(inputs.dtype, torch.float32)
