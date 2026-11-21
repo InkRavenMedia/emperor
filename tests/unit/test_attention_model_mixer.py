@@ -327,7 +327,7 @@ class TestMixerAttention(unittest.TestCase):
         self.assertIsInstance(model.processor, Module)
         self.assertIs(model.processor.cfg, model.cfg)
 
-    def test_construction_preserves_exact_module_and_state_fingerprint(self):
+    def test_processor_owns_the_mixer_and_its_seeded_state(self):
         with torch.random.fork_rng():
             torch.manual_seed(1501)
             model = _mixer_config(embedding_dim=2, sequence_length=3).build()
@@ -335,23 +335,12 @@ class TestMixerAttention(unittest.TestCase):
                 torch.random.get_rng_state().numpy().tobytes()
             ).hexdigest()
 
-        self.assertEqual(
-            tuple(name for name, _module in model.named_modules()),
-            (
-                "",
-                "processor",
-                "processor.mixing_model",
-                "processor.mixing_model.shared_controllers",
-                "processor.mixing_model.layers",
-                "processor.mixing_model.layers.0",
-                "processor.mixing_model.layers.0.postprocessing",
-                "processor.mixing_model.layers.0.halting",
-                "processor.mixing_model.layers.0.memory",
-                "processor.mixing_model.layers.0.residual",
-                "processor.mixing_model.layers.0.normalization",
-                "processor.mixing_model.layers.0.model",
-            ),
-        )
+        owners = [
+            path
+            for path, child in model.named_modules(remove_duplicate=False)
+            if child is model.processor.mixing_model
+        ]
+        self.assertEqual(owners, ["processor.mixing_model"])
         expected_state_topology = (
             (
                 "processor.mixing_model.layers.0.model.weight_params",

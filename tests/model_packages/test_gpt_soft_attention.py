@@ -5,12 +5,10 @@ import copy
 import pytest
 import torch
 
-from emperor.attention._variants.mixture.layer import MixtureOfAttentionHeads
-from emperor.attention._variants.mixture.soft import (
-    SoftMixtureOfAttentionHeadsProjector,
-)
+from emperor.attention import MixtureOfAttentionHeadsConfig
 from emperor.augmentations.adaptive_parameters import AdditiveDynamicBiasConfig
 from emperor.experts import SoftMoEConfig
+from emperor.experts._routing.soft import SoftMoERouter
 from emperor.sampler import RouterConfig
 from models.catalog import model_package
 from tests.model_packages.test_gpt_hierarchical_embedding import TOKENS
@@ -68,13 +66,13 @@ def test_gpt_attention_option_is_opt_in_and_preserves_sparse_feed_forward(
     attention_modules = [
         module
         for module in model.modules()
-        if isinstance(module, MixtureOfAttentionHeads)
+        if isinstance(module, MixtureOfAttentionHeadsConfig().registry_owner())
     ]
     assert len(attention_modules) == 2
     for attention in attention_modules:
         assert attention.causal_attention_mask_flag
         assert (
-            isinstance(attention.projector, SoftMixtureOfAttentionHeadsProjector)
+            isinstance(getattr(attention.projector, "soft_router", None), SoftMoERouter)
             == soft_attention
         )
         if soft_attention:
@@ -115,7 +113,7 @@ def test_gpt_soft_attention_is_causal_and_all_attention_components_receive_gradi
     total_loss = logits.square().mean() + auxiliary_loss.sum()
     total_loss.backward()
     for attention in model.modules():
-        if not isinstance(attention, MixtureOfAttentionHeads):
+        if not isinstance(attention, MixtureOfAttentionHeadsConfig().registry_owner()):
             continue
         for component in (
             attention.projector.soft_router,

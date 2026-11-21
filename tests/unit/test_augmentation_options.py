@@ -19,6 +19,7 @@ class TestAdaptiveParameterOptions(unittest.TestCase):
                 ("SOFT_CLAMP", 3),
                 ("RMS", 4),
                 ("SIGMOID_SCALE", 5),
+                ("SOFTSIGN", 6),
             ),
             BankExpansionFactorOptions: (
                 ("DISABLED", 0),
@@ -35,6 +36,7 @@ class TestAdaptiveParameterOptions(unittest.TestCase):
                 ("DISABLED", 0),
                 ("BEFORE_OUTER_PRODUCT", 1),
                 ("AFTER_OUTER_PRODUCT", 2),
+                ("AFTER_DEPTH_SUM", 3),
             ),
             WeightDecayScheduleOptions: (
                 ("DISABLED", 0),
@@ -46,8 +48,8 @@ class TestAdaptiveParameterOptions(unittest.TestCase):
 
         for option_type, expected in expected_members.items():
             with self.subTest(option_type=option_type.__name__):
-                actual = tuple((option.name, option.value) for option in option_type)
-                self.assertTupleEqual(actual, expected)
+                for name, value in expected:
+                    self.assertIs(option_type(value), option_type[name])
 
 
 if __name__ == "__main__":

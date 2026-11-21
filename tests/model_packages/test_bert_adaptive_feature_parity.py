@@ -7,7 +7,6 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from emperor.attention._base import MultiHeadAttentionAbstract
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
@@ -29,6 +28,7 @@ from tests.model_packages.test_bert_hierarchical_soft_moe import (
     configuration,
     inputs,
 )
+from tests.support.attention import is_configured_attention
 from tests.unit.test_byte_contextual_embedding import contextual_config
 
 ADAPTIVE_VARIANTS = ("linear_adaptive", "expert_linear_adaptive")
@@ -79,7 +79,7 @@ def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_me
     attention = next(
         module
         for module in model.transformer.modules()
-        if isinstance(module, MultiHeadAttentionAbstract)
+        if is_configured_attention(module)
     )
     projections = (
         attention.projector.key_model,
@@ -132,7 +132,7 @@ def test_grouped_expert_bert_trains_with_halting_soft_feed_forward_and_source_me
             )
             for component in (
                 attention.projector.source_memory,
-                model.transformer.utilities.halting_model,
+                model.transformer.pipeline.halting.model,
             ):
                 assert any(
                     parameter.grad is not None and torch.count_nonzero(parameter.grad)

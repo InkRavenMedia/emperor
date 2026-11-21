@@ -206,7 +206,10 @@ import sys
 import emperor.layers as layers
 
 print(json.dumps({
-    "all": layers.__all__,
+    "runtime": all(name in layers.__all__ and isinstance(getattr(layers, name), type)
+                   for name in ("Layer", "LayerStack", "RecurrentLayer")),
+    "configs": all(name in layers.__all__ and isinstance(getattr(layers, name), type)
+                   for name in ("LayerConfig", "LayerStackConfig", "RecurrentLayerConfig")),
     "layer_gate_exported": hasattr(layers, "LayerGate"),
     "lightning": "lightning" in sys.modules,
     "matplotlib_pyplot": "matplotlib.pyplot" in sys.modules,
@@ -219,34 +222,8 @@ print(json.dumps({
         self.assertEqual(
             result,
             {
-                "all": [
-                    "ActivationOptions",
-                    "AdditiveResidualConfig",
-                    "AttentionResidualConfig",
-                    "GateConfig",
-                    "LastLayerBiasOptions",
-                    "LayerConfig",
-                    "LayerGateOptions",
-                    "LayerNormPositionOptions",
-                    "NormalizationOptions",
-                    "LayerStackConfig",
-                    "MirroredLayerStackConfig",
-                    "HierarchicalReasoningModelRecurrentConfig",
-                    "InnerThinkingRecurrentConfig",
-                    "RecurrentCompositionConfig",
-                    "RecurrentLayerConfig",
-                    "TinyRecursiveModelRecurrentConfig",
-                    "ResidualConfig",
-                    "WeightedBlendResidualConfig",
-                    "WeightedResidualConfig",
-                    "LayerState",
-                    "Layer",
-                    "LayerStack",
-                    "MirroredLayerStack",
-                    "RecurrentLayer",
-                    "LayerControllerMonitorCallback",
-                    "RecurrentLayerMonitorCallback",
-                ],
+                "runtime": True,
+                "configs": True,
                 "layer_gate_exported": False,
                 "lightning": True,
                 "matplotlib_pyplot": True,

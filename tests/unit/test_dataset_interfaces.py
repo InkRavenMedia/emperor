@@ -20,6 +20,9 @@ class DatasetInterfaceTests(unittest.TestCase):
         ),
         "emperor.datasets.text.bert_pretraining": (
             "BERT_PRETRAINING_TARGET_VOCAB_SIZE",
+            "BertMaskedWordBatch",
+            "WikiText2BertHierarchical",
+            "WikiText103BertHierarchical",
             "PennTreebankBertPretraining",
             "WikiText2BertPretraining",
         ),

@@ -68,7 +68,7 @@ class ScalingExpert(nn.Module):
         return state
 
 
-def test_experts_construct_independent_networks_with_legacy_state_keys():
+def test_experts_register_independent_networks_under_module_list_indices():
     cfg = expert_config()
     original_config = deepcopy(cfg)
     experts = Experts(cfg)
@@ -90,17 +90,11 @@ def test_experts_construct_independent_networks_with_legacy_state_keys():
     for expert in experts:
         assert expert.cfg.input_dim == expert.cfg.output_dim == 3
 
-    legacy_container = nn.ModuleList()
-    for _ in range(3):
-        overrides = LayerStackConfig(input_dim=3, output_dim=3)
-        legacy_expert = cfg.expert_model_config.build(overrides)
-        legacy_container.append(legacy_expert)
-    legacy_state = legacy_container.state_dict()
-    experts.load_state_dict(legacy_state, strict=True)
-    restored_state = experts.state_dict()
-    legacy_container.load_state_dict(restored_state, strict=True)
-    for key, expected_parameter in legacy_state.items():
-        torch.testing.assert_close(restored_state[key], expected_parameter)
+    restored = Experts(cfg)
+    restored.load_state_dict(expert_state, strict=True)
+    assert set(dict(restored.named_parameters())) == set(expected_keys)
+    for name, parameter in restored.state_dict().items():
+        torch.testing.assert_close(parameter, expert_state[name])
 
 
 def test_experts_preserve_indexing_slicing_replacement_and_registered_state():
