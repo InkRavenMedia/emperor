@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
 
 from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 
 from model_runtime.packages import RuntimeDefaultsSpec
+from model_runtime.packages.metric_direction import MetricDirection
 
 
 class TrainerSettings(TypedDict):
@@ -19,6 +20,33 @@ class RuntimeSettings(TypedDict):
     data_num_workers: int | None
     run_test_after_fit: bool
     seed: int | None
+
+
+_MINIMIZED_METRICS = frozenset(
+    {
+        "loss",
+        "loss_epoch",
+        "auxiliary_loss",
+        "byte_reconstruction_loss",
+        "nll",
+        "perplexity",
+        "cross_entropy",
+        "symbol_cross_entropy",
+        "bits_per_byte",
+    }
+)
+
+
+def metric_mode(metric: str, explicit: object) -> Literal["min", "max"]:
+    if explicit == MetricDirection.MIN:
+        return "min"
+    if explicit == MetricDirection.MAX:
+        return "max"
+    if explicit is not None:
+        raise ValueError("CALLBACK_EARLY_STOPPING_MODE must be min, max, or None.")
+    if metric.rsplit("/", 1)[-1] in _MINIMIZED_METRICS or "loss" in metric:
+        return "min"
+    return "max"
 
 
 def trainer_arguments(
