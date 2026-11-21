@@ -83,6 +83,38 @@ def _local_references(
     return references
 
 
+def _training_calls(
+    scope: ast.AST,
+    local_fit_owners: set[str],
+    include_run_execution: bool,
+    local_super_fit: bool = False,
+) -> bool:
+    if isinstance(scope, ast.ClassDef):
+        local_super_fit = (
+            len(scope.bases) == 1
+            and isinstance(scope.bases[0], ast.Name)
+            and scope.bases[0].id in local_fit_owners
+        )
+    if isinstance(scope, ast.Call) and _is_training_operation(
+        scope,
+        include_run_execution=include_run_execution,
+    ):
+        method = scope.func
+        if not (
+            local_super_fit
+            and isinstance(method, ast.Attribute)
+            and method.attr == "fit"
+            and isinstance(method.value, ast.Call)
+            and isinstance(method.value.func, ast.Name)
+            and method.value.func.id == "super"
+        ):
+            return True
+    return any(
+        _training_calls(child, local_fit_owners, include_run_execution, local_super_fit)
+        for child in ast.iter_child_nodes(scope)
+    )
+
+
 def _training_tests(
     tree: ast.Module,
     *,
@@ -99,17 +131,19 @@ def _training_tests(
         name: _local_references(record, records, functions_by_class)
         for name, record in records.items()
     }
+    # A nested recording double may call its locally defined parent's fit.
+    # The reference graph still inspects that parent's method for real operations.
+    local_fit_owners = {
+        node.name
+        for node in tree.body
+        if isinstance(node, ast.ClassDef)
+        and not node.bases
+        and f"{node.name}.fit" in records
+    }
     training_functions = {
         name
         for name, record in records.items()
-        if any(
-            _is_training_operation(
-                node,
-                include_run_execution=include_run_execution,
-            )
-            for node in ast.walk(record.node)
-            if isinstance(node, ast.Call)
-        )
+        if _training_calls(record.node, local_fit_owners, include_run_execution)
     }
 
     changed = True
@@ -179,3 +213,62 @@ def test_training_operations_are_statically_classified() -> None:
         "Tests that fit models or step optimizers require @pytest.mark.training:\n"
         + "\n".join(missing_markers)
     )
+
+
+def test_classifier_follows_local_super_fit_and_real_optimizer_steps() -> None:
+    tree = ast.parse("""
+class Recorder:
+    def fit(self): self.called = True
+def test_fixture():
+    class RecordingTrainer(Recorder):
+        def fit(self): super().fit()
+def test_real_fit():
+    class Instrumented(ExternalTrainer):
+        def fit(self): super().fit()
+def test_optimizer():
+    optimizer.step()
+""")
+    selected, _ = _training_tests(tree, include_run_execution=False)
+    assert {item.qualified_name for item in selected} == {
+        "test_real_fit",
+        "test_optimizer",
+    }
+
+
+def test_nontraining_lane_blocks_fit_and_step_before_they_run(tmp_path) -> None:
+    import os
+    import subprocess
+    import sys
+
+    (tmp_path / "conftest.py").write_bytes((TEST_ROOT / "conftest.py").read_bytes())
+    (tmp_path / "test_guard.py").write_text(
+        """import lightning, pytest, torch
+def test_training_guards():
+    parameter = torch.nn.Parameter(torch.tensor(4.0))
+    optimizer = torch.optim.SGD([parameter], lr=1.0)
+    parameter.grad = torch.ones_like(parameter)
+    with pytest.raises(pytest.fail.Exception, match="requires @pytest.mark.training"):
+        optimizer.step()
+    assert parameter.item() == 4.0
+    with pytest.raises(pytest.fail.Exception, match="requires @pytest.mark.training"):
+        lightning.Trainer.fit(None)
+"""
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "-m",
+            "not training",
+            str(tmp_path),
+        ],
+        cwd=tmp_path,
+        env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

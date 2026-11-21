@@ -65,6 +65,7 @@ from emperor.nn import Module
     ],
 )
 @pytest.mark.parametrize("shape", [(3, 5), (2, 3, 5), (2, 3, 4, 5)])
+@pytest.mark.training
 def test_each_depth_has_an_independent_positive_normalization_scale(
     normalization, shape
 ):
@@ -2092,6 +2093,7 @@ class TestWeightHandlerForward(unittest.TestCase):
                 result = model._apply_normalization_transform(vectors)
                 torch.testing.assert_close(result, expected)
 
+    @pytest.mark.training
     def test_softsign_scale_learns_to_expand_the_output_range(self):
         policy = (
             self.preset(
