@@ -27,6 +27,11 @@ from model_runtime.runs._progress_events import (
     TrainingErrorEvent,
 )
 from model_runtime.runs._terminal_checkpoint import save_terminal_last_checkpoint
+from model_runtime.runs._trainer_settings import (
+    RuntimeSettings,
+    TrainerSettings,
+    trainer_arguments,
+)
 from model_runtime.runs.artifacts import FilesystemRunArtifacts, RunArtifacts
 from model_runtime.runs.progress import (
     ContextualRunProgress,
@@ -43,8 +48,8 @@ _ExperimentPresetInput = BaseOptions | None | _ExperimentPresetUnset
 
 @dataclass(frozen=True, slots=True)
 class _TrainingRuntime:
-    trainer_config: dict[str, Any]
-    runtime_config: dict[str, Any]
+    trainer_config: TrainerSettings
+    runtime_config: RuntimeSettings
     dataset: Any
     model: Any
     terminal_checkpoint_callback: ModelCheckpoint | None
@@ -98,7 +103,7 @@ class ExperimentBase:
     def _load_trainer_config(
         self,
         config_overrides: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> TrainerSettings:
         runtime_defaults = self.model_package.runtime_defaults_spec
         config_overrides = config_overrides or {}
         checkpoint = self._checkpoint_callback(runtime_defaults, config_overrides)
@@ -217,7 +222,7 @@ class ExperimentBase:
     def _load_runtime_config(
         self,
         config_overrides: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
+    ) -> RuntimeSettings:
         runtime_defaults = self.model_package.runtime_defaults_spec
         config_overrides = config_overrides or {}
 
@@ -235,12 +240,10 @@ class ExperimentBase:
     def _configure_dataset(
         self,
         dataset: Any,
-        runtime_config: dict[str, Any],
+        runtime_config: RuntimeSettings,
     ) -> None:
         data_num_workers = runtime_config.get("data_num_workers")
-        if data_num_workers is None or not hasattr(dataset, "num_workers"):
-            pass
-        else:
+        if data_num_workers is not None and hasattr(dataset, "num_workers"):
             dataset.num_workers = int(data_num_workers)
         seed = runtime_config.get("seed")
         if seed is not None and hasattr(dataset, "seed"):
@@ -271,20 +274,7 @@ class ExperimentBase:
         runtime_defaults: RuntimeDefaultsSpec,
         config_overrides: dict[str, Any],
     ) -> dict[str, Any]:
-        trainer_args: dict[str, Any] = {}
-        for key, value in runtime_defaults.items_with_prefix("TRAINER_"):
-            if value is None:
-                continue
-            clean_key = key[len("TRAINER_") :].lower()
-            trainer_args[clean_key] = config_overrides.get(key.lower(), value)
-
-        for key, value in config_overrides.items():
-            if not key.startswith("trainer_"):
-                continue
-            clean_key = key[len("trainer_") :]
-            if value is not None:
-                trainer_args[clean_key] = value
-        return trainer_args
+        return trainer_arguments(runtime_defaults, config_overrides)
 
     def materialize_training_runs(
         self,
