@@ -28,7 +28,7 @@ class TestExperimentTaskMetadata(unittest.TestCase):
         package = model_package("linears/linear")
 
         experiment = LinearExperiment(
-            experiment_preset=package.default_preset,
+            preset=package.default_preset,
             model_package=package,
         )
 
