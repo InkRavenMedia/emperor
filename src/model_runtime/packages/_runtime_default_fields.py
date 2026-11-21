@@ -1,4 +1,4 @@
-"""Bind a package's declared flat and structured options to its frozen defaults."""
+"""Bind declared flat and structured options to package-owned defaults."""
 
 from __future__ import annotations
 

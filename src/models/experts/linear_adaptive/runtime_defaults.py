@@ -4,9 +4,9 @@ from types import ModuleType
 from typing import Final
 
 import models.experts.linear_adaptive.config as config
+from model_runtime.packages._runtime_default_fields import apply_runtime_default_fields
 from model_runtime.packages.runtime_values import runtime_default_mapping
 from models import _learned_grouping
-from models._runtime_default_fields import apply_runtime_default_fields
 from models.experts.linear_adaptive._config_implementation import (
     ResolvedRuntimeDefaults,
     RuntimeDefaultValues,
