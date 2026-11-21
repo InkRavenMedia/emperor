@@ -18,6 +18,7 @@ from model_runtime.packages import (
     PresetDefinition,
 )
 from model_runtime.runs import ExperimentBase
+from model_runtime.task_behavior import bert_dataset_uses_masked_words
 from models.bert.expert_linear_adaptive.config_builder import (
     BertExpertLinearAdaptiveConfigBuilder,
 )
@@ -298,6 +299,25 @@ _PRESET_DEFINITIONS[ExperimentPreset.SINGLE_LAYER_RECURRENT_ATTENTION_RESIDUAL] 
 
 
 class ExperimentPresets(BuilderBackedExperimentPresetsBase):
+    def _validate_dataset_selection(self, preset, dataset, overrides):
+        from models.bert.expert_linear_adaptive._masked_word import (
+            validate_masked_word_attention,
+        )
+
+        values = {
+            **self._dataset_config(dataset),
+            **overrides,
+            **self.overrides_for_preset(preset),
+        }
+        validate_masked_word_attention(
+            masked_words=values.get(
+                "hierarchical_masked_word_flag", config.HIERARCHICAL_MASKED_WORD_FLAG
+            ),
+            causal=values.get(
+                "causal_attention_mask_flag", config.CAUSAL_ATTENTION_MASK_FLAG
+            ),
+        )
+
     def __init__(self) -> None:
         super().__init__(
             _PRESET_DEFINITIONS,
@@ -306,13 +326,14 @@ class ExperimentPresets(BuilderBackedExperimentPresetsBase):
             default_dataset=PennTreebankBertPretraining,
             runtime_factory=runtime_from_flat,
         )
+        self.dataset_validator = self._validate_dataset_selection
 
     def _dataset_config(self, dataset: type) -> dict:
         values = {
             **super()._dataset_config(dataset),
             "sequence_length": dataset.sequence_length,
         }
-        if getattr(dataset, "hierarchical_masked_word_flag", False):
+        if bert_dataset_uses_masked_words(dataset):
             values.update(
                 hierarchical_masked_word_flag=True,
                 hierarchical_embedding_flag=True,

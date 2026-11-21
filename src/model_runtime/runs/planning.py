@@ -309,20 +309,22 @@ def _materialize_planned_runs(
             )
             for combination in combinations:
                 index = len(runs) + 1
-                runs.append(
-                    RunSpec(
-                        id=f"run-{index:04d}",
-                        experiment_task=resolved.experiment_task_name,
-                        preset=preset_name,
-                        dataset=dataset_name(dataset),
-                        parameters=(
-                            fixed_parameters
-                            if search is None
-                            else fixed_parameters
-                            + _search_parameters(search, combination)
-                        ),
-                    )
+                run = RunSpec(
+                    id=f"run-{index:04d}",
+                    experiment_task=resolved.experiment_task_name,
+                    preset=preset_name,
+                    dataset=dataset_name(dataset),
+                    parameters=(
+                        fixed_parameters
+                        if search is None
+                        else fixed_parameters + _search_parameters(search, combination)
+                    ),
                 )
+                try:
+                    package.validate_run_dataset(preset_name, dataset, run.overrides)
+                except (ValueError, RuntimeDefaultsError) as exc:
+                    raise _request_error(exc) from exc
+                runs.append(run)
     return tuple(runs)
 
 
@@ -356,13 +358,15 @@ def plan_runs(
 
 def _submitted_parameters(
     package: ModelPackage,
-    preset_name: str,
-    overrides: Mapping[str, Any],
+    submitted: SubmittedRun,
+    dataset: type,
 ) -> tuple[RunParameter, ...]:
+    overrides = submitted.overrides
     try:
+        package.validate_run_dataset(submitted.preset, dataset, overrides)
         runtime_defaults = package.runtime_defaults_spec
         parsed = runtime_defaults.parse_overrides(overrides)
-        runtime_defaults.reject_locked_overrides(preset_name, parsed)
+        runtime_defaults.reject_locked_overrides(submitted.preset, parsed)
         serialized = runtime_defaults.serialize_overrides(overrides)
     except (RuntimeDefaultsError, ValueError) as exc:
         raise _plan_error(exc) from exc
@@ -393,7 +397,7 @@ def accept_run_plan(
         )
 
     valid_presets = set(resolved.preset_names)
-    valid_datasets = {dataset_name(dataset) for dataset in resolved.datasets}
+    valid_datasets = {dataset_name(dataset): dataset for dataset in resolved.datasets}
     accepted: list[RunSpec] = []
     seen_ids: set[str] = set()
     for index, submitted in enumerate(submitted_runs, start=1):
@@ -417,8 +421,8 @@ def accept_run_plan(
                 dataset=submitted.dataset,
                 parameters=_submitted_parameters(
                     package,
-                    submitted.preset,
-                    submitted.overrides,
+                    submitted,
+                    valid_datasets[submitted.dataset],
                 ),
             )
         )

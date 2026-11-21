@@ -490,10 +490,11 @@ def test_text_tasks_align_supervision_and_generation_after_recurrent_expansion(
         recurrent_flag=True, recurrent_max_steps=2, recurrent_initial_iterations=2
     )
     config = configuration(name, overrides)
+    package = model_package(name)
     behavior = experiment_task_behavior(task)
     behavior.validate_configuration(config)
-    behavior.validate_dataset(object, config)
-    model = model_package(name).build_model(config).eval()
+    behavior.validate_dataset(package.dataset_metadata[task][0], config)
+    model = package.build_model(config).eval()
     tokens = torch.tensor([[2, 0, 4, 0], [2, 5, 6, 3]])
     attention_mask = tokens.ne(0).long()
     hooks = []

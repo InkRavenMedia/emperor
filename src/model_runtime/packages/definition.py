@@ -260,6 +260,18 @@ class ModelPackage:
             return JointImageClassifier(model)
         return model
 
+    def validate_run_dataset(
+        self,
+        preset_name: str,
+        dataset: type,
+        overrides: Mapping[str, Any],
+    ) -> None:
+        """Check the package's input representation before admitting a Run."""
+        validate = self.presets.dataset_validator
+        if validate is not None:
+            parsed = self.runtime_defaults_spec.parse_overrides(overrides)
+            validate(self.resolve_preset(preset_name), dataset, parsed)
+
     def build_experiment(
         self,
         preset: Any,

@@ -20,7 +20,9 @@ from emperor.datasets.text.language_modeling import (
     WikiText2,
     WikiText103,
 )
+from emperor.embedding.hierarchical.decoder import END_OF_DOCUMENT, END_OF_TOKEN
 from emperor.experiments import ExperimentTask
+from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
 from models.catalog import discover_model_packages
 from support.dataset_metadata import DATASET_TASKS, offline_dataset_metadata
 
@@ -125,7 +127,13 @@ class DatasetMetadataContractTests(unittest.TestCase):
                             batches.append(next(iter(loader)))
 
                 self.assertEqual(loader_seeds, [SEED, SEED])
-                if isinstance(batches[0], JointImageBatch):
+                if isinstance(batches[0], HierarchicalLanguageModelBatch):
+                    first, second = map(asdict, batches)
+                    self.assertEqual(
+                        first.pop("context_texts"), second.pop("context_texts")
+                    )
+                    torch.testing.assert_close(first, second)
+                elif isinstance(batches[0], JointImageBatch):
                     self.assertEqual(batches[0].dataset_id, batches[1].dataset_id)
                     torch.testing.assert_close(batches[0].images, batches[1].images)
                     torch.testing.assert_close(batches[0].labels, batches[1].labels)
@@ -171,6 +179,28 @@ class DatasetMetadataContractTests(unittest.TestCase):
             return
 
         if task == ExperimentTask.CAUSAL_LANGUAGE_MODELING:
+            if isinstance(batch, HierarchicalLanguageModelBatch):
+                self.assertEqual(len(batch.context_texts), BATCH_SIZE)
+                self.assertTrue(batch.bos_mask[:, 0].all())
+                self.assertFalse(batch.bos_mask[:, 1:].any())
+                labels = []
+                for row, contexts in enumerate(batch.context_texts):
+                    active = int(batch.attention_mask[row].sum())
+                    self.assertEqual(contexts[0], "")
+                    for index, token in enumerate(contexts[1:active]):
+                        encoded = list(token.encode("utf-8"))
+                        self.assertEqual(
+                            batch.byte_lengths[row, index].item(), len(encoded)
+                        )
+                        self.assertEqual(
+                            batch.byte_prefix_ids[row, index, : len(encoded)].tolist(),
+                            encoded,
+                        )
+                        labels.extend((*encoded, END_OF_TOKEN))
+                    labels.append(END_OF_DOCUMENT)
+                self.assertEqual(batch.labels.tolist(), labels)
+                self.assertEqual(batch.byte_count, int(batch.byte_lengths.sum()))
+                return
             input_ids, labels = batch
             self.assertEqual(input_ids.dtype, torch.long)
             self.assertEqual(labels.dtype, torch.long)

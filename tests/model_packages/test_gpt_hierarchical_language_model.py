@@ -540,3 +540,93 @@ class GptHierarchicalLanguageModelTests(unittest.TestCase):
                 self.assertGreater(
                     model.hierarchical_model.beginning_of_document.grad.abs().sum(), 0
                 )
+
+
+@pytest.mark.parametrize("name", GPT_PACKAGES)
+def test_planning_and_construction_agree_on_language_dataset(name):
+    from model_runtime.runs import InvalidRunRequest, RunRequest, plan_runs
+
+    package = model_package(name)
+    for preset, hierarchical, dataset, compatible in (
+        ("baseline", None, "WikiText2", True),
+        ("hierarchical", None, "WikiText103Hierarchical", True),
+        ("baseline", None, "WikiText103Hierarchical", False),
+        ("hierarchical", None, "WikiText2", False),
+        ("baseline", True, "WikiText103Hierarchical", True),
+        ("baseline", True, "WikiText2", False),
+    ):
+        values = (
+            {}
+            if hierarchical is None
+            else {
+                "hierarchical_language_model_flag": hierarchical,
+                "lm_head_weight_tying_flag": False,
+            }
+        )
+        request = RunRequest(presets=(preset,), datasets=(dataset,), overrides=values)
+
+        def build(preset=preset, dataset=dataset, overrides=values):
+            return package.build_configuration(
+                package.resolve_preset(preset),
+                package.resolve_dataset(dataset),
+                config_overrides=overrides,
+            )
+
+        if compatible:
+            assert len(plan_runs(package, request).runs) == 1
+            assert build()
+        else:
+            with pytest.raises(InvalidRunRequest, match="dataset"):
+                plan_runs(package, request)
+            with pytest.raises(ValueError, match="dataset"):
+                build()
+
+
+def test_submitted_and_searched_runs_validate_their_effective_dataset():
+    from model_runtime.runs import (
+        InvalidRunPlan,
+        InvalidRunRequest,
+        RunRequest,
+        SearchAxisSelection,
+        SearchSpec,
+        SubmittedRun,
+        accept_run_plan,
+        plan_runs,
+    )
+
+    package = model_package("gpt/linear")
+    dataset = "WikiText103Hierarchical"
+    request = RunRequest(presets=("baseline",), datasets=(dataset,))
+    with pytest.raises(InvalidRunPlan, match="token-ID dataset"):
+        accept_run_plan(package, request, [SubmittedRun(None, "baseline", dataset)])
+    plan = accept_run_plan(
+        package,
+        request,
+        [
+            SubmittedRun(
+                None,
+                "baseline",
+                dataset,
+                {
+                    "hierarchical_language_model_flag": True,
+                    "lm_head_weight_tying_flag": False,
+                },
+            )
+        ],
+    )
+    assert len(plan.runs) == 1
+    search = SearchSpec(
+        mode="grid",
+        axes=(
+            SearchAxisSelection(
+                key="hierarchical_language_model_flag",
+                values=(True, False),
+                allow_custom_values=True,
+            ),
+        ),
+    )
+    with pytest.raises(InvalidRunRequest, match="token-ID dataset"):
+        plan_runs(
+            package,
+            RunRequest(presets=("baseline",), datasets=(dataset,), search=search),
+        )
