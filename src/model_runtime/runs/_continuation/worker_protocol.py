@@ -8,7 +8,7 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any, cast
 
-from model_runtime.runs._checkpoint_receipt import CheckpointPayloadReceipt
+from model_runtime.runs._continuation.receipt import CheckpointPayloadReceipt
 from model_runtime.runs.checkpoint_admission import CheckpointAdmissionPolicy
 
 MAX_CHECKPOINT_WORKER_RECEIPT_BYTES = 4096
@@ -25,9 +25,7 @@ _REQUEST_KEYS = frozenset(
         "policy",
     }
 )
-_SUCCESS_KEYS = frozenset(
-    {"ok", "sha256", "sizeBytes", "controls", "receipt"}
-)
+_SUCCESS_KEYS = frozenset({"ok", "sha256", "sizeBytes", "controls", "receipt"})
 _ERROR_KEYS = frozenset({"ok", "category", "detail"})
 _CONTROL_KEYS = frozenset(
     {"addressSpaceBytes", "coreBytes", "cpuSeconds", "fileSizeBytes"}

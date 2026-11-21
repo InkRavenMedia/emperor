@@ -25,11 +25,11 @@ from model_runtime.runs import (
     CheckpointAdmissionPolicy,
     execute_runs,
 )
-from model_runtime.runs import _checkpoint_isolation as checkpoint_isolation
-from model_runtime.runs import _checkpoint_snapshot as checkpoint_snapshot
-from model_runtime.runs._checkpoint_payload import validate_checkpoint_payload
-from model_runtime.runs._checkpoint_receipt import CheckpointPayloadReceipt
-from model_runtime.runs._checkpoint_worker_protocol import (
+from model_runtime.runs._continuation import isolation as checkpoint_isolation
+from model_runtime.runs._continuation import snapshot as checkpoint_snapshot
+from model_runtime.runs._continuation.payload import validate_checkpoint_payload
+from model_runtime.runs._continuation.receipt import CheckpointPayloadReceipt
+from model_runtime.runs._continuation.worker_protocol import (
     decode_worker_response,
     encode_worker_receipt,
 )
@@ -475,8 +475,8 @@ class CheckpointWorkerProtocolTests(unittest.TestCase):
     def test_pre_limit_worker_import_graph_is_torch_free(self) -> None:
         script = """
 import sys
-import model_runtime.runs._checkpoint_worker_protocol
-import model_runtime.runs._checkpoint_worker
+import model_runtime.runs._continuation.worker_protocol
+import model_runtime.runs._continuation.worker
 for prefix in ('torch', 'lightning', 'models', 'emperor', 'emperor_workbench'):
     assert not any(name == prefix or name.startswith(prefix + '.') for name in sys.modules), prefix
 """
@@ -494,8 +494,8 @@ import sys
 import tempfile
 from pathlib import Path
 from model_runtime.runs.checkpoint_admission import CheckpointAdmissionPolicy
-from model_runtime.runs._checkpoint_worker_protocol import CheckpointWorkerRequest, encode_worker_request
-from model_runtime.runs import _checkpoint_worker as worker
+from model_runtime.runs._continuation.worker_protocol import CheckpointWorkerRequest, encode_worker_request
+from model_runtime.runs._continuation import worker as worker
 
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
@@ -533,7 +533,7 @@ with tempfile.TemporaryDirectory() as tmp:
     def test_worker_clamps_to_an_existing_stronger_hard_limit(self) -> None:
         script = r"""
 import resource
-from model_runtime.runs._checkpoint_worker import _effective_limit
+from model_runtime.runs._continuation.worker import _effective_limit
 resource.setrlimit(resource.RLIMIT_FSIZE, (2048, 2048))
 assert _effective_limit(resource.RLIMIT_FSIZE, 4096) == 2048
 assert resource.getrlimit(resource.RLIMIT_FSIZE) == (2048, 2048)
@@ -618,11 +618,11 @@ assert resource.getrlimit(resource.RLIMIT_FSIZE) == (2048, 2048)
             outer_script = f"""
 import sys
 from pathlib import Path
-from model_runtime.runs import _checkpoint_isolation as isolation
+from model_runtime.runs._continuation import isolation as isolation
 from model_runtime.runs.checkpoint_admission import CheckpointAdmissionPolicy
 isolation._WORKER_COMMAND = (sys.executable, '-P', '-c', {worker_script!r})
 isolation.decode_checkpoint_isolated(
-    Path({str(root / 'snapshot.ckpt')!r}),
+    Path({str(root / "snapshot.ckpt")!r}),
     Path('source.ckpt'),
     '0' * 64,
     0,
