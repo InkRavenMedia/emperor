@@ -387,7 +387,6 @@ class RecurrentIterationSchedule(nn.Module):
         checkpoint_key = f"{prefix}forward_call_progress"
         incoming_progress = state_dict.get(checkpoint_key)
         if incoming_progress is None:
-            state_dict[checkpoint_key] = self.forward_call_progress.new_zeros(())
             return
         progress = self.VALIDATOR.validate_checkpoint_progress(
             incoming_progress,
