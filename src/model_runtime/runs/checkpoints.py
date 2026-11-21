@@ -357,7 +357,11 @@ def _preflight_model_state_shapes(
         checkpoint_value = checkpoint_state[key]
         checkpoint_shape = getattr(checkpoint_value, "shape", None)
         model_shape = getattr(model_value, "shape", None)
-        if checkpoint_shape is None or model_shape is None or checkpoint_shape != model_shape:
+        if (
+            checkpoint_shape is None
+            or model_shape is None
+            or checkpoint_shape != model_shape
+        ):
             mismatch_count += 1
             if len(mismatch_sample) < _DIAGNOSTIC_SAMPLE_SIZE:
                 mismatch_sample.append(
