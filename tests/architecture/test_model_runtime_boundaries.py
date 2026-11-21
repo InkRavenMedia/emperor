@@ -133,8 +133,17 @@ class ModelRuntimeBoundaryTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertNotIn("InspectionCapture", graph_source)
-        self.assertNotIn("InspectionError", graph_source)
+        forbidden = {"InspectionCapture", "InspectionError"}
+        for node in ast.walk(ast.parse(graph_source)):
+            if isinstance(node, ast.alias):
+                name = node.name.rsplit(".", 1)[-1]
+            elif isinstance(node, ast.Attribute):
+                name = node.attr
+            elif isinstance(node, ast.Name):
+                name = node.id
+            else:
+                continue
+            self.assertNotIn(name, forbidden)
         self.assertNotIn("require_transportable_run_budget", facade_source)
         self.assertNotIn("require_transportable_run_budget", public_source)
         self.assertNotIn("require_transportable_run_budget", adapter_source)
