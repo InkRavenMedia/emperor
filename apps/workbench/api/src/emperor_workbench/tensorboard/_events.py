@@ -14,6 +14,7 @@ from threading import RLock
 from typing import Any
 
 from tensorboard.backend.event_processing import event_accumulator, event_file_loader
+from tensorboard.compat.proto import event_pb2
 
 from emperor_workbench.tensorboard._records import (
     ImageSummary,
@@ -287,6 +288,8 @@ def scalar_points(
     accumulator,
     tag: str,
     limit: int | None,
+    *,
+    finite_values_only: bool = False,
 ) -> tuple[ScalarPoint, ...]:
     """Read scalar events for ``tag`` as immutable semantic points."""
     events = accumulator.Scalars(tag)
@@ -299,6 +302,7 @@ def scalar_points(
             value=finite_float(event.value),
         )
         for event in events
+        if not finite_values_only or math.isfinite(event.value)
     )
 
 
@@ -510,7 +514,7 @@ def exact_scalar_tails(
     max_points: int,
     byte_budget: int = DEFAULT_TENSORBOARD_EVENT_READ_BUDGET,
 ) -> dict[str, ScalarTail]:
-    """Stream explicit event files and retain each tag's exact final points."""
+    """Retain each tag's final points from the scalar records written by Lightning."""
 
     requested_tags = list(dict.fromkeys(tags))
     point_limit = max(1, int(max_points))
@@ -555,8 +559,9 @@ def exact_scalar_tails(
                     )
                     for tag in requested_tags
                 }
-            loader = event_file_loader.LegacyEventFileLoader(str(copy_path))
-            for event in loader.Load():
+            loader = event_file_loader.RawEventFileLoader(str(copy_path))
+            for record in loader.Load():
+                event = event_pb2.Event.FromString(record)
                 if not event.HasField("summary"):
                     continue
                 for value in event.summary.value:

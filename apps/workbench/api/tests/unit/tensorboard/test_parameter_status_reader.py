@@ -86,6 +86,47 @@ class TensorBoardParameterStatusReaderTests(unittest.TestCase):
             "main_model.layers.3.model/weights/delta_norm",
         )
 
+    def test_activity_counts_only_finite_parameter_observations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            log_dir = Path(tmp) / "run"
+            self.write_scalars(
+                log_dir,
+                {
+                    "example.0/weights/delta_norm": [
+                        (1, float("nan")),
+                        (2, float("inf")),
+                    ],
+                    "example.0/bias/l2_norm": [(1, 2), (2, float("-inf"))],
+                    "example.1/weights/delta_norm": [(1, float("nan")), (2, 0.5)],
+                },
+            )
+            data = TensorBoardParameterStatusReader().read(
+                source_id="run",
+                preset="baseline",
+                dataset="Mnist",
+                log_dir=str(log_dir),
+            )
+        nodes = {node.node_path: node for node in data.nodes}
+        self.assertEqual(
+            (
+                nodes["example.0"].weights.status,
+                nodes["example.0"].weights.observed_points,
+            ),
+            ("unknown", 0),
+        )
+        self.assertEqual(
+            (nodes["example.0"].bias.status, nodes["example.0"].bias.observed_points),
+            ("unknown", 1),
+        )
+        self.assertEqual(
+            (
+                nodes["example.1"].weights.status,
+                nodes["example.1"].weights.observed_points,
+            ),
+            ("updated", 1),
+        )
+        self.assertEqual(nodes["example.1"].bias.status, "missing")
+
     def test_single_zero_delta_point_is_unknown(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             log_dir = Path(tmp) / "run"
