@@ -39,6 +39,13 @@ class TestExperimentTaskResolution(unittest.TestCase):
                 "causal-language-modeling",
                 "Causal Language Modeling",
             ),
+            (
+                ExperimentTask.JOINT_IMAGE_CLASSIFICATION,
+                5,
+                "JOINT_IMAGE_CLASSIFICATION",
+                "joint-image-classification",
+                "Joint Image Classification",
+            ),
         )
 
         self.assertEqual(tuple(ExperimentTask), tuple(row[0] for row in expected))
