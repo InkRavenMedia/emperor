@@ -3001,7 +3001,7 @@ class TestRecurrentLayer(unittest.TestCase):
                     source.recurrent_iteration_schedule.snapshot(),
                 )
 
-    def test_legacy_checkpoint_missing_only_schedule_progress_loads_strictly(self):
+    def test_missing_schedule_progress_is_reported_by_the_checkpoint_loader(self):
         config = RecurrentLayerConfig(
             recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=4,
@@ -3013,11 +3013,16 @@ class TestRecurrentLayer(unittest.TestCase):
             recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
             block_config=self.layer_block_config(),
         )
-        legacy_checkpoint = config.build().state_dict()
-        legacy_checkpoint.pop("recurrent_iteration_schedule.forward_call_progress")
+        progress_key = "recurrent_iteration_schedule.forward_call_progress"
+        checkpoint = config.build().state_dict()
+        checkpoint.pop(progress_key)
 
         restored = config.build()
-        restored.load_state_dict(legacy_checkpoint, strict=True)
+        with self.assertRaisesRegex(RuntimeError, "forward_call_progress"):
+            restored.load_state_dict(checkpoint, strict=True)
+        incompatible = restored.load_state_dict(checkpoint, strict=False)
+        self.assertEqual(incompatible.missing_keys, [progress_key])
+        self.assertEqual(incompatible.unexpected_keys, [])
 
         restored_schedule = restored.recurrent_iteration_schedule
         self.assertEqual(restored_schedule.snapshot().forward_call_progress, 0)
