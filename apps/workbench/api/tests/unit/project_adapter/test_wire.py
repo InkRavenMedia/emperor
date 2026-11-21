@@ -10,6 +10,7 @@ from model_runtime.inspection import InspectionRequest
 from model_runtime.packages import ModelIdentity
 from model_runtime.runs import (
     PlanningBudget,
+    PresetSearch,
     RunParameter,
     RunPlan,
     RunRequest,
@@ -36,7 +37,7 @@ class ProjectAdapterWireTests(unittest.TestCase):
             experiment_task="image-classification",
             datasets=request.datasets,
             overrides={},
-            search=None,
+            preset_searches=(PresetSearch("baseline", None),),
             runs=(
                 RunSpec(
                     id="run-0001",

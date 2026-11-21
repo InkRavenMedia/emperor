@@ -14,7 +14,7 @@ from model_runtime.runs import execution, experiment
 from model_runtime.runs._handoff import TrainingRunRequest
 from model_runtime.runs.artifacts import FilesystemRunArtifacts
 from model_runtime.runs.experiment import ExperimentBase
-from model_runtime.runs.records import RunParameter, RunPlan, RunSpec
+from model_runtime.runs.records import PresetSearch, RunParameter, RunPlan, RunSpec
 from models.catalog import model_package
 
 
@@ -181,7 +181,7 @@ class RunsParameterPreservationTests(unittest.TestCase):
             experiment_task="image-classification",
             datasets=("Mnist",),
             overrides={"NUM_EPOCHS": 3},
-            search=None,
+            preset_searches=(PresetSearch("baseline", None),),
             runs=(run,),
         )
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
-from typing import Literal
 
 from emperor.config import BaseOptions
 from emperor.experiments import ExperimentTask
@@ -11,6 +10,7 @@ from model_runtime.packages import (
     ModelPackage,
     normalize_key,
 )
+from model_runtime.runs import SearchMode
 from models.config_overrides import extract_config_overrides
 from models.experiment_cli_parser import preset_name_to_cli
 
@@ -28,7 +28,7 @@ class CliSelection:
     selected_presets: list[BaseOptions] | None = field(
         metadata={"help": "Ordered multi-preset selection, when requested."}
     )
-    search_mode: Literal["grid", "random"] | None = field(
+    search_mode: SearchMode | None = field(
         metadata={"help": "Selected grid/random search mode, if any."}
     )
     random_samples: int | None = field(
@@ -131,7 +131,7 @@ def resolve_cli_selection(
         preset = preset_enum.get_member(args.preset)
 
     if args.random_search is not None:
-        search_mode: Literal["grid", "random"] | None = "random"
+        search_mode: SearchMode | None = "random"
         random_samples = args.random_search
     elif args.grid_search:
         search_mode = "grid"

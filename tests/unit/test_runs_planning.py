@@ -337,7 +337,9 @@ class RunsPlanningTests(unittest.TestCase):
             "datasets": ("Mnist",),
         }
 
-        with self.assertRaisesRegex(InvalidRunRequest, "mode must be 'grid'"):
+        with self.assertRaisesRegex(
+            InvalidRunRequest, "mode must be one of 'grid' or 'random'"
+        ):
             plan_runs(
                 package,
                 RunRequest(
