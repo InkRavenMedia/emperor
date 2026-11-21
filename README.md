@@ -239,10 +239,10 @@ The example command above uses ten-token attention-memory chunks.
 Training reached **61.72 epoch equivalents** (91,654 optimizer steps at
 1,485 steps per full training pass).
 
-| Validation | Epoch equivalents | Masked top-1 ↑ | Masked top-5 ↑ | Next-sentence accuracy ↑ |
-| --- | ---: | ---: | ---: | ---: |
-| First validation | 1.00 | 9.27% | 25.78% | 53.88% |
-| Final checkpoint | 61.72 | 26.71% | 39.76% | 63.03% |
+| Validation       | Epoch equivalents | Masked top-1 ↑ | Masked top-5 ↑ | Next-sentence accuracy ↑ |
+| ---------------- | ----------------: | -------------: | -------------: | -----------------------: |
+| First validation |              1.00 |          9.27% |         25.78% |                   53.88% |
+| Final checkpoint |             61.72 |         26.71% |         39.76% |                   63.03% |
 
 Validation uses random token masks and generated next-sentence pairs.
 
@@ -618,11 +618,11 @@ mise run logs:archive -- logs path/to/emperor_logs.zip
 
 ## Project structure
 
-| Path | Purpose |
-| --- | --- |
-| [`src/emperor/`](src/emperor/) | Neural modules, controller primitives, datasets, training helpers, and monitor callbacks. |
-| [`src/model_runtime/`](src/model_runtime/) | Shared model-package, inspection, run, and project-adapter interfaces for the CLI. |
-| [`src/models/`](src/models/) | Reference experiment packages that compose the core modules into runnable architectures. |
+| Path                                       | Purpose                                                                                   |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| [`src/emperor/`](src/emperor/)             | Neural modules, controller primitives, datasets, training helpers, and monitor callbacks. |
+| [`src/model_runtime/`](src/model_runtime/) | Shared model-package, inspection, run, and project-adapter interfaces for the CLI.        |
+| [`src/models/`](src/models/)               | Reference experiment packages that compose the core modules into runnable architectures.  |
 
 ## License
 
