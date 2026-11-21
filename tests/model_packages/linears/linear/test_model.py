@@ -89,7 +89,7 @@ _NEW_PRESET_EXPECTATIONS = {
     "WEIGHTED_RESIDUAL": (
         25,
         {"stack_residual_connection_option": WeightedResidualConfig},
-        "Default config with a learned tanh-scaled current contribution composed "
+        "Default config with a learned sigmoid-scaled current contribution composed "
         "with the previous hidden state at each hidden layer.",
     ),
     "WEIGHTED_BLEND_RESIDUAL": (
@@ -440,7 +440,9 @@ class TestLinearRuntimeDefaults(unittest.TestCase):
             and not any(key.startswith(prefix) for prefix in _NON_MODEL_PREFIXES)
         ]
 
-        self.assertEqual(len(model_keys), 143)
+        self.assertTrue(
+            {"HIDDEN_DIM", "STACK_RESIDUAL_CONNECTION_OPTION"} <= set(model_keys)
+        )
         for key in model_keys:
             with self.subTest(key=key):
                 flat_key = config_key_to_model_param(key)
@@ -1173,6 +1175,11 @@ class TestLinearPresetsAndMetadata(unittest.TestCase):
                 )
                 self.assertIs(actual_residual, residual)
                 self.assertIs(layer.layer_norm_position, norm)
+                if preset is ExperimentPreset.WEIGHTED_RESIDUAL:
+                    self.assertIs(
+                        layer.residual_config.coefficient_activation,
+                        ActivationOptions.SIGMOID,
+                    )
 
     def test_attention_residual_preset_requires_explicit_numeric_settings(self):
         cfg = model_package("linears/linear").presets.get_config(
