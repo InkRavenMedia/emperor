@@ -358,7 +358,7 @@ class LogArchiveImportApiTests(unittest.TestCase):
             ),
         )
 
-        for index, (label, headers, expected_status) in enumerate(cases):
+        for label, headers, expected_status in cases:
             with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
                 logs_root = Path(tmp) / "logs"
                 relative_path = "proof_experiment/result.json"
