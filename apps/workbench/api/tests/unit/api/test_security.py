@@ -346,6 +346,10 @@ class RouteAuthIntegrationTests(unittest.TestCase):
                     is_random_search=False,
                     runs=[run],
                     summary=RunPlanProgressProjector.summarize([run]),
+                    preset_searches={
+                        preset: command.search
+                        for preset in command.presets or [command.preset]
+                    },
                 )
 
         class FakeRunHistoryService:

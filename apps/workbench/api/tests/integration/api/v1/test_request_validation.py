@@ -287,6 +287,39 @@ if __name__ == "__main__":
     unittest.main()
 
 
+def test_preview_search_options_follow_the_browser_contract():
+    cases_path = (
+        Path(__file__).resolve().parents[5] / "web/tests/fixtures/search-options.json"
+    )
+    cases = json.loads(cases_path.read_text())
+
+    async def check():
+        async with lifespan_client(create_app()) as client:
+            for case in cases:
+                response = await client.post(
+                    "/training/run-plan",
+                    json={
+                        "modelType": "linears",
+                        "model": "linear",
+                        "preset": "baseline",
+                        "datasets": ["Mnist"],
+                        "overrides": {},
+                        "search": {
+                            "values": {"hidden_dim": [64, 128]},
+                            **case["input"],
+                        },
+                    },
+                )
+                if case["accepted"]:
+                    assert response.status_code == 200, (case, response.text)
+                    assert response.json()["search"]["randomSamples"] == case["count"]
+                else:
+                    assert response.status_code in (400, 422), (case, response.text)
+                    assert case["field"] in response.text, (case, response.text)
+
+    asyncio.run(check())
+
+
 def test_experiment_listing_accepts_only_current_pagination_options():
     async def check():
         async with lifespan_client(create_app()) as client:

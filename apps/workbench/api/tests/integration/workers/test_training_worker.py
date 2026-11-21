@@ -72,6 +72,36 @@ class TrainingWorkerPlanAcceptanceTests(unittest.TestCase):
         assert effective_search is not None
         self.assertTrue(effective_search.axes[0].allow_custom_values)
 
+    def test_worker_requires_canonical_persisted_searches_and_snapshot_revisions(
+        self,
+    ) -> None:
+        package = project_adapter_client().package("linears/linear")
+        for mode, expected_samples in (("grid", None), ("random", 10)):
+            payload = worker_payload(
+                search={"mode": mode, "values": {"hidden_dim": [64, 128]}}
+            )
+            plan = payload["runPlan"]
+            accepted = RunPlanWorkerAcceptance.accept(package, payload)
+            self.assertEqual(accepted.search.random_samples, expected_samples)
+            self.assertEqual(
+                [run.id for run in accepted.runs], [row["id"] for row in plan["runs"]]
+            )
+            for field in ("presetSearches", "snapshotRevisions"):
+                incomplete = copy.deepcopy(payload)
+                del incomplete["runPlan"][field]
+                with (
+                    self.subTest(mode=mode, field=field),
+                    self.assertRaises(ValueError),
+                ):
+                    RunPlanWorkerAcceptance.accept(package, incomplete)
+            for search in [plan["search"], *plan["presetSearches"].values()]:
+                if mode == "grid":
+                    search["randomSamples"] = None
+                else:
+                    del search["randomSamples"]
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                RunPlanWorkerAcceptance.accept(package, payload)
+
     def test_worker_accepts_exact_materialized_rows_without_sampling(self) -> None:
         payload = worker_payload(
             search={
@@ -241,7 +271,7 @@ class TrainingWorkerPlanAcceptanceTests(unittest.TestCase):
                         }
                     }
                 ),
-                "sample count must be an integer",
+                "randomSamples must be an integer",
             ),
             (
                 "boolean row index",
@@ -564,7 +594,9 @@ class TrainingWorkerProgressTests(unittest.TestCase):
 
     def test_neuron_cluster_growth_callback_caps_coordinate_payloads(self) -> None:
         events: list[dict[str, object]] = []
-        progress = SimpleNamespace(write_event=lambda event: events.append(dict(event)))
+        progress = SimpleNamespace(
+            write_record=lambda event: events.append(dict(event))
+        )
         callback = lightning_progress_adapter(
             ContextualRunProgress(
                 progress,

@@ -21,6 +21,7 @@ from emperor_workbench.project_adapter import (
     ProjectAdapterFailure,
 )
 from emperor_workbench.run_plans._command_projection import (
+    plan_configuration_fields,
     project_pending_run,
 )
 from emperor_workbench.run_plans._errors import RunPlanFailure
@@ -312,9 +313,12 @@ class RunPlanService:
             )
         except ProjectAdapterFailure as exc:
             raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
+        fields_by_preset = plan_configuration_fields(
+            self._model_packages, model, semantic_plan
+        )
         runs = [
             project_pending_run(
-                self._model_packages,
+                fields_by_preset[run.preset],
                 model=model,
                 package=selected.package,
                 run=run,
@@ -379,13 +383,16 @@ class RunPlanService:
         except ProjectAdapterFailure as exc:
             raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
 
+        fields_by_preset = plan_configuration_fields(
+            self._model_packages, model, semantic_plan
+        )
         runs = []
         for index, (submitted_run, semantic_run) in enumerate(
             zip(submitted_runs, semantic_plan.runs, strict=True),
             start=1,
         ):
             projected_run = project_pending_run(
-                self._model_packages,
+                fields_by_preset[semantic_run.preset],
                 model=model,
                 package=selected.package,
                 run=semantic_run,
@@ -399,8 +406,6 @@ class RunPlanService:
                     projected_run,
                     snapshot_id=submitted_run.snapshot_id,
                     snapshot_name=submitted_run.snapshot_name,
-                    snapshot_id_present=True,
-                    snapshot_name_present=True,
                 )
             )
 

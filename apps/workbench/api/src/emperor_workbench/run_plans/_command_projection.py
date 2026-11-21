@@ -5,7 +5,7 @@ from typing import Any
 
 from model_runtime.inspection import ConfigurationField
 from model_runtime.packages import normalize_key, serialize_config_value
-from model_runtime.runs import RunSpec, SearchSpec
+from model_runtime.runs import RunPlan, RunSpec, SearchSpec
 
 from emperor_workbench.model_packages import (
     ModelPackageCatalog,
@@ -20,7 +20,19 @@ from emperor_workbench.run_plans._records import (
     TrainingRunChangeView,
     TrainingRunView,
 )
-from emperor_workbench.run_plans._selection import configuration_fields
+from emperor_workbench.run_plans._selection import (
+    ConfigurationFields,
+    configuration_fields,
+)
+
+
+def plan_configuration_fields(
+    model_packages: ModelPackageCatalog, model: str, plan: RunPlan
+) -> dict[str, ConfigurationFields]:
+    return {
+        preset: configuration_fields(model_packages, model=model, preset=preset)
+        for preset in dict.fromkeys(run.preset for run in plan.runs)
+    }
 
 
 def render_posix_command(argv: list[str]) -> str:
@@ -54,7 +66,7 @@ def field_label(field: ConfigurationField) -> str:
 
 
 def project_training_command(
-    model_packages: ModelPackageCatalog,
+    configuration: ConfigurationFields,
     *,
     model: str,
     preset: str,
@@ -64,14 +76,9 @@ def project_training_command(
     log_folder: str,
     monitors: list[str],
 ) -> tuple[list[str], TrainingCommandsView]:
-    fields, by_key = configuration_fields(
-        model_packages,
-        model=model,
-        preset=preset,
-    )
     values_by_field_key: dict[str, Any] = {}
     for raw_key, raw_value in overrides.items():
-        field = by_key.get(normalize_key(str(raw_key)))
+        field = configuration.by_key.get(normalize_key(str(raw_key)))
         if field is not None:
             values_by_field_key[field.key] = raw_value
 
@@ -95,7 +102,7 @@ def project_training_command(
         arguments.extend(monitors)
 
     config_parts: list[str] = []
-    for field in fields:
+    for field in configuration.ordered:
         if field.key not in values_by_field_key:
             continue
         config_parts.extend(
@@ -126,7 +133,7 @@ def run_total_epochs(
             SelectedModelPackage(package).parse_overrides(dict(run.overrides)).values
         )
     except ModelPackageFailure as exc:
-        raise RunPlanFailure(exc.detail) from exc
+        raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
     raw_epochs = parsed_overrides.get(
         "num_epochs",
         getattr(package.runtime_defaults, "NUM_EPOCHS", 10),
@@ -138,7 +145,7 @@ def run_total_epochs(
 
 
 def project_pending_run(
-    model_packages: ModelPackageCatalog,
+    configuration: ConfigurationFields,
     *,
     model: str,
     package: ModelPackageReference,
@@ -148,11 +155,6 @@ def project_pending_run(
     monitors: list[str],
     search: SearchSpec | None,
 ) -> TrainingRunView:
-    _fields, by_key = configuration_fields(
-        model_packages,
-        model=model,
-        preset=run.preset,
-    )
     search_keys = (
         {normalize_key(axis.key) for axis in (search.axes or ())}
         if search is not None
@@ -181,7 +183,7 @@ def project_pending_run(
     changes: list[TrainingRunChangeView] = []
     overrides: dict[str, Any] = {}
     for parameter in parameters:
-        field = by_key.get(normalize_key(parameter.key))
+        field = configuration.by_key.get(normalize_key(parameter.key))
         field_key = field.key if field is not None else parameter.key
         overrides[field_key] = parameter.value
         changes.append(
@@ -198,7 +200,7 @@ def project_pending_run(
             )
         )
     command_argv, commands = project_training_command(
-        model_packages,
+        configuration,
         model=model,
         preset=run.preset,
         experiment_task=run.experiment_task,
@@ -224,6 +226,7 @@ def project_pending_run(
 
 __all__ = [
     "field_label",
+    "plan_configuration_fields",
     "project_pending_run",
     "project_training_command",
     "render_posix_command",

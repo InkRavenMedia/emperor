@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
+from model_runtime.runs import SearchMode
 from pydantic import Field
 
 from emperor_workbench.api.v1._base_contracts import (
@@ -57,16 +58,17 @@ class TrainingRunPlanCreateRequest(ApiResponseModel):
 
 
 class TrainingSearchResponse(ApiResponseModel):
-    mode: Literal["grid", "random"]
+    mode: SearchMode
     values: dict[str, list[ConfigValue]]
     randomSamples: int | None = None
 
 
 class TrainingSearchRequest(ApiResponseModel):
-    mode: Literal["grid", "random"]
+    mode: SearchMode
     values: dict[str, TrainingSearchValues] = Field(max_length=MAX_TRAINING_SEARCH_AXES)
     randomSamples: int | None = Field(
         default=None,
+        strict=True,
         ge=1,
         le=MAX_TRAINING_PLANNED_RUNS,
     )

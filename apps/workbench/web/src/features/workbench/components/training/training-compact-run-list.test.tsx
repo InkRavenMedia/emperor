@@ -73,6 +73,8 @@ function plan(runs: TrainingRun[]): TrainingRunPlan {
     search: null,
     presetSearches: { baseline: null },
     logFolder: "compact",
+    snapshotRevisions: [],
+    experimentTask: "image-classification",
     isRandomSearch: false,
     runs,
     summary: {
