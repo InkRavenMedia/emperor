@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -370,6 +370,12 @@ class TensorBoardMonitorReader:
         return images
 
 
+@dataclass
+class _ChannelEvidence:
+    seen: set[str] = field(default_factory=set)
+    points: dict[str, list[ScalarPoint]] = field(default_factory=dict)
+
+
 class TensorBoardParameterStatusReader:
     def __init__(
         self,
@@ -450,12 +456,12 @@ class TensorBoardParameterStatusReader:
                     weights=self._channel_status(
                         node_path,
                         "weights",
-                        channel_data.get("weights", self._empty_channel_data()),
+                        channel_data.get("weights", _ChannelEvidence()),
                     ),
                     bias=self._channel_status(
                         node_path,
                         "bias",
-                        channel_data.get("bias", self._empty_channel_data()),
+                        channel_data.get("bias", _ChannelEvidence()),
                     ),
                 )
                 for node_path, channel_data in sorted(scalars_by_node.items())
@@ -467,8 +473,8 @@ class TensorBoardParameterStatusReader:
     def _read_parameter_scalars(
         self,
         index: EventFileIndex,
-    ) -> dict[str, dict[str, dict[str, Any]]]:
-        scalars_by_node: dict[str, dict[str, dict[str, Any]]] = {}
+    ) -> dict[str, dict[str, _ChannelEvidence]]:
+        scalars_by_node: dict[str, dict[str, _ChannelEvidence]] = {}
         for run_dir in index.dirs:
             accumulator = index.load_accumulator(
                 run_dir,
@@ -486,32 +492,30 @@ class TensorBoardParameterStatusReader:
                     continue
                 node_path, channel, metric = parsed
                 channel_data = scalars_by_node.setdefault(node_path, {}).setdefault(
-                    channel, self._empty_channel_data()
+                    channel, _ChannelEvidence()
                 )
-                channel_data["seen"].add(metric)
+                channel_data.seen.add(metric)
                 try:
                     points = scalar_points(
                         accumulator,
                         tag,
                         self.scalar_point_limit,
+                        finite_values_only=True,
                     )
                 except Exception:
                     continue
                 if points:
-                    channel_data["points"].setdefault(metric, []).extend(points)
+                    channel_data.points.setdefault(metric, []).extend(points)
 
         for channel_data_by_node in scalars_by_node.values():
             for channel_data in channel_data_by_node.values():
-                for metric_points in channel_data["points"].values():
+                for metric_points in channel_data.points.values():
                     metric_points.sort(key=lambda point: (point.step, point.wall_time))
                     del metric_points[: -self.scalar_point_limit]
         return scalars_by_node
 
     def _parameter_tag(self, tag: str) -> tuple[str, str, str] | None:
         return parse_parameter_monitor_tag(tag)
-
-    def _empty_channel_data(self) -> dict[str, Any]:
-        return {"seen": set(), "points": {}}
 
     def _empty_channel_status(
         self,
@@ -528,10 +532,10 @@ class TensorBoardParameterStatusReader:
         self,
         node_path: str,
         channel: str,
-        channel_data: dict[str, Any],
+        channel_data: _ChannelEvidence,
     ) -> ParameterChannelStatus:
-        seen_metrics = channel_data["seen"]
-        points_by_metric = channel_data["points"]
+        seen_metrics = channel_data.seen
+        points_by_metric = channel_data.points
         if not seen_metrics:
             return self._empty_channel_status("missing")
 
