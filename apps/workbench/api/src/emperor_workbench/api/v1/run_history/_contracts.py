@@ -30,6 +30,11 @@ def _is_none(value: object) -> bool:
     return value is None
 
 
+class LogExperimentPageRequest(ApiResponseModel):
+    limit: int = Field(default=DEFAULT_LOG_PAGE_LIMIT, ge=1, le=MAX_LOG_PAGE_LIMIT)
+    offset: int = Field(default=0, ge=0)
+
+
 class LogRunResponse(ApiResponseModel):
     id: str
     group: str | None = None
