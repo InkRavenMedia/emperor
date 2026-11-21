@@ -134,9 +134,6 @@ describe("query key factories", () => {
       "baseline",
       ["baseline", "post-norm"],
     ]);
-    expect(
-      workbenchQueryKeys.historicalSummaryInspection("linear", "baseline", "Mnist"),
-    ).toEqual(["inspect", "historical-summary", "linear", "baseline", "Mnist"]);
     expect(workbenchQueryKeys.previewInspections()).toEqual(["inspect", "preview"]);
     expect(workbenchQueryKeys.previewInspection("request-key")).toEqual([
       "inspect",
@@ -271,21 +268,6 @@ describe("query key factories", () => {
       "historical-run-group",
       ["run-1", "run-2"],
     ]);
-    expect(
-      monitorQueryKeys.historicalParameterSummary(
-        "linear",
-        "baseline",
-        "Mnist",
-        runIds,
-      ),
-    ).toEqual([
-      "monitor-parameter-summary",
-      "historical-run-group",
-      "linear",
-      "baseline",
-      "Mnist",
-      ["run-1", "run-2"],
-    ]);
     expect(runIds).toEqual(["run-2", "run-1"]);
   });
 
@@ -297,21 +279,6 @@ describe("query key factories", () => {
       ),
     ).toEqual(
       monitorQueryKeys.historicalRunGroup(["run-1", "run-2"], "root.layer"),
-    );
-    expect(
-      monitorQueryKeys.historicalParameterSummary(
-        "linear",
-        "baseline",
-        "Mnist",
-        ["run-2", "run-1", "run-2"],
-      ),
-    ).toEqual(
-      monitorQueryKeys.historicalParameterSummary(
-        "linear",
-        "baseline",
-        "Mnist",
-        ["run-1", "run-2"],
-      ),
     );
   });
 });
