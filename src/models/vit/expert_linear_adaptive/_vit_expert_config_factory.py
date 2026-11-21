@@ -75,8 +75,11 @@ class VitExpertAdaptiveConfigDependencies(VitExpertConfigDependencies):
     router_adaptive_mask_options: HiddenAdaptiveMaskOptions
 
 
-class _VitExpertConfigFactoryBase:
-    def __init__(self, dependencies: VitExpertConfigDependencies) -> None:
+class VitExpertAdaptiveConfigFactory:
+    def __init__(
+        self,
+        dependencies: VitExpertAdaptiveConfigDependencies,
+    ) -> None:
         self.dependencies = dependencies
 
     def build_feed_forward_base_stack_config(
@@ -196,22 +199,6 @@ class _VitExpertConfigFactoryBase:
             last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
             apply_output_postprocessing_flag=True,
         )
-
-    def _build_control_config(
-        self,
-        stack_options: ExpertsStackOptions,
-    ) -> ExpertAdaptiveControlConfigFactory:
-        raise NotImplementedError
-
-
-class VitExpertAdaptiveConfigFactory(_VitExpertConfigFactoryBase):
-    dependencies: VitExpertAdaptiveConfigDependencies
-
-    def __init__(
-        self,
-        dependencies: VitExpertAdaptiveConfigDependencies,
-    ) -> None:
-        super().__init__(dependencies)
 
     def _build_control_config(
         self,

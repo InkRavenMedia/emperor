@@ -47,7 +47,7 @@ class GptExpertConfigDependencies:
     expert_attention_use_kv_expert_models_flag: bool
 
 
-class _GptExpertConfigFactoryBase:
+class GptExpertConfigFactory:
     def __init__(self, dependencies: GptExpertConfigDependencies) -> None:
         self.dependencies = dependencies
 
@@ -170,11 +170,6 @@ class _GptExpertConfigFactoryBase:
             apply_output_postprocessing_flag=True,
         )
 
-    def _build_control_config(self, stack_options: ExpertsStackOptions):
-        raise NotImplementedError
-
-
-class GptExpertConfigFactory(_GptExpertConfigFactoryBase):
     def _build_control_config(
         self,
         stack_options: ExpertsStackOptions,

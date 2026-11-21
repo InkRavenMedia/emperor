@@ -47,7 +47,7 @@ class VitExpertConfigDependencies:
     expert_attention_use_kv_expert_models_flag: bool
 
 
-class _VitExpertConfigFactoryBase:
+class VitExpertConfigFactory:
     def __init__(self, dependencies: VitExpertConfigDependencies) -> None:
         self.dependencies = dependencies
 
@@ -169,14 +169,6 @@ class _VitExpertConfigFactoryBase:
             apply_output_postprocessing_flag=True,
         )
 
-    def _build_control_config(
-        self,
-        stack_options: ExpertsStackOptions,
-    ) -> ExpertLinearControlConfigFactory:
-        raise NotImplementedError
-
-
-class VitExpertConfigFactory(_VitExpertConfigFactoryBase):
     def _build_control_config(
         self,
         stack_options: ExpertsStackOptions,
