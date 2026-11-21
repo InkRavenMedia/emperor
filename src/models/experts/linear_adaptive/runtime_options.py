@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Protocol
 
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
@@ -33,6 +32,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.experts.linear_adaptive import _generation
 from models.experts.linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
@@ -375,16 +375,22 @@ class HiddenAdaptiveMaskOptions:
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
 
-class AdaptiveBoundaryModelOptions(Protocol):
-    weight_generation: WeightGenerationOptions
-    bias_generation: BiasGenerationOptions
-    grouping_config: GroupingConfig | None
+@dataclass(frozen=True, slots=True)
+class AdaptiveBoundaryModelOptions:
+    weight_generation: WeightGenerationOptions = field(
+        default_factory=WeightGenerationOptions, kw_only=True
+    )
+    bias_generation: BiasGenerationOptions = field(
+        default_factory=BiasGenerationOptions, kw_only=True
+    )
+    grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
     weight_option: type[DynamicWeightConfig] | None
     generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int
     weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_learnable_scale_flag: bool
     weight_normalization_position_option: WeightNormalizationPositionOptions
     weight_bank_expansion_factor: BankExpansionFactorOptions
     bias_option: type[DynamicBiasConfig] | None
@@ -399,7 +405,6 @@ class AdaptiveBoundaryModelOptions(Protocol):
     mask_surrogate_scale: float
     mask_floor: float
     mask_transition_width: float
-    weight_normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True, slots=True)

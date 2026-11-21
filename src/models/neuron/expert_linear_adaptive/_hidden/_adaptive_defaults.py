@@ -24,6 +24,7 @@ from models.neuron.expert_linear_adaptive._generation import (
     AdaptiveGeneratorStackSource,
 )
 from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
+    AdaptiveBoundaryModelOptions,
     AdaptiveGeneratorStackOptions,
     ExpertsAdaptiveGeneratorStackOptions,
     HiddenAdaptiveBiasOptions,
