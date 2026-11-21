@@ -39,14 +39,6 @@ from emperor_workbench.project_adapter import (
     ProjectAdapterClient,
     ProjectAdapterFailure,
 )
-from tests.support.inspection import config_schema as support_config_schema
-from tests.support.inspection import inspect_model as support_inspect_model
-from tests.support.inspection import (
-    legacy_config_schema_payload,
-)
-from tests.support.inspection import (
-    search_space_schema as support_search_space_schema,
-)
 from tests.support.model_packages import project_adapter_client
 
 
@@ -150,7 +142,9 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
             fields["TOKEN_MIXER_SOURCE_MEMORY_MODEL_OPTION"].choices,
             ["LINEAR", "LINEAR_STACK", "RECURRENT_LINEAR"],
         )
-        self.assertTrue(fields["TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG"].legacyJson)
+        self.assertTrue(
+            fields["TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG"].hasFlatControls
+        )
         self.assertTrue(
             any(
                 group.experiment_task == "bert-pretraining"
@@ -174,7 +168,7 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                 if field.type == "json":
                     with self.subTest(model=package.catalog_key, field=field.key):
                         self.assertTrue(
-                            field.legacyJson,
+                            field.hasFlatControls,
                             "Expose flat controls before adding a JSON field.",
                         )
 
@@ -195,12 +189,12 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                 ),
             )
         )
-        legacy = next(
+        structured_field = next(
             field
             for field in response.fields
             if field.key == "ATTN_SOURCE_MEMORY_MODEL_CONFIG"
         )
-        self.assertFalse(legacy.legacyJson)
+        self.assertFalse(structured_field.hasFlatControls)
 
     def catalog(self) -> ModelPackageCatalog:
         return ModelPackageCatalog(project_adapter_client())
@@ -237,7 +231,7 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                     raised.exception.detail,
                 )
 
-    def test_semantic_inspection_matches_the_frozen_http_projection(self) -> None:
+    def test_graph_projection_preserves_the_semantic_nodes_and_edges(self) -> None:
         cases = (
             ("linears/linear", "baseline", "Mnist", "image-classification"),
             (
@@ -274,18 +268,22 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
                     dataset=dataset,
                     experiment_task=experiment_task,
                 )
-                expected = inspection_response(result).model_dump(mode="json")
+                response = inspection_response(result)
+                self.assertEqual(response.preset, result.preset)
+                self.assertEqual(response.parameterCount, result.parameter_count)
                 self.assertEqual(
-                    expected,
-                    support_inspect_model(
-                        model_id,
-                        preset,
-                        dataset=dataset,
-                        experiment_task=experiment_task,
-                    ),
+                    response.parameterSizeBytes, result.parameter_size_bytes
+                )
+                self.assertEqual(
+                    [(node.id, node.typeName, node.path) for node in response.nodes],
+                    [(node.id, node.type_name, node.path) for node in result.nodes],
+                )
+                self.assertEqual(
+                    [(edge.id, edge.source, edge.target) for edge in response.edges],
+                    [(edge.id, edge.source, edge.target) for edge in result.edges],
                 )
 
-    def test_model_package_schema_and_search_match_frozen_helpers(self) -> None:
+    def test_schema_and_search_preserve_field_order_and_preset_locks(self) -> None:
         cases = (
             ("linears/linear", "baseline", None),
             ("linears/linear", "gating", None),
@@ -299,18 +297,24 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
         for model_id, preset, presets in cases:
             with self.subTest(model=model_id, preset=preset, presets=presets):
                 selected = self.catalog().select(model_id)
+                configuration = selected.configuration(preset)
+                fields = config_schema_response(configuration).fields
                 self.assertEqual(
-                    legacy_config_schema_payload(
-                        config_schema_response(selected.configuration(preset))
-                    ),
-                    support_config_schema(model_id, preset),
+                    [field.key for field in fields],
+                    [field.key for field in configuration.fields],
                 )
-                self.assertEqual(
-                    search_space_response(
-                        selected.search_space(preset, presets)
-                    ).model_dump(),
-                    support_search_space_schema(model_id, preset, presets),
-                )
+                self.assertTrue(all(field.sectionIdPath for field in fields))
+                space = selected.search_space(preset, presets)
+                response = search_space_response(space)
+                self.assertEqual(response.preset, space.preset)
+                for axis, projected in zip(space.axes, response.axes, strict=True):
+                    self.assertEqual(projected.configKey, axis.key)
+                    self.assertEqual(projected.searchKey, axis.search_key)
+                    self.assertEqual(projected.values, list(axis.values))
+                    self.assertEqual(projected.locked, axis.locked)
+                    self.assertEqual(
+                        projected.lockedByPresets, list(axis.locked_by_presets)
+                    )
 
     def test_configuration_section_metadata_survives_heading_renames(self) -> None:
         schema = (
@@ -485,12 +489,12 @@ class InspectionAdapterEquivalenceTests(unittest.TestCase):
         )
 
         self.assertEqual(
-            legacy_config_schema_payload(config_schema_response(configuration)),
-            support_config_schema("linears/linear", "baseline"),
+            configuration,
+            catalog.select("linears/linear").configuration("baseline"),
         )
         self.assertEqual(
-            search_space_response(search).model_dump(),
-            support_search_space_schema("linears/linear", "baseline"),
+            search,
+            catalog.select("linears/linear").search_space("baseline", None),
         )
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 # ruff: noqa: I001
 
+import asyncio
 import importlib
 import os
 import sys
@@ -21,10 +22,10 @@ from model_runtime.packages.configuration_metadata import (
 from models.catalog import discover_model_ids
 from model_runtime.packages import ConfigValueError, parse_config_value
 
-from tests.support.inspection import (
-    config_schema,
-    search_space_schema,
-)
+from emperor_workbench.api import create_app
+from emperor_workbench.settings import WorkbenchApiSettings
+from tests.support import lifespan_client
+from tests.support.inspection import search_space_schema
 
 
 def _fields_by_key(payload: dict) -> dict[str, dict]:
@@ -36,6 +37,29 @@ def _axes_by_key(payload: dict) -> dict[str, dict]:
 
 
 class InspectorSchemaTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        root = Path(cls.enterClassContext(tempfile.TemporaryDirectory()))
+        settings = WorkbenchApiSettings(
+            state_root=str(root / "state"),
+            logs_root=str(root / "logs"),
+            snapshots_root=str(root / "snapshots"),
+        )
+        cls.runner = cls.enterClassContext(asyncio.Runner())
+        connection = lifespan_client(create_app(settings))
+        cls.client = cls.runner.run(connection.__aenter__())
+        cls.addClassCleanup(cls.runner.run, connection.__aexit__(None, None, None))
+
+    def config_schema(self, model: str, preset: str | None = None) -> dict:
+        response = self.runner.run(
+            self.client.get(
+                f"/models/{model}/config-schema",
+                params={"preset": preset} if preset else {},
+            )
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()
+
     def test_gpt_schemas_remove_pretraining_and_causal_switch_fields(self) -> None:
         blocked = {
             "causal_attention_mask_flag",
@@ -51,7 +75,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "gpt/expert_linear_adaptive",
         ):
             with self.subTest(model_name=model_name):
-                fields = _fields_by_key(config_schema(model_name))
+                fields = _fields_by_key(self.config_schema(model_name))
                 self.assertFalse(blocked & set(fields))
                 self.assertFalse(any("causal" in key for key in fields))
                 self.assertIn("sequence_length", fields)
@@ -83,7 +107,7 @@ class InspectorSchemaTests(unittest.TestCase):
                 )
 
     def test_config_schema_emits_uppercase_public_keys(self) -> None:
-        fields = config_schema("linears/linear")["fields"]
+        fields = self.config_schema("linears/linear")["fields"]
 
         stack_field = next(
             field
@@ -100,7 +124,7 @@ class InspectorSchemaTests(unittest.TestCase):
             self.assertTrue(field["key"].isupper())
 
     def test_config_schema_exposes_residual_model_flags(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear"))
+        fields = _fields_by_key(self.config_schema("linears/linear"))
         residual_model_flag = fields["stack_residual_model_flag"]
         residual_stack_hidden_dim = fields["residual_stack_hidden_dim"]
 
@@ -130,7 +154,7 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_does_not_invent_recurrent_applicability(self) -> None:
-        fields = _fields_by_key(config_schema("transformer/linear"))
+        fields = _fields_by_key(self.config_schema("transformer/linear"))
 
         self.assertEqual(
             fields["recurrent_max_steps"]["applicableWhen"],
@@ -147,7 +171,7 @@ class InspectorSchemaTests(unittest.TestCase):
             [],
         )
         self.assertEqual(
-            _fields_by_key(config_schema("linears/linear"))["hidden_dim"][
+            _fields_by_key(self.config_schema("linears/linear"))["hidden_dim"][
                 "applicableWhen"
             ],
             [],
@@ -170,7 +194,7 @@ class InspectorSchemaTests(unittest.TestCase):
         blocked_keys = {"DATASET_OPTIONS", "MONITOR_OPTIONS"}
         for model_name in discover_model_ids():
             with self.subTest(model_name=model_name):
-                fields = config_schema(model_name)["fields"]
+                fields = self.config_schema(model_name)["fields"]
                 field_keys = {field["key"] for field in fields}
                 self.assertFalse(blocked_keys & field_keys)
                 self.assertFalse(
@@ -226,7 +250,7 @@ class InspectorSchemaTests(unittest.TestCase):
         self.assertEqual(metadata["HIDDEN_DIM"]["section"], "Model")
 
     def test_config_schema_uses_markdown_heading_section_paths(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear"))
+        fields = _fields_by_key(self.config_schema("linears/linear"))
 
         self.assertEqual(
             fields["recurrent_gate_stack_hidden_dim"]["section"],
@@ -287,7 +311,7 @@ class InspectorSchemaTests(unittest.TestCase):
 
         for model_name in discover_model_ids():
             with self.subTest(model_name=model_name):
-                fields = _fields_by_key(config_schema(model_name))
+                fields = _fields_by_key(self.config_schema(model_name))
                 for field in fields.values():
                     self.assertTrue(field["sectionPath"], field["key"])
                     self.assertEqual(field["section"], field["sectionPath"][-1])
@@ -339,7 +363,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "vit/expert_linear",
             "vit/expert_linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key in public_fields:
@@ -387,7 +411,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "expert_linear_adaptive",
         ):
             model_name = f"mlp_mixer/{backend}"
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
             axes = _axes_by_key(search_space_schema(model_name, "baseline"))
             adaptive = "adaptive" in backend
             expert = "expert" in backend
@@ -426,7 +450,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "bert/expert_linear_adaptive",
             "vit/expert_linear_adaptive",
         ):
-            payload = config_schema(model_name)
+            payload = self.config_schema(model_name)
             fields = _fields_by_key(payload)
 
             with self.subTest(model_name=model_name):
@@ -471,7 +495,7 @@ class InspectorSchemaTests(unittest.TestCase):
             ),
             ("bert/expert_linear", {"sequence_length"}, set()),
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key in common_public_fields | additional_public_fields:
@@ -511,7 +535,7 @@ class InspectorSchemaTests(unittest.TestCase):
                 sys.modules.pop(shared_module_name, None)
 
     def test_config_schema_exposes_supported_field_types(self) -> None:
-        linear_fields = _fields_by_key(config_schema("linears/linear"))
+        linear_fields = _fields_by_key(self.config_schema("linears/linear"))
         self.assertEqual(linear_fields["hidden_dim"]["type"], "int")
         self.assertEqual(
             linear_fields["hidden_dim"]["default"],
@@ -519,7 +543,7 @@ class InspectorSchemaTests(unittest.TestCase):
         )
         self.assertEqual(linear_fields["layer_norm_position"]["type"], "enum")
         self.assertEqual(linear_fields["stack_bias_flag"]["type"], "bool")
-        adaptive_fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        adaptive_fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
         self.assertEqual(adaptive_fields["stack_bias_flag"]["type"], "bool")
         self.assertEqual(
             adaptive_fields["stack_bias_flag"]["section"],
@@ -707,13 +731,13 @@ class InspectorSchemaTests(unittest.TestCase):
             "Layer Stack Submodule Options",
         )
 
-        vit_fields = _fields_by_key(config_schema("vit/linear"))
+        vit_fields = _fields_by_key(self.config_schema("vit/linear"))
         self.assertEqual(vit_fields["input_dim"]["type"], "int")
         self.assertNotIn("positional_embedding_option", vit_fields)
         self.assertNotIn("hidden_dim", vit_fields)
 
     def test_config_schema_exposes_field_descriptions(self) -> None:
-        adaptive_fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        adaptive_fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         self.assertTrue(
             all(field["description"].strip() for field in adaptive_fields.values())
@@ -750,15 +774,15 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_serializes_value_defaults(self) -> None:
-        linear_fields = _fields_by_key(config_schema("linears/linear"))
-        adaptive_fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        linear_fields = _fields_by_key(self.config_schema("linears/linear"))
+        adaptive_fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         self.assertEqual(
             linear_fields["hidden_dim"]["default"],
             linear_config.HIDDEN_DIM,
         )
         self.assertEqual(linear_fields["stack_activation"]["default"], "GELU")
-        vit_fields = _fields_by_key(config_schema("vit/linear"))
+        vit_fields = _fields_by_key(self.config_schema("vit/linear"))
         self.assertEqual(vit_fields["input_dim"]["default"], 224 * 224 * 3)
         self.assertNotIn("positional_embedding_option", vit_fields)
         self.assertFalse(
@@ -798,7 +822,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "transformer/expert_linear",
             "transformer/expert_linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key, section in expected_sections.items():
@@ -829,7 +853,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "vit/expert_linear",
             "vit/expert_linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 visible_fields = (
@@ -884,7 +908,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "transformer/expert_linear",
             "transformer/expert_linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key, section in expected_sections.items():
@@ -915,7 +939,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "vit/expert_linear",
             "vit/expert_linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 visible_fields = (
@@ -940,7 +964,7 @@ class InspectorSchemaTests(unittest.TestCase):
         ):
             model_name = f"transformer/{backend}"
             with self.subTest(model_name=model_name):
-                fields = _fields_by_key(config_schema(model_name))
+                fields = _fields_by_key(self.config_schema(model_name))
                 self.assertTrue(
                     {
                         "vocab_size",
@@ -1010,7 +1034,7 @@ class InspectorSchemaTests(unittest.TestCase):
         }
 
         for model_name in ("linears/linear", "linears/linear_adaptive"):
-            payload = config_schema(model_name)
+            payload = self.config_schema(model_name)
             fields = _fields_by_key(payload)
             config_keys = {field["configKey"] for field in payload["fields"]}
 
@@ -1021,7 +1045,7 @@ class InspectorSchemaTests(unittest.TestCase):
                     self.assertNotIn(config_key, config_keys)
 
     def test_linear_adaptive_schema_uses_controller_stack_field_names(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
         expected_stack_fields = {
             "gate_stack_hidden_dim",
             "gate_stack_layer_norm_position",
@@ -1143,7 +1167,7 @@ class InspectorSchemaTests(unittest.TestCase):
         }
 
         for model_name, expected_stack_fields in expected_by_model.items():
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
             legacy_fields = {
                 field_name.replace("_stack_", "_")
                 for field_name in expected_stack_fields
@@ -1182,7 +1206,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "experts/linear",
             "experts/linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 self.assertEqual(
@@ -1222,7 +1246,7 @@ class InspectorSchemaTests(unittest.TestCase):
     def test_experts_linear_adaptive_schema_exposes_router_controller_sections(
         self,
     ) -> None:
-        fields = _fields_by_key(config_schema("experts/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("experts/linear_adaptive"))
         expected_sections = {
             "router_stack_gate_flag": "Router Gate Options",
             "router_gate_stack_hidden_dim": "Router Gate Stack Options",
@@ -1339,7 +1363,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "experts/linear",
             "experts/linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key, expected_values in expected.items():
@@ -1461,7 +1485,7 @@ class InspectorSchemaTests(unittest.TestCase):
             "experts/linear",
             "experts/linear_adaptive",
         ):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
 
             with self.subTest(model_name=model_name):
                 for field_key, expected_values in expected.items():
@@ -1487,7 +1511,7 @@ class InspectorSchemaTests(unittest.TestCase):
                 )
 
     def test_config_schema_excludes_abstract_class_choices(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         self.assertNotIn("DynamicWeightConfig", fields["weight_option"]["choices"])
         self.assertIn(
@@ -1513,7 +1537,9 @@ class InspectorSchemaTests(unittest.TestCase):
     def test_config_schema_orders_adaptive_class_choices_from_search_space(
         self,
     ) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive", "baseline"))
+        fields = _fields_by_key(
+            self.config_schema("linears/linear_adaptive", "baseline")
+        )
 
         self.assertEqual(
             fields["weight_option"]["choices"][0],
@@ -1533,7 +1559,7 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_exposes_adaptive_component_option_flags(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         expected_flags = {
             "weight_option_flag": "Weight Generator Options",
@@ -1604,7 +1630,7 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_exposes_boundary_model_adaptive_options(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         self.assertNotIn("input_layer_model_option", fields)
         self.assertNotIn("output_layer_model_option", fields)
@@ -1628,8 +1654,8 @@ class InspectorSchemaTests(unittest.TestCase):
                 self.assertNotIn("searchChoices", fields[field_key])
 
     def test_linear_adaptive_schema_exposes_full_adaptive_surface(self) -> None:
-        fields = _fields_by_key(config_schema("experts/linear_adaptive"))
-        linear_fields = _fields_by_key(config_schema("linears/linear_adaptive"))
+        fields = _fields_by_key(self.config_schema("experts/linear_adaptive"))
+        linear_fields = _fields_by_key(self.config_schema("linears/linear_adaptive"))
 
         linear_parity_keys = [
             "weight_option_flag",
@@ -1727,7 +1753,7 @@ class InspectorSchemaTests(unittest.TestCase):
         self,
     ) -> None:
         fields = _fields_by_key(
-            config_schema("experts/linear_adaptive", "adaptive-bank-router")
+            self.config_schema("experts/linear_adaptive", "adaptive-bank-router")
         )
 
         self.assertTrue(fields["router_weight_option_flag"]["locked"])
@@ -1739,7 +1765,7 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_exposes_nullable_controller_stack_overrides(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear"))
+        fields = _fields_by_key(self.config_schema("linears/linear"))
 
         self.assertEqual(
             fields["submodule_stack_hidden_dim"]["section"],
@@ -1820,7 +1846,7 @@ class InspectorSchemaTests(unittest.TestCase):
         }
 
         for model_name in ("linears/linear", "linears/linear_adaptive"):
-            fields = _fields_by_key(config_schema(model_name))
+            fields = _fields_by_key(self.config_schema(model_name))
             for field_key, field in fields.items():
                 if "_stack_" not in field_key or field_key.startswith("stack_"):
                     continue
@@ -1842,7 +1868,7 @@ class InspectorSchemaTests(unittest.TestCase):
                     self.assertEqual(field["key"].lower(), field_key)
                     self.assertNotEqual(field["section"], canonical["section"])
 
-        linear_fields = _fields_by_key(config_schema("linears/linear"))
+        linear_fields = _fields_by_key(self.config_schema("linears/linear"))
         self.assertEqual(
             linear_fields["hidden_dim"]["default"],
             linear_config.HIDDEN_DIM,
@@ -1954,8 +1980,10 @@ class InspectorSchemaTests(unittest.TestCase):
             )
 
     def test_config_schema_marks_preset_owned_fields_locked(self) -> None:
-        baseline_fields = _fields_by_key(config_schema("linears/linear", "baseline"))
-        gating_fields = _fields_by_key(config_schema("linears/linear", "gating"))
+        baseline_fields = _fields_by_key(
+            self.config_schema("linears/linear", "baseline")
+        )
+        gating_fields = _fields_by_key(self.config_schema("linears/linear", "gating"))
 
         self.assertFalse(baseline_fields["stack_gate_flag"]["locked"])
         self.assertTrue(gating_fields["stack_gate_flag"]["locked"])
@@ -1969,7 +1997,9 @@ class InspectorSchemaTests(unittest.TestCase):
         )
 
     def test_config_schema_locks_adaptive_component_flags_for_presets(self) -> None:
-        fields = _fields_by_key(config_schema("linears/linear_adaptive", "full-stack"))
+        fields = _fields_by_key(
+            self.config_schema("linears/linear_adaptive", "full-stack")
+        )
 
         expected_locked_fields = {
             "weight_option_flag": True,
