@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
 import torch
 
@@ -162,7 +162,13 @@ def _experts_config(
     input_dim: int,
     output_dim: int,
     options: ExpertOptions,
+    *,
+    bias_flag: bool = True,
 ):
+    path = options.expert_path_options
+    expert_stack = replace(
+        path.stack_options, bias_flag=bias_flag and path.stack_options.bias_flag
+    )
     return MixtureOfExpertsConfig(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -177,7 +183,7 @@ def _experts_config(
         sampler_config=_sampler(runtime, input_dim, options),
         expert_model_config=_projection_stack(
             runtime,
-            options.expert_path_options,
+            replace(path, stack_options=expert_stack),
         ),
     )
 
@@ -308,6 +314,7 @@ def _expert_feed_forward(
         runtime.model_dim,
         runtime.model_dim,
         options,
+        bias_flag=stack_options.bias_flag,
     )
     stack = LayerStackConfig(
         input_dim=runtime.model_dim,
