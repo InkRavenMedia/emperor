@@ -92,6 +92,13 @@ function selectionMatchesValues(selection: Set<string>, values: string[]) {
 
 type NullableSelection = Set<string> | null;
 
+type RunFacetKey = "datasets" | "models" | "presets";
+const emptyRunFacets: Record<RunFacetKey, NullableSelection> = {
+  datasets: null,
+  models: null,
+  presets: null,
+};
+
 function sortedSelectionValues(values: Set<string>) {
   return Array.from(values).sort((left, right) => left.localeCompare(right));
 }
@@ -581,6 +588,26 @@ export type LogsBrowser = {
   };
 };
 
+function useRunFacetProjection(
+  options: ChecklistOption[],
+  selection: NullableSelection,
+  started: Set<string>,
+  selectFirstAvailable: boolean,
+) {
+  return useMemo(() => {
+    const available = options.map((option) => option.value);
+    const normalized = normalizeRunFacetSelection({
+      selection: addValuesToInitializedSelection(selection, started),
+      availableValues: available,
+      selectFirstAvailable,
+    });
+    return {
+      available,
+      selected: selectionSetOrDefault(normalized, new Set(available)),
+    };
+  }, [options, selection, started, selectFirstAvailable]);
+}
+
 /**
  * Owns all state for the logs workspace: the run/experiment/tag queries, the
  * multi-facet selection sets (experiment/dataset/model/preset/run/tag), the
@@ -600,9 +627,7 @@ function useLogsWorkspaceImplementation({
   const [selectedExperiments, setSelectedExperiments] = useState<Set<string> | null>(
     emptySelection,
   );
-  const [selectedDatasets, setSelectedDatasets] = useState<Set<string> | null>(null);
-  const [selectedModels, setSelectedModels] = useState<Set<string> | null>(null);
-  const [selectedPresets, setSelectedPresets] = useState<Set<string> | null>(null);
+  const [runFacetSelections, setRunFacetSelections] = useState(emptyRunFacets);
   const [runFacetResetRequestedAt, setRunFacetResetRequestedAt] = useState<
     number | null
   >(null);
@@ -767,9 +792,7 @@ function useLogsWorkspaceImplementation({
 
   const resetLogSelections = useCallback(() => {
     setSelectedExperiments(emptySelection());
-    setSelectedDatasets(null);
-    setSelectedModels(null);
-    setSelectedPresets(null);
+    setRunFacetSelections(emptyRunFacets);
     setRunFacetResetRequestedAt(null);
     setSelectedTags(null);
     setRetainedTagProjection(null);
@@ -811,18 +834,6 @@ function useLogsWorkspaceImplementation({
   const datasetOptions = commonRunFacetOptions.datasets;
   const modelOptions = commonRunFacetOptions.models;
   const presetOptions = commonRunFacetOptions.presets;
-  const datasetOptionValues = useMemo(
-    () => datasetOptions.map((option) => option.value),
-    [datasetOptions],
-  );
-  const modelOptionValues = useMemo(
-    () => modelOptions.map((option) => option.value),
-    [modelOptions],
-  );
-  const presetOptionValues = useMemo(
-    () => presetOptions.map((option) => option.value),
-    [presetOptions],
-  );
   const runFacetResetReady =
     runFacetResetRequestedAt !== null &&
     Boolean(runsQuery.data) &&
@@ -832,82 +843,27 @@ function useLogsWorkspaceImplementation({
     runsQuery.dataUpdatedAt > runFacetResetRequestedAt;
   const runFacetResetPending =
     runFacetResetRequestedAt !== null && !runFacetResetReady;
-  const selectedDatasetsWithStarted = useMemo(
-    () =>
-      addValuesToInitializedSelection(
-        selectedDatasets,
-        startedSelections.datasets,
-      ),
-    [selectedDatasets, startedSelections.datasets],
+  const datasetFacet = useRunFacetProjection(
+    datasetOptions,
+    runFacetSelections.datasets,
+    startedSelections.datasets,
+    runFacetResetReady,
   );
-  const selectedModelsWithStarted = useMemo(
-    () =>
-      addValuesToInitializedSelection(selectedModels, startedSelections.models),
-    [selectedModels, startedSelections.models],
+  const modelFacet = useRunFacetProjection(
+    modelOptions,
+    runFacetSelections.models,
+    startedSelections.models,
+    runFacetResetReady,
   );
-  const selectedPresetsWithStarted = useMemo(
-    () =>
-      addValuesToInitializedSelection(
-        selectedPresets,
-        startedSelections.presets,
-      ),
-    [selectedPresets, startedSelections.presets],
+  const presetFacet = useRunFacetProjection(
+    presetOptions,
+    runFacetSelections.presets,
+    startedSelections.presets,
+    runFacetResetReady,
   );
-  const normalizedDatasetSelection = useMemo(
-    () =>
-      normalizeRunFacetSelection({
-        selection: selectedDatasetsWithStarted,
-        availableValues: datasetOptionValues,
-        selectFirstAvailable: runFacetResetReady,
-      }),
-    [
-      datasetOptionValues,
-      runFacetResetReady,
-      selectedDatasetsWithStarted,
-    ],
-  );
-  const normalizedModelSelection = useMemo(
-    () =>
-      normalizeRunFacetSelection({
-        selection: selectedModelsWithStarted,
-        availableValues: modelOptionValues,
-        selectFirstAvailable: runFacetResetReady,
-      }),
-    [modelOptionValues, runFacetResetReady, selectedModelsWithStarted],
-  );
-  const normalizedPresetSelection = useMemo(
-    () =>
-      normalizeRunFacetSelection({
-        selection: selectedPresetsWithStarted,
-        availableValues: presetOptionValues,
-        selectFirstAvailable: runFacetResetReady,
-      }),
-    [presetOptionValues, runFacetResetReady, selectedPresetsWithStarted],
-  );
-  const datasetSet = useMemo(
-    () =>
-      selectionSetOrDefault(
-        normalizedDatasetSelection,
-        new Set(datasetOptionValues),
-      ),
-    [datasetOptionValues, normalizedDatasetSelection],
-  );
-  const modelSet = useMemo(
-    () =>
-      selectionSetOrDefault(
-        normalizedModelSelection,
-        new Set(modelOptionValues),
-      ),
-    [modelOptionValues, normalizedModelSelection],
-  );
-  const presetSet = useMemo(
-    () =>
-      selectionSetOrDefault(
-        normalizedPresetSelection,
-        new Set(presetOptionValues),
-      ),
-    [normalizedPresetSelection, presetOptionValues],
-  );
+  const datasetSet = datasetFacet.selected;
+  const modelSet = modelFacet.selected;
+  const presetSet = presetFacet.selected;
   const deletedRunIdsAwaitingRefresh = useMemo(() => {
     if (
       deletedRunsAwaitingRefresh.runIds.size === 0 ||
@@ -1325,6 +1281,22 @@ function useLogsWorkspaceImplementation({
     clearDeletionForConnectionChange();
   }, [clearDeletionForConnectionChange, resetLogSelections]);
 
+  function runFacetActions(
+    key: RunFacetKey,
+    facet: ReturnType<typeof useRunFacetProjection>,
+  ) {
+    function select(next: Set<string>) {
+      preserveCurrentTagProjection();
+      setRunFacetResetRequestedAt(null);
+      setRunFacetSelections((previous) => ({ ...previous, [key]: next }));
+    }
+    return {
+      toggle: (value: string) => select(toggleSelectionValue(facet.selected, value)),
+      all: () => select(new Set(facet.available)),
+      none: () => select(new Set()),
+    };
+  }
+
   return {
     enabled,
     logDeletionEnabled,
@@ -1426,20 +1398,10 @@ function useLogsWorkspaceImplementation({
       }
       setSelectedExperiments(toggleSelectionValue(currentSelection, value));
     },
-    toggleDataset: (value: string) => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedDatasets(toggleSelectionValue(datasetSet, value));
-    },
-    toggleModel: (value: string) => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedModels(toggleSelectionValue(modelSet, value));
-    },
-    togglePreset: (value: string) => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedPresets(toggleSelectionValue(presetSet, value));
+    runFacets: {
+      datasets: runFacetActions("datasets", datasetFacet),
+      models: runFacetActions("models", modelFacet),
+      presets: runFacetActions("presets", presetFacet),
     },
     toggleTag: (value: string) => {
       setSelectedTagValues(
@@ -1464,36 +1426,6 @@ function useLogsWorkspaceImplementation({
       setStartedExperiments(new Set());
       setPendingExperimentTagSeeds(new Set());
       setSelectedExperiments(new Set());
-    },
-    selectAllDatasets: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedDatasets(new Set(datasetOptionValues));
-    },
-    selectNoDatasets: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedDatasets(new Set());
-    },
-    selectAllModels: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedModels(new Set(modelOptionValues));
-    },
-    selectNoModels: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedModels(new Set());
-    },
-    selectAllPresets: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedPresets(new Set(presetOptionValues));
-    },
-    selectNoPresets: () => {
-      preserveCurrentTagProjection();
-      setRunFacetResetRequestedAt(null);
-      setSelectedPresets(new Set());
     },
     selectAllTags: () => {
       setPendingExperimentTagSeeds(new Set());
@@ -1616,29 +1548,18 @@ function logsBrowserProjection(state: LogsWorkspaceImplementation): LogsBrowser 
       ),
     },
   };
-  const toggleActions: Record<
-    LogsBrowserFilterKey,
-    (value: string) => void
-  > = {
-    experiments: state.toggleExperiment,
-    datasets: state.toggleDataset,
-    models: state.toggleModel,
-    presets: state.togglePreset,
-    tags: state.toggleTag,
-  };
-  const allActions: Record<LogsBrowserFilterKey, () => void> = {
-    experiments: state.selectAllExperiments,
-    datasets: state.selectAllDatasets,
-    models: state.selectAllModels,
-    presets: state.selectAllPresets,
-    tags: state.selectAllTags,
-  };
-  const noneActions: Record<LogsBrowserFilterKey, () => void> = {
-    experiments: state.selectNoExperiments,
-    datasets: state.selectNoDatasets,
-    models: state.selectNoModels,
-    presets: state.selectNoPresets,
-    tags: state.selectNoTags,
+  const filterActions = {
+    ...state.runFacets,
+    experiments: {
+      toggle: state.toggleExperiment,
+      all: state.selectAllExperiments,
+      none: state.selectNoExperiments,
+    },
+    tags: {
+      toggle: state.toggleTag,
+      all: state.selectAllTags,
+      none: state.selectNoTags,
+    },
   };
   return {
     filters,
@@ -1669,9 +1590,9 @@ function logsBrowserProjection(state: LogsWorkspaceImplementation): LogsBrowser 
       },
     },
     actions: {
-      toggleFilter: (filter, value) => toggleActions[filter](value),
-      selectAll: (filter) => allActions[filter](),
-      selectNone: (filter) => noneActions[filter](),
+      toggleFilter: (filter, value) => filterActions[filter].toggle(value),
+      selectAll: (filter) => filterActions[filter].all(),
+      selectNone: (filter) => filterActions[filter].none(),
       refresh: state.refreshLogLists,
       loadMoreRuns: state.loadMoreRuns,
       loadMoreScalarTags: state.loadMoreScalarTags,
