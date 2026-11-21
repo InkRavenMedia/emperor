@@ -14,6 +14,7 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from model_runtime.inspection import configuration_schema
+from model_runtime.packages.soft_moe import soft_moe_scoring_supports_residual
 from models.catalog import discover_model_packages, model_package
 
 PACKAGES = tuple(package.catalog_key for package in discover_model_packages())
@@ -108,7 +109,10 @@ def test_every_residual_selector_exposes_explicit_attention_settings(catalog_key
     spec = package.runtime_defaults_spec
     schema = {field.key: field for field in configuration_schema(package).fields}
     selectors = [
-        key for key in spec.supported_keys if key.endswith("RESIDUAL_CONNECTION_OPTION")
+        key
+        for key in spec.supported_keys
+        if key.endswith("RESIDUAL_CONNECTION_OPTION")
+        and soft_moe_scoring_supports_residual(key, AttentionResidualConfig)
     ]
     assert selectors
     for selector in selectors:
@@ -136,7 +140,10 @@ def test_attention_settings_reach_direct_runtime_options(catalog_key):
     package = model_package(catalog_key)
     spec = package.runtime_defaults_spec
     selectors = sorted(
-        key for key in spec.supported_keys if key.endswith("RESIDUAL_CONNECTION_OPTION")
+        key
+        for key in spec.supported_keys
+        if key.endswith("RESIDUAL_CONNECTION_OPTION")
+        and soft_moe_scoring_supports_residual(key, AttentionResidualConfig)
     )
     for selector in selectors:
         prefix = selector.removesuffix("RESIDUAL_CONNECTION_OPTION")

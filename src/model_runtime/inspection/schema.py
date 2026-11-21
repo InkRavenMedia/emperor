@@ -36,6 +36,7 @@ from model_runtime.packages.annotations import (
     annotation_is_nullable,
     annotation_options,
 )
+from model_runtime.packages.soft_moe import soft_moe_scoring_supports_residual
 
 DEFAULT_SECTION = "General"
 PRIMITIVE_ANNOTATION_KINDS = {
@@ -184,6 +185,8 @@ class _ChoiceResolver:
         choices: list[str] = []
         for candidate in self._spec.configuration_values():
             if not inspect.isclass(candidate):
+                continue
+            if not soft_moe_scoring_supports_residual(key, candidate):
                 continue
             if abstract_config_class_error(candidate) is not None:
                 continue
