@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from torch.nn import Sequential
 
@@ -14,7 +14,6 @@ from emperor.layers._stack.validation import LayerStackValidator
 from emperor.layers._support import LayerModuleBase
 
 if TYPE_CHECKING:
-    from emperor.config import ModelConfig
     from emperor.layers._state import LayerState
 
 
@@ -25,12 +24,11 @@ class LayerStack(LayerModuleBase):
 
     def __init__(
         self,
-        cfg: LayerStackConfig | ModelConfig,
+        cfg: LayerStackConfig,
         overrides: LayerStackConfig | None = None,
     ):
         super().__init__()
-        config = getattr(cfg, "layer_stack_config", cfg)
-        self.cfg: LayerStackConfig = self._override_config(config, overrides)
+        self.cfg = self._override_config(cfg, overrides)
         self.VALIDATOR.validate(self)
         self.input_dim: int = self.cfg.input_dim
         self.hidden_dim: int = self.cfg.hidden_dim

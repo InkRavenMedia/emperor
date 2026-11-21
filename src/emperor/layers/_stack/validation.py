@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from emperor.halting import HaltingInterface, HaltingStateBase
     from emperor.layers._composition.gate import LayerGate
     from emperor.layers._config import LayerStackConfig
-    from emperor.layers._stack.core import LayerStack
+    from emperor.layers._stack import LayerStack
     from emperor.memory import MemoryInterface
     from emperor.nn import Module
 
