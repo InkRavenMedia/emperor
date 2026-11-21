@@ -469,7 +469,7 @@ class TestExperimentTraining(unittest.TestCase):
             progress=progress,
         )
 
-    def test_constructor_preserves_preset_keyword_and_rejects_ambiguous_alias(self):
+    def test_constructor_requires_the_current_preset_keyword(self):
         experiment = ExperimentBase(
             preset=FakeOption.BASELINE,
             model_package=self.model_package,
@@ -478,7 +478,7 @@ class TestExperimentTraining(unittest.TestCase):
         self.assertIs(experiment.preset, FakeOption.BASELINE)
         with self.assertRaisesRegex(
             TypeError,
-            "Pass only 'preset' or 'experiment_preset'",
+            "unexpected keyword argument 'experiment_preset'",
         ):
             ExperimentBase(
                 FakeOption.BASELINE,

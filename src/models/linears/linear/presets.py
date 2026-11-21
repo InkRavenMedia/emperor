@@ -348,14 +348,14 @@ class Experiment(ExperimentBase):
 
     def __init__(
         self,
-        experiment_preset: ExperimentPreset | None = None,
+        preset: ExperimentPreset | None = None,
         experiment_task=None,
         *,
         model_package,
         run_artifacts=None,
     ) -> None:
         super().__init__(
-            experiment_preset=experiment_preset,
+            preset=preset,
             experiment_task=experiment_task,
             model_package=model_package,
             run_artifacts=run_artifacts,
