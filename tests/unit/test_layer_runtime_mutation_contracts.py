@@ -136,13 +136,13 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
                 with torch.no_grad():
                     layer.model.weight_params.copy_(weight)
                     layer.model.bias_params.copy_(bias)
-                configure_weighted_memory(layer.memory.model)
+                configure_weighted_memory(layer.pipeline.memory.model)
                 hidden = hidden_values.clone().requires_grad_(True)
 
                 output = layer(LayerState(hidden=hidden)).hidden
 
-                self.assertEqual(layer.memory.model.input_dim, 2)
-                self.assertEqual(layer.memory.model.output_dim, 3)
+                self.assertEqual(layer.pipeline.memory.model.input_dim, 2)
+                self.assertEqual(layer.pipeline.memory.model.output_dim, 3)
                 self.assertEqual(memory_config.input_dim, 7)
                 self.assertEqual(memory_config.output_dim, 8)
                 if position == MemoryPositionOptions.BEFORE_AFFINE:
@@ -190,13 +190,13 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
                 recurrent = RecurrentLayer(
                     recurrent_config(memory_config=memory_config)
                 )
-                configure_weighted_memory(recurrent.utilities.memory_model)
+                configure_weighted_memory(recurrent.pipeline.memory.model)
                 hidden = hidden_values.clone().requires_grad_(True)
 
                 output = recurrent(LayerState(hidden=hidden)).hidden
 
-                self.assertEqual(recurrent.utilities.memory_model.input_dim, 2)
-                self.assertEqual(recurrent.utilities.memory_model.output_dim, 2)
+                self.assertEqual(recurrent.pipeline.memory.model.input_dim, 2)
+                self.assertEqual(recurrent.pipeline.memory.model.output_dim, 2)
                 self.assertEqual(memory_config.input_dim, 7)
                 self.assertEqual(memory_config.output_dim, 8)
                 torch.testing.assert_close(output, hidden * 1.75)
@@ -214,7 +214,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         ).eval()
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]])
         outer_halting_state = _run_identity_halting_step(
-            recurrent.utilities.halting_model,
+            recurrent.pipeline.halting.model,
             hidden,
         )
         public_state = LayerState(
@@ -225,7 +225,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
 
         public_result = recurrent(public_state)
 
-        self.assertEqual(recurrent.utilities.halting_model.input_dim, 2)
+        self.assertEqual(recurrent.pipeline.halting.model.input_dim, 2)
         self.assertEqual(halting_config.input_dim, 7)
         self.assertIs(public_result, public_state)
         self.assertIs(public_result.halting_state, outer_halting_state)
@@ -233,34 +233,34 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         torch.testing.assert_close(public_result.loss, torch.tensor(1.75))
 
         internal_halting_state = _run_identity_halting_step(
-            recurrent.utilities.halting_model,
+            recurrent.pipeline.halting.model,
             hidden,
         )
         input_loss = torch.tensor(1.25)
-        finalized_hidden, finalized_loss = recurrent.utilities.finalize_halting(
-            hidden,
-            input_loss,
-            internal_halting_state,
+        finalized_hidden, finalized_loss = (
+            recurrent.pipeline.halting.finalize_accumulation(
+                internal_halting_state, hidden, input_loss
+            )
         )
 
         torch.testing.assert_close(finalized_hidden, hidden)
         torch.testing.assert_close(finalized_loss, torch.tensor(1.75))
 
-        recurrent.utilities.halting_model = None
-        guarded_hidden, guarded_loss = recurrent.utilities.finalize_halting(
-            hidden,
-            input_loss,
-            internal_halting_state,
+        recurrent.pipeline.halting.model = None
+        guarded_hidden, guarded_loss = recurrent.pipeline.halting.finalize_accumulation(
+            internal_halting_state, hidden, input_loss
         )
         self.assertIs(guarded_hidden, hidden)
         self.assertIs(guarded_loss, input_loss)
 
-    def test_stack_accepts_real_model_config_wrapper(self) -> None:
+    def test_stack_requires_a_layer_stack_config(self) -> None:
         layer_stack_config = linear_stack_config(2)
         wrapper = ModelConfig()
         wrapper.layer_stack_config = layer_stack_config
 
-        stack = LayerStack(wrapper)
+        with self.assertRaisesRegex(TypeError, "LayerStackConfig"):
+            LayerStack(wrapper)
+        stack = LayerStack(layer_stack_config)
         set_layer_identity(stack[0])
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]])
         output = stack(LayerState(hidden=hidden)).hidden
@@ -302,31 +302,31 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         ).eval()
         first, output_layer = stack
 
-        self.assertIs(first.halting.is_terminal, False)
-        self.assertIs(output_layer.halting.is_terminal, True)
+        self.assertIs(first.pipeline.halting.is_terminal, False)
+        self.assertIs(output_layer.pipeline.halting.is_terminal, True)
         self.assertEqual(
-            first.postprocessing.activation_function,
+            first.pipeline.postprocessing.activation_function,
             ActivationOptions.TANH,
         )
         self.assertEqual(
-            type(first.residual.config),
+            type(first.pipeline.residual.config),
             AdditiveResidualConfig,
         )
         self.assertEqual(
-            first.normalization.position,
+            first.pipeline.normalization.position,
             LayerNormPositionOptions.AFTER,
         )
         self.assertEqual(
-            output_layer.postprocessing.activation_function,
+            output_layer.pipeline.postprocessing.activation_function,
             ActivationOptions.DISABLED,
         )
-        self.assertIsNone(output_layer.residual.config)
+        self.assertIsNone(output_layer.pipeline.residual.config)
         self.assertEqual(
-            output_layer.normalization.position,
+            output_layer.pipeline.normalization.position,
             LayerNormPositionOptions.DISABLED,
         )
-        self.assertIsNone(output_layer.residual.connection)
-        self.assertIsNone(output_layer.normalization.module)
+        self.assertIsNone(output_layer.pipeline.residual.connection)
+        self.assertIsNone(output_layer.pipeline.normalization.module)
         self.assertTrue(output_layer.model.bias_flag)
         self.assertIsNotNone(output_layer.model.bias_params)
 
@@ -346,7 +346,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         first_normalized = F.rms_norm(
             first_residual,
             (2,),
-            eps=first.normalization.module.eps,
+            eps=first.pipeline.normalization.module.eps,
         )
         expected = first_normalized @ output_weight + output_bias
         torch.testing.assert_close(output, expected)
@@ -369,7 +369,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         )
         for layer in memory_stack:
             set_layer_identity(layer)
-        shared_memory = memory_stack[0].memory.model
+        shared_memory = memory_stack[0].pipeline.memory.model
         configure_weighted_memory(shared_memory)
         hidden = torch.tensor([[1.0, -2.0], [0.5, 3.0]], requires_grad=True)
 
@@ -380,7 +380,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         self.assertEqual(memory_config.input_dim, 7)
         self.assertEqual(memory_config.output_dim, 8)
         self.assertTrue(
-            all(layer.memory.model is shared_memory for layer in memory_stack)
+            all(layer.pipeline.memory.model is shared_memory for layer in memory_stack)
         )
         torch.testing.assert_close(memory_output, hidden * (1.75**2))
         memory_output.sum().backward()
@@ -405,7 +405,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         ).eval()
         for layer in halting_stack:
             set_layer_identity(layer)
-        shared_halting = halting_stack[0].halting.model
+        shared_halting = halting_stack[0].pipeline.halting.model
         halting_input = torch.tensor([[1.0, -2.0], [0.5, 3.0]])
 
         halting_result = halting_stack(
@@ -415,7 +415,7 @@ class LayerRuntimeMutationContractTests(unittest.TestCase):
         self.assertEqual(shared_halting.input_dim, 2)
         self.assertEqual(halting_config.input_dim, 7)
         self.assertTrue(
-            all(layer.halting.model is shared_halting for layer in halting_stack)
+            all(layer.pipeline.halting.model is shared_halting for layer in halting_stack)
         )
         torch.testing.assert_close(halting_result.hidden, halting_input)
         torch.testing.assert_close(halting_result.loss, torch.tensor(1.0))

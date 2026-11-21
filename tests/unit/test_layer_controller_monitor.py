@@ -205,7 +205,7 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
                 module = CaptureLightningModule(layer=layer)
                 callback = LayerControllerMonitorCallback(log_every_n_steps=1)
                 original_activation = getattr(
-                    layer.postprocessing, ACTIVATION_METHOD_NAME
+                    layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME
                 )
                 self.assertFalse(hasattr(layer, "_install_controller_observation"))
 
@@ -226,12 +226,12 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
                 callback.on_fit_end(TrainerStub(), module)
                 self.assertTrue(
                     same_bound_method(
-                        getattr(layer.postprocessing, ACTIVATION_METHOD_NAME),
+                        getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME),
                         original_activation,
                     )
                 )
                 self.assertEqual(callback._wrapped_methods, [])
-                self.assertEqual(layer.residual.connection._forward_hooks, {})
+                self.assertEqual(layer.pipeline.residual.connection._forward_hooks, {})
 
     def test_discovers_only_layer_modules(self):
         module = CaptureLightningModule(layer=self.layer(), other=torch.nn.Linear(4, 4))
@@ -279,23 +279,23 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
         first_layer = self.layer()
         failing_layer = self.layer()
         rejecting_dropout = RejectingForwardHookModule()
-        failing_layer.postprocessing.dropout = rejecting_dropout
+        failing_layer.pipeline.postprocessing.dropout = rejecting_dropout
         module = CaptureLightningModule(first=first_layer, second=failing_layer)
         callback = LayerControllerMonitorCallback(log_every_n_steps=1)
         hook_targets = (
-            first_layer.postprocessing.gate.model,
-            first_layer.postprocessing.dropout,
-            first_layer.normalization.module,
-            first_layer.residual.connection,
-            failing_layer.postprocessing.gate.model,
+            first_layer.pipeline.postprocessing.gate.model,
+            first_layer.pipeline.postprocessing.dropout,
+            first_layer.pipeline.normalization.module,
+            first_layer.pipeline.residual.connection,
+            failing_layer.pipeline.postprocessing.gate.model,
             rejecting_dropout,
-            failing_layer.normalization.module,
-            failing_layer.residual.connection,
+            failing_layer.pipeline.normalization.module,
+            failing_layer.pipeline.residual.connection,
         )
         activation_methods = tuple(
             (
-                layer.postprocessing,
-                getattr(layer.postprocessing, ACTIVATION_METHOD_NAME),
+                layer.pipeline.postprocessing,
+                getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME),
             )
             for layer in (first_layer, failing_layer)
         )
@@ -418,13 +418,13 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
             any(tag.startswith("layer/residual/") for tag in module.logged_tags)
         )
         callback.on_exception(TrainerStub(), module, RuntimeError("deliberate"))
-        self.assertEqual(layer.residual.connection._forward_hooks, {})
+        self.assertEqual(layer.pipeline.residual.connection._forward_hooks, {})
         self.assertEqual(callback._wrapped_methods, [])
         self.assertEqual(callback._hooks, [])
 
     def test_logs_effective_gate_values_with_selected_gate_option(self):
         layer = self.layer(gate_option=LayerGateOptions.MULTIPLIER)
-        gate_layer = layer.postprocessing.gate.model[0]
+        gate_layer = layer.pipeline.postprocessing.gate.model[0]
         with torch.no_grad():
             gate_layer.model.weight_params.zero_()
             gate_layer.model.bias_params.zero_()
@@ -536,22 +536,22 @@ class TestLayerControllerMonitorCallback(unittest.TestCase):
         layer = self.layer()
         module = CaptureLightningModule(layer=layer)
         callback = LayerControllerMonitorCallback(log_every_n_steps=1)
-        original_activation = getattr(layer.postprocessing, ACTIVATION_METHOD_NAME)
+        original_activation = getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME)
 
         callback.on_fit_start(TrainerStub(), module)
         self.assertTrue(callback._wrapped_methods)
-        self.assertTrue(layer.residual.connection._forward_hooks)
+        self.assertTrue(layer.pipeline.residual.connection._forward_hooks)
         self.assertGreater(len(callback._hooks), 0)
 
         callback.on_fit_end(TrainerStub(), module)
 
         self.assertTrue(
             same_bound_method(
-                getattr(layer.postprocessing, ACTIVATION_METHOD_NAME),
+                getattr(layer.pipeline.postprocessing, ACTIVATION_METHOD_NAME),
                 original_activation,
             )
         )
-        self.assertEqual(layer.residual.connection._forward_hooks, {})
+        self.assertEqual(layer.pipeline.residual.connection._forward_hooks, {})
         self.assertEqual(callback._wrapped_methods, [])
         self.assertEqual(callback._hooks, [])
         self.assertEqual(callback._hooked_gate_model_ids, set())

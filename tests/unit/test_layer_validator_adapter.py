@@ -7,18 +7,20 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
 )
-from emperor.layers._layer.pipeline.halting import LayerHaltingDelegate
-from emperor.layers._layer.pipeline.memory import LayerMemoryDelegate
-from emperor.layers._layer.pipeline.normalization import LayerNormalizationDelegate
-from emperor.layers._layer.pipeline.postprocessing import LayerPostprocessingDelegate
-from emperor.layers._layer.pipeline.residual import LayerResidualDelegate
-from emperor.layers._layer.validation import (
+from emperor.layers._layer.validation import LayerValidator
+from emperor.layers._pipeline.delegates import (
+    LayerHaltingDelegate,
+    LayerMemoryDelegate,
+    LayerNormalizationDelegate,
+    LayerPostprocessingDelegate,
+    LayerResidualDelegate,
+)
+from emperor.layers._pipeline.delegates.validation import (
     LayerHaltingDelegateValidator,
     LayerMemoryDelegateValidator,
     LayerNormalizationDelegateValidator,
     LayerPostprocessingDelegateValidator,
     LayerResidualDelegateValidator,
-    LayerValidator,
 )
 
 
@@ -339,6 +341,35 @@ class TestLayerResidualDelegateValidatorAdapter(unittest.TestCase):
             LayerResidualDelegate.VALIDATOR,
             LayerResidualDelegateValidator,
         )
+
+    def test_forward_local_residual_runtime_requires_connection_and_schedule(self):
+        connection = object()
+        schedule = object()
+
+        self.assertEqual(
+            LayerResidualDelegateValidator.validate_forward_local_residual_runtime(
+                connection,
+                schedule,
+            ),
+            (connection, schedule),
+        )
+        for residual_connection, residual_schedule in (
+            (None, schedule),
+            (connection, None),
+        ):
+            with self.subTest(
+                residual_connection=residual_connection,
+                residual_schedule=residual_schedule,
+            ):
+                with self.assertRaisesRegex(
+                    RuntimeError,
+                    "forward-local residual state requires a recurrent residual "
+                    "schedule",
+                ):
+                    LayerResidualDelegateValidator.validate_forward_local_residual_runtime(
+                        residual_connection,
+                        residual_schedule,
+                    )
 
     def test_construction_validation_dispatches_through_adapter(self):
         class TrackingValidator(LayerResidualDelegateValidator):

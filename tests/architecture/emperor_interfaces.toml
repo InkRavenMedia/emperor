@@ -38,7 +38,7 @@ retired_modules = [
   "emperor.layers.monitoring",
   "emperor.layers.execution",
   "emperor.layers._recurrent",
-  "emperor.layers._pipeline",
+  "emperor.layers._composition.recurrent.utilities",
   "emperor.layers._stack_delegates",
   "emperor.layers._mirrored",
   "emperor.layers._validation.gate",
@@ -221,7 +221,7 @@ owners = ["emperor.halting._config", "emperor.halting._config", "emperor.halting
 module = "emperor.layers"
 kind = "runtime"
 exports = ["ActivationOptions", "AdditiveResidualConfig", "AttentionResidualConfig", "GateConfig", "LastLayerBiasOptions", "LayerConfig", "LayerGateOptions", "LayerNormPositionOptions", "LayerNormalizationDelegate", "NormalizationOptions", "LayerStackConfig", "MirroredLayerStackConfig", "HierarchicalReasoningModelRecurrentConfig", "InnerThinkingRecurrentConfig", "RecurrentCompositionConfig", "RecurrentLayerConfig", "TinyRecursiveModelRecurrentConfig", "ResidualConfig", "WeightedBlendResidualConfig", "WeightedResidualConfig", "LayerState", "Layer", "LayerStack", "MirroredLayerStack", "RecurrentLayer", "LayerControllerMonitorCallback", "RecurrentLayerMonitorCallback"]
-owners = ["emperor.layers._options", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._config", "emperor.layers._options", "emperor.layers._config", "emperor.layers._options", "emperor.layers._options", "emperor.layers._layer.pipeline.normalization", "emperor.layers._options", "emperor.layers._config", "emperor.layers._config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._state", "emperor.layers._layer.core", "emperor.layers._stack.core", "emperor.layers._stack.mirrored", "emperor.layers._composition.recurrent.variants.standard.core", "emperor.layers._monitoring.callbacks", "emperor.layers._monitoring.callbacks"]
+owners = ["emperor.layers._options", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._config", "emperor.layers._options", "emperor.layers._config", "emperor.layers._options", "emperor.layers._options", "emperor.layers._pipeline.delegates.normalization", "emperor.layers._options", "emperor.layers._config", "emperor.layers._config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.recurrent.config", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._composition.residual.config", "emperor.layers._state", "emperor.layers._layer.core", "emperor.layers._stack.core", "emperor.layers._stack.mirrored", "emperor.layers._composition.recurrent.variants.standard.core", "emperor.layers._monitoring.callbacks", "emperor.layers._monitoring.callbacks"]
 
 [[interfaces]]
 module = "emperor.linears"

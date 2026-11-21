@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from torch.nn import Module
     from torch.utils.hooks import RemovableHandle
 
+    from emperor.layers._layer import Layer
+
 
 class LayerControllerMonitorCallback(Callback):
     """Log activation, gate, dropout, normalization, and residual diagnostics."""
@@ -69,10 +71,10 @@ class LayerControllerMonitorCallback(Callback):
     def __attach_gate_hook(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> None:
-        postprocessing = getattr(layer, "postprocessing", None)
+        postprocessing = layer.pipeline.postprocessing
         gate = getattr(postprocessing, "gate", None)
         gate_model = getattr(gate, "model", None)
         if gate_model is None or id(gate_model) in self._hooked_gate_model_ids:
@@ -87,10 +89,10 @@ class LayerControllerMonitorCallback(Callback):
     def __attach_dropout_hook(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> None:
-        postprocessing = getattr(layer, "postprocessing", None)
+        postprocessing = layer.pipeline.postprocessing
         dropout_module = getattr(postprocessing, "dropout", None)
         if dropout_module is not None:
             self._hooks.append(
@@ -102,10 +104,10 @@ class LayerControllerMonitorCallback(Callback):
     def __attach_layer_norm_hook(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> None:
-        normalization = getattr(layer, "normalization", None)
+        normalization = layer.pipeline.normalization
         layer_norm_module = getattr(normalization, "module", None)
         if layer_norm_module is not None:
             self._hooks.append(
@@ -117,7 +119,7 @@ class LayerControllerMonitorCallback(Callback):
     def __make_gate_hook(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> Callable[[Module, tuple[object, ...], object], None]:
         def log_gate_output(
@@ -193,10 +195,10 @@ class LayerControllerMonitorCallback(Callback):
 
     @staticmethod
     def __effective_layer_gate_values(
-        layer: Module,
+        layer: Layer,
         raw_gate_values: Tensor,
     ) -> Tensor | None:
-        postprocessing = getattr(layer, "postprocessing", None)
+        postprocessing = layer.pipeline.postprocessing
         gate = getattr(postprocessing, "gate", None)
         if gate is None or not hasattr(gate, "effective_values"):
             return raw_gate_values
@@ -367,12 +369,12 @@ class LayerControllerMonitorCallback(Callback):
     def __wrap_activation(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> None:
         from emperor.layers._options import ActivationOptions
 
-        postprocessing = getattr(layer, "postprocessing", None)
+        postprocessing = layer.pipeline.postprocessing
         activation = getattr(postprocessing, "activation_function", None)
         if activation in (None, ActivationOptions.DISABLED):
             return
@@ -428,20 +430,16 @@ class LayerControllerMonitorCallback(Callback):
     def __attach_residual_hook(
         self,
         module_name: str,
-        layer: Module,
+        layer: Layer,
         pl_module: LightningModule,
     ) -> None:
-        from emperor.layers._composition.residual.variants.additive import (
+        from emperor.layers._composition.residual.variants import (
             AdditiveResidual,
-        )
-        from emperor.layers._composition.residual.variants.weighted import (
+            WeightedBlendResidual,
             WeightedResidual,
         )
-        from emperor.layers._composition.residual.variants.weighted_blend import (
-            WeightedBlendResidual,
-        )
 
-        residual = getattr(layer, "residual", None)
+        residual = layer.pipeline.residual
         residual_connection = getattr(residual, "connection", None)
         if not isinstance(
             residual_connection,

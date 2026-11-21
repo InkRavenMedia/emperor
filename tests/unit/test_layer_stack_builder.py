@@ -17,7 +17,7 @@ from emperor.layers import (
     LayerStackConfig,
     NormalizationOptions,
 )
-from emperor.layers._layer.pipeline.normalization_variants import (
+from emperor.layers._pipeline.delegates.normalization_variants import (
     DynamicErf,
     DynamicISRU,
     DynamicTanh,
@@ -127,15 +127,15 @@ class TestLayerStackBuilder(unittest.TestCase):
                     first, final = stack.layers
                     expected_type = module_types[normalization]
 
-                    self.assertIsInstance(first.normalization.module, expected_type)
+                    self.assertIsInstance(first.pipeline.normalization.module, expected_type)
                     self.assertIs(final.cfg.normalization, normalization)
                     if output_postprocessing:
-                        self.assertIsInstance(final.normalization.module, expected_type)
+                        self.assertIsInstance(final.pipeline.normalization.module, expected_type)
                         self.assertIsNot(
-                            first.normalization.module, final.normalization.module
+                            first.pipeline.normalization.module, final.pipeline.normalization.module
                         )
                     else:
-                        self.assertIsNone(final.normalization.module)
+                        self.assertIsNone(final.pipeline.normalization.module)
                     self.assertEqual(cfg, original)
 
     def test_builds_layers_in_dimension_order_and_marks_only_the_last(self):
@@ -151,7 +151,7 @@ class TestLayerStackBuilder(unittest.TestCase):
             [(4, 4), (4, 6), (6, 2)],
         )
         self.assertEqual(
-            [layer.halting.is_terminal for layer in layers],
+            [layer.pipeline.halting.is_terminal for layer in layers],
             [False, False, True],
         )
         self.assertEqual(len({id(layer.cfg) for layer in layers}), len(layers))
@@ -169,25 +169,25 @@ class TestLayerStackBuilder(unittest.TestCase):
         first_layer, final_layer = builder.build_layer_stack(((4, 4), (4, 4)))
 
         self.assertEqual(
-            first_layer.postprocessing.activation_function,
+            first_layer.pipeline.postprocessing.activation_function,
             ActivationOptions.RELU,
         )
-        self.assertIsNotNone(first_layer.postprocessing.dropout)
+        self.assertIsNotNone(first_layer.pipeline.postprocessing.dropout)
         self.assertEqual(
-            first_layer.normalization.position,
+            first_layer.pipeline.normalization.position,
             LayerNormPositionOptions.AFTER,
         )
-        self.assertIsNotNone(first_layer.residual.config)
+        self.assertIsNotNone(first_layer.pipeline.residual.config)
         self.assertEqual(
-            final_layer.postprocessing.activation_function,
+            final_layer.pipeline.postprocessing.activation_function,
             ActivationOptions.DISABLED,
         )
-        self.assertIsNone(final_layer.postprocessing.dropout)
+        self.assertIsNone(final_layer.pipeline.postprocessing.dropout)
         self.assertEqual(
-            final_layer.normalization.position,
+            final_layer.pipeline.normalization.position,
             LayerNormPositionOptions.DISABLED,
         )
-        self.assertIsNone(final_layer.residual.config)
+        self.assertIsNone(final_layer.pipeline.residual.config)
 
     def test_applies_last_layer_bias_policy_without_mutating_base_config(self):
         cases = (
@@ -242,7 +242,7 @@ class TestLayerStackBuilder(unittest.TestCase):
 
         rectangular_layer = builder.build_layer_stack(((4, 3),))[0]
 
-        self.assertIsNone(rectangular_layer.residual.config)
+        self.assertIsNone(rectangular_layer.pipeline.residual.config)
 
     def test_rectangular_gate_policy_respects_stack_capability(self):
         for supports_rectangular_gate in (False, True):
@@ -257,9 +257,9 @@ class TestLayerStackBuilder(unittest.TestCase):
                 rectangular_layer = builder.build_layer_stack(((4, 3),))[0]
 
                 if supports_rectangular_gate:
-                    self.assertIsNotNone(rectangular_layer.postprocessing.gate)
+                    self.assertIsNotNone(rectangular_layer.pipeline.postprocessing.gate)
                 else:
-                    self.assertIsNone(rectangular_layer.postprocessing.gate)
+                    self.assertIsNone(rectangular_layer.pipeline.postprocessing.gate)
 
     def test_rejects_unsupported_last_layer_bias_option(self):
         stack_config = make_stack_config()

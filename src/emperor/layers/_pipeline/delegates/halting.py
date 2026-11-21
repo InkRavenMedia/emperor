@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from emperor.layers._layer.validation import LayerHaltingDelegateValidator
-from emperor.layers._state import LayerState
+from emperor.layers._pipeline.delegates.validation import LayerHaltingDelegateValidator
+from emperor.layers._state import LayerState, are_all_items_halted
 from emperor.nn import Module
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 class LayerHaltingDelegate(Module):
-    """Own halting construction and the Layer halting lifecycle."""
+    """Own the configured halting model, completion check and loss finalization."""
 
     VALIDATOR = LayerHaltingDelegateValidator
 
@@ -47,7 +47,10 @@ class LayerHaltingDelegate(Module):
     def should_skip(self, state: LayerState) -> bool:
         if self.model is None or state.halting_state is None:
             return False
-        return self.__is_complete(state.halting_state)
+        return self.all_items_halted(state.halting_state)
+
+    def all_items_halted(self, halting_state: HaltingStateBase | None) -> bool:
+        return are_all_items_halted(halting_state)
 
     def apply_halting(self, state: LayerState) -> LayerState:
         model = self.model
@@ -58,29 +61,28 @@ class LayerHaltingDelegate(Module):
             state.halting_state, state.hidden
         )
         state.halting_state = halting_state
-        if self.is_terminal or self.__is_complete(halting_state):
-            return self.__finalize(state, model, halting_state)
-        state.hidden = halting_output
+        if self.is_terminal or self.all_items_halted(halting_state):
+            state.hidden, state.loss = self.finalize_accumulation(
+                halting_state, state.hidden, state.loss
+            )
+        else:
+            state.hidden = halting_output
         return state
 
-    @staticmethod
-    def __is_complete(halting_state: HaltingStateBase | None) -> bool:
-        if halting_state is None or halting_state.halt_mask is None:
-            return False
-        return bool(halting_state.halt_mask.all().item())
-
-    def __finalize(
+    def finalize_accumulation(
         self,
-        state: LayerState,
-        model: HaltingInterface[HaltingStateBase],
-        halting_state: HaltingStateBase,
-    ) -> LayerState:
-        state.hidden, halting_loss = model.finalize_weighted_accumulation(
-            halting_state, state.hidden
+        halting_state: HaltingStateBase | None,
+        hidden: Tensor,
+        loss: Tensor | None,
+    ) -> tuple[Tensor, Tensor | None]:
+        model = self.model
+        if model is None or halting_state is None:
+            return hidden, loss
+        hidden, halting_loss = model.finalize_weighted_accumulation(
+            halting_state, hidden
         )
         auxiliary_loss = self.__maybe_reduce_halting_loss(halting_loss)
-        state.loss = self.__maybe_accumulate_auxiliary_loss(state.loss, auxiliary_loss)
-        return state
+        return hidden, self.__maybe_accumulate_auxiliary_loss(loss, auxiliary_loss)
 
     @staticmethod
     def __maybe_reduce_halting_loss(halting_loss: Tensor) -> Tensor:

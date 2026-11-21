@@ -210,16 +210,16 @@ class TestTransformerEncoderLayer(unittest.TestCase):
         model = TransformerEncoderLayer(cfg)
 
         self.assertEqual(
-            type(model.self_attention_layer.residual.connection.cfg),
+            type(model.self_attention_layer.pipeline.residual.connection.cfg),
             WeightedResidualConfig,
         )
         self.assertEqual(
-            type(model.feed_forward_layer.residual.connection.cfg),
+            type(model.feed_forward_layer.pipeline.residual.connection.cfg),
             WeightedResidualConfig,
         )
         self.assertIsNot(
-            model.self_attention_layer.residual.connection.raw_weight,
-            model.feed_forward_layer.residual.connection.raw_weight,
+            model.self_attention_layer.pipeline.residual.connection.raw_weight,
+            model.feed_forward_layer.pipeline.residual.connection.raw_weight,
         )
 
     def test_data_dependent_residual_uses_separate_models_per_encoder_join(self):
@@ -234,8 +234,8 @@ class TestTransformerEncoderLayer(unittest.TestCase):
         )
         model = TransformerEncoderLayer(cfg)
         residual_connections = [
-            model.self_attention_layer.residual.connection,
-            model.feed_forward_layer.residual.connection,
+            model.self_attention_layer.pipeline.residual.connection,
+            model.feed_forward_layer.pipeline.residual.connection,
         ]
         coefficient_models = [connection.model for connection in residual_connections]
 
@@ -695,9 +695,9 @@ class TestTransformerDecoderLayer(unittest.TestCase):
         model = TransformerDecoderLayer(cfg)
 
         residual_connections = [
-            model.self_attention_layer.residual.connection,
-            model.cross_attention_layer.residual.connection,
-            model.feed_forward_layer.residual.connection,
+            model.self_attention_layer.pipeline.residual.connection,
+            model.cross_attention_layer.pipeline.residual.connection,
+            model.feed_forward_layer.pipeline.residual.connection,
         ]
 
         self.assertTrue(
@@ -721,9 +721,9 @@ class TestTransformerDecoderLayer(unittest.TestCase):
         )
         model = TransformerDecoderLayer(cfg)
         residual_connections = [
-            model.self_attention_layer.residual.connection,
-            model.cross_attention_layer.residual.connection,
-            model.feed_forward_layer.residual.connection,
+            model.self_attention_layer.pipeline.residual.connection,
+            model.cross_attention_layer.pipeline.residual.connection,
+            model.feed_forward_layer.pipeline.residual.connection,
         ]
         coefficient_models = [connection.model for connection in residual_connections]
 

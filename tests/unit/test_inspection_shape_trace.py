@@ -84,9 +84,10 @@ class InspectionShapeTraceTests(unittest.TestCase):
         layer_pipeline = next(
             method
             for method in trace.methods
-            if method.qualified_name == "Layer._handle_layer_processing"
-            and method.module_path == "main_model.layers.0"
+            if method.qualified_name == "LayerProcessingPipeline.process_normal_layer"
+            and method.module_path == "main_model.layers.0.pipeline"
         )
+        self.assertEqual(layer_pipeline.source_path, "emperor/layers/_pipeline/core.py")
         same_shape_state_assignments = [
             tensor
             for variable in layer_pipeline.variables
@@ -113,11 +114,14 @@ class InspectionShapeTraceTests(unittest.TestCase):
         expected_initial_iterations = 2
 
         self.assertEqual(
-            len(modules["main_model.block_model"].calls),
+            len(modules["main_model.step"].calls), expected_initial_iterations
+        )
+        self.assertEqual(
+            len(modules["main_model.step.block_model"].calls),
             expected_initial_iterations,
         )
         self.assertEqual(
-            len(modules["main_model.block_model.layers.0"].calls),
+            len(modules["main_model.step.block_model.layers.0"].calls),
             expected_initial_iterations,
         )
 

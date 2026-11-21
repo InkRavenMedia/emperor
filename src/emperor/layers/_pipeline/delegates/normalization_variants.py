@@ -6,7 +6,9 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from emperor.layers._layer.validation import ElementwiseNormalizationValidator
+from emperor.layers._pipeline.delegates.validation import (
+    ElementwiseNormalizationValidator,
+)
 
 
 class ElementwiseNormalization(nn.Module):

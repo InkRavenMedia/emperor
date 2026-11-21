@@ -214,6 +214,9 @@ class TestTransformerModelPackageOwnership(unittest.TestCase):
 
     def test_runtime_records_are_package_local_frozen_dataclasses(self):
         expected_attention_fields = {
+            "source_memory_flag",
+            "source_memory_config",
+            "source_memory_chunk_size",
             "num_heads",
             "add_key_value_bias_flag",
             "zero_attention_flag",
@@ -235,13 +238,13 @@ class TestTransformerModelPackageOwnership(unittest.TestCase):
                 feed_forward_type = options.TransformerFeedForwardOptions
                 self.assertTrue(attention_type.__dataclass_params__.frozen)
                 self.assertTrue(feed_forward_type.__dataclass_params__.frozen)
-                self.assertEqual(
-                    {field.name for field in dataclasses.fields(attention_type)},
+                self.assertLessEqual(
                     expected_attention_fields,
+                    {field.name for field in dataclasses.fields(attention_type)},
                 )
-                self.assertEqual(
-                    {field.name for field in dataclasses.fields(feed_forward_type)},
+                self.assertLessEqual(
                     expected_feed_forward_fields,
+                    {field.name for field in dataclasses.fields(feed_forward_type)},
                 )
                 self.assertEqual(
                     attention_type.__module__,

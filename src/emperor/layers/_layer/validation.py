@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 from math import isfinite
-from typing import TYPE_CHECKING, TypeGuard
+from typing import TYPE_CHECKING
 
 import torch
 
 from emperor._validation import ValidatorBase, _validate_grouped_row_preservation
 from emperor.config import ConfigBase
 from emperor.layers._composition.gate.validation import LayerGateValidator
-from emperor.layers._composition.residual.validation import (
-    ResidualConnectionValidator,
-)
-from emperor.layers._options import (
-    ActivationOptions,
-    LayerNormPositionOptions,
-    NormalizationOptions,
+from emperor.layers._composition.residual.validation import ResidualConnectionValidator
+from emperor.layers._options import LayerNormPositionOptions
+from emperor.layers._pipeline.delegates.validation import (
+    LayerNormalizationDelegateValidator,
 )
 from emperor.layers._validation.common import (
     _HALTING_CONFIG_FIELDS,
@@ -28,207 +25,11 @@ from emperor.layers._validation.common import (
 if TYPE_CHECKING:
     from torch import Tensor
 
-    from emperor.halting import HaltingConfig, HaltingInterface, HaltingStateBase
-    from emperor.layers._composition.gate import LayerGate
-    from emperor.layers._composition.residual.base import ResidualConnectionAbstract
+    from emperor.halting import HaltingConfig
     from emperor.layers._composition.residual.config import ResidualConfig
     from emperor.layers._config import GateConfig, LayerConfig
-    from emperor.layers._layer.core import Layer
-    from emperor.layers._layer.pipeline.halting import LayerHaltingDelegate
-    from emperor.layers._layer.pipeline.memory import LayerMemoryDelegate
-    from emperor.layers._layer.pipeline.normalization import (
-        LayerNormalizationDelegate,
-    )
-    from emperor.layers._layer.pipeline.postprocessing import (
-        LayerPostprocessingDelegate,
-    )
-    from emperor.layers._layer.pipeline.residual import LayerResidualDelegate
-    from emperor.memory import MemoryInterface
+    from emperor.layers._layer import Layer
     from emperor.nn import Module
-
-
-def _implements_halting_interface(
-    model: object,
-) -> TypeGuard[HaltingInterface[HaltingStateBase]]:
-    return callable(getattr(model, "update_halting_state", None)) and callable(
-        getattr(model, "finalize_weighted_accumulation", None)
-    )
-
-
-def _implements_memory_interface(model: object) -> TypeGuard[MemoryInterface]:
-    return callable(model) and hasattr(model, "memory_position_option")
-
-
-class LayerHaltingDelegateValidator(ValidatorBase):
-    @classmethod
-    def validate(cls, model: LayerHaltingDelegate) -> None:
-        cls.validate_resolved_output_dim(model.cfg.output_dim)
-
-    @staticmethod
-    def validate_resolved_output_dim(output_dim: int | None) -> None:
-        if output_dim is None:
-            raise ValueError("Layer halting requires a resolved output_dim.")
-
-    @staticmethod
-    def validate_built_halting_model_interface(
-        model: Module | None,
-    ) -> HaltingInterface[HaltingStateBase] | None:
-        if model is None:
-            return None
-        if not _implements_halting_interface(model):
-            raise TypeError(
-                "halting_config must build a model implementing HaltingInterface."
-            )
-        return model
-
-
-class LayerMemoryDelegateValidator(ValidatorBase):
-    @classmethod
-    def validate(cls, model: LayerMemoryDelegate) -> None:
-        cls.validate_resolved_dimensions(
-            model.cfg.input_dim,
-            model.cfg.output_dim,
-        )
-
-    @staticmethod
-    def validate_resolved_dimensions(
-        input_dim: int | None,
-        output_dim: int | None,
-    ) -> None:
-        if input_dim is None or output_dim is None:
-            raise ValueError(
-                "Layer memory requires resolved input and output dimensions."
-            )
-
-    @staticmethod
-    def validate_built_memory_model_interface(
-        model: Module | None,
-    ) -> MemoryInterface | None:
-        if model is None:
-            return None
-        if not _implements_memory_interface(model):
-            raise TypeError(
-                "memory_config must build a model implementing MemoryInterface."
-            )
-        return model
-
-
-class LayerNormalizationDelegateValidator(ValidatorBase):
-    @classmethod
-    def validate(cls, model: LayerNormalizationDelegate) -> None:
-        cls.validate_normalization_option(model.cfg.normalization)
-        cls.validate_resolved_position(model.cfg.layer_norm_position)
-        cls.validate_resolved_dimensions(
-            model.cfg.input_dim,
-            model.cfg.output_dim,
-        )
-
-    @staticmethod
-    def validate_normalization_option(
-        normalization: NormalizationOptions | None,
-    ) -> None:
-        if normalization is not None and not isinstance(
-            normalization, NormalizationOptions
-        ):
-            raise TypeError(
-                "normalization must be a NormalizationOptions value or None, "
-                f"got {type(normalization).__name__}."
-            )
-
-    @staticmethod
-    def validate_resolved_position(
-        position: LayerNormPositionOptions | None,
-    ) -> None:
-        if position is None:
-            raise ValueError("Layer normalization requires a resolved position.")
-
-    @staticmethod
-    def validate_resolved_dimensions(
-        input_dim: int | None,
-        output_dim: int | None,
-    ) -> None:
-        if input_dim is None or output_dim is None:
-            raise ValueError(
-                "Layer normalization requires resolved input and output dimensions."
-            )
-
-
-class ElementwiseNormalizationValidator(ValidatorBase):
-    @staticmethod
-    def validate_forward_input(hidden: Tensor, dimension: int) -> None:
-        if hidden.ndim == 0 or hidden.shape[-1] != dimension:
-            raise ValueError(
-                f"Normalization requires last dimension {dimension}, "
-                f"got shape {tuple(hidden.shape)}."
-            )
-        if not hidden.is_floating_point():
-            raise TypeError("Normalization requires floating-point inputs.")
-
-
-class LayerPostprocessingDelegateValidator(ValidatorBase):
-    @classmethod
-    def validate(cls, model: LayerPostprocessingDelegate) -> None:
-        cls.validate_resolved_activation(model.cfg.activation)
-        cls.validate_resolved_output_dim(model.cfg.output_dim)
-        cls.validate_resolved_dropout_probability(model.cfg.dropout_probability)
-
-    @staticmethod
-    def validate_resolved_activation(
-        activation: ActivationOptions | None,
-    ) -> None:
-        if activation is None:
-            raise ValueError("Layer postprocessing requires a resolved activation.")
-
-    @staticmethod
-    def validate_resolved_output_dim(output_dim: int | None) -> None:
-        if output_dim is None:
-            raise ValueError("Layer postprocessing requires a resolved output_dim.")
-
-    @staticmethod
-    def validate_resolved_dropout_probability(
-        dropout_probability: float | None,
-    ) -> None:
-        if dropout_probability is None:
-            raise ValueError(
-                "Layer postprocessing requires a resolved dropout_probability."
-            )
-
-    @staticmethod
-    def validate_built_gate_type(gate: Module | None) -> LayerGate | None:
-        if gate is None:
-            return None
-        from emperor.layers._composition.gate import LayerGate
-
-        if not isinstance(gate, LayerGate):
-            raise TypeError("gate_config must build a LayerGate.")
-        return gate
-
-
-class LayerResidualDelegateValidator(ValidatorBase):
-    @classmethod
-    def validate(cls, model: LayerResidualDelegate) -> None:
-        cls.validate_resolved_output_dim(model.cfg.output_dim)
-
-    @staticmethod
-    def validate_resolved_output_dim(output_dim: int | None) -> None:
-        if output_dim is None:
-            raise ValueError(
-                "Layer residual processing requires a resolved output_dim."
-            )
-
-    @staticmethod
-    def validate_built_residual_connection_type(
-        connection: Module | None,
-    ) -> ResidualConnectionAbstract | None:
-        if connection is None:
-            return None
-        from emperor.layers._composition.residual.base import (
-            ResidualConnectionAbstract,
-        )
-
-        if not isinstance(connection, ResidualConnectionAbstract):
-            raise TypeError("residual_config must build a ResidualConnectionAbstract.")
-        return connection
 
 
 class LayerValidator(ValidatorBase):

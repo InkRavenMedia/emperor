@@ -67,7 +67,7 @@ def _thinking_oracle(hidden, parameters, depth, gradient_count=None, controllers
         with torch.set_grad_enabled(step >= prefix):
             previous = hidden
             if step == 0:
-                candidate = hidden * parameters["block_model.scale"]
+                candidate = hidden * parameters["step.block_model.scale"]
                 candidate = candidate * parameters["thinking_step_weights"][step]
             else:
                 router = f"samplers.{step - 1}.router.model.layers.0.model"
@@ -79,19 +79,21 @@ def _thinking_oracle(hidden, parameters, depth, gradient_count=None, controllers
                 indices = indices.sort(dim=-1).values
                 feature_indices = indices.unsqueeze(-1).expand(-1, -1, hidden.shape[-1])
                 selected = hidden.gather(-2, feature_indices)
-                update = selected * parameters["block_model.scale"]
+                update = selected * parameters["step.block_model.scale"]
                 update = update * logits.sigmoid().gather(-1, indices).unsqueeze(-1)
                 update = update * parameters["thinking_step_weights"][step] * 0.3
                 candidate = hidden.scatter_add(-2, feature_indices, update)
             if controllers:
-                gate = "utilities.recurrent_gate.model.layers.0.model"
+                gate = "step.pipeline.postprocessing.gate.model.layers.0.model"
                 candidate = candidate + (
                     candidate @ parameters[f"{gate}.weight_params"]
                     + parameters[f"{gate}.bias_params"]
                 )
                 candidate = (
                     previous
-                    + parameters["utilities.residual_connection.raw_weight"].sigmoid()
+                    + parameters[
+                        "step.pipeline.residual.connection.raw_weight"
+                    ].sigmoid()
                     * candidate
                 )
             hidden = candidate
@@ -218,12 +220,12 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
         )
         set_router(model, 0, 0.4)
         _set_affine_parameters(
-            model.utilities.recurrent_gate.model,
+            model.pipeline.postprocessing.gate.model,
             torch.eye(2) * 0.1,
             torch.ones(2) * 0.2,
         )
         with torch.no_grad():
-            model.utilities.residual_connection.raw_weight.fill_(0.5)
+            model.pipeline.residual.connection.raw_weight.fill_(0.5)
             model.block_model.scale.fill_(0.75)
         parameters = dict(model.named_parameters())
         oracle_parameters = {
@@ -268,7 +270,7 @@ class TestRecurrentRefactorContracts(unittest.TestCase):
                 expected_keys = [
                     "thinking_step_weights",
                     "recurrent_iteration_schedule.forward_call_progress",
-                    "block_model.scale",
+                    "step.block_model.scale",
                 ]
                 expected_keys.extend(
                     f"samplers.{step}.router.model.layers.0.model.{parameter}"

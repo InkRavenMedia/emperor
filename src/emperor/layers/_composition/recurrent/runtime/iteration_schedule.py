@@ -47,16 +47,20 @@ class RecurrentBranchExecutionPlan:
     transition_count: int
     no_gradient_transition_count: int
 
+    def has_active_step(self, transition_index: int, all_items_halted: bool) -> bool:
+        has_remaining_steps = transition_index < self.transition_count
+        has_active_items = not all_items_halted
+        return has_remaining_steps and has_active_items
+
+    def starts_gradient_suffix(self, transition_index: int) -> bool:
+        has_no_gradient_prefix = self.no_gradient_transition_count > 0
+        is_first_gradient_step = transition_index == self.no_gradient_transition_count
+        return has_no_gradient_prefix and is_first_gradient_step
+
     def gradient_context(self, transition_index: int) -> AbstractContextManager[None]:
         if self.tracks_gradients(transition_index):
             return nullcontext()
         return torch.no_grad()
-
-    def starts_gradient_suffix(self, transition_index: int) -> bool:
-        return (
-            self.no_gradient_transition_count > 0
-            and transition_index == self.no_gradient_transition_count
-        )
 
     def tracks_gradients(self, transition_index: int) -> bool:
         return transition_index >= self.no_gradient_transition_count
@@ -265,6 +269,13 @@ class RecurrentIterationSchedule(nn.Module):
     @property
     def active_iterations(self) -> int:
         return self.__current_runtime().active_iterations
+
+    @property
+    def stable_branch(self) -> RecurrentBranchExecutionPlan:
+        runtime = self.__current_runtime()
+        return RecurrentBranchExecutionPlan(
+            runtime.active_transition_count, runtime.no_gradient_transition_count
+        )
 
     @property
     def active_transition_count(self) -> int:

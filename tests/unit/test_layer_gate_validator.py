@@ -16,11 +16,11 @@ from emperor.layers._composition.residual.validation import (
     AttentionResidualValidator,
     ResidualConnectionValidator,
 )
-from emperor.layers._composition.residual.variants.additive import AdditiveResidual
-from emperor.layers._composition.residual.variants.attention import AttentionResidual
-from emperor.layers._composition.residual.variants.weighted import WeightedResidual
-from emperor.layers._composition.residual.variants.weighted_blend import (
+from emperor.layers._composition.residual.variants import (
+    AdditiveResidual,
+    AttentionResidual,
     WeightedBlendResidual,
+    WeightedResidual,
 )
 from emperor.linears import LinearLayerConfig
 
