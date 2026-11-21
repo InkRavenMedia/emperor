@@ -182,7 +182,7 @@ def test_cli_soft_moe_and_memory_forward_backward_across_packages(name):
 
 
 @pytest.mark.parametrize("name", [name for name in PACKAGES if "expert" in name])
-def test_existing_router_stack_flags_also_configure_soft_moe(name):
+def test_router_stack_options_do_not_override_soft_moe_scoring(name):
     package = model_package(name)
     values = cli_values(
         package,
@@ -208,9 +208,9 @@ def test_existing_router_stack_flags_also_configure_soft_moe(name):
     assert routers
     for router in routers:
         stack = router.cfg.router_config.model_config
-        assert stack.hidden_dim == 7 and stack.num_layers == 2
-        assert stack.layer_config.activation is ActivationOptions.GELU
-        assert stack.layer_config.dropout_probability == 0.2
+        assert stack.hidden_dim == 32 and stack.num_layers == 2
+        assert stack.layer_config.activation is ActivationOptions.RELU
+        assert stack.layer_config.dropout_probability == 0.0
 
 
 def test_router_residual_normalization_and_last_layer_bias_flags_build_and_run():
@@ -533,3 +533,34 @@ def test_cli_rejects_invalid_soft_controls(field, value):
         model_package("bert/expert_linear").runtime_defaults_spec.parse_overrides(
             {field: value}
         )
+
+
+@pytest.mark.parametrize("name", PACKAGES)
+def test_every_displayed_scoring_residual_constructs_the_selected_scorer(name):
+    package = model_package(name)
+    fields = configuration_schema(package).fields
+    for field in fields:
+        if not field.key.endswith("SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION"):
+            continue
+        assert "AttentionResidualConfig" not in field.choices
+        assert "AdditiveResidualConfig" in field.choices
+        enabled = (
+            field.key.removesuffix("_SCORING_RESIDUAL_CONNECTION_OPTION") + "_FLAG"
+        )
+        for choice in field.choices:
+            residual = package.runtime_defaults_spec.parse_value(field.key, choice)
+            config = package.build_configuration(
+                config_overrides={
+                    enabled.lower(): True,
+                    field.key.lower(): residual,
+                }
+            )
+            scores = [
+                mixture.router_config.model_config.layer_config.residual_config
+                for mixture in soft_configs(config)
+            ]
+            assert any(isinstance(value, residual) for value in scores), (
+                name,
+                field.key,
+                choice,
+            )
