@@ -5,8 +5,8 @@ from types import ModuleType
 from typing import Final
 
 import models.neuron.expert_linear_adaptive.config as config
+from model_runtime.packages._runtime_default_fields import apply_runtime_default_fields
 from model_runtime.packages.runtime_values import runtime_default_mapping
-from models._runtime_default_fields import apply_runtime_default_fields
 from models.neuron.expert_linear_adaptive._generation import (
     apply_generation_options,
     generation_keys,
