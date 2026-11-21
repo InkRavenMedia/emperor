@@ -31,6 +31,7 @@ from models._sequence_expansion import SEQUENCE_EXPANSION_FIELDS
 from models.catalog import model_package
 from models.config_overrides import print_config_options
 from models.experiment_cli_parser import get_experiment_parser
+from tests.model_packages.test_attention_residual_options import walk
 from tests.model_packages.test_grouped_attention_memory import (
     PACKAGES as ATTENTION_PACKAGES,
 )
@@ -47,7 +48,7 @@ from tests.model_packages.test_mlp_mixer_source_memory import (
 from tests.model_packages.test_mlp_mixer_source_memory import (
     configuration as mixer_configuration,
 )
-from unit.test_transformer import linear_stack
+from tests.unit.test_transformer import linear_stack
 
 PACKAGES = (*ATTENTION_PACKAGES, *MIXER_PACKAGES)
 LINEAR_PACKAGES = [name for name in PACKAGES if name.endswith("/linear")]
@@ -89,6 +90,38 @@ def expansions(model):
     return [
         module for module in model.modules() if isinstance(module, SequenceExpansion)
     ]
+
+
+@pytest.mark.parametrize("package_name", PACKAGES)
+def test_sequence_expansion_can_be_enabled_on_its_own(package_name):
+    package = model_package(package_name)
+    overrides = parse_overrides(package_name, *LINEAR_ARGUMENTS)
+
+    def configured_blocks(values):
+        configuration = package.build_configuration(config_overrides=values)
+        return [
+            item
+            for item in walk(configuration)
+            if isinstance(item, SequenceExpansionConfig)
+        ]
+
+    assert not configured_blocks({"sequence_expansion_flag": False})
+    with pytest.raises(ValueError):
+        configured_blocks({"sequence_expansion_flag": True})
+    blocks = configured_blocks(overrides)
+    assert blocks and all(block.max_new_tokens == 2 for block in blocks)
+    assert all(
+        isinstance(block.model_config, LinearLayerConfig)
+        and block.model_config.bias_flag
+        for block in blocks
+    )
+    if "HIDDEN_DIM" in package.runtime_defaults_spec.supported_keys:
+        assert blocks == configured_blocks(
+            {
+                **overrides,
+                "hidden_dim": package.runtime_defaults_spec.current_value("HIDDEN_DIM"),
+            }
+        )
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)

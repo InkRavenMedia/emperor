@@ -489,6 +489,7 @@ def _gpt_boundary_builder_kwargs(
         )
 
     decoder_keys = {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "hidden_dim",
         "stack_num_layers",
         "stack_activation",
@@ -526,7 +527,6 @@ def _gpt_boundary_builder_kwargs(
         )
 
     attention_keys = {
-        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "attn_num_heads",
         "attn_num_layers",
         "attn_bias_flag",

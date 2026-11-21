@@ -1384,6 +1384,7 @@ _PATCH_FLAT_KEYS = frozenset(
 )
 _ENCODER_FLAT_KEYS = frozenset(
     {
+        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "hidden_dim",
         "stack_num_layers",
         "stack_activation",
@@ -1402,7 +1403,6 @@ _POSITIONAL_EMBEDDING_FLAT_KEYS = frozenset(
 )
 _ATTENTION_FLAT_KEYS = frozenset(
     {
-        *_sequence_expansion.SEQUENCE_EXPANSION_FIELDS,
         "attn_num_heads",
         "attn_num_layers",
         "attn_bias_flag",
