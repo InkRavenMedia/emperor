@@ -65,6 +65,11 @@ class RunHistoryServiceContractTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            (run_dir / "hparams.yaml").write_text(
+                "batch_size: 4\nnotes: 'trial #3' # comment\n"
+                "nested:\n  inner_only: ignored\n",
+                encoding="utf-8",
+            )
             service = _service(logs_root)
             source: HistoricalInspectionSource = service
             run_id = service.list_runs(limit=1, offset=0).runs[0].id
@@ -77,7 +82,7 @@ class RunHistoryServiceContractTests(unittest.TestCase):
             self.assertEqual(context.dataset, "Mnist")
             self.assertEqual(
                 dict(context.params),
-                {"batch_size": 8, "dropout": 0.1},
+                {"batch_size": 8, "dropout": 0.1, "notes": "trial #3"},
             )
             self.assertEqual(
                 tuple(candidate.path for candidate in context.checkpoint_candidates),
