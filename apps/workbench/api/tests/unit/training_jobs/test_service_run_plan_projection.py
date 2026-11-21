@@ -344,6 +344,80 @@ class TrainingJobRunPlanProjectionTests(unittest.TestCase):
             },
         )
 
+    def test_job_views_are_isolated_from_the_record_and_cached_progress(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manager, payload, job = self._create_progress_projection_job(Path(tmp))
+            manager.runtime._write_event(
+                job,
+                {
+                    "type": "step",
+                    "runId": job.run_plan.runs[0].id,
+                    "metrics": {"curve": [0.25]},
+                },
+            )
+            view = manager.service.get_job(payload["id"])
+            view.run_plan.presets.append("changed")
+            view.run_plan.runs[0].command_argv.append("changed")
+            view.run_plan.runs[0].overrides["changed"] = True
+            view.run_plan.runs[0].metrics["curve"].append(99)
+            view.events[-1]["metrics"]["curve"].append(88)
+            fresh = manager.service.get_job(payload["id"])
+            self.assertNotIn("changed", job.run_plan.presets)
+            self.assertNotIn("changed", fresh.run_plan.runs[0].command_argv)
+            self.assertNotIn("changed", fresh.run_plan.runs[0].overrides)
+            self.assertEqual(fresh.metrics["curve"], [0.25])
+            self.assertEqual(fresh.run_plan.runs[0].metrics["curve"], [0.25])
+            self.assertEqual(fresh.events[-1]["metrics"]["curve"], [0.25])
+
+    def test_structured_failure_reconciles_committed_runs_idempotently(self) -> None:
+        cases = (
+            ("progress_projection", 2, ["Completed", "Completed", "Skipped"]),
+            ("best_results_projection", 2, ["Completed", "Completed", "Skipped"]),
+            ("training", 1, ["Completed", "Failed", "Skipped"]),
+        )
+        for phase, committed_count, expected in cases:
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:
+                process = FakeProcess()
+                manager, payload, job = self._create_progress_projection_job(
+                    Path(tmp), process=process
+                )
+                rows = payload["runPlan"]["runs"]
+                manager.runtime._write_event(
+                    job,
+                    {
+                        "type": "dataset_started",
+                        "status": "running",
+                        "runId": rows[1]["id"],
+                    },
+                )
+                event = {
+                    "type": "error",
+                    "status": "failed",
+                    "phase": phase,
+                    "executionId": "execution-1",
+                    "affectedRunId": rows[1]["id"],
+                    "committedRunIndexes": list(range(1, committed_count + 1)),
+                    "error": "operation failed",
+                }
+                for _ in range(2):
+                    manager.runtime._write_event(job, event)
+                    process.exit_code = 1
+                    view = manager.get_job_payload(payload["id"])
+                    self.assertEqual(view["status"], "failed")
+                    self.assertEqual(
+                        [r["status"] for r in view["runPlan"]["runs"]], expected
+                    )
+                    self.assertEqual(
+                        view["runPlan"]["summary"]["completedRuns"], committed_count
+                    )
+                    self.assertTrue(
+                        all(
+                            r["currentEpoch"] == r["totalEpochs"]
+                            for r in view["runPlan"]["runs"][:committed_count]
+                        )
+                    )
+                    self.assertEqual(view["resultLinks"], [])
+
     def test_failed_process_marks_running_and_pending_rows(
         self,
     ) -> None:

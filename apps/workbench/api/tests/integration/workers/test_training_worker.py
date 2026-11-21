@@ -15,9 +15,11 @@ from unittest.mock import patch
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
+from model_runtime.runs import RunResult
 from model_runtime.runs._lightning_progress import lightning_progress_adapter
 from model_runtime.runs.progress import ContextualRunProgress, RunProgressContext
 
+from emperor_workbench.project_adapter import ProjectAdapterFailure
 from emperor_workbench.run_plans import (
     MAX_TRAINING_DATASETS,
     MAX_TRAINING_MONITORS,
@@ -466,6 +468,77 @@ class TrainingWorkerProgressTests(unittest.TestCase):
         execute.assert_not_called()
         self.assertEqual([event["type"] for event in events], ["error"])
         self.assertIn("non-empty materialized run plan", events[-1]["error"])
+
+    def test_worker_reports_committed_run_positions_when_projection_fails(self) -> None:
+        for phase in ("progress_projection", "best_results_projection"):
+            with self.subTest(phase=phase), tempfile.TemporaryDirectory() as tmp:
+                payload = worker_payload(datasets=["Mnist", "Cifar10"])
+                receipts = [
+                    RunResult(
+                        row["id"],
+                        "image-classification",
+                        "baseline",
+                        row["dataset"],
+                        "logs/version_0",
+                        {},
+                    )
+                    for row in payload["runPlan"]["runs"]
+                ]
+                failure = ProjectAdapterFailure(
+                    "post-commit projection failed",
+                    phase=phase,
+                    affected_run_id=receipts[-1].run_id,
+                    execution_id="execution-1",
+                    completed_results=receipts,
+                )
+                progress_path = Path(tmp) / "progress.jsonl"
+                with (
+                    contextlib.redirect_stderr(io.StringIO()),
+                    self.assertRaises(SystemExit),
+                ):
+                    self.run_worker(payload, progress_path, execute_side_effect=failure)
+                terminal = read_jsonl(progress_path)[-1]
+                self.assertEqual(terminal["status"], "failed")
+                self.assertEqual(terminal["phase"], phase)
+                self.assertEqual(terminal["executionId"], "execution-1")
+                self.assertEqual(terminal["affectedRunId"], receipts[-1].run_id)
+                self.assertEqual(terminal["committedRunIndexes"], [1, 2])
+
+    def test_long_committed_ids_fit_the_progress_event_budget(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            payload = worker_payload()
+            row = payload["runPlan"]["runs"][0]
+            rows = [{**row, "id": f"{index:04d}-" + "é" * 200} for index in range(128)]
+            payload["runPlan"]["runs"] = rows
+            receipts = [
+                RunResult(
+                    item["id"],
+                    "classification",
+                    "baseline",
+                    "Mnist",
+                    "logs/version_0",
+                    {},
+                )
+                for item in rows
+            ]
+            progress_path = Path(tmp) / "progress.jsonl"
+            failure = ProjectAdapterFailure(
+                "post-commit failure",
+                phase="progress_projection",
+                affected_run_id=rows[-1]["id"],
+                execution_id="bounded",
+                completed_results=receipts,
+            )
+            with (
+                self.assertRaises(SystemExit),
+                contextlib.redirect_stderr(io.StringIO()),
+            ):
+                self.run_worker(payload, progress_path, execute_side_effect=failure)
+            event = read_jsonl(progress_path)[-1]
+            self.assertEqual(
+                event["committedRunIndexes"], list(range(1, len(rows) + 1))
+            )
+            self.assertEqual(event["affectedRunId"], rows[-1]["id"])
 
     def test_worker_writes_error_event_when_execution_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

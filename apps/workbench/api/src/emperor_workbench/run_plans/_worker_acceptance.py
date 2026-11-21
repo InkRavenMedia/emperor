@@ -662,6 +662,26 @@ class RunPlanWorkerAcceptance:
         return semantic_plan
 
     @staticmethod
+    def failure_progress_fields(error: Exception, plan: object) -> dict[str, Any]:
+        """Publish the identity portion of a validated project execution failure."""
+        if not isinstance(error, ProjectAdapterFailure) or error.phase is None:
+            return {}
+        assert isinstance(plan, Mapping)
+        committed_ids = {result.run_id for result in error.completed_results}
+        # Positions in the accepted immutable plan keep even the largest receipt
+        # within the JSONL event byte limit.
+        return {
+            "phase": error.phase,
+            "executionId": error.execution_id,
+            "affectedRunId": error.affected_run_id,
+            "committedRunIndexes": [
+                index
+                for index, row in enumerate(plan["runs"], start=1)
+                if row["id"] in committed_ids
+            ],
+        }
+
+    @staticmethod
     def execute(
         payload: Mapping[str, Any],
         *,
