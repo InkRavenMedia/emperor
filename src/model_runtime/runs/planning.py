@@ -345,7 +345,6 @@ def plan_runs(
         experiment_task=resolved.experiment_task_name,
         datasets=tuple(dataset_name(dataset) for dataset in resolved.datasets),
         overrides=resolved.serialized_overrides,
-        search=None,
         runs=_materialize_planned_runs(package, resolved, random_source),
         preset_searches=resolved.preset_searches(),
     )
@@ -426,7 +425,6 @@ def accept_run_plan(
         experiment_task=resolved.experiment_task_name,
         datasets=tuple(dataset_name(dataset) for dataset in resolved.datasets),
         overrides=resolved.serialized_overrides,
-        search=None,
         runs=tuple(accepted),
         preset_searches=resolved.preset_searches(),
     )

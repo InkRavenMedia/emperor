@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from math import prod
-from typing import Any, Literal
+from typing import Any, assert_never
 
+from model_runtime.runs._search_options import resolve_search_options
 from model_runtime.runs.errors import InvalidRunRequest
-from model_runtime.runs.records import RandomSource
+from model_runtime.runs.records import RandomSource, SearchMode
 
 
 def _combination_count(axes: Sequence[Sequence[Any]]) -> int:
@@ -65,33 +66,18 @@ def _sample_unique_combination_indices(
 @dataclass(frozen=True, slots=True)
 class PreparedSearch:
     axes: tuple[Sequence[Any], ...]
-    mode: Literal["grid", "random"] = "grid"
+    mode: SearchMode = "grid"
     random_samples: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "axes", tuple(self.axes))
-        if self.mode not in {"grid", "random"}:
-            raise InvalidRunRequest("Training search mode must be 'grid' or 'random'.")
+        mode, count = resolve_search_options(self.mode, self.random_samples)
+        object.__setattr__(self, "mode", mode)
+        object.__setattr__(self, "random_samples", count)
         if any(len(axis) == 0 for axis in self.axes):
             raise InvalidRunRequest(
                 "Training search axes require at least one selected value."
             )
-        if self.mode == "grid" and self.random_samples is not None:
-            raise InvalidRunRequest(
-                "Grid search does not accept a random sample count."
-            )
-        if self.mode == "random":
-            if isinstance(self.random_samples, bool) or not isinstance(
-                self.random_samples,
-                int,
-            ):
-                raise InvalidRunRequest(
-                    "Random search sample count must be an integer."
-                )
-            if self.random_samples < 1:
-                raise InvalidRunRequest(
-                    "Random search sample count must be at least 1."
-                )
 
     @property
     def combination_count(self) -> int:
@@ -110,7 +96,7 @@ class PreparedSearch:
     ) -> Iterator[tuple[Any, ...]]:
         if self.mode == "grid":
             indices: Sequence[int] = range(self.combination_count)
-        else:
+        elif self.mode == "random":
             if random_source is None:
                 raise InvalidRunRequest(
                     "Random search requires an explicit random source."
@@ -121,6 +107,8 @@ class PreparedSearch:
                 self.random_samples,
                 random_source,
             )
+        else:
+            assert_never(self.mode)
         for index in indices:
             yield _combination_at_index(self.axes, index)
 

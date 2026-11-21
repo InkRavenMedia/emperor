@@ -379,6 +379,7 @@ def _preset_searches_from_wire(payload: object) -> tuple[PresetSearch, ...]:
                 search=search_spec_from_wire_at(
                     raw["search"],
                     f"{path}.search",
+                    planned=True,
                 ),
             )
         )
@@ -397,8 +398,8 @@ def run_plan_from_wire(payload: object) -> RunPlan:
             "overrides",
             "search",
             "runs",
+            "preset_searches",
         ),
-        optional=("preset_searches",),
     )
     runs = _run_specs_from_wire(raw["runs"])
     identity = identity_from_wire(raw["identity"])
@@ -423,22 +424,23 @@ def run_plan_from_wire(payload: object) -> RunPlan:
         "$.datasets",
     )
     overrides = json_mapping_from_wire(raw["overrides"], path="$.overrides")
-    search = search_spec_from_wire(raw["search"])
-    preset_searches = (
-        ()
-        if "preset_searches" not in raw
-        else _preset_searches_from_wire(raw["preset_searches"])
-    )
-    return RunPlan(
-        identity=identity,
-        presets=presets,
-        experiment_task=experiment_task,
-        datasets=datasets,
-        overrides=overrides,
-        search=search,
-        runs=tuple(runs),
-        preset_searches=preset_searches,
-    )
+    search = search_spec_from_wire_at(raw["search"], "$.search", planned=True)
+    preset_searches = _preset_searches_from_wire(raw["preset_searches"])
+    try:
+        plan = RunPlan(
+            identity=identity,
+            presets=presets,
+            experiment_task=experiment_task,
+            datasets=datasets,
+            overrides=overrides,
+            runs=tuple(runs),
+            preset_searches=preset_searches,
+        )
+    except ValueError as exc:
+        raise WireCodecError(f"$.preset_searches: {exc}") from exc
+    if search != plan.search:
+        raise WireCodecError("$.search must match the accepted per-preset search summary.")
+    return plan
 
 
 def run_result_to_wire(result: RunResult) -> dict[str, Any]:

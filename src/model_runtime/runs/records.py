@@ -54,6 +54,14 @@ class PresetSearch:
     preset: str
     search: SearchSpec | None
 
+    def __post_init__(self) -> None:
+        from model_runtime.runs._search_options import resolve_search_options
+
+        if self.search is not None:
+            resolve_search_options(
+                self.search.mode, self.search.random_samples, planned=True
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class RunRequest:
@@ -130,31 +138,32 @@ class RunPlan:
     experiment_task: str
     datasets: tuple[str, ...]
     overrides: Mapping[str, Any]
-    search: SearchSpec | None
     runs: tuple[RunSpec, ...]
-    preset_searches: tuple[PresetSearch, ...] = ()
+    preset_searches: tuple[PresetSearch, ...]
 
     def __post_init__(self) -> None:
         presets = tuple(self.presets)
         preset_searches = tuple(self.preset_searches)
-        if not preset_searches:
-            preset_searches = tuple(
-                PresetSearch(preset=preset, search=self.search) for preset in presets
-            )
         if tuple(entry.preset for entry in preset_searches) != presets:
             raise ValueError(
                 "Run Plan per-preset Search provenance must match presets in order."
             )
-        summary = next(
-            (entry.search for entry in preset_searches if entry.search is not None),
-            None,
-        )
         object.__setattr__(self, "presets", presets)
         object.__setattr__(self, "datasets", tuple(self.datasets))
         object.__setattr__(self, "overrides", deep_freeze(self.overrides))
-        object.__setattr__(self, "search", summary)
         object.__setattr__(self, "runs", tuple(self.runs))
         object.__setattr__(self, "preset_searches", preset_searches)
+
+    @property
+    def search(self) -> SearchSpec | None:
+        return next(
+            (
+                entry.search
+                for entry in self.preset_searches
+                if entry.search is not None
+            ),
+            None,
+        )
 
     def search_for_preset(self, preset: str) -> SearchSpec | None:
         for entry in self.preset_searches:

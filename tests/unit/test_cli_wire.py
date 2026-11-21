@@ -6,6 +6,7 @@ import math
 import random
 import unittest
 from contextlib import redirect_stderr
+from copy import deepcopy
 from dataclasses import replace
 from io import StringIO
 from unittest.mock import patch
@@ -57,6 +58,7 @@ from model_runtime.inspection import (
 )
 from model_runtime.packages import ModelIdentity
 from model_runtime.runs import (
+    InvalidRunRequest,
     PlanningBudget,
     PresetSearch,
     RunParameter,
@@ -208,7 +210,7 @@ def _run_plan() -> RunPlan:
         experiment_task="image-classification",
         datasets=request.datasets,
         overrides=request.overrides,
-        search=request.search,
+        preset_searches=(PresetSearch("baseline", request.search),),
         runs=(
             RunSpec(
                 id="run-0001",
@@ -309,7 +311,6 @@ class CliWireRoundTripTests(unittest.TestCase):
             experiment_task="image-classification",
             datasets=("Mnist",),
             overrides={},
-            search=None,
             runs=(),
             preset_searches=(
                 PresetSearch("baseline", baseline_search),
@@ -330,16 +331,44 @@ class CliWireRoundTripTests(unittest.TestCase):
             post_norm_search,
         )
 
-        legacy_payload = dict(payload)
-        del legacy_payload["preset_searches"]
-        legacy = run_plan_from_wire(legacy_payload)
-        self.assertEqual(
-            legacy.preset_searches,
-            (
-                PresetSearch("baseline", baseline_search),
-                PresetSearch("post-norm", baseline_search),
-            ),
-        )
+        without_provenance = dict(payload)
+        del without_provenance["preset_searches"]
+        with self.assertRaisesRegex(
+            WireCodecError, "missing required field 'preset_searches'"
+        ):
+            run_plan_from_wire(without_provenance)
+
+        for field in ("search", "preset_searches"):
+            invalid = deepcopy(payload)
+            options = (
+                invalid["search"]
+                if field == "search"
+                else invalid["preset_searches"][0]["search"]
+            )
+            del options["random_samples"]
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(WireCodecError, "random_samples"),
+            ):
+                run_plan_from_wire(invalid)
+
+        mismatched_summary = {**payload, "search": None}
+        with self.assertRaisesRegex(WireCodecError, "search.*per-preset"):
+            run_plan_from_wire(mismatched_summary)
+
+        reordered = {
+            **payload,
+            "preset_searches": list(reversed(payload["preset_searches"])),
+        }
+        with self.assertRaisesRegex(
+            WireCodecError, "preset_searches.*match presets in order"
+        ):
+            run_plan_from_wire(reordered)
+
+        with self.assertRaisesRegex(
+            InvalidRunRequest, "random_samples.*accepted sample count"
+        ):
+            PresetSearch("baseline", SearchSpec(mode="random"))
 
     def test_adapter_forwards_memory_limit_to_inspection_and_validation(self) -> None:
         captured_requests = []
