@@ -613,7 +613,7 @@ const successfulMonitorDataFixture = {
   nodePath: "root.classifier",
   preset: "baseline",
   dataset: "Mnist",
-  logDir: "runs/workbench-training/job-123/linear/baseline/Mnist/run-0001",
+  logDir: "runs/workbench_training/linears/linear/baseline/Mnist/run-0001",
   scalarSeries: [
     {
       tag: "train/loss",
@@ -655,7 +655,7 @@ const successfulParameterStatusFixture = {
   sourceId: "job-123",
   preset: "baseline",
   dataset: "Mnist",
-  logDir: "runs/workbench-training/job-123/linear/baseline/Mnist/run-0001",
+  logDir: "runs/workbench_training/linears/linear/baseline/Mnist/run-0001",
   nodes: [
     {
       nodePath: "root.classifier",
@@ -686,7 +686,7 @@ const successfulLogParameterStatusFixture = {
 
 const successfulLogRunFixture = {
   id: "run-1",
-  group: "workbench-training/job-123",
+  group: "workbench_training",
   experiment: "workbench-training",
   modelType: "linears",
   model: "linear",
@@ -952,7 +952,7 @@ describe("successful API fixtures", () => {
         overrides: {
           learning_rate: "0.01",
         },
-        logFolder: "workbench-training/job-123",
+        logFolder: "workbench_training",
         monitors: ["weights", "activations"],
       }, mutationOptions()),
     );
@@ -973,7 +973,7 @@ describe("successful API fixtures", () => {
           overrides: {
             learning_rate: "0.01",
           },
-          logFolder: "workbench-training/job-123",
+          logFolder: "workbench_training",
         }),
     );
 
