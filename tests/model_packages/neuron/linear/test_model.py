@@ -48,7 +48,9 @@ class TestNeuronLinearModel(unittest.TestCase):
     package_module = "models.neuron.linear"
 
     def test_removed_terminal_z_axis_offset_override_is_rejected(self):
-        with self.assertRaisesRegex(TypeError, "cluster_terminal_z_axis_offset"):
+        with self.assertRaisesRegex(
+            ValueError, "unknown runtime override 'cluster_terminal_z_axis_offset'"
+        ):
             model_package("neuron/linear").bind_runtime_defaults(
                 {"cluster_terminal_z_axis_offset": 0}
             )

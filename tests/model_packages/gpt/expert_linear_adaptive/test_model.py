@@ -636,11 +636,11 @@ class TestGptExpertLinearAdaptiveModel(unittest.TestCase):
 
         model = Model(cfg).eval()
         self.assertIsInstance(
-            model.transformer.utilities.residual_connection,
+            model.transformer.pipeline.residual.connection,
             recurrent_config.residual_config.registry_owner(),
         )
         self.assertIsInstance(
-            model.transformer.utilities.halting_model,
+            model.transformer.pipeline.halting.model,
             recurrent_config.halting_config.registry_owner(),
         )
         logits, auxiliary_loss = model(self._input_ids(cfg))
