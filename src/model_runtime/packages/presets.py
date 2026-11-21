@@ -64,6 +64,7 @@ _RUN_OWNED_CONFIG_PREFIXES = (
     "monitor_",
 )
 _RUN_OWNED_CONFIG_KEYS = frozenset({"num_epochs", "seed"})
+_DatasetValidator = Callable[[object, type[Any], Mapping[str, Any]], None]
 
 
 def is_run_owned_config_key(key: str) -> bool:
@@ -77,6 +78,7 @@ class ExperimentPresetsBase:
         self,
         preset_definitions: Mapping[object, PresetDefinition],
     ) -> None:
+        self.dataset_validator: _DatasetValidator | None = None
         self._preset_definition_snapshots = MappingProxyType(
             {
                 preset: _PresetDefinitionSnapshot.capture(definition)
@@ -310,6 +312,8 @@ class BuilderBackedExperimentPresetsBase(ExperimentPresetsBase):
             model_config_preset,
             model_config_overrides,
         )
+        if self.dataset_validator is not None:
+            self.dataset_validator(model_config_preset, dataset_type, model_config_overrides)
         dataset_config = self._dataset_config(dataset_type)
         base_config = {
             **dataset_config,

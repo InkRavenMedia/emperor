@@ -36,6 +36,8 @@ from model_runtime.packages import (
     PresetDefinition,
 )
 from model_runtime.runs import ExperimentBase
+from model_runtime.task_behavior import validate_language_model_dataset
+from models.gpt.linear_adaptive import config
 from models.gpt.linear_adaptive.config_builder import (
     GptLinearAdaptiveConfigBuilder,
 )
@@ -792,28 +794,18 @@ class ExperimentPresets(BuilderBackedExperimentPresetsBase):
             default_dataset=WikiText2,
             runtime_factory=runtime_from_flat,
         )
+        self.dataset_validator = self._validate_dataset_selection
 
-    def get_config(
-        self,
-        model_config_preset=ExperimentPreset.BASELINE,
-        dataset=WikiText2,
-        *,
-        config_overrides=None,
-    ):
-        configurations = super().get_config(
-            model_config_preset, dataset, config_overrides=config_overrides
+    def _validate_dataset_selection(self, preset, dataset, overrides):
+        preset_values = self.overrides_for_preset(preset)
+        hierarchical = overrides.get(
+            "hierarchical_language_model_flag",
+            preset_values.get(
+                "hierarchical_language_model_flag",
+                config.HIERARCHICAL_LANGUAGE_MODEL_FLAG,
+            ),
         )
-        raw_text = bool(getattr(dataset, "hierarchical_language_model_flag", False))
-        for configuration in configurations:
-            hierarchical = (
-                configuration.experiment_config.hierarchical_language_model_config
-                is not None
-            )
-            if hierarchical != raw_text:
-                raise ValueError(
-                    "Hierarchical language modeling requires a compatible raw-text dataset such as WikiText103Hierarchical"
-                )
-        return configurations
+        validate_language_model_dataset(dataset, hierarchical=hierarchical)
 
     def _dataset_config(self, dataset: type) -> dict:
         return {
