@@ -159,7 +159,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         package = _source_less_package()
 
         with patch(
-            "model_runtime.packages.metadata.configuration_field_metadata",
+            "model_runtime.packages.configuration_metadata.configuration_field_metadata",
             side_effect=AssertionError("source parser must not run"),
         ) as source_parser:
             spec = package.runtime_defaults_spec
@@ -219,14 +219,14 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             ["ALPHA", "BETA"],
         )
 
-    def test_every_catalog_declaration_exactly_matches_legacy_metadata(self) -> None:
+    def test_every_catalog_declaration_matches_the_authoring_source(self) -> None:
         for catalog_package in discover_model_packages():
             with self.subTest(package=catalog_package.catalog_key):
                 metadata = catalog_package._adapter.load_metadata()
-                legacy_configuration = configuration_field_metadata(
+                source_configuration = configuration_field_metadata(
                     metadata._runtime_defaults_source
                 )
-                legacy_search = configuration_field_metadata(
+                source_search = configuration_field_metadata(
                     metadata._search_space_source,
                     include_search_space=True,
                 )
@@ -236,18 +236,18 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
                     catalog_package.inspection_construction_limits,
                 )
                 with patch(
-                    "model_runtime.packages.metadata.configuration_field_metadata",
+                    "model_runtime.packages.configuration_metadata.configuration_field_metadata",
                     side_effect=AssertionError("catalog parser must not run"),
                 ):
                     spec = package.runtime_defaults_spec
 
                 self.assertEqual(
                     _plain_metadata(spec.configuration_metadata),
-                    legacy_configuration,
+                    source_configuration,
                 )
                 self.assertEqual(
                     _plain_metadata(spec.search_metadata),
-                    legacy_search,
+                    source_search,
                 )
 
     def test_declarations_are_authoritative_and_all_or_none(self) -> None:
@@ -266,8 +266,8 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             search,
         )
         with self.assertRaisesRegex(
-            ValueError,
-            "configuration and search metadata declarations together",
+            TypeError,
+            "search_metadata_sections",
         ):
             ModelMetadata(
                 *common,
@@ -286,7 +286,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         )
         package = ModelPackage(base.identity, _MetadataAdapter(base, metadata))
         with patch(
-            "model_runtime.packages.metadata.configuration_field_metadata",
+            "model_runtime.packages.configuration_metadata.configuration_field_metadata",
             side_effect=AssertionError("authoritative declarations cannot fallback"),
         ) as source_parser:
             with self.assertRaisesRegex(RuntimeDefaultsError, "missing.*VALUE"):
@@ -475,7 +475,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             ("VALUE", "PRESENTATION_ONLY"),
         )
 
-    def test_public_constructor_and_facade_compatibility(self) -> None:
+    def test_public_constructor_requires_both_metadata_declarations(self) -> None:
         from model_runtime.packages import RuntimeDefaultsSection
         from model_runtime.packages.configuration_metadata import (
             RuntimeDefaultsSection as OwnerRuntimeDefaultsSection,
@@ -501,7 +501,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             )
         for name in tuple(parameters)[5:]:
             self.assertIs(parameters[name].kind, inspect.Parameter.KEYWORD_ONLY)
-            self.assertIsNone(parameters[name].default)
+            self.assertIs(parameters[name].default, inspect.Parameter.empty)
 
     def test_authoring_generator_bootstraps_a_missing_declaration(self) -> None:
         from tools import generate_model_package_inspection_metadata as generator

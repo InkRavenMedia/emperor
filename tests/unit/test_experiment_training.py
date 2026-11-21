@@ -21,6 +21,7 @@ from model_runtime.packages import (
     ModelMetadata,
     ModelPackage,
     PresetDefinition,
+    RuntimeDefaultsSection,
 )
 from model_runtime.runs import ExperimentBase, JsonlRunProgress
 from model_runtime.runs._handoff import TrainingRunRequest
@@ -368,6 +369,18 @@ class FakePackageAdapter:
             dataset_options=dataset_metadata,
             monitor_options_source=monitor_metadata,
             search_space=search_metadata,
+            configuration_metadata_sections=(
+                RuntimeDefaultsSection(
+                    ("Run",),
+                    (
+                        ("DATA_NUM_WORKERS", 1, (1,)),
+                        ("NUM_EPOCHS", 2, (2,)),
+                        ("RUN_TEST_AFTER_FIT", 3, (3,)),
+                        ("SEED", 4, (4,)),
+                    ),
+                ),
+            ),
+            search_metadata_sections=(),
         )
 
     def load_metadata(self):
