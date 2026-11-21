@@ -159,7 +159,7 @@ class _Progress:
     def __init__(self) -> None:
         self.events: list[dict] = []
 
-    def write_event(self, event: dict) -> None:
+    def write_record(self, event: dict) -> None:
         self.events.append(dict(event))
 
 

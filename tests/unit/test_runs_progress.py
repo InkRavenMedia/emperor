@@ -68,7 +68,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -112,7 +112,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: write_event(event)},
+            {"write_record": lambda _self, event: write_event(event)},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -166,7 +166,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: write_event(event)},
+            {"write_record": lambda _self, event: write_event(event)},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -203,7 +203,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -255,7 +255,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -298,7 +298,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -340,7 +340,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -394,7 +394,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: write_event(event)},
+            {"write_record": lambda _self, event: write_event(event)},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -435,7 +435,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),  # type: ignore[arg-type]
@@ -505,7 +505,7 @@ class RunsProgressTests(unittest.TestCase):
         self.assertIs(raised.exception, cancellation)
         self.assertEqual(calls, ["numel"])
 
-    def test_item_only_metric_wrapper_keeps_legacy_conversion(self) -> None:
+    def test_scalar_metric_is_projected_by_calling_item_once(self) -> None:
         calls: list[str] = []
 
         class ItemOnlyMetric:
@@ -716,35 +716,9 @@ class RunsProgressTests(unittest.TestCase):
                     expected_items,
                 )
 
-    def test_context_projection_overwrites_values_without_moving_existing_keys(
-        self,
-    ) -> None:
-        payload = project_run_progress_event(
-            {
-                "type": "legacy",
-                "dataset": "untrusted",
-                "status": "running",
-            },
-            context=_context(),
-        )
-
-        self.assertEqual(payload["dataset"], "Mnist")
-        self.assertEqual(
-            list(payload),
-            [
-                "type",
-                "dataset",
-                "status",
-                "experimentTask",
-                "preset",
-                "presetKey",
-                "logDir",
-                "runId",
-                "runIndex",
-                "runTotal",
-                "totalEpochs",
-            ],
-        )
+    def test_context_projection_requires_a_typed_event(self) -> None:
+        with self.assertRaisesRegex(TypeError, "Unsupported Runs progress event: dict"):
+            project_run_progress_event({"type": "dataset_started"}, context=_context())
 
     def test_typed_event_jsonl_bytes_remain_stable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -776,7 +750,7 @@ class RunsProgressTests(unittest.TestCase):
             progress = JsonlRunProgress(path)
 
             with self.assertRaises(ValueError):
-                progress.write_event({"type": "step", "metrics": {"loss": math.inf}})
+                progress.write_record({"type": "step", "metrics": {"loss": math.inf}})
 
             self.assertFalse(path.exists())
 
@@ -791,7 +765,7 @@ class RunsProgressTests(unittest.TestCase):
         progress = type(
             "Progress",
             (),
-            {"write_event": lambda _self, event: events.append(dict(event))},
+            {"write_record": lambda _self, event: events.append(dict(event))},
         )()
         callback = lightning_progress_adapter(
             ContextualRunProgress(progress, _context()),
@@ -831,12 +805,7 @@ class RunsProgressTests(unittest.TestCase):
                 JsonlRunProgress(path),
                 _context(),
             )
-            progress.write_event(
-                {
-                    "type": "dataset_started",
-                    "status": "running",
-                }
-            )
+            progress.write_event(DatasetStartedEvent(params={}))
             payload = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(payload["dataset"], "Mnist")

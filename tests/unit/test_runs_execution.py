@@ -129,7 +129,7 @@ class _Progress:
     def __init__(self) -> None:
         self.events: list[dict] = []
 
-    def write_event(self, event) -> None:
+    def write_record(self, event) -> None:
         self.events.append(dict(event))
 
 
@@ -2559,7 +2559,7 @@ class RunsExecutionTests(unittest.TestCase):
         failure = OSError("completion progress unavailable")
 
         class FailingCompletionProgress(_Progress):
-            def write_event(self, event) -> None:
+            def write_record(self, event) -> None:
                 payload = dict(event)
                 if payload["type"] == "dataset_completed":
                     raise failure
