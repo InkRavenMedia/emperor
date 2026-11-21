@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from unittest.mock import patch
 
 from emperor_workbench.config_snapshots import (
     ConfigSnapshotRecord,
@@ -214,6 +215,68 @@ class InMemoryConfigSnapshotStoreTests(unittest.TestCase):
 
 
 class FileSystemConfigSnapshotStoreTests(unittest.TestCase):
+    def test_catalog_failure_preserves_authoritative_mutation_on_restart(self) -> None:
+        for operation in ("create", "update", "delete"):
+            with (
+                self.subTest(operation=operation),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                root = Path(tmp)
+
+                def open_store(root=root):
+                    return FileSystemConfigSnapshotStore(
+                        root / "snapshots", state_root=root / "state"
+                    )
+
+                store = open_store()
+                current = make_record()
+                replacement = replace(current, name="new")
+                if operation != "create":
+                    store.create(current)
+                else:
+                    self.assertEqual(store.list_all(), [])
+                with patch.object(
+                    store._catalog,
+                    "publish",
+                    side_effect=OSError("catalog unavailable"),
+                ):
+                    if operation == "create":
+                        self.assertEqual(store.create(current), current)
+                        expected = [current]
+                    elif operation == "update":
+                        self.assertEqual(
+                            store.update(current, replacement), replacement
+                        )
+                        expected = [replacement]
+                    else:
+                        self.assertTrue(store.delete(current.id))
+                        expected = []
+                self.assertEqual(open_store().list_all(), expected)
+
+    def test_authoritative_write_failure_propagates_without_replacing_snapshot(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            store = FileSystemConfigSnapshotStore(
+                root / "snapshots", state_root=root / "state"
+            )
+            current = store.create(make_record())
+            with (
+                patch(
+                    "emperor_workbench.config_snapshots._filesystem_store.write_json_atomic",
+                    side_effect=OSError("authority unavailable"),
+                ),
+                self.assertRaisesRegex(OSError, "authority"),
+            ):
+                store.update(current, replace(current, name="new"))
+            self.assertEqual(
+                FileSystemConfigSnapshotStore(
+                    root / "snapshots", state_root=root / "state"
+                ).get(current.id),
+                current,
+            )
+
     def test_persists_across_store_instances(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             first = FileSystemConfigSnapshotStore(Path(tmp))
