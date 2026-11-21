@@ -30,7 +30,7 @@ def walk(value):
             continue
         seen.add(id(current))
         yield current
-        if is_dataclass(current):
+        if is_dataclass(current) and not isinstance(current, type):
             pending.extend(getattr(current, field.name) for field in fields(current))
         elif isinstance(current, Mapping):
             pending.extend(current.values())
