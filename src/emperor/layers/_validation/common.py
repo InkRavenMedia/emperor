@@ -35,37 +35,14 @@ def _validate_halting_lifecycle_owner(
             f"{field_name} must be a concrete halting config for {owner_name}"
         ) from exc
 
-    if isinstance(owner, type):
-        supports_interface = getattr(owner, "implements_halting_interface", None)
-        if callable(supports_interface) and supports_interface():
-            validator = getattr(owner, "VALIDATOR", None)
-            validate_minimum_step_capability = getattr(
-                validator,
-                "validate_minimum_step_capability",
-                None,
-            )
-            if callable(validate_minimum_step_capability):
-                validate_minimum_step_capability(
-                    halting_config,
-                    owner_name=owner_name,
-                )
-            else:
-                configured_min_steps = getattr(halting_config, "min_steps", None)
-                has_default_minimum = configured_min_steps is None or (
-                    not isinstance(configured_min_steps, bool)
-                    and isinstance(configured_min_steps, Integral)
-                    and configured_min_steps == 1
-                )
-                if (
-                    not has_default_minimum
-                    and getattr(owner, "supports_minimum_step_delay", False) is not True
-                ):
-                    raise ValueError(
-                        f"halting_config.min_steps={configured_min_steps} requires "
-                        f"minimum-step delay support for {owner_name}; "
-                        f"{owner.__name__} implements only the legacy lifecycle."
-                    )
-            return
+    supports_interface = getattr(owner, "implements_halting_interface", None)
+    if (
+        isinstance(owner, type)
+        and callable(supports_interface)
+        and supports_interface()
+    ):
+        _minimum_halting_steps(halting_config, owner_name)
+        return
     built_owner_name = getattr(owner, "__name__", type(owner).__name__)
     raise ValueError(
         f"{field_name} {type(halting_config).__name__} builds "
@@ -74,23 +51,52 @@ def _validate_halting_lifecycle_owner(
     )
 
 
+def _positive_step_count(value: object, field_name: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, Integral):
+        raise TypeError(
+            f"{field_name} must be an integer or None, received {type(value).__name__}"
+        )
+    if value < 1:
+        raise ValueError(
+            f"{field_name} must be greater than or equal to 1, received {value}"
+        )
+    return int(value)
+
+
+def _minimum_halting_steps(halting_config, owner_name: str) -> int:
+    configured = getattr(halting_config, "min_steps", None)
+    if configured is None:
+        return 1
+    minimum = _positive_step_count(configured, "min_steps")
+    if minimum > 1:
+        strategy = halting_config._registry_owner()
+        if getattr(strategy, "supports_minimum_step_delay", False) is not True:
+            raise ValueError(
+                f"halting_config.min_steps={minimum} requires minimum-step delay "
+                f"support for {owner_name}. Strategy {strategy.__name__} can halt "
+                "on its first step."
+            )
+    return minimum
+
+
 def _validate_halting_owner_step_contract(
     halting_config,
     *,
     owner_step_limit: int | None,
     owner_name: str,
 ) -> None:
-    validator = getattr(halting_config._registry_owner(), "VALIDATOR", None)
-    validate_owner_step_contract = getattr(
-        validator,
-        "validate_owner_step_contract",
-        None,
-    )
-    if callable(validate_owner_step_contract):
-        validate_owner_step_contract(
-            halting_config,
-            owner_step_limit=owner_step_limit,
-            owner_name=owner_name,
+    minimum = _minimum_halting_steps(halting_config, owner_name)
+    if minimum == 1:
+        return
+    if owner_step_limit is None:
+        raise ValueError(
+            f"halting_config.min_steps={minimum} is not supported for {owner_name}. "
+            "This owner has no defined owner step limit."
+        )
+    if minimum > _positive_step_count(owner_step_limit, "owner_step_limit"):
+        raise ValueError(
+            "min_steps must be less than or equal to the owner step limit, "
+            f"received min_steps={minimum} and owner_step_limit={owner_step_limit}."
         )
 
 
@@ -100,27 +106,11 @@ def _validate_halting_required_update_count(
     required_update_count: int,
     owner_name: str,
 ) -> None:
-    validator = getattr(halting_config._registry_owner(), "VALIDATOR", None)
-    validate_required_update_count = getattr(
-        validator,
-        "validate_required_update_count",
-        None,
-    )
-    if callable(validate_required_update_count):
-        validate_required_update_count(
-            halting_config,
-            required_update_count=required_update_count,
-            owner_name=owner_name,
-        )
-        return
-
-    configured_min_steps = getattr(halting_config, "min_steps", None)
-    min_steps = 1 if configured_min_steps is None else configured_min_steps
-    if min_steps < required_update_count:
+    minimum = _minimum_halting_steps(halting_config, owner_name)
+    if minimum < required_update_count:
         raise ValueError(
-            "halting_config.min_steps must be greater than or equal to the "
-            f"required update count for {owner_name}; received "
-            f"min_steps={min_steps} and "
+            "halting_config.min_steps must be greater than or equal to the required "
+            f"update count for {owner_name}, received min_steps={minimum} and "
             f"required_update_count={required_update_count}."
         )
 
