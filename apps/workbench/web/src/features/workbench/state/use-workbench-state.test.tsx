@@ -1075,13 +1075,17 @@ beforeEach(() => {
   });
   mocks.fetchTrainingRunPlan.mockReset().mockImplementation((request) =>
     Promise.resolve({
+      modelType: request.modelType,
       model: request.model,
       preset: request.preset,
       presets: request.presets,
+      experimentTask: request.experimentTask ?? "image-classification",
       datasets: request.datasets,
       overrides: request.overrides,
       search: null,
+      presetSearches: Object.fromEntries((request.presets ?? [request.preset]).map((preset: string) => [preset, null])),
       logFolder: request.logFolder ?? "",
+      snapshotRevisions: [],
       isRandomSearch: false,
       runs: [],
       summary: {
@@ -1113,11 +1117,19 @@ beforeEach(() => {
 
 describe("useWorkbenchState", () => {
   it("keeps the target context identity stable on unrelated rerenders", async () => {
+    mocks.fetchConfigSnapshots.mockImplementation(fetchReadyConfigSnapshots);
     const { result, rerender } = renderWorkbenchState();
 
     await waitFor(() => {
-      expect(result.current.targetContexts.model.browser.selectedModel).toBe("linear");
-      expect(result.current.targetContexts.model.browser.selectedPreset).toBe("baseline");
+      expect(result.current.targetContexts.model.browser).toMatchObject({
+        selectedModel: "linear",
+        selectedPreset: "baseline",
+        selectedExperimentTask: "image-classification",
+        selectedDatasets: ["Mnist"],
+      });
+      expect(result.current.targetContexts.model.status.schema.isReady).toBe(true);
+      expect(result.current.targetContexts.model.status.monitors.isLoading).toBe(false);
+      expect(result.current.targetContexts.snapshots.records.allCount).toBe(1);
     });
     const target = result.current.targetContexts.model;
 
