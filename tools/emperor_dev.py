@@ -1160,7 +1160,8 @@ def _wait_ready(spec: ServiceSpec, process, timeout: float = 45.0) -> None:
     )
 
 
-def _start_service(spec: ServiceSpec) -> None:
+def _start_service(spec: ServiceSpec) -> bool:
+    """Ensure the service is ready and report whether this call started it."""
     import psutil
 
     _reject_runtime_link(spec.metadata_path)
@@ -1175,9 +1176,9 @@ def _start_service(spec: ServiceSpec) -> None:
                 "Workbench "
                 f"{spec.name}: running (PID {existing.process.pid}, port {spec.port})"
             )
-            return
+            return False
         _wait_ready(spec, existing.process)
-        return
+        return False
     _drain_runtime_metadata(spec)
     if _port_open(spec.port):
         raise SystemExit(
@@ -1243,6 +1244,7 @@ def _start_service(spec: ServiceSpec) -> None:
         _stop_service(spec, quiet=True)
         raise
     print(f"Workbench {spec.name}: started (PID {process.pid}, port {spec.port})")
+    return True
 
 
 def _stop_service(spec: ServiceSpec, *, quiet: bool = False) -> None:
@@ -1313,11 +1315,12 @@ def workbench(action: str) -> int:
     backend, frontend = service_specs()
     with FileLock(str(RUNTIME_ROOT / "launcher.lock"), timeout=30):
         if action == "start":
-            _start_service(backend)
+            backend_started = _start_service(backend)
             try:
                 _start_service(frontend)
             except BaseException:
-                _stop_service(backend, quiet=True)
+                if backend_started:
+                    _stop_service(backend, quiet=True)
                 raise
         elif action == "stop":
             _stop_service(frontend)

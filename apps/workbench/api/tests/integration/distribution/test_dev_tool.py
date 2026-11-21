@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from tests.integration.distribution._environment_support import (
@@ -21,6 +22,70 @@ os.environ.setdefault(
 
 
 class PortableLauncherTests(unittest.TestCase):
+    def test_existing_ready_service_is_reported_as_reused(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            spec = emperor_dev.ServiceSpec(
+                name="backend",
+                port=9000,
+                command=("server",),
+                command_identity="test",
+                cwd=Path(tmp),
+                environment={},
+                ready_url="http://localhost:9000",
+            )
+            observation = SimpleNamespace(process=SimpleNamespace(pid=123))
+            with (
+                patch.object(emperor_dev, "RUNTIME_ROOT", Path(tmp)),
+                patch.object(
+                    emperor_dev, "_validated_runtime_process", return_value=observation
+                ),
+                patch.object(emperor_dev, "_http_ready", return_value=True),
+                patch.object(emperor_dev.subprocess, "Popen") as spawn,
+            ):
+                self.assertFalse(emperor_dev._start_service(spec))
+                spawn.assert_not_called()
+
+    def test_workbench_rollback_stops_only_a_newly_started_backend(self) -> None:
+        for started_backend in (True, False):
+            for frontend_fails in (True, False):
+                with (
+                    self.subTest(
+                        started_backend=started_backend, frontend_fails=frontend_fails
+                    ),
+                    tempfile.TemporaryDirectory() as tmp,
+                ):
+                    outcomes = (
+                        started_backend,
+                        RuntimeError("frontend failed") if frontend_fails else True,
+                    )
+                    with (
+                        patch.object(emperor_dev, "RUNTIME_ROOT", Path(tmp)),
+                        patch.object(
+                            emperor_dev,
+                            "service_specs",
+                            return_value=("backend", "frontend"),
+                        ),
+                        patch.object(
+                            emperor_dev, "_start_service", side_effect=outcomes
+                        ) as start,
+                        patch.object(emperor_dev, "_stop_service") as stop,
+                    ):
+                        if frontend_fails:
+                            with self.assertRaisesRegex(
+                                RuntimeError, "frontend failed"
+                            ):
+                                emperor_dev.workbench("start")
+                        else:
+                            self.assertEqual(emperor_dev.workbench("start"), 0)
+                        self.assertEqual(
+                            [call.args for call in start.call_args_list],
+                            [("backend",), ("frontend",)],
+                        )
+                        if frontend_fails and started_backend:
+                            stop.assert_called_once_with("backend", quiet=True)
+                        else:
+                            stop.assert_not_called()
+
     def test_workbench_cli_launches_the_canonical_asgi_target(self) -> None:
         from emperor_workbench.cli import main
 
