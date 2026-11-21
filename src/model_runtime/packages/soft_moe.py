@@ -1,9 +1,10 @@
 """Shared CLI defaults and binding for package-declared Soft MoE components."""
 
 from collections.abc import Mapping, MutableMapping
+from dataclasses import dataclass, fields
 from math import isfinite
 from types import ModuleType
-from typing import Any
+from typing import Any, get_type_hints
 
 from emperor.experts import SoftMoEConfig
 from emperor.layers import (
@@ -21,27 +22,49 @@ from emperor.layers import (
 from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
 
+
 # Dimension and layer-model fields are supplied by the mixture owner. Routers
 # must emit raw logits; noisy top-k and context controllers are not Soft MoE options.
+@dataclass(frozen=True, slots=True)
+class _ScoringSettings:
+    num_experts: int | None = None
+    slots_per_expert: int = 2
+    scoring_hidden_dim: int = 32
+    scoring_num_layers: int = 2
+    scoring_activation: ActivationOptions = ActivationOptions.RELU
+    scoring_dropout_probability: float = 0.0
+    scoring_layer_norm_position: LayerNormPositionOptions = (
+        LayerNormPositionOptions.DISABLED
+    )
+    scoring_normalization: NormalizationOptions = NormalizationOptions.RMS_NORM
+    scoring_last_layer_bias_option: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT
+    scoring_residual_connection_option: type[ResidualConfig] | None = None
+    scoring_residual_model_flag: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _CoefficientSettings:
+    hidden_dim: int
+    num_layers: int
+    last_layer_bias_option: LastLayerBiasOptions
+    apply_output_postprocessing_flag: bool
+    activation: ActivationOptions
+    layer_norm_position: LayerNormPositionOptions
+    normalization: NormalizationOptions
+    residual_connection_option: type[ResidualConfig] | None
+    residual_block_size: int | None
+    residual_rms_norm_epsilon: float | None
+    dropout_probability: float
+    bias_flag: bool
+
+
+_SCORING_TYPES = get_type_hints(_ScoringSettings)
 _DEFAULTS: dict[str, tuple[Any, Any]] = {
     "flag": (bool, False),
-    "num_experts": (int | None, None),
-    "slots_per_expert": (int, 2),
-    "scoring_hidden_dim": (int, 32),
-    "scoring_num_layers": (int, 2),
-    "scoring_activation": (ActivationOptions, ActivationOptions.RELU),
-    "scoring_dropout_probability": (float, 0.0),
-    "scoring_layer_norm_position": (
-        LayerNormPositionOptions,
-        LayerNormPositionOptions.DISABLED,
-    ),
-    "scoring_normalization": (NormalizationOptions, NormalizationOptions.RMS_NORM),
-    "scoring_last_layer_bias_option": (
-        LastLayerBiasOptions,
-        LastLayerBiasOptions.DEFAULT,
-    ),
-    "scoring_residual_connection_option": (type[ResidualConfig] | None, None),
-    "scoring_residual_model_flag": (bool, False),
+    **{
+        option.name: (_SCORING_TYPES[option.name], option.default)
+        for option in fields(_ScoringSettings)
+    },
 }
 _POSITIVE_FIELDS = (
     "num_experts",
@@ -49,6 +72,14 @@ _POSITIVE_FIELDS = (
     "scoring_hidden_dim",
     "scoring_num_layers",
 )
+
+
+def soft_moe_scoring_supports_residual(key: str | None, candidate: type) -> bool:
+    """Scoring stacks emit raw logits, which cannot run depth attention."""
+    is_scoring_selector = key is not None and key.endswith(
+        "SOFT_MOE_SCORING_RESIDUAL_CONNECTION_OPTION"
+    )
+    return not is_scoring_selector or not issubclass(candidate, AttentionResidualConfig)
 
 
 def _component_prefixes(namespace: Mapping[str, Any]) -> tuple[str, ...]:
@@ -110,19 +141,11 @@ def validate_soft_moe_runtime_values(
 def _setting(
     values: Mapping[str, Any], config_module: ModuleType, prefix: str, suffix: str
 ) -> Any:
-    # Explicit role > explicit common > explicit legacy router stack > defaults.
+    """Apply an explicit role setting, then the shared Soft MoE setting."""
     keys = tuple(dict.fromkeys((f"{prefix}_{suffix}", f"soft_moe_{suffix}")))
     for key in keys:
         if key in values and values[key] is not None:
             return values[key]
-    if suffix.startswith("scoring_"):
-        stack_field = suffix.removeprefix("scoring_")
-        router_key = f"router_stack_{stack_field}"
-        if values.get(router_key) is not None:
-            return values[router_key]
-        router_options = values.get("router_stack_options")
-        if getattr(router_options, stack_field, None) is not None:
-            return getattr(router_options, stack_field)
     for key in keys:
         default = getattr(config_module, key.upper(), None)
         if default is not None:
@@ -146,21 +169,52 @@ def _existing_config(
 def _build_config(
     values: Mapping[str, Any], config_module: ModuleType, prefix: str
 ) -> SoftMoEConfig:
-    settings = {
-        suffix: _setting(values, config_module, prefix, suffix)
-        for suffix in _DEFAULTS
-        if suffix != "flag"
-    }
-    num_experts = settings["num_experts"]
+    settings = _ScoringSettings(
+        **{
+            option.name: _setting(values, config_module, prefix, option.name)
+            for option in fields(_ScoringSettings)
+        }
+    )
+    num_experts = settings.num_experts
     if num_experts is None:
         mixture_options = values.get("mixture_options")
         default_experts = getattr(config_module, "NUM_EXPERTS", 4)
         num_experts = values.get(
             "num_experts", getattr(mixture_options, "num_experts", default_experts)
         )
+    residual_config = _scoring_residual(settings, values, config_module, prefix)
+    layer_config = LayerConfig(
+        activation=settings.scoring_activation,
+        dropout_probability=settings.scoring_dropout_probability,
+        layer_norm_position=settings.scoring_layer_norm_position,
+        normalization=settings.scoring_normalization,
+        residual_config=residual_config,
+        layer_model_config=None,
+    )
+    scoring_stack = LayerStackConfig(
+        hidden_dim=settings.scoring_hidden_dim,
+        num_layers=settings.scoring_num_layers,
+        last_layer_bias_option=settings.scoring_last_layer_bias_option,
+        apply_output_postprocessing_flag=False,
+        layer_config=layer_config,
+    )
+    router_config = RouterConfig(noisy_topk_flag=False, model_config=scoring_stack)
+    return SoftMoEConfig(
+        num_experts=num_experts,
+        slots_per_expert=settings.slots_per_expert,
+        router_config=router_config,
+    )
+
+
+def _scoring_residual(
+    settings: _ScoringSettings,
+    values: Mapping[str, Any],
+    config_module: ModuleType,
+    prefix: str,
+) -> ResidualConfig | None:
     residual_config = None
-    residual_option = settings["scoring_residual_connection_option"]
-    residual_model_flag = settings["scoring_residual_model_flag"]
+    residual_option = settings.scoring_residual_connection_option
+    residual_model_flag = settings.scoring_residual_model_flag
     if residual_model_flag and (
         not isinstance(residual_option, type)
         or not issubclass(
@@ -173,7 +227,9 @@ def _build_config(
             "WeightedResidualConfig or WeightedBlendResidualConfig."
         )
     if residual_option is not None:
-        if issubclass(residual_option, AttentionResidualConfig):
+        if not soft_moe_scoring_supports_residual(
+            f"{prefix.upper()}_SCORING_RESIDUAL_CONNECTION_OPTION", residual_option
+        ):
             raise ValueError(
                 "Soft MoE scoring cannot use AttentionResidualConfig: it requires "
                 "output postprocessing, but the router requires raw logits."
@@ -198,27 +254,7 @@ def _build_config(
             )
         else:
             residual_config = residual_option()
-    layer_config = LayerConfig(
-        activation=settings["scoring_activation"],
-        dropout_probability=settings["scoring_dropout_probability"],
-        layer_norm_position=settings["scoring_layer_norm_position"],
-        normalization=settings["scoring_normalization"],
-        residual_config=residual_config,
-        layer_model_config=None,
-    )
-    scoring_stack = LayerStackConfig(
-        hidden_dim=settings["scoring_hidden_dim"],
-        num_layers=settings["scoring_num_layers"],
-        last_layer_bias_option=settings["scoring_last_layer_bias_option"],
-        apply_output_postprocessing_flag=False,
-        layer_config=layer_config,
-    )
-    router_config = RouterConfig(noisy_topk_flag=False, model_config=scoring_stack)
-    return SoftMoEConfig(
-        num_experts=num_experts,
-        slots_per_expert=settings["slots_per_expert"],
-        router_config=router_config,
-    )
+    return residual_config
 
 
 def _residual_stack_setting(
@@ -255,25 +291,14 @@ def _build_coefficient_stack(
             "RESIDUAL_STACK_RESIDUAL_MODEL_FLAG=True would recursively define "
             "the residual coefficient stack in itself."
         )
-    fields = (
-        "hidden_dim",
-        "num_layers",
-        "last_layer_bias_option",
-        "apply_output_postprocessing_flag",
-        "activation",
-        "layer_norm_position",
-        "normalization",
-        "residual_connection_option",
-        "residual_block_size",
-        "residual_rms_norm_epsilon",
-        "dropout_probability",
-        "bias_flag",
+    settings = _CoefficientSettings(
+        **{
+            option.name: _residual_stack_setting(values, config_module, option.name)
+            for option in fields(_CoefficientSettings)
+        }
     )
-    settings = {
-        field: _residual_stack_setting(values, config_module, field) for field in fields
-    }
     residual_config = None
-    residual_option = settings["residual_connection_option"]
+    residual_option = settings.residual_connection_option
     if residual_option is not None:
         if issubclass(
             residual_option, (WeightedResidualConfig, WeightedBlendResidualConfig)
@@ -286,23 +311,23 @@ def _build_coefficient_stack(
             )
         elif issubclass(residual_option, AttentionResidualConfig):
             residual_config = residual_option(
-                block_size=settings["residual_block_size"],
-                rms_norm_epsilon=settings["residual_rms_norm_epsilon"],
+                block_size=settings.residual_block_size,
+                rms_norm_epsilon=settings.residual_rms_norm_epsilon,
             )
         else:
             residual_config = residual_option()
     return LayerStackConfig(
-        hidden_dim=settings["hidden_dim"],
-        num_layers=settings["num_layers"],
-        last_layer_bias_option=settings["last_layer_bias_option"],
-        apply_output_postprocessing_flag=settings["apply_output_postprocessing_flag"],
+        hidden_dim=settings.hidden_dim,
+        num_layers=settings.num_layers,
+        last_layer_bias_option=settings.last_layer_bias_option,
+        apply_output_postprocessing_flag=settings.apply_output_postprocessing_flag,
         layer_config=LayerConfig(
-            activation=settings["activation"],
-            layer_norm_position=settings["layer_norm_position"],
-            normalization=settings["normalization"],
+            activation=settings.activation,
+            layer_norm_position=settings.layer_norm_position,
+            normalization=settings.normalization,
             residual_config=residual_config,
-            dropout_probability=settings["dropout_probability"],
-            layer_model_config=LinearLayerConfig(bias_flag=settings["bias_flag"]),
+            dropout_probability=settings.dropout_probability,
+            layer_model_config=LinearLayerConfig(bias_flag=settings.bias_flag),
         ),
     )
 
