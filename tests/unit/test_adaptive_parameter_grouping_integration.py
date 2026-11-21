@@ -201,11 +201,13 @@ def test_one_context_is_shared_in_generator_order_and_weights_stay_compact(
     )
     model = config.build().double()
     augmentation = model.adaptive_behaviour
-    # Keep the real hard mask open so its random initialization cannot block
-    # the generator-gradient contract being tested here.
+    # Choose a positive operating point for the learned grouping projection
+    # and every generator so the real hard mask stays open.
     with torch.no_grad():
         model.weight_params.fill_(0.2)
         model.bias_params.fill_(0.1)
+        for parameter in augmentation.grouper.parameters():
+            parameter.fill_(0.15)
         for component in ("weight", "diagonal", "bias", "mask"):
             for parameter in getattr(augmentation, component + "_model").parameters():
                 parameter.fill_(0.15)
