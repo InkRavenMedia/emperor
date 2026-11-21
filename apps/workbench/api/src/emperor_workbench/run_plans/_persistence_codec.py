@@ -3,26 +3,27 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping
 from math import isfinite
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from model_runtime.packages import normalize_key
 
 from emperor_workbench.model_packages import ModelPackageIdentity
 from emperor_workbench.run_plans._limits import (
-    MAX_TRAINING_PLANNED_RUNS,
     MAX_TRAINING_SEARCH_AXES,
     MAX_TRAINING_SEARCH_AXIS_VALUES,
 )
 from emperor_workbench.run_plans._records import (
     ConfigSnapshotRevision,
     TrainingCommandsView,
-    TrainingRunChangeSource,
     TrainingRunChangeView,
     TrainingRunPlanSummaryView,
     TrainingRunPlanView,
-    TrainingRunStatus,
     TrainingRunView,
     TrainingSearch,
+)
+from emperor_workbench.run_plans._search import (
+    materialized_search_options,
+    training_search_options,
 )
 
 _RUN_STATUSES = {
@@ -34,6 +35,14 @@ _RUN_STATUSES = {
     "Skipped",
 }
 _CHANGE_SOURCES = {"override", "search"}
+
+
+def _require_fields(
+    payload: Mapping[str, Any], fields: tuple[str, ...], *, path: str
+) -> None:
+    for name in fields:
+        if name not in payload:
+            raise ValueError(f"{path}.{name} is required.")
 
 
 def _validate_config_value(value: object, *, path: str) -> None:
@@ -109,9 +118,7 @@ def _validate_search_payload(
 ) -> Mapping[str, Any]:
     if not isinstance(payload, Mapping):
         raise ValueError(f"{path} must be an object.")
-    mode = payload.get("mode")
-    if mode not in {"grid", "random"}:
-        raise ValueError(f"{path}.mode must be 'grid' or 'random'.")
+    materialized_search_options(payload, path=path)
     values = payload.get("values")
     if not isinstance(values, Mapping) or (not values and not allow_empty):
         raise ValueError(f"{path}.values must be a non-empty object.")
@@ -152,17 +159,6 @@ def _validate_search_payload(
         if normalized_key not in normalized_axes:
             raise ValueError(f"{path}.customValueAxes contains unknown axis '{key}'.")
         normalized_custom_axes.add(normalized_key)
-    random_samples = payload.get("randomSamples")
-    if mode == "random":
-        _validate_integer(random_samples, path=f"{path}.randomSamples")
-        assert isinstance(random_samples, int)
-        if not 1 <= random_samples <= MAX_TRAINING_PLANNED_RUNS:
-            raise ValueError(
-                f"{path}.randomSamples must be between 1 and "
-                f"{MAX_TRAINING_PLANNED_RUNS}."
-            )
-    elif random_samples is not None:
-        raise ValueError(f"{path}.randomSamples is only valid for random search.")
     return payload
 
 
@@ -194,7 +190,8 @@ def _validate_run_change(payload: object, *, path: str) -> None:
         value = payload.get(field)
         if not isinstance(value, str):
             raise ValueError(f"{path}.{field} must be a string.")
-    _validate_config_value(payload.get("value"), path=f"{path}.value")
+    _require_fields(payload, ("value",), path=path)
+    _validate_config_value(payload["value"], path=f"{path}.value")
     if payload.get("source") not in _CHANGE_SOURCES:
         raise ValueError(f"{path}.source is invalid.")
 
@@ -202,39 +199,52 @@ def _validate_run_change(payload: object, *, path: str) -> None:
 def _validate_run_payload(payload: object, *, path: str) -> None:
     if not isinstance(payload, Mapping):
         raise ValueError(f"{path} must be an object.")
+    if "command" in payload:
+        raise ValueError(f"{path}.command is retired; use commandArgv and commands.")
+    _require_fields(
+        payload,
+        (
+            "experimentTask",
+            "snapshotId",
+            "snapshotName",
+            "logDir",
+            "error",
+            "errorTraceback",
+            "index",
+            "totalEpochs",
+            "currentEpoch",
+            "status",
+            "changes",
+            "overrides",
+            "metrics",
+        ),
+        path=path,
+    )
     for field in ("id", "preset", "dataset"):
         value = payload.get(field)
         if not isinstance(value, str) or not value:
             raise ValueError(f"{path}.{field} must be a non-empty string.")
+    if not isinstance(payload["experimentTask"], str):
+        raise ValueError(f"{path}.experimentTask must be a string.")
     for field in (
-        "experimentTask",
         "logDir",
         "error",
         "errorTraceback",
         "snapshotId",
         "snapshotName",
     ):
-        if (
-            field in payload
-            and payload[field] is not None
-            and not isinstance(payload[field], str)
-        ):
+        if payload[field] is not None and not isinstance(payload[field], str):
             raise ValueError(f"{path}.{field} must be a string or null.")
     for field in ("index", "totalEpochs", "currentEpoch"):
-        if field in payload:
-            _validate_integer(payload[field], path=f"{path}.{field}")
-    if "status" in payload and payload["status"] not in _RUN_STATUSES:
+        _validate_integer(payload[field], path=f"{path}.{field}")
+    if payload["status"] not in _RUN_STATUSES:
         raise ValueError(f"{path}.status is invalid.")
-    if "changes" in payload:
-        changes = payload["changes"]
-        if not isinstance(changes, list):
-            raise ValueError(f"{path}.changes must be a list.")
-        for index, change in enumerate(changes):
-            _validate_run_change(change, path=f"{path}.changes[{index}]")
-    if "overrides" in payload:
-        _validate_config_mapping(payload["overrides"], path=f"{path}.overrides")
-    if "command" in payload:
-        raise ValueError(f"{path}.command is retired; use commandArgv and commands.")
+    changes = payload["changes"]
+    if not isinstance(changes, list):
+        raise ValueError(f"{path}.changes must be a list.")
+    for index, change in enumerate(changes):
+        _validate_run_change(change, path=f"{path}.changes[{index}]")
+    _validate_config_mapping(payload["overrides"], path=f"{path}.overrides")
     _validate_string_list(
         payload.get("commandArgv"),
         path=f"{path}.commandArgv",
@@ -247,11 +257,10 @@ def _validate_run_payload(payload: object, *, path: str) -> None:
     for shell in ("posix", "powershell"):
         if not isinstance(commands.get(shell), str) or not commands[shell]:
             raise ValueError(f"{path}.commands.{shell} must be a non-empty string.")
-    if "metrics" in payload:
-        metrics = payload["metrics"]
-        if not isinstance(metrics, Mapping):
-            raise ValueError(f"{path}.metrics must be an object.")
-        _validate_json_value(metrics, path=f"{path}.metrics")
+    metrics = payload["metrics"]
+    if not isinstance(metrics, Mapping):
+        raise ValueError(f"{path}.metrics must be an object.")
+    _validate_json_value(metrics, path=f"{path}.metrics")
 
 
 def _validate_summary_payload(payload: object) -> None:
@@ -269,11 +278,21 @@ def _validate_summary_payload(payload: object) -> None:
         "completedEpochs",
         "remainingEpochs",
     ):
-        if field in payload:
-            _validate_integer(payload[field], path=f"runPlan.summary.{field}")
+        _validate_integer(payload.get(field), path=f"runPlan.summary.{field}")
 
 
 def _validate_plan_payload(payload: Mapping[str, Any]) -> None:
+    _require_fields(
+        payload,
+        (
+            "search",
+            "presetSearches",
+            "snapshotRevisions",
+            "isRandomSearch",
+            "experimentTask",
+        ),
+        path="runPlan",
+    )
     if ModelPackageIdentity.from_mapping(payload) is None:
         raise ValueError("Persisted Run Plan model identity is invalid.")
     preset = payload.get("preset")
@@ -293,20 +312,19 @@ def _validate_plan_payload(payload: Mapping[str, Any]) -> None:
         nonempty_items=True,
         unique=True,
     )
-    if "experimentTask" in payload and not isinstance(payload["experimentTask"], str):
+    if not isinstance(payload["experimentTask"], str):
         raise ValueError("runPlan.experimentTask must be a string.")
     _validate_config_mapping(payload.get("overrides"), path="runPlan.overrides")
     if payload.get("search") is not None:
         _validate_search_payload(payload["search"], path="runPlan.search")
-    if "presetSearches" in payload:
-        _validate_preset_searches_payload(
-            payload["presetSearches"],
-            presets=presets,
-            path="runPlan.presetSearches",
-        )
+    _validate_preset_searches_payload(
+        payload["presetSearches"],
+        presets=presets,
+        path="runPlan.presetSearches",
+    )
     if not isinstance(payload.get("logFolder"), str):
         raise ValueError("runPlan.logFolder must be a string.")
-    if "isRandomSearch" in payload and not isinstance(payload["isRandomSearch"], bool):
+    if not isinstance(payload["isRandomSearch"], bool):
         raise ValueError("runPlan.isRandomSearch must be a boolean.")
     run_payloads = payload.get("runs")
     if not isinstance(run_payloads, list):
@@ -325,17 +343,10 @@ def _validate_plan_payload(payload: Mapping[str, Any]) -> None:
     _snapshot_revisions_from_payload(payload.get("snapshotRevisions"))
 
 
-def _mapping_items(value: object) -> list[Mapping[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    return [item for item in value if isinstance(item, Mapping)]
-
-
 def _payload_model_id(payload: Mapping[str, Any]) -> str:
     identity = ModelPackageIdentity.from_mapping(payload)
-    if identity is not None:
-        return identity.catalog_key
-    return str(payload.get("model") or "")
+    assert identity is not None
+    return identity.catalog_key
 
 
 def _model_identity(model_id: str) -> dict[str, str]:
@@ -348,29 +359,21 @@ def _search_from_payload(
 ) -> TrainingSearch | None:
     if payload is None:
         return None
-    raw_values = payload.get("values") or {}
-    values = {
-        str(key): list(value) if isinstance(value, list) else []
-        for key, value in dict(raw_values).items()
-    }
-    raw_random_samples = payload.get("randomSamples")
+    values = {key: list(options) for key, options in payload["values"].items()}
+    mode, random_samples = materialized_search_options(payload)
     return TrainingSearch(
-        mode=cast(
-            Literal["grid", "random"],
-            str(payload.get("mode") or "grid"),
-        ),
+        mode=mode,
         values=values,
-        random_samples=(
-            int(raw_random_samples) if raw_random_samples is not None else None
-        ),
+        random_samples=random_samples,
         custom_value_axes=tuple(cast(list[str], payload.get("customValueAxes", []))),
     )
 
 
 def _search_to_payload(search: TrainingSearch) -> dict[str, Any]:
-    payload: dict[str, Any] = {"mode": search.mode, "values": search.values}
-    if search.random_samples is not None:
-        payload["randomSamples"] = search.random_samples
+    mode, samples = training_search_options(search.mode, search.random_samples)
+    payload: dict[str, Any] = {"mode": mode, "values": search.values}
+    if samples is not None:
+        payload["randomSamples"] = samples
     if search.custom_value_axes:
         payload["customValueAxes"] = list(search.custom_value_axes)
     return payload
@@ -380,11 +383,8 @@ def _preset_searches_from_payload(
     payload: Mapping[str, Any],
     *,
     presets: list[str],
-    summary: TrainingSearch | None,
 ) -> dict[str, TrainingSearch | None]:
-    raw_preset_searches = payload.get("presetSearches")
-    if raw_preset_searches is None:
-        return {preset: summary for preset in presets}
+    raw_preset_searches = payload["presetSearches"]
     assert isinstance(raw_preset_searches, Mapping)
     return {
         preset: _search_from_payload(
@@ -399,7 +399,7 @@ def _preset_searches_to_payload(
 ) -> dict[str, dict[str, Any] | None]:
     payload: dict[str, dict[str, Any] | None] = {}
     for preset in plan.presets:
-        search = plan.preset_searches.get(preset, plan.search)
+        search = plan.preset_searches[preset]
         payload[preset] = _search_to_payload(search) if search is not None else None
     return payload
 
@@ -408,13 +408,10 @@ def _run_change_from_payload(
     payload: Mapping[str, Any],
 ) -> TrainingRunChangeView:
     return TrainingRunChangeView(
-        key=str(payload.get("key") or ""),
-        label=str(payload.get("label") or ""),
-        value=payload.get("value"),
-        source=cast(
-            TrainingRunChangeSource,
-            str(payload.get("source") or "override"),
-        ),
+        key=payload["key"],
+        label=payload["label"],
+        value=payload["value"],
+        source=payload["source"],
     )
 
 
@@ -428,54 +425,39 @@ def _run_change_to_payload(change: TrainingRunChangeView) -> dict[str, Any]:
 
 
 def _run_from_payload(payload: Mapping[str, Any]) -> TrainingRunView:
-    snapshot_id = payload.get("snapshotId")
-    snapshot_name = payload.get("snapshotName")
-    log_dir = payload.get("logDir")
-    error = payload.get("error")
-    error_traceback = payload.get("errorTraceback")
-    raw_commands = payload.get("commands")
-    commands = raw_commands if isinstance(raw_commands, Mapping) else {}
-    raw_command_argv = payload.get("commandArgv")
     return TrainingRunView(
-        id=str(payload.get("id") or ""),
-        index=int(payload.get("index") or 0),
-        status=cast(TrainingRunStatus, str(payload.get("status") or "Pending")),
-        preset=str(payload.get("preset") or ""),
-        dataset=str(payload.get("dataset") or ""),
-        experiment_task=str(payload.get("experimentTask") or ""),
-        changes=[
-            _run_change_from_payload(item)
-            for item in _mapping_items(payload.get("changes"))
-        ],
-        overrides=dict(payload.get("overrides") or {}),
-        command_argv=(
-            [str(value) for value in raw_command_argv]
-            if isinstance(raw_command_argv, list)
-            else []
-        ),
+        id=payload["id"],
+        index=payload["index"],
+        status=payload["status"],
+        preset=payload["preset"],
+        dataset=payload["dataset"],
+        experiment_task=payload["experimentTask"],
+        changes=[_run_change_from_payload(change) for change in payload["changes"]],
+        overrides=dict(payload["overrides"]),
+        command_argv=list(payload["commandArgv"]),
         commands=TrainingCommandsView(
-            posix=str(commands.get("posix") or ""),
-            powershell=str(commands.get("powershell") or ""),
+            posix=payload["commands"]["posix"],
+            powershell=payload["commands"]["powershell"],
         ),
-        total_epochs=int(payload.get("totalEpochs") or 0),
-        snapshot_id=str(snapshot_id) if snapshot_id is not None else None,
-        snapshot_name=str(snapshot_name) if snapshot_name is not None else None,
-        snapshot_id_present="snapshotId" in payload,
-        snapshot_name_present="snapshotName" in payload,
-        current_epoch=int(payload.get("currentEpoch") or 0),
-        metrics=dict(payload.get("metrics") or {}),
-        log_dir=str(log_dir) if log_dir is not None else None,
-        error=str(error) if error is not None else None,
-        error_traceback=(str(error_traceback) if error_traceback is not None else None),
+        total_epochs=payload["totalEpochs"],
+        snapshot_id=payload["snapshotId"],
+        snapshot_name=payload["snapshotName"],
+        current_epoch=payload["currentEpoch"],
+        metrics=copy.deepcopy(payload["metrics"]),
+        log_dir=payload["logDir"],
+        error=payload["error"],
+        error_traceback=payload["errorTraceback"],
     )
 
 
 def _run_to_payload(run: TrainingRunView) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+    return {
         "id": run.id,
         "index": run.index,
         "status": run.status,
         "preset": run.preset,
+        "snapshotId": run.snapshot_id,
+        "snapshotName": run.snapshot_name,
         "dataset": run.dataset,
         "experimentTask": run.experiment_task,
         "changes": [_run_change_to_payload(change) for change in run.changes],
@@ -492,28 +474,22 @@ def _run_to_payload(run: TrainingRunView) -> dict[str, Any]:
         "error": run.error,
         "errorTraceback": run.error_traceback,
     }
-    if run.snapshot_id_present or run.snapshot_id is not None:
-        payload["snapshotId"] = run.snapshot_id
-    if run.snapshot_name_present or run.snapshot_name is not None:
-        payload["snapshotName"] = run.snapshot_name
-    return payload
 
 
 def _summary_from_payload(
-    payload: Mapping[str, Any] | None,
+    payload: Mapping[str, Any],
 ) -> TrainingRunPlanSummaryView:
-    payload = payload or {}
     return TrainingRunPlanSummaryView(
-        total_runs=int(payload.get("totalRuns") or 0),
-        completed_runs=int(payload.get("completedRuns") or 0),
-        running_runs=int(payload.get("runningRuns") or 0),
-        pending_runs=int(payload.get("pendingRuns") or 0),
-        failed_runs=int(payload.get("failedRuns") or 0),
-        cancelled_runs=int(payload.get("cancelledRuns") or 0),
-        skipped_runs=int(payload.get("skippedRuns") or 0),
-        total_epochs=int(payload.get("totalEpochs") or 0),
-        completed_epochs=int(payload.get("completedEpochs") or 0),
-        remaining_epochs=int(payload.get("remainingEpochs") or 0),
+        total_runs=payload["totalRuns"],
+        completed_runs=payload["completedRuns"],
+        running_runs=payload["runningRuns"],
+        pending_runs=payload["pendingRuns"],
+        failed_runs=payload["failedRuns"],
+        cancelled_runs=payload["cancelledRuns"],
+        skipped_runs=payload["skippedRuns"],
+        total_epochs=payload["totalEpochs"],
+        completed_epochs=payload["completedEpochs"],
+        remaining_epochs=payload["remainingEpochs"],
     )
 
 
@@ -535,10 +511,8 @@ def _summary_to_payload(summary: TrainingRunPlanSummaryView) -> dict[str, int]:
 def _snapshot_revisions_from_payload(
     payload: object,
 ) -> tuple[ConfigSnapshotRevision, ...]:
-    if payload is None:
-        return ()
     if not isinstance(payload, list):
-        raise ValueError("Snapshot revisions must be a list.")
+        raise ValueError("runPlan.snapshotRevisions must be a list.")
     revisions: list[ConfigSnapshotRevision] = []
     seen: set[str] = set()
     for raw_revision in payload:
@@ -578,30 +552,23 @@ def _snapshot_revisions_to_payload(
 
 
 def _plan_from_payload(payload: Mapping[str, Any]) -> TrainingRunPlanView:
-    presets = [str(item) for item in payload.get("presets") or []]
-    search = _search_from_payload(cast(Mapping[str, Any] | None, payload.get("search")))
+    presets = list(payload["presets"])
     return TrainingRunPlanView(
         model=_payload_model_id(payload),
-        preset=str(payload.get("preset") or ""),
+        preset=payload["preset"],
         presets=presets,
-        experiment_task=str(payload.get("experimentTask") or ""),
-        datasets=[str(item) for item in payload.get("datasets") or []],
-        overrides=dict(payload.get("overrides") or {}),
-        search=search,
-        log_folder=str(payload.get("logFolder") or ""),
-        is_random_search=bool(payload.get("isRandomSearch")),
-        runs=[_run_from_payload(item) for item in _mapping_items(payload.get("runs"))],
-        summary=_summary_from_payload(
-            cast(Mapping[str, Any] | None, payload.get("summary"))
-        ),
+        experiment_task=payload["experimentTask"],
+        datasets=list(payload["datasets"]),
+        overrides=dict(payload["overrides"]),
+        search=_search_from_payload(payload["search"]),
+        log_folder=payload["logFolder"],
+        is_random_search=payload["isRandomSearch"],
+        runs=[_run_from_payload(row) for row in payload["runs"]],
+        summary=_summary_from_payload(payload["summary"]),
         snapshot_revisions=_snapshot_revisions_from_payload(
-            payload.get("snapshotRevisions")
+            payload["snapshotRevisions"]
         ),
-        preset_searches=_preset_searches_from_payload(
-            payload,
-            presets=presets,
-            summary=search,
-        ),
+        preset_searches=_preset_searches_from_payload(payload, presets=presets),
     )
 
 

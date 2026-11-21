@@ -136,7 +136,7 @@ function buildTrainingJobRequest({
     logFolder: draftRequest.logFolder ?? "",
     monitors: draftRequest.monitors ?? [],
     ...(hasSnapshots
-      ? { snapshotRevisions: runPlan.snapshotRevisions ?? [] }
+      ? { snapshotRevisions: runPlan.snapshotRevisions }
       : { runPlan: toTrainingRunPlanSubmitInput(runPlan) }),
   };
 }

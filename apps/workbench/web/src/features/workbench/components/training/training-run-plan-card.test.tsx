@@ -68,6 +68,8 @@ function plan(runs: TrainingRun[]): TrainingRunPlan {
     search: null,
     presetSearches: { baseline: null },
     logFolder: "test_model",
+    snapshotRevisions: [],
+    experimentTask: "image-classification",
     isRandomSearch: false,
     runs,
     summary: {
@@ -191,7 +193,7 @@ describe("TrainingRunPlanCard", () => {
         epoch: 3,
         step: 42,
         metrics: {
-          validation_accuracy: 0.987654,
+          "validation/accuracy": 0.987654,
           loss: 1.23456,
           phase: "fit",
         },
@@ -205,7 +207,7 @@ describe("TrainingRunPlanCard", () => {
     expect(screen.getByText("recurrent-gating-halting")).toBeInTheDocument();
     expect(screen.getByText("Cifar10")).toBeInTheDocument();
     expect(screen.getByText("epoch 3 / step 42")).toBeInTheDocument();
-    expect(screen.getByText("validation_accuracy=0.9877")).toBeInTheDocument();
+    expect(screen.getByText("validation/accuracy=0.9877")).toBeInTheDocument();
     expect(screen.getByText("loss=1.235")).toBeInTheDocument();
     expect(screen.getByText("phase=fit")).toBeInTheDocument();
     expect(screen.getByTitle("logs/active-job")).toBeInTheDocument();
@@ -229,19 +231,19 @@ describe("TrainingRunPlanCard", () => {
       job: job(runPlan, {
         status: "running",
         metrics: {
-          validation_accuracy: 0.987654,
+          "validation/accuracy": 0.987654,
           loss: 1.23456,
           custom_signal: 42,
         },
       }),
     });
 
-    expect(screen.getByText("validation_accuracy=0.9877")).toBeInTheDocument();
+    expect(screen.getByText("validation/accuracy=0.9877")).toBeInTheDocument();
     expect(screen.getByText("loss=1.235")).toBeInTheDocument();
     expect(screen.getByText("custom_signal=42")).toBeInTheDocument();
 
     const validationInfoButton = screen.getByRole("button", {
-      name: "Explain metric validation_accuracy",
+      name: "Explain metric validation/accuracy",
     });
     expect(validationInfoButton).toBeInTheDocument();
     expect(
@@ -254,7 +256,7 @@ describe("TrainingRunPlanCard", () => {
     await user.click(validationInfoButton);
 
     const validationDialog = await screen.findByRole("dialog", {
-      name: "validation_accuracy",
+      name: "validation/accuracy",
     });
     expect(within(validationDialog).getByText("Validation accuracy"))
       .toBeInTheDocument();
@@ -281,7 +283,7 @@ describe("TrainingRunPlanCard", () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole("dialog", { name: "validation_accuracy" }),
+        screen.queryByRole("dialog", { name: "validation/accuracy" }),
       ).not.toBeInTheDocument(),
     );
     await waitFor(() => expect(validationInfoButton).toHaveFocus());

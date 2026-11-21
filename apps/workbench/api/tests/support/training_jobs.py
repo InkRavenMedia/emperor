@@ -86,16 +86,8 @@ def run_plan_payload(plan: TrainingRunPlanView) -> dict[str, Any]:
                 "index": run.index,
                 "status": run.status,
                 "preset": run.preset,
-                **(
-                    {"snapshotId": run.snapshot_id}
-                    if run.snapshot_id_present or run.snapshot_id is not None
-                    else {}
-                ),
-                **(
-                    {"snapshotName": run.snapshot_name}
-                    if run.snapshot_name_present or run.snapshot_name is not None
-                    else {}
-                ),
+                "snapshotId": run.snapshot_id,
+                "snapshotName": run.snapshot_name,
                 "dataset": run.dataset,
                 "experimentTask": run.experiment_task,
                 "changes": [

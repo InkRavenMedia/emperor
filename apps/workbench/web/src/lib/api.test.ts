@@ -493,7 +493,7 @@ const successfulTrainingRunFixture = {
       accuracy: 0.91,
     },
   },
-  logDir: "runs/workbench-training/job-123/linear/baseline/Mnist/run-0001",
+  logDir: "runs/workbench_training/linears/linear/baseline/Mnist/run-0001",
   error: null,
   errorTraceback: null,
 };
@@ -517,7 +517,10 @@ const successfulTrainingRunPlanFixture = {
     },
     randomSamples: null,
   },
-  logFolder: "workbench-training/job-123",
+  logFolder: "workbench_training",
+  experimentTask: "image-classification",
+  presetSearches: { baseline: null },
+  snapshotRevisions: [],
   isRandomSearch: false,
   runs: [successfulTrainingRunFixture],
   summary: {
@@ -557,7 +560,7 @@ const successfulTrainingJobFixture = {
   plannedRunCount: 1,
   runPlan: successfulTrainingRunPlanFixture,
   monitors: ["weights", "activations"],
-  logFolder: "workbench-training/job-123",
+  logFolder: "workbench_training",
   createdAt: "2026-06-01T00:00:00Z",
   updatedAt: "2026-06-01T00:03:00Z",
   exitCode: null,
@@ -572,7 +575,7 @@ const successfulTrainingJobFixture = {
       accuracy: 0.91,
     },
   },
-  logDir: "runs/workbench-training/job-123/linear/baseline/Mnist/run-0001",
+  logDir: "runs/workbench_training/linears/linear/baseline/Mnist/run-0001",
   events: [
     {
       type: "epoch",
@@ -600,7 +603,7 @@ const successfulTrainingJobFixture = {
     {
       preset: "baseline",
       dataset: "Mnist",
-      logDir: "runs/workbench-training/job-123/linear/baseline/Mnist/run-0001",
+      logDir: "runs/workbench_training/linears/linear/baseline/Mnist/run-0001",
     },
   ],
 };
@@ -990,6 +993,15 @@ describe("successful API fixtures", () => {
     ).toThrow();
   });
 
+  it("requires materialized search provenance and snapshot revisions", () => {
+    for (const field of ["experimentTask", "presetSearches", "snapshotRevisions"]) {
+      const incomplete = Object.fromEntries(Object.entries(successfulTrainingRunPlanFixture).filter(([key]) => key !== field));
+      expect(trainingRunPlanSchema.safeParse(incomplete).success).toBe(false);
+    }
+    const randomWithoutCount = { mode: "random", values: { width: [1] } };
+    expect(trainingRunPlanSchema.safeParse({ ...successfulTrainingRunPlanFixture, search: randomWithoutCount }).success).toBe(false);
+  });
+
   it("preserves per-preset search provenance in training run plans", () => {
     const result = trainingRunPlanSchema.parse({
       ...successfulTrainingRunPlanFixture,
@@ -997,6 +1009,7 @@ describe("successful API fixtures", () => {
         baseline: successfulTrainingRunPlanFixture.search,
         wide: {
           mode: "grid",
+          randomSamples: null,
           values: {
             hidden_dim: [128],
           },
@@ -4215,6 +4228,9 @@ describe("fetchTrainingRunPlan", () => {
       overrides: {},
       search: null,
       logFolder: "test_model",
+      experimentTask: "image-classification",
+      presetSearches: { baseline: null },
+      snapshotRevisions: [],
       isRandomSearch: false,
       runs: [
         {

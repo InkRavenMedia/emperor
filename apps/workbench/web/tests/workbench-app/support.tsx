@@ -2030,6 +2030,12 @@ function mockTrainingRunPlan(
       ...selectedSnapshots.map((snapshot) => snapshot.preset),
     ]),
   );
+  const search = request.search
+    ? {
+        ...request.search,
+        randomSamples: request.search.mode === "random" ? request.search.randomSamples ?? 10 : null,
+      }
+    : null;
   const totalEpochs = runs.reduce((total, run) => total + run.totalEpochs, 0);
   return {
     modelType,
@@ -2039,7 +2045,8 @@ function mockTrainingRunPlan(
     experimentTask: request.experimentTask ?? "",
     datasets,
     overrides,
-    search: request.search ?? null,
+    search,
+    presetSearches: Object.fromEntries(planPresets.map((name) => [name, search])),
     logFolder: request.logFolder ?? "",
     isRandomSearch: request.search?.mode === "random",
     runs,
@@ -2203,7 +2210,7 @@ function completedMockTrainingRunPlan(
     ...run,
     status: "Completed",
     currentEpoch: run.totalEpochs,
-    metrics: { validation_accuracy: 0.9 },
+    metrics: { "validation/accuracy": 0.9 },
     logDir: `logs/${request.logFolder ?? "test_model"}`,
   }));
   return {
@@ -2309,7 +2316,7 @@ function mockTrainingJobPayload(
     currentDataset: request.datasets?.[0] ?? "Mnist",
     epoch: isCompleted ? 1 : 0,
     step: isCompleted ? 4 : 0,
-    metrics: isCompleted ? { validation_accuracy: 0.9 } : {},
+    metrics: isCompleted ? { "validation/accuracy": 0.9 } : {},
     logDir: isCompleted ? `logs/${logFolder}` : null,
     events: isCancelled ? [{ type: "cancelled", status: "cancelled" }] : [],
     eventCount: isCancelled ? 1 : 0,

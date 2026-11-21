@@ -19,6 +19,7 @@ export type TrainingSearchLockSummary = {
 };
 
 export const DEFAULT_RANDOM_SEARCH_SAMPLES = 10;
+export const MAX_RANDOM_SEARCH_SAMPLES = 2000;
 export const LARGE_GRID_RUN_THRESHOLD = 100;
 
 export const DEFAULT_TRAINING_SEARCH_STATE: TrainingSearchState = {
