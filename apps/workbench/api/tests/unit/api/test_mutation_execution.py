@@ -6,6 +6,7 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Annotated
 from unittest.mock import patch
 
@@ -180,6 +181,24 @@ class MutationExecutionTests(unittest.TestCase):
         self.assertEqual(missing.status_code, 428)
         self.assertEqual(empty.status_code, 428)
         self.assertEqual(too_long.status_code, 422)
+
+    def test_unrecognized_journal_decision_does_not_execute_the_handler(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            calls = []
+            app = _counter_app(Path(tmp), calls)
+
+            async def scenario():
+                async with app.router.lifespan_context(app):
+                    with patch.object(
+                        MutationJournal,
+                        "admit",
+                        return_value=SimpleNamespace(action="unrecognized"),
+                    ):
+                        return await self._post(app, "one", {}, key="unknown-decision")
+
+            response = asyncio.run(scenario())
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(calls, [])
 
     def test_middleware_known_failure_uses_finite_json_and_cors(self) -> None:
         from emperor_workbench.api import create_app

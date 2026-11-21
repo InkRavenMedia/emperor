@@ -7,6 +7,7 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 
 from emperor_workbench.filesystem import apply_owner_only_permissions
@@ -19,11 +20,18 @@ class StoredMutationResponse:
     body: bytes
 
 
+class MutationDecision(Enum):
+    EXECUTE = "execute"
+    IN_PROGRESS = "in_progress"
+
+
 @dataclass(frozen=True, slots=True)
-class MutationAdmission:
-    action: str
-    response: StoredMutationResponse | None = None
-    request_hash: str | None = None
+class ReplayMutation:
+    response: StoredMutationResponse
+    request_hash: str
+
+
+MutationAdmission = MutationDecision | ReplayMutation
 
 
 class MutationJournal:
@@ -110,7 +118,7 @@ class MutationJournal:
                         now,
                     ),
                 )
-                return MutationAdmission("execute")
+                return MutationDecision.EXECUTE
 
             stored_hash, state, owner, status_code, headers_json, body = row
             if state == "completed":
@@ -118,8 +126,7 @@ class MutationJournal:
                     (name.encode("latin-1"), value.encode("latin-1"))
                     for name, value in json.loads(headers_json or "[]")
                 )
-                return MutationAdmission(
-                    "replay",
+                return ReplayMutation(
                     StoredMutationResponse(
                         status_code=int(status_code),
                         headers=decoded_headers,
@@ -128,7 +135,7 @@ class MutationJournal:
                     str(stored_hash),
                 )
             if owner == self._owner_token:
-                return MutationAdmission("in_progress")
+                return MutationDecision.IN_PROGRESS
 
             connection.execute(
                 """
@@ -139,7 +146,7 @@ class MutationJournal:
                 """,
                 (self._owner_token, now, caller, method, route, key),
             )
-            return MutationAdmission("execute")
+            return MutationDecision.EXECUTE
 
     def record_request_hash(
         self,
@@ -242,4 +249,10 @@ class MutationJournal:
             )
 
 
-__all__ = ["MutationAdmission", "MutationJournal", "StoredMutationResponse"]
+__all__ = [
+    "MutationAdmission",
+    "MutationDecision",
+    "MutationJournal",
+    "ReplayMutation",
+    "StoredMutationResponse",
+]
