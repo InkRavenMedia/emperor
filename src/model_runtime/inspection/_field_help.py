@@ -221,6 +221,11 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
         "checkpoint callbacks. The metric name must be emitted during "
         "validation."
     ),
+    "CALLBACK_EARLY_STOPPING_MODE": (
+        "Sets the improvement direction for early stopping and checkpoint selection. "
+        "Use min for a decreasing metric or max for an increasing metric. Leave unset "
+        "to use the monitored metric's default direction."
+    ),
     "CALLBACK_EARLY_STOPPING_MIN_DELTA": (
         "Sets the minimum metric change that counts as an improvement for early "
         "stopping. Increase it to ignore tiny fluctuations."

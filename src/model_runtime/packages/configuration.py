@@ -4,7 +4,7 @@ import inspect
 import json
 from collections.abc import Sequence
 from dataclasses import fields
-from enum import Enum
+from enum import Enum, StrEnum
 from types import ModuleType
 from typing import Any, TypeAlias, cast
 
@@ -99,6 +99,10 @@ def _enum_lookup(enum_type: type[Enum], raw_value: str) -> Enum:
     try:
         return enum_type[value]
     except KeyError as exc:
+        if issubclass(enum_type, StrEnum):
+            for member in enum_type:
+                if member.value == value:
+                    return member
         choices = ", ".join(enum_type.__members__)
         raise ConfigValueError(
             f"unknown {enum_type.__name__} value '{raw_value}'. Choices: {choices}"
