@@ -24,6 +24,31 @@ GPT_PACKAGES = (
 )
 
 
+@pytest.mark.parametrize("package_name", GPT_PACKAGES)
+def test_checkpoint_inference_uses_the_current_shared_byte_embedding_layout(package_name):
+    package = model_package(package_name)
+    encoder = "hierarchical_model.encoder.byte_embedding.weight"
+    decoder = "hierarchical_model.decoder.byte_embedding.weight"
+    assert package.checkpoint_config_overrides({}) == {}
+    for invalid in (
+        {encoder: (256, 8)},
+        {decoder: (256, 8)},
+        {encoder: (256, 8), decoder: (256, 16)},
+        {encoder: (258, 8), decoder: (258, 8)},
+        {encoder: (256, 0), decoder: (256, 0)},
+    ):
+        with pytest.raises(ValueError, match="HAT byte embeddings"):
+            package.checkpoint_config_overrides(invalid)
+    shapes = {
+        encoder: (256, 8),
+        decoder: (256, 8),
+        "hierarchical_model.decoder.byte_position.embedding_model.weight": (513, 8),
+    }
+    recovered = package.checkpoint_config_overrides(shapes)
+    assert recovered["hierarchical_byte_embedding_dim"] == 8
+    assert "hierarchical_max_token_bytes" not in recovered
+
+
 def configuration(package_name, **overrides):
     package = model_package(package_name)
     values = {
