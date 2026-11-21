@@ -7,7 +7,7 @@ from types import MappingProxyType
 from typing import Any, cast
 
 from emperor.config import ModelConfig
-from emperor.datasets.image.classification import Mnist
+from emperor.datasets.image.classification import JointImageClassification, Mnist
 from model_runtime.packages.configuration import config_key_to_model_param
 
 
@@ -305,10 +305,23 @@ class BuilderBackedExperimentPresetsBase(ExperimentPresetsBase):
             model_config_preset,
             model_config_overrides,
         )
+        dataset_config = self._dataset_config(dataset_type)
         base_config = {
-            **self._dataset_config(dataset_type),
+            **dataset_config,
             **model_config_overrides,
         }
+        if dataset_type is JointImageClassification:
+            from emperor.experiments.classifier import JointImageClassifierConfig
+
+            for key in ("input_dim", "image_height", "input_channels", "output_dim"):
+                if base_config[key] != dataset_config[key]:
+                    raise ValueError(
+                        f"Joint image classification fixes {key}={dataset_config[key]} "
+                        "for its 32×32 RGB inputs and dataset-specific heads."
+                    )
+            return [
+                JointImageClassifierConfig.from_backbone(preset_callback(**base_config))
+            ]
         return [preset_callback(**base_config)]
 
     def _normalize_model_config_preset(

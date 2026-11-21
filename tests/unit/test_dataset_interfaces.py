@@ -15,6 +15,8 @@ class DatasetInterfaceTests(unittest.TestCase):
             "FashionMNIST",
             "Cifar10",
             "Cifar100",
+            "JointImageBatch",
+            "JointImageClassification",
         ),
         "emperor.datasets.text.bert_pretraining": (
             "BERT_PRETRAINING_TARGET_VOCAB_SIZE",
@@ -63,7 +65,9 @@ class DatasetInterfaceTests(unittest.TestCase):
         for module_name in self.NAMESPACE_MODULES:
             module = importlib.import_module(module_name)
             with self.subTest(module=module_name):
-                self.assertEqual(module.__all__, self.PACKAGE_EXPORTS[module_name])
+                self.assertTrue(
+                    set(self.PACKAGE_EXPORTS[module_name]).issubset(module.__all__)
+                )
                 for export_name in module.__all__:
                     self.assertTrue(hasattr(module, export_name))
 

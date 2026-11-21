@@ -69,7 +69,12 @@ def _checkpoint_continuation(args) -> CheckpointContinuation | None:
             "--resume-checkpoint requires exactly one --preset; "
             "--presets and --all-presets are not supported."
         )
-    if len(getattr(args, "datasets", None) or ()) != 1:
+    datasets = getattr(args, "datasets", None) or ()
+    fixed_joint_input = (
+        getattr(args, "experiment_task", None) == "joint-image-classification"
+        and not datasets
+    )
+    if len(datasets) != 1 and not fixed_joint_input:
         raise InvalidCheckpointContinuation(
             "--resume-checkpoint requires exactly one explicitly selected --dataset."
         )

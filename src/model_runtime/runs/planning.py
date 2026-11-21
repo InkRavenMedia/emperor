@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from emperor.experiments import ExperimentTask
 from model_runtime.packages import ModelPackage, RuntimeDefaultsError, dataset_name
 from model_runtime.runs._search_parsing import ParsedSearch, SearchValue, parse_search
 from model_runtime.runs.errors import InvalidRunPlan, InvalidRunRequest, PlanTooLarge
@@ -124,10 +125,13 @@ def _resolve_task_and_datasets(
     package: ModelPackage,
     request: RunRequest,
 ) -> tuple[str, tuple[type[Any], ...]]:
-    if not request.datasets:
-        raise InvalidRunRequest("Training requires at least one selected dataset.")
     try:
         experiment_task = package.resolve_experiment_task(request.experiment_task)
+        if (
+            not request.datasets
+            and experiment_task is not ExperimentTask.JOINT_IMAGE_CLASSIFICATION
+        ):
+            raise InvalidRunRequest("Training requires at least one selected dataset.")
         datasets = tuple(
             package.resolve_datasets(list(request.datasets), experiment_task)
         )

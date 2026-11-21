@@ -872,6 +872,7 @@ modules = [
 [families.datasets]
 status = "pending"
 focused_tests = [
+  "tests/model_packages/vit/test_joint_image_classification.py",
   "tests/model_packages/test_bert_masked_words.py",
   "tests/unit/test_wikitext_hierarchical.py",
   "tests/unit/test_dataset*.py",
@@ -907,6 +908,7 @@ modules = [
   "src/emperor/datasets/image/classification/_cifar_10.py",
   "src/emperor/datasets/image/classification/_cifar_100.py",
   "src/emperor/datasets/image/classification/_fashion_mnist.py",
+  "src/emperor/datasets/image/classification/_joint.py",
   "src/emperor/datasets/image/classification/_mnist.py",
   "src/emperor/datasets/image/classification/_svhn.py",
   "src/emperor/datasets/image/detection/__init__.py",
@@ -981,6 +983,7 @@ modules = [
 [families.experiments]
 status = "pending"
 focused_tests = [
+  "tests/model_packages/vit/test_joint_image_classification.py",
   "tests/model_packages/test_bert_adaptive_feature_parity.py",
   "tests/model_packages/test_bert_hierarchical_soft_moe.py",
   "tests/integration/test_hat_v2_fidelity.py",
@@ -1016,6 +1019,7 @@ modules = [
   "src/emperor/experiments/classifier/_diagnostics.py",
   "src/emperor/experiments/classifier/_epoch_metrics.py",
   "src/emperor/experiments/classifier/_experiment.py",
+  "src/emperor/experiments/classifier/_joint.py",
   "src/emperor/experiments/classifier/_metrics.py",
   "src/emperor/experiments/classifier/_records.py",
   "src/emperor/experiments/classifier/_validation_examples.py",

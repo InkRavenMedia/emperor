@@ -20,15 +20,22 @@ class Mnist(DataModule):
         batch_size,
         resize=(28, 28),
         seed: int | None = None,
+        *,
+        padding: int = 0,
     ):
         super().__init__()
         self.batch_size = batch_size
         self.resize = resize
+        if padding < 0:
+            raise ValueError("Image padding must be nonnegative.")
+        self.padding = padding
         self.seed = None if seed is None else int(seed)
         if isinstance(resize, int):
             self.default_height = self.default_width = resize
         else:
             self.default_height, self.default_width = resize
+        self.default_height += 2 * padding
+        self.default_width += 2 * padding
         self.flattened_input_dim = (
             self.default_height * self.default_width * self.num_channels
         )
@@ -88,19 +95,14 @@ class Mnist(DataModule):
         return transforms.Compose(
             [
                 transforms.Resize(self.resize),
+                *([transforms.Pad(self.padding)] if self.padding else []),
                 transforms.ToTensor(),
                 transforms.Normalize((0.1307,), (0.3081,)),
             ]
         )
 
     def __get_test_transforms(self) -> Compose:
-        return transforms.Compose(
-            [
-                transforms.Resize(self.resize),
-                transforms.ToTensor(),
-                transforms.Normalize((0.1307,), (0.3081,)),
-            ]
-        )
+        return self.__get_train_transforms()
 
     def _text_labels(self, indices) -> list:
         return [str(int(i)) for i in indices]

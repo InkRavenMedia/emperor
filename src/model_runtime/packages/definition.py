@@ -250,7 +250,15 @@ class ModelPackage:
         )
 
     def build_model(self, configuration: ModelConfig) -> Any:
-        return self._adapter.build_model(configuration)
+        from emperor.experiments.classifier import (
+            JointImageClassifier,
+            JointImageClassifierConfig,
+        )
+
+        model = self._adapter.build_model(configuration)
+        if isinstance(configuration, JointImageClassifierConfig):
+            return JointImageClassifier(model)
+        return model
 
     def build_experiment(
         self,
