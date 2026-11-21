@@ -22,7 +22,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_config_schema_exposes_flat_memory_and_expansion_model_options(
         self,
     ) -> None:
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         feature_prefixes = {
             "bert/linear": ("ATTN_SOURCE_MEMORY", "SEQUENCE_EXPANSION"),
@@ -41,7 +41,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
         }
 
         async def call_api() -> None:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 for model, prefixes in feature_prefixes.items():
                     response = await client.get(
                         f"/models/{model}/config-schema",
@@ -55,7 +55,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
                         with self.subTest(model=model, prefix=prefix):
                             option = fields[f"{prefix}_MODEL_OPTION"]
                             bias = fields[f"{prefix}_MODEL_BIAS_FLAG"]
-                            legacy = fields[f"{prefix}_MODEL_CONFIG"]
+                            structured = fields[f"{prefix}_MODEL_CONFIG"]
                             flag_prefix = prefix.lower().replace("_", "-")
                             self.assertEqual(
                                 option["flag"], f"--{flag_prefix}-model-option"
@@ -67,12 +67,13 @@ class ApiIntegrationContractTests(unittest.TestCase):
                             )
                             self.assertEqual(bias["type"], "bool")
                             self.assertEqual(bias["choices"], [True, False])
-                            self.assertEqual(legacy["type"], "json")
+                            self.assertEqual(structured["type"], "json")
+                            self.assertTrue(structured["hasFlatControls"])
                             if (
                                 prefix == "ATTN_SOURCE_MEMORY"
                                 and model != "transformer/linear"
                             ):
-                                for field in (option, bias, legacy):
+                                for field in (option, bias, structured):
                                     self.assertEqual(
                                         field["section"],
                                         "Attention Source Memory Options",
@@ -84,8 +85,8 @@ class ApiIntegrationContractTests(unittest.TestCase):
 
         asyncio.run(call_api())
 
-    def test_inspect_flat_projection_options_match_legacy_json(self) -> None:
-        from emperor_workbench.api import app
+    def test_inspection_resolves_flat_and_structured_projection_options(self) -> None:
+        from emperor_workbench.api import create_app
 
         enable = {
             "ATTN_SOURCE_MEMORY_FLAG": "true",
@@ -101,7 +102,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
             "SEQUENCE_EXPANSION_MODEL_BIAS_FLAG": "false",
         }
         linear = '{"type":"LinearLayerConfig","bias_flag":false}'
-        legacy = {
+        structured = {
             **enable,
             "ATTN_SOURCE_MEMORY_MODEL_CONFIG": linear,
             "SEQUENCE_EXPANSION_MODEL_CONFIG": linear,
@@ -114,32 +115,45 @@ class ApiIntegrationContractTests(unittest.TestCase):
         }
 
         async def call_api() -> None:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 flat_response = await client.post(
                     "/inspect", json={**target, "overrides": flat}
                 )
-                legacy_response = await client.post(
-                    "/inspect", json={**target, "overrides": legacy}
+                structured_response = await client.post(
+                    "/inspect", json={**target, "overrides": structured}
                 )
+                undeclared_path = await client.post(
+                    "/inspect",
+                    json={
+                        **target,
+                        "overrides": {
+                            "ATTN_SOURCE_MEMORY_MODEL_CONFIG.bias_flag": False
+                        },
+                    },
+                )
+            self.assertEqual(undeclared_path.status_code, 400, undeclared_path.text)
+            self.assertIn("Unknown override", undeclared_path.json()["detail"])
             self.assertEqual(flat_response.status_code, 200, flat_response.text)
-            self.assertEqual(legacy_response.status_code, 200, legacy_response.text)
+            self.assertEqual(
+                structured_response.status_code, 200, structured_response.text
+            )
             graph = flat_response.json()
             node_types = {node["typeName"] for node in graph["nodes"]}
             self.assertTrue(
                 {"AttentionSourceMemory", "SequenceExpansion"} <= node_types
             )
-            self.assertEqual(graph, legacy_response.json())
+            self.assertEqual(graph, structured_response.json())
 
         asyncio.run(call_api())
 
     def test_capabilities_endpoint_exposes_local_defaults(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
         from emperor_workbench.settings import get_workbench_api_settings
 
         async def call_api() -> httpx.Response:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return await client.get("/capabilities")
 
         response = asyncio.run(call_api())
@@ -298,10 +312,10 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_model_dataset_endpoint_exposes_path_free_dataset_metadata(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> httpx.Response:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return await client.get("/models/linears/linear/datasets")
 
         response = asyncio.run(call_api())
@@ -347,10 +361,10 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_retired_flat_model_routes_are_not_registered(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> list[httpx.Response]:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return [
                     await client.get(path)
                     for path in (
@@ -367,7 +381,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_api_health_and_inspect(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> tuple[
             httpx.Response,
@@ -375,7 +389,7 @@ class ApiIntegrationContractTests(unittest.TestCase):
             httpx.Response,
             httpx.Response,
         ]:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 health = await client.get("/health")
                 monitors = await client.get("/models/linears/linear/monitors")
                 search_space = await client.get(
@@ -421,10 +435,10 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_inspect_rejects_path_like_dataset_input(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> httpx.Response:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return await client.post(
                     "/inspect",
                     json={
@@ -446,10 +460,10 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_log_scalars_rejects_more_than_max_request_run_ids(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> httpx.Response:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return await client.post(
                     "/logs/scalars",
                     json={
@@ -472,10 +486,10 @@ class ApiIntegrationContractTests(unittest.TestCase):
     def test_api_inspector_errors_use_shared_handler(self) -> None:
         import httpx
 
-        from emperor_workbench.api import app
+        from emperor_workbench.api import create_app
 
         async def call_api() -> httpx.Response:
-            async with _lifespan_client(app) as client:
+            async with _lifespan_client(create_app()) as client:
                 return await client.get("/models/unknown/model/presets")
 
         response = asyncio.run(call_api())
