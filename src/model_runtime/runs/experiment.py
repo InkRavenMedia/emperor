@@ -40,7 +40,7 @@ from model_runtime.runs.progress import (
     RunProgressContext,
     contextual_run_progress,
 )
-from model_runtime.task_behavior import experiment_task_behavior
+from model_runtime.task_behavior import bert_validation_metric, experiment_task_behavior
 
 _ExperimentPresetUnset = NewType("_ExperimentPresetUnset", object)
 _EXPERIMENT_PRESET_UNSET = _ExperimentPresetUnset(object())
@@ -264,14 +264,12 @@ class ExperimentBase:
     ) -> dict[str, Any]:
         """Return Experiment Task arguments for a data module."""
 
-        task = getattr(training_run, "experiment_task", None) or self.experiment_task
-        return experiment_task_behavior(task).dataset_constructor_kwargs(
-            training_run.config
-        )
+        return experiment_task_behavior(
+            training_run.experiment_task
+        ).dataset_constructor_kwargs(training_run.config)
 
     def _build_dataset(self, training_run: TrainingRun) -> Any:
-        task = getattr(training_run, "experiment_task", None) or self.experiment_task
-        experiment_task_behavior(task).validate_dataset(
+        experiment_task_behavior(training_run.experiment_task).validate_dataset(
             training_run.dataset_type, training_run.config
         )
         return training_run.dataset_type(
@@ -516,7 +514,7 @@ class ExperimentBase:
         state.outcome.project(
             lambda: self.run_artifacts.update_best_results(
                 self.model_package.identity,
-                self.experiment_task,
+                state.training_run.experiment_task,
                 result,
             ),
             lambda: self._emit_dataset_completed(
@@ -531,13 +529,8 @@ class ExperimentBase:
         self,
         training_run: TrainingRun,
     ) -> RunProgressContext:
-        experiment_task = (
-            experiment_task_name(training_run.experiment_task)
-            if training_run.experiment_task is not None
-            else None
-        )
         return RunProgressContext(
-            experiment_task=experiment_task,
+            experiment_task=experiment_task_name(training_run.experiment_task),
             dataset=training_run.dataset_type.__name__,
             preset=self.model_package.preset_name(training_run.preset),
             preset_key=training_run.preset.name,
@@ -619,14 +612,9 @@ class ExperimentBase:
         *,
         resumed_from: Mapping[str, object] | None = None,
     ) -> dict[str, Any]:
-        experiment_task = (
-            experiment_task_name(training_run.experiment_task)
-            if training_run.experiment_task is not None
-            else None
-        )
-        return {
+        result = {
             **self.model_package.identity.to_payload(),
-            "experimentTask": experiment_task,
+            "experimentTask": experiment_task_name(training_run.experiment_task),
             "dataset": training_run.dataset_type.__name__,
             "preset": self.model_package.preset_name(training_run.preset),
             "presetKey": training_run.preset.name,
@@ -634,6 +622,9 @@ class ExperimentBase:
             **self.run_artifacts.result_metrics_payload(trainer.callback_metrics),
             **({"resumedFrom": dict(resumed_from)} if resumed_from is not None else {}),
         }
+        if training_run.experiment_task is ExperimentTask.BERT_PRETRAINING:
+            result["rankingMetric"] = bert_validation_metric(training_run.dataset_type)
+        return result
 
 
 __all__ = ["ExperimentBase"]

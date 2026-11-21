@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from lightning.pytorch.callbacks import Callback
 
+from emperor.experiments import ExperimentTask
 from model_runtime.runs import (
     RunParameter,
     RunPlanExecutionError,
@@ -281,7 +282,7 @@ class RunsImmutableRecordTests(unittest.TestCase):
         self.assertEqual(execution.resumed_from["nested"]["values"], (3,))
 
         training_run = TrainingRun(
-            experiment_task=None,
+            experiment_task=ExperimentTask.IMAGE_CLASSIFICATION,
             preset=cast(Any, object()),
             dataset_type=object,
             config=cast(Any, object()),

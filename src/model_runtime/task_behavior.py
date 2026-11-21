@@ -1,12 +1,32 @@
 from __future__ import annotations
 
+import math
 from collections import Counter
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, cast
 
 from emperor.experiments import ExperimentTask
+
+if TYPE_CHECKING:
+    from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
+
+
+class _FixedTokenOutputValidator(Protocol):
+    def validate_fixed_token_output(self, config: object, operation: str) -> None: ...
+
+
+class _HierarchicalExample(TypedDict):
+    context_texts: list[str]
+    target_texts: list[str]
+    bos_mask: list[bool]
+
+
+class _HierarchicalBatchCollator(Protocol):
+    def collate(
+        self, examples: Sequence[_HierarchicalExample]
+    ) -> HierarchicalLanguageModelBatch: ...
 
 
 class SyntheticInputError(ValueError):
@@ -28,7 +48,7 @@ class DatasetArgument:
 @dataclass(frozen=True, slots=True)
 class RankingMetric:
     tier: float
-    keys: tuple[str, ...]
+    key: str
     direction: float = 1.0
 
 
@@ -38,8 +58,7 @@ class ExperimentTaskBehavior:
     synthetic_input_builder: Callable[[type, Any], tuple[Any, ...]]
     dataset_arguments: tuple[DatasetArgument, ...]
     ranking_metrics: tuple[RankingMetric, ...]
-    missing_ranking_score: tuple[float, float]
-    core_result_metric_keys: tuple[str, ...] = ()
+    core_result_metric_keys: tuple[str, ...]
 
     def synthetic_inputs(self, dataset: type, configuration: Any) -> tuple[Any, ...]:
         return self.synthetic_input_builder(dataset, configuration)
@@ -49,7 +68,7 @@ class ExperimentTaskBehavior:
         if self.task == ExperimentTask.BERT_PRETRAINING:
             experiment = getattr(configuration, "experiment_config", None)
             hierarchical = getattr(experiment, "masked_word_decoder_config", None)
-            raw_words = bool(getattr(dataset, "hierarchical_masked_word_flag", False))
+            raw_words = bert_dataset_uses_masked_words(dataset)
             if (hierarchical is not None) != raw_words:
                 raise ValueError(
                     "Masked-word BERT requires a compatible dataset such as WikiText103BertHierarchical."
@@ -58,11 +77,7 @@ class ExperimentTaskBehavior:
             return
         experiment = getattr(configuration, "experiment_config", None)
         hierarchical = getattr(experiment, "hierarchical_language_model_config", None)
-        raw_text = bool(getattr(dataset, "hierarchical_language_model_flag", False))
-        if (hierarchical is not None) != raw_text:
-            raise ValueError(
-                "Hierarchical language modeling requires a compatible raw-text dataset such as WikiText103Hierarchical"
-            )
+        validate_language_model_dataset(dataset, hierarchical=hierarchical is not None)
 
     def validate_configuration(self, configuration: Any) -> None:
         from emperor.transformer.sequence_expansion import SequenceExpansion
@@ -70,7 +85,8 @@ class ExperimentTaskBehavior:
         experiment = getattr(configuration, "experiment_config", None)
         if getattr(experiment, "hierarchical_language_model_config", None) is None:
             return
-        SequenceExpansion.VALIDATOR.validate_fixed_token_output(
+        validator = cast(_FixedTokenOutputValidator, SequenceExpansion.VALIDATOR)
+        validator.validate_fixed_token_output(
             getattr(experiment, "decoder_config", None),
             "Hierarchical language modeling",
         )
@@ -93,23 +109,31 @@ class ExperimentTaskBehavior:
                 arguments["max_token_bytes"] = decoder.max_token_bytes
         return arguments
 
-    def ranking_score(self, result: Mapping[str, Any]) -> tuple[float, float]:
+    def ranking_score(self, result: Mapping[str, Any]) -> tuple[float, float] | None:
         metrics = result.get("metrics", {})
         if not isinstance(metrics, Mapping):
             metrics = {}
         typed_metrics = cast(Mapping[str, Any], metrics)
         for preference in self.ranking_metrics:
-            value = next(
-                (
-                    typed_metrics[key]
-                    for key in preference.keys
-                    if typed_metrics.get(key) is not None
-                ),
-                None,
-            )
-            if value is not None:
-                return preference.tier, preference.direction * float(value)
-        return self.missing_ranking_score
+            if (
+                self.task is ExperimentTask.BERT_PRETRAINING
+                and result.get("rankingMetric") != preference.key
+            ):
+                continue
+            score = _finite_score(typed_metrics.get(preference.key))
+            if score is not None:
+                return preference.tier, preference.direction * score
+        return None
+
+
+def _finite_score(value: object) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        score = float(value)
+    except OverflowError:
+        return None
+    return score if math.isfinite(score) else None
 
 
 def _positive_integer(value: object, label: str) -> int:
@@ -169,8 +193,9 @@ def _token_inputs(_dataset: type, configuration: Any) -> tuple[Any, ...]:
     if hierarchical is not None:
         from emperor.transformer.hierarchical import HierarchicalLanguageModelBatch
 
+        collator = cast(_HierarchicalBatchCollator, HierarchicalLanguageModelBatch)
         return (
-            HierarchicalLanguageModelBatch.collate(
+            collator.collate(
                 [
                     {
                         "context_texts": [""] + ["a"] * (sequence_length - 1),
@@ -220,17 +245,61 @@ _TARGET_SEQUENCE_LENGTH = DatasetArgument(
 )
 _VALIDATION_ACCURACY = RankingMetric(
     tier=1.0,
-    keys=("validation_accuracy", "validation/accuracy"),
+    key="validation/accuracy",
 )
 _VALIDATION_LOSS = RankingMetric(
     tier=1.0,
-    keys=("validation/loss", "validation_loss"),
+    key="validation/loss",
     direction=-1.0,
 )
 _VALIDATION_BLEU = RankingMetric(
     tier=2.0,
-    keys=("validation/bleu", "validation_bleu"),
+    key="validation/bleu",
 )
+
+_BERT_EXACT_WORD_ACCURACY = RankingMetric(1.0, "validation/mlm/exact_word_accuracy")
+_BERT_MASKED_TOKEN_ACCURACY = RankingMetric(1.0, "validation/mlm/masked_accuracy")
+
+
+def validate_language_model_dataset(dataset: type, *, hierarchical: bool) -> None:
+    raw_text = bool(getattr(dataset, "hierarchical_language_model_flag", False))
+    if hierarchical and not raw_text:
+        raise ValueError(
+            "Hierarchical language modeling requires a raw-text dataset such as "
+            f"WikiText103Hierarchical. Received {dataset.__name__}."
+        )
+    if raw_text and not hierarchical:
+        raise ValueError(
+            f"{dataset.__name__} is a raw-text dataset. Token-level language "
+            "modeling requires a token-ID dataset such as WikiText2."
+        )
+
+
+def bert_dataset_uses_masked_words(dataset_type: type[object]) -> bool:
+    from emperor.datasets.text.bert_pretraining import (
+        PennTreebankBertPretraining,
+        WikiText2BertPretraining,
+    )
+
+    token_adapters = (PennTreebankBertPretraining, WikiText2BertPretraining)
+    if issubclass(dataset_type, token_adapters) and not hasattr(
+        dataset_type, "hierarchical_masked_word_flag"
+    ):
+        return False
+    flag = getattr(dataset_type, "hierarchical_masked_word_flag", None)
+    if not isinstance(flag, bool):
+        raise ValueError(
+            f"BERT dataset {dataset_type.__name__} must declare "
+            "hierarchical_masked_word_flag as a boolean."
+        )
+    return flag
+
+
+def bert_validation_metric(dataset_type: type) -> str:
+    """Choose the measured unit for this dataset when writing its Run result."""
+    if bert_dataset_uses_masked_words(dataset_type):
+        return _BERT_EXACT_WORD_ACCURACY.key
+    return _BERT_MASKED_TOKEN_ACCURACY.key
 
 
 def _stage_metric_keys(*metric_names: str) -> tuple[str, ...]:
@@ -298,15 +367,13 @@ _DECLARED_BEHAVIORS = (
         dataset_arguments=(_BATCH_SIZE,),
         ranking_metrics=(_VALIDATION_ACCURACY,),
         core_result_metric_keys=_IMAGE_CLASSIFICATION_RESULT_METRIC_KEYS,
-        missing_ranking_score=(1.0, 0.0),
     ),
     ExperimentTaskBehavior(
         task=ExperimentTask.BERT_PRETRAINING,
         synthetic_input_builder=_token_inputs,
         dataset_arguments=(_BATCH_SIZE, _SEQUENCE_LENGTH),
-        ranking_metrics=(_VALIDATION_ACCURACY,),
+        ranking_metrics=(_BERT_EXACT_WORD_ACCURACY, _BERT_MASKED_TOKEN_ACCURACY),
         core_result_metric_keys=_BERT_PRETRAINING_RESULT_METRIC_KEYS,
-        missing_ranking_score=(1.0, 0.0),
     ),
     ExperimentTaskBehavior(
         task=ExperimentTask.TEXT_TRANSLATION,
@@ -318,7 +385,6 @@ _DECLARED_BEHAVIORS = (
         ),
         ranking_metrics=(_VALIDATION_BLEU, _VALIDATION_LOSS),
         core_result_metric_keys=_TEXT_TRANSLATION_RESULT_METRIC_KEYS,
-        missing_ranking_score=(0.0, float("-inf")),
     ),
     ExperimentTaskBehavior(
         task=ExperimentTask.CAUSAL_LANGUAGE_MODELING,
@@ -326,7 +392,6 @@ _DECLARED_BEHAVIORS = (
         dataset_arguments=(_BATCH_SIZE, _SEQUENCE_LENGTH),
         ranking_metrics=(_VALIDATION_LOSS,),
         core_result_metric_keys=_CAUSAL_LANGUAGE_MODELING_RESULT_METRIC_KEYS,
-        missing_ranking_score=(0.0, float("-inf")),
     ),
 )
 
@@ -357,7 +422,7 @@ CORE_RESULT_METRIC_KEYS = frozenset(
     for behavior in EXPERIMENT_TASK_BEHAVIORS.values()
     for key in (
         *behavior.core_result_metric_keys,
-        *(key for metric in behavior.ranking_metrics for key in metric.keys),
+        *(metric.key for metric in behavior.ranking_metrics),
     )
 )
 
@@ -374,5 +439,8 @@ __all__ = [
     "EXPERIMENT_TASK_BEHAVIORS",
     "ExperimentTaskBehavior",
     "SyntheticInputError",
+    "bert_dataset_uses_masked_words",
+    "bert_validation_metric",
     "experiment_task_behavior",
+    "validate_language_model_dataset",
 ]

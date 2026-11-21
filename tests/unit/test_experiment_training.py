@@ -322,7 +322,7 @@ class FakeTrainer:
         self.max_epochs = max_epochs
         self.logger = logger
         self.callbacks = callbacks
-        self.callback_metrics = {"validation_accuracy": FakeMetric(0.75)}
+        self.callback_metrics = {"validation/accuracy": FakeMetric(0.75)}
         self.current_epoch = 1
         self.global_step = 2
         type(self).instances.append(self)
@@ -485,6 +485,30 @@ class TestExperimentTraining(unittest.TestCase):
                 experiment_preset=FakeOption.GATING,
                 model_package=self.model_package,
             )
+
+    def test_bert_receipt_records_the_metric_for_the_training_dataset(self):
+        from types import SimpleNamespace
+
+        from emperor.datasets.text.bert_pretraining import WikiText103BertHierarchical
+
+        experiment = FakeExperiment(
+            FakeOption.BASELINE, model_package=self.model_package
+        )
+        trainer = SimpleNamespace(callback_metrics={})
+        for dataset_type, metric in (
+            (WikiText103BertHierarchical, "validation/mlm/exact_word_accuracy"),
+            (WikiText2BertPretraining, "validation/mlm/masked_accuracy"),
+        ):
+            with self.subTest(dataset=dataset_type):
+                run = SimpleNamespace(
+                    experiment_task=ExperimentTask.BERT_PRETRAINING,
+                    dataset_type=dataset_type,
+                    preset=FakeOption.BASELINE,
+                    parameters={},
+                )
+                self.assertEqual(
+                    experiment._training_result(run, trainer)["rankingMetric"], metric
+                )
 
     def test_data_num_workers_override_updates_datamodule(self):
         experiment = FakeExperiment(
@@ -662,7 +686,7 @@ class TestExperimentTraining(unittest.TestCase):
         self.assertEqual(started["runTotal"], 9)
         self.assertEqual(started["totalEpochs"], 3)
         self.assertEqual(started["params"], {"NUM_EPOCHS": 3})
-        self.assertEqual(completed["metrics"], {"validation_accuracy": 0.75})
+        self.assertEqual(completed["metrics"], {"validation/accuracy": 0.75})
 
     def test_training_lifecycle_order_is_stable(self):
         events = []
@@ -777,7 +801,7 @@ class TestExperimentTraining(unittest.TestCase):
                 self.logger = logger
                 self.callbacks = callbacks
                 self.kwargs = kwargs
-                self.callback_metrics = {"validation_accuracy": FakeMetric(0.75)}
+                self.callback_metrics = {"validation/accuracy": FakeMetric(0.75)}
                 type(self).instances.append(self)
 
             def fit(self, model, datamodule, **kwargs):
@@ -1178,7 +1202,7 @@ class TestExperimentTraining(unittest.TestCase):
             self.assertEqual(event["presetKey"], "BASELINE")
             self.assertEqual(event["epoch"], 1)
             self.assertEqual(event["step"], 2)
-            self.assertEqual(event["metrics"]["validation_accuracy"], 0.75)
+            self.assertEqual(event["metrics"]["validation/accuracy"], 0.75)
 
     def test_progress_callback_can_throttle_step_events(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1213,7 +1237,7 @@ class TestExperimentTraining(unittest.TestCase):
                 callbacks=[],
             )
             trainer.callback_metrics = {
-                "validation_accuracy": FakeMetric(0.75),
+                "validation/accuracy": FakeMetric(0.75),
                 "train/confusion_matrix/0/0": FakeMetric(12),
                 "validation/per_class/0/accuracy": FakeMetric(0.5),
                 "train/loss": FakeMetric(0.25),
@@ -1227,7 +1251,7 @@ class TestExperimentTraining(unittest.TestCase):
             self.assertEqual(
                 event["metrics"],
                 {
-                    "validation_accuracy": 0.75,
+                    "validation/accuracy": 0.75,
                     "train/loss": 0.25,
                     "grad_norm": 1.2,
                 },
@@ -1238,7 +1262,7 @@ class TestExperimentTraining(unittest.TestCase):
     def test_result_metrics_filter_high_cardinality_metrics(self):
         payload = FilesystemRunArtifacts().result_metrics_payload(
             {
-                "validation_accuracy": FakeMetric(0.75),
+                "validation/accuracy": FakeMetric(0.75),
                 "train/confusion_matrix/0/0": FakeMetric(12),
                 "validation/per_class/0/accuracy": FakeMetric(0.5),
                 "train/loss": FakeMetric(0.25),
@@ -1249,7 +1273,7 @@ class TestExperimentTraining(unittest.TestCase):
             payload,
             {
                 "metrics": {
-                    "validation_accuracy": 0.75,
+                    "validation/accuracy": 0.75,
                     "train/loss": 0.25,
                 },
                 "metricsOriginalCount": 4,
@@ -1271,7 +1295,7 @@ class TestExperimentTraining(unittest.TestCase):
                 callbacks=[],
             )
             trainer.callback_metrics = {
-                "validation_accuracy": FakeMetric(0.75),
+                "validation/accuracy": FakeMetric(0.75),
                 **{f"metric_{index}": "x" * 120 for index in range(20)},
             }
 
@@ -1280,7 +1304,7 @@ class TestExperimentTraining(unittest.TestCase):
             raw_line = path.read_text().splitlines()[0]
             event = json.loads(raw_line)
             self.assertLessEqual(len(raw_line.encode("utf-8")), 800)
-            self.assertEqual(event["metrics"]["validation_accuracy"], 0.75)
+            self.assertEqual(event["metrics"]["validation/accuracy"], 0.75)
             self.assertGreater(event["metricsDroppedCount"], 0)
 
     def test_monitor_option_build_callback_returns_fresh_instances(self):

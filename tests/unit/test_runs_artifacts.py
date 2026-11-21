@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
+import pytest
 from filelock import FileLock
 
 from emperor.experiments import ExperimentTask
@@ -246,7 +247,7 @@ class RunsArtifactsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "outside artifact root"):
                 artifacts.update_best_results(
                     ModelIdentity("linears", "linear"),
-                    None,
+                    ExperimentTask.IMAGE_CLASSIFICATION,
                     {"dataset": "Mnist", "metrics": {}},
                 )
 
@@ -280,12 +281,12 @@ class RunsArtifactsTests(unittest.TestCase):
             )
             path = artifacts.write_result(
                 artifacts.root / run_name / "version_0",
-                {"metrics": {"validation_accuracy": 0.75}},
+                {"metrics": {"validation/accuracy": 0.75}},
             )
             self.assertEqual(path.name, "result.json")
             self.assertEqual(
                 json.loads(path.read_text(encoding="utf-8")),
-                {"metrics": {"validation_accuracy": 0.75}},
+                {"metrics": {"validation/accuracy": 0.75}},
             )
 
     def test_concurrent_best_result_updates_are_locked_and_keep_top_five(
@@ -302,7 +303,7 @@ class RunsArtifactsTests(unittest.TestCase):
                     {
                         "dataset": "Mnist",
                         "params": {"score": score},
-                        "metrics": {"validation_accuracy": score},
+                        "metrics": {"validation/accuracy": score},
                     },
                 )
 
@@ -311,7 +312,7 @@ class RunsArtifactsTests(unittest.TestCase):
 
             merged = artifacts.read_best_results(identity)
             self.assertEqual(
-                [run["metrics"]["validation_accuracy"] for run in merged["Mnist"]],
+                [run["metrics"]["validation/accuracy"] for run in merged["Mnist"]],
                 [11, 10, 9, 8, 7],
             )
             self.assertEqual(
@@ -356,7 +357,7 @@ class RunsArtifactsTests(unittest.TestCase):
                     {
                         "dataset": dataset,
                         "params": {"score": score},
-                        "metrics": {"validation_accuracy": score},
+                        "metrics": {"validation/accuracy": score},
                     },
                 )
 
@@ -366,7 +367,7 @@ class RunsArtifactsTests(unittest.TestCase):
                 {
                     "dataset": "Mnist",
                     "params": {"score": 0.9},
-                    "metrics": {"validation_accuracy": 0.9},
+                    "metrics": {"validation/accuracy": 0.9},
                 },
             )
 
@@ -386,7 +387,7 @@ class RunsArtifactsTests(unittest.TestCase):
                 "runId": "run-0001",
                 "dataset": "Mnist",
                 "params": {},
-                "metrics": {"validation_accuracy": 0.8},
+                "metrics": {"validation/accuracy": 0.8},
             }
 
             artifacts.update_best_results(
@@ -423,7 +424,7 @@ class RunsArtifactsTests(unittest.TestCase):
                     ExperimentTask.IMAGE_CLASSIFICATION,
                     {
                         **result,
-                        "metrics": {"validation_accuracy": 0.1},
+                        "metrics": {"validation/accuracy": 0.1},
                     },
                 )
 
@@ -446,7 +447,7 @@ class RunsArtifactsTests(unittest.TestCase):
                 with self.assertRaisesRegex(TimeoutError, "best-results lock"):
                     artifacts.update_best_results(
                         identity,
-                        None,
+                        ExperimentTask.IMAGE_CLASSIFICATION,
                         {"dataset": "Mnist", "metrics": {}},
                     )
             finally:
@@ -455,8 +456,8 @@ class RunsArtifactsTests(unittest.TestCase):
             self.assertLess(time.monotonic() - started, 1.0)
             merged = artifacts.update_best_results(
                 identity,
-                None,
-                {"dataset": "Mnist", "metrics": {}},
+                ExperimentTask.IMAGE_CLASSIFICATION,
+                {"dataset": "Mnist", "metrics": {"validation/accuracy": 0.0}},
             )
             self.assertEqual(len(merged["Mnist"]), 1)
 
@@ -599,11 +600,7 @@ class RunsArtifactsTests(unittest.TestCase):
         }
 
         for task, behavior in EXPERIMENT_TASK_BEHAVIORS.items():
-            ranking_keys = {
-                key
-                for ranking_metric in behavior.ranking_metrics
-                for key in ranking_metric.keys
-            }
+            ranking_keys = {metric.key for metric in behavior.ranking_metrics}
             expected_core_keys = {
                 *behavior.core_result_metric_keys,
                 *ranking_keys,
@@ -663,3 +660,115 @@ class RunsArtifactsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_bert_summary_ranks_only_the_metric_selected_for_the_dataset(tmp_path):
+    from model_runtime.task_behavior import bert_validation_metric
+
+    class WordDataset:
+        hierarchical_masked_word_flag = True
+
+    class TokenDataset:
+        hierarchical_masked_word_flag = False
+
+    class UndeclaredDataset:
+        pass
+
+    class MalformedDataset:
+        hierarchical_masked_word_flag = "False"
+
+    for invalid_dataset in (UndeclaredDataset, MalformedDataset):
+        with pytest.raises(ValueError, match="hierarchical_masked_word_flag"):
+            bert_validation_metric(invalid_dataset)
+
+    artifacts = FilesystemRunArtifacts(root=tmp_path)
+    identity = ModelIdentity("bert", "linear")
+    unselected = {
+        "dataset": "Unselected",
+        "metrics": {
+            "validation_accuracy": 1.0,
+            "validation/mlm/masked_accuracy": 1.0,
+            "validation/mlm/exact_word_accuracy": 1.0,
+        },
+    }
+    for result in (unselected, {**unselected, "rankingMetric": "validation_accuracy"}):
+        artifacts.update_best_results(identity, ExperimentTask.BERT_PRETRAINING, result)
+        assert "Unselected" not in artifacts.read_best_results(identity)
+
+    for dataset in (WordDataset, TokenDataset):
+        selected = bert_validation_metric(dataset)
+        other = (
+            "validation/mlm/masked_accuracy"
+            if dataset is WordDataset
+            else "validation/mlm/exact_word_accuracy"
+        )
+        assert selected != other
+        for index in range(7):
+            metrics = {
+                other: 1 - index / 10,
+                "validation/accuracy": 1.0,
+                "validation_accuracy": 1.0,
+                "validation/loss": index,
+                "validation/nsp/accuracy": 1.0,
+            }
+            if index:
+                metrics[selected] = index / 10
+            receipt = {
+                "dataset": dataset.__name__,
+                "rankingMetric": selected,
+                "params": {"index": index},
+                "metrics": metrics,
+            }
+            artifacts.update_best_results(
+                identity, ExperimentTask.BERT_PRETRAINING, receipt
+            )
+            if index == 0:
+                assert not artifacts.read_best_results(identity).get(dataset.__name__)
+        indices = [
+            record["params"]["index"]
+            for record in artifacts.read_best_results(identity)[dataset.__name__]
+        ]
+        assert indices == [6, 5, 4, 3, 2]
+
+
+def test_best_summary_only_scores_finite_numbers_at_the_current_metric_key(tmp_path):
+    artifacts = FilesystemRunArtifacts(root=tmp_path)
+    identity = ModelIdentity("linears", "linear")
+    for index, value in enumerate(("0.98", "NaN", True, None, 0.90, 0.95, 0.0)):
+        metrics = {"validation/accuracy": value, "validation_accuracy": 1 - index / 10}
+        receipt = {"dataset": "Mnist", "params": {"index": index}, "metrics": metrics}
+        run = tmp_path / f"run-{index}"
+        run.mkdir()
+        artifacts.write_result(str(run), receipt)
+        read_back = artifacts.read_result(str(run))
+        assert read_back["metrics"] == metrics
+        artifacts.update_best_results(
+            identity, ExperimentTask.IMAGE_CLASSIFICATION, read_back
+        )
+    assert [
+        r["params"]["index"] for r in artifacts.read_best_results(identity)["Mnist"]
+    ] == [5, 4, 6]
+    with pytest.raises(ValueError, match="Experiment Task"):
+        artifacts.update_best_results(identity, None, receipt)
+
+
+def test_replayed_receipt_clears_an_ineligible_stored_rank(tmp_path):
+    artifacts = FilesystemRunArtifacts(root=tmp_path)
+    identity = ModelIdentity("bert", "linear")
+    receipt = {
+        "artifactId": "attempt-a",
+        "dataset": "WordDataset",
+        "rankingMetric": "validation/mlm/exact_word_accuracy",
+        "metrics": {"validation_accuracy": 1.0, "validation/mlm/masked_accuracy": 0.9},
+    }
+    summary_path = artifacts.best_results_path(identity)
+    summary_path.parent.mkdir(parents=True)
+    summary_path.write_text(json.dumps({"WordDataset": [{**receipt, "rank": 1}]}))
+
+    assert (
+        artifacts.update_best_results(
+            identity, ExperimentTask.BERT_PRETRAINING, receipt
+        )
+        == {}
+    )
+    assert artifacts.read_best_results(identity) == {}
