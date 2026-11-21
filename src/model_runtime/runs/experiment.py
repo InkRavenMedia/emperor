@@ -4,7 +4,7 @@ import traceback
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, NewType, cast
+from typing import Any, Literal, cast
 
 from lightning import Trainer, seed_everything
 from lightning.pytorch.callbacks import Callback, EarlyStopping, ModelCheckpoint
@@ -45,10 +45,6 @@ from model_runtime.runs.progress import (
 )
 from model_runtime.task_behavior import bert_validation_metric, experiment_task_behavior
 
-_ExperimentPresetUnset = NewType("_ExperimentPresetUnset", object)
-_EXPERIMENT_PRESET_UNSET = _ExperimentPresetUnset(object())
-_ExperimentPresetInput = BaseOptions | None | _ExperimentPresetUnset
-
 
 @dataclass(frozen=True, slots=True)
 class _TrainingRuntime:
@@ -82,14 +78,9 @@ class ExperimentBase:
         *,
         model_package: ModelPackage,
         run_artifacts: RunArtifacts | None = None,
-        experiment_preset: _ExperimentPresetInput = _EXPERIMENT_PRESET_UNSET,
     ) -> None:
         if not isinstance(cast(object, model_package), ModelPackage):
             raise TypeError("Runs require an explicit ModelPackage.")
-        if experiment_preset is not _EXPERIMENT_PRESET_UNSET:
-            if preset is not None:
-                raise TypeError("Pass only 'preset' or 'experiment_preset'.")
-            preset = cast(BaseOptions | None, experiment_preset)
         self.model_package = model_package
         self.run_artifacts = (
             run_artifacts if run_artifacts is not None else FilesystemRunArtifacts()
