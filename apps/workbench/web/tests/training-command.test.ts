@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "./fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 import { buildTrainingCommand } from "@/lib/training-command";
 import type { ConfigField } from "@/lib/api/models";
@@ -9,6 +10,7 @@ function field(overrides: Partial<ConfigField> & Pick<ConfigField, "key" | "flag
     configKey: overrides.configKey ?? overrides.key.toUpperCase(),
     label: overrides.label ?? overrides.key,
     section,
+    ...configFieldSectionFixture(overrides.sectionPath ?? [section || "General"]),
     sectionPath: overrides.sectionPath ?? [section || "General"],
     description: overrides.description ?? "",
     type: overrides.type ?? "string",

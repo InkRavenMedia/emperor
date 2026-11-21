@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../fixtures/config-sections";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -858,6 +859,7 @@ const schemaResponse = {
       flag: "--hidden-dim",
       label: "stack hidden dim",
       section: "Layer Stack Options",
+      ...configFieldSectionFixture(["Layer Stack Options"]),
       sectionPath: ["Layer Stack Options"],
       type: "int",
       default: 256,
@@ -871,6 +873,7 @@ const schemaResponse = {
       flag: "--stack-num-layers",
       label: "stack num layers",
       section: "Layer Stack Options",
+      ...configFieldSectionFixture(["Layer Stack Options"]),
       sectionPath: ["Layer Stack Options"],
       type: "int",
       default: 5,
@@ -884,6 +887,7 @@ const schemaResponse = {
       flag: "--stack-gate-flag",
       label: "gate flag",
       section: "Gate Options",
+      ...configFieldSectionFixture(["Gate Options"]),
       sectionPath: ["Gate Options"],
       type: "bool",
       default: false,
@@ -897,6 +901,7 @@ const schemaResponse = {
       flag: "--stack-activation",
       label: "stack activation",
       section: "Layer Stack Options",
+      ...configFieldSectionFixture(["Layer Stack Options"]),
       sectionPath: ["Layer Stack Options"],
       type: "enum",
       default: "GELU",
@@ -3939,6 +3944,8 @@ function setupTrainingScenario(
   return installFetchMock(options);
 }
 
+const WORKSPACE_READY_TIMEOUT = 5_000;
+
 function renderWorkbench() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -3962,8 +3969,10 @@ async function waitForOpenFullConfigButton(
       await user.click(modelWorkspaceButton);
     }
   }
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: /open full config/i })).toBeEnabled(),
+  await waitFor(
+    () =>
+      expect(screen.getByRole("button", { name: /open full config/i })).toBeEnabled(),
+    { timeout: WORKSPACE_READY_TIMEOUT },
   );
   return screen.getByRole("button", { name: /open full config/i });
 }
@@ -4072,7 +4081,11 @@ async function selectTargetOption(
 
 async function openFullConfig(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await waitForOpenFullConfigButton(user));
-  return screen.findByRole("dialog", { name: /full configuration/i });
+  return screen.findByRole(
+    "dialog",
+    { name: /full configuration/i },
+    { timeout: WORKSPACE_READY_TIMEOUT },
+  );
 }
 
 async function typeConfigFieldValue(
@@ -4186,9 +4199,11 @@ async function openTrainingWorkspace(user: ReturnType<typeof userEvent.setup>) {
     await waitFor(() => expect(existingWorkspace).toBeVisible());
     return existingWorkspace;
   }
-  const workspace = await screen.findByRole("region", {
-    name: "Training workspace",
-  });
+  const workspace = await screen.findByRole(
+    "region",
+    { name: "Training workspace" },
+    { timeout: WORKSPACE_READY_TIMEOUT },
+  );
   if (!(workspace instanceof HTMLElement)) {
     throw new Error("Expected Training workspace to render");
   }

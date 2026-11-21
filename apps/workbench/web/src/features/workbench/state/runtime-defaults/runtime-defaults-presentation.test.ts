@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 import type { ConfigField } from "@/lib/api/models";
 import { type ConfigSection } from "@/lib/config";
@@ -14,11 +15,12 @@ function field(
     label: overrides.label ?? overrides.key,
     section: overrides.section,
     sectionPath: overrides.sectionPath,
-    sectionIdPath: overrides.sectionIdPath,
-    sectionControlFieldKey: overrides.sectionControlFieldKey,
+    ...configFieldSectionFixture(overrides.sectionPath ?? [overrides.section ?? "Global"]),
+    ...(overrides.sectionIdPath && { sectionIdPath: overrides.sectionIdPath }),
+    ...(overrides.sectionControlFieldKey !== undefined && { sectionControlFieldKey: overrides.sectionControlFieldKey }),
     description: overrides.description,
     type: overrides.type ?? "int",
-    legacyJson: overrides.legacyJson,
+    hasFlatControls: overrides.hasFlatControls ?? false,
     default: Object.prototype.hasOwnProperty.call(overrides, "default")
       ? (overrides.default ?? null)
       : 0,
@@ -36,6 +38,7 @@ function schemaSections(): ConfigSection[] {
     key: "hidden_dim",
     label: "Hidden Dim",
     section: "Global",
+    ...configFieldSectionFixture(["Global"]),
     sectionPath: ["Global"],
     default: 64,
     locked: true,
@@ -46,6 +49,7 @@ function schemaSections(): ConfigSection[] {
     key: "stack_depth",
     label: "Stack Depth",
     section: "Layer Stack Options",
+    ...configFieldSectionFixture(["Layer Stack Options"]),
     sectionPath: ["Layer Stack Options"],
     default: 2,
   });
@@ -53,6 +57,7 @@ function schemaSections(): ConfigSection[] {
     key: "stack_gate_flag",
     label: "Gate Flag",
     section: "Gate Options",
+    ...configFieldSectionFixture(["Gate Options"]),
     sectionPath: ["Gate Options"],
     type: "bool",
     default: false,
@@ -62,6 +67,7 @@ function schemaSections(): ConfigSection[] {
     key: "gate_scale",
     label: "Gate Scale",
     section: "Gate Options",
+    ...configFieldSectionFixture(["Gate Options"]),
     sectionPath: ["Gate Options"],
     type: "float",
     default: 1,
@@ -70,6 +76,7 @@ function schemaSections(): ConfigSection[] {
     key: "gate_stack_independent_flag",
     label: "Gate Stack Independent Flag",
     section: "Gate Stack Options",
+    ...configFieldSectionFixture(["Gate Options", "Gate Stack Options"]),
     sectionPath: ["Gate Options", "Gate Stack Options"],
     type: "bool",
     default: false,
@@ -79,6 +86,7 @@ function schemaSections(): ConfigSection[] {
     key: "gate_stack_depth",
     label: "Gate Stack Depth",
     section: "Gate Stack Options",
+    ...configFieldSectionFixture(["Gate Options", "Gate Stack Options"]),
     sectionPath: ["Gate Options", "Gate Stack Options"],
     default: 2,
   });
@@ -86,6 +94,7 @@ function schemaSections(): ConfigSection[] {
     key: "input_layer_weight_option",
     label: "Input Layer Weight Option",
     section: "Input Boundary Model Options",
+    ...configFieldSectionFixture(["Input Boundary Model Options"]),
     sectionPath: ["Input Boundary Model Options"],
     type: "class",
     default: null,
@@ -96,6 +105,7 @@ function schemaSections(): ConfigSection[] {
     key: "input_layer_weight_rank",
     label: "Input Layer Weight Rank",
     section: "Input Boundary Model Options",
+    ...configFieldSectionFixture(["Input Boundary Model Options"]),
     sectionPath: ["Input Boundary Model Options"],
     default: 4,
   });
@@ -105,10 +115,13 @@ function schemaSections(): ConfigSection[] {
     { title: "Layer Stack Options", fields: [layerStackDepth] },
     { title: "Gate Options", fields: [gateFlag, gateScale] },
     {
+      idPath: ["gate_stack_independent_flag"],
+      controlFieldKey: "gate_stack_independent_flag",
       title: "Gate Stack Options",
       fields: [gateStackFlag, gateStackDepth],
     },
     {
+      idPath: ["input_layer_weight_option"],
       title: "Input Boundary Model Options",
       fields: [inputWeightOption, inputWeightRank],
     },
@@ -116,31 +129,32 @@ function schemaSections(): ConfigSection[] {
 }
 
 describe("Runtime Defaults schema presentation", () => {
-  it("hides empty legacy model objects while preserving their schema and concrete values", () => {
-    const legacyField = (
+  it("hides empty model objects with flat controls while preserving their schema and concrete values", () => {
+    const fieldWithFlatControls = (
       key: string,
       values: Partial<ConfigField> = {},
     ) => field({
       key,
       section: "Model Options",
+      ...configFieldSectionFixture(["Model Options"]),
       sectionPath: ["Model Options"],
       type: "json",
-      legacyJson: true,
+      hasFlatControls: true,
       default: null,
       nullable: true,
       ...values,
     });
     const concrete = '{"type":"LinearLayerConfig","bias_flag":true}';
     const fields = [
-      legacyField("ATTN_SOURCE_MEMORY_MODEL_CONFIG"),
-      legacyField("ENCODER_ATTN_SOURCE_MEMORY_MODEL_CONFIG", { default: "null" }),
-      legacyField("SEQUENCE_EXPANSION_MODEL_CONFIG", { default: concrete }),
-      legacyField("ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG", {
+      fieldWithFlatControls("ATTN_SOURCE_MEMORY_MODEL_CONFIG"),
+      fieldWithFlatControls("ENCODER_ATTN_SOURCE_MEMORY_MODEL_CONFIG", { default: "null" }),
+      fieldWithFlatControls("SEQUENCE_EXPANSION_MODEL_CONFIG", { default: concrete }),
+      fieldWithFlatControls("ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG", {
         locked: true,
         lockedValue: concrete,
       }),
-      legacyField("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG"),
-      legacyField("ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG", { legacyJson: undefined }),
+      fieldWithFlatControls("DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG"),
+      fieldWithFlatControls("ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG", { hasFlatControls: false }),
     ];
     const input = {
       sections: [{ title: "Model Options", fields }],
@@ -266,6 +280,7 @@ describe("Runtime Defaults schema presentation", () => {
     const selector = field({
       key: "recurrent_composition_option",
       section: "Recurrent Layer Options",
+      ...configFieldSectionFixture(["Recurrent Layer Options"]),
       sectionPath: ["Recurrent Layer Options"],
       type: "class",
       default: "RecurrentLayerConfig",
@@ -277,6 +292,7 @@ describe("Runtime Defaults schema presentation", () => {
     const shared = field({
       key: "recurrent_no_gradient_transition_count",
       section: "Recurrent Layer Options",
+      ...configFieldSectionFixture(["Recurrent Layer Options"]),
       sectionPath: ["Recurrent Layer Options"],
       default: null,
       nullable: true,
@@ -284,6 +300,7 @@ describe("Runtime Defaults schema presentation", () => {
     const standard = field({
       key: "recurrent_max_steps",
       section: "Standard Recurrent Options",
+      ...configFieldSectionFixture(["Standard Recurrent Options"]),
       sectionPath: ["Standard Recurrent Options"],
       applicableWhen: [
         {
@@ -295,6 +312,7 @@ describe("Runtime Defaults schema presentation", () => {
     const trm = field({
       key: "recurrent_answer_update_count",
       section: "TRM Recurrent Options",
+      ...configFieldSectionFixture(["TRM Recurrent Options"]),
       sectionPath: ["TRM Recurrent Options"],
       applicableWhen: [
         {
@@ -360,10 +378,7 @@ describe("Runtime Defaults schema presentation", () => {
       "Gate Options",
       "Input Boundary Model Options",
     ]);
-    expect(presentation.defaultOpenSectionKeys).toEqual([
-      "Global",
-      "Layer Stack Options",
-    ]);
+    expect(presentation.defaultOpenSectionKeys).toEqual(["global", "stack_num_layers"]);
 
     const global = presentation.sections[0]!;
     expect(global.treeMetrics).toEqual({
@@ -429,7 +444,7 @@ describe("Runtime Defaults schema presentation", () => {
 
     expect(presentation.isSearchActive).toBe(true);
     expect(presentation.searchOpenKey).toBe("gate_stack_depth\u0000");
-    expect(presentation.defaultOpenSectionKeys).toEqual(["Gate Options"]);
+    expect(presentation.defaultOpenSectionKeys).toEqual(["stack_gate_flag"]);
     expect(presentation.sections).toHaveLength(1);
 
     const gate = presentation.sections[0]!;
@@ -445,7 +460,7 @@ describe("Runtime Defaults schema presentation", () => {
     );
     expect(searchOption).toMatchObject({
       sectionTitle: "Gate Stack Options",
-      rootSectionKey: "Gate Options",
+      rootSectionKey: "stack_gate_flag",
       field: {
         key: "gate_stack_depth",
         value: "2",
@@ -488,6 +503,6 @@ describe("Runtime Defaults schema presentation", () => {
         sourceTitle: "Layer Stack Submodule Options",
       },
     });
-    expect(presentation.defaultOpenSectionKeys).toEqual(["Global", "Gate Options"]);
+    expect(presentation.defaultOpenSectionKeys).toEqual(["global", "stack_gate_flag"]);
   });
 });

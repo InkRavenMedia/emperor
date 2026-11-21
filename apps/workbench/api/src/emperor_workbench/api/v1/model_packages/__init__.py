@@ -14,6 +14,12 @@ from emperor_workbench.api.v1.model_packages._contracts import (
     SearchAxisResponse,
     SearchSpaceResponse,
 )
+from emperor_workbench.api.v1.model_packages._mapping import (
+    datasets_response,
+    monitors_response,
+    presets_response,
+    search_space_response,
+)
 from emperor_workbench.api.v1.model_packages._routes import router
 
 __all__ = [
@@ -31,5 +37,9 @@ __all__ = [
     "PresetsResponse",
     "SearchAxisResponse",
     "SearchSpaceResponse",
+    "datasets_response",
+    "monitors_response",
+    "presets_response",
     "router",
+    "search_space_response",
 ]

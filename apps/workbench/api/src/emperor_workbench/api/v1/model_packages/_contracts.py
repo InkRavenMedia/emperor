@@ -72,11 +72,11 @@ class ConfigFieldResponse(ApiResponseModel):
     label: str
     section: str
     sectionPath: list[str] = Field(min_length=1)
-    sectionIdPath: list[str] | None = Field(default=None, min_length=1)
-    sectionControlFieldKey: str | None = None
+    sectionIdPath: list[str] = Field(min_length=1)
+    sectionControlFieldKey: str | None
     description: str = ""
     type: str
-    legacyJson: bool = False
+    hasFlatControls: bool
     default: ConfigValue
     nullable: bool
     choices: list[ConfigValue]

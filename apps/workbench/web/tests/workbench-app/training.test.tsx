@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../fixtures/config-sections";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -2322,6 +2323,7 @@ describe("WorkbenchApp Training And Preview", () => {
             flag: "--num-epochs",
             label: "num epochs",
             section: "Training",
+            ...configFieldSectionFixture(["Training"]),
             sectionPath: ["Training"],
             type: "int",
             default: 30,
@@ -2573,6 +2575,7 @@ describe("WorkbenchApp Training And Preview", () => {
             flag: "--num-epochs",
             label: "num epochs",
             section: "Training",
+            ...configFieldSectionFixture(["Training"]),
             sectionPath: ["Training"],
             type: "int",
             default: 30,
@@ -2684,6 +2687,7 @@ describe("WorkbenchApp Training And Preview", () => {
             flag: "--num-epochs",
             label: "num epochs",
             section: "Training",
+            ...configFieldSectionFixture(["Training"]),
             sectionPath: ["Training"],
             type: "int",
             default: 30,
@@ -2781,6 +2785,7 @@ describe("WorkbenchApp Training And Preview", () => {
             flag: "--num-epochs",
             label: "num epochs",
             section: "Training",
+            ...configFieldSectionFixture(["Training"]),
             sectionPath: ["Training"],
             type: "int",
             default: 30,
@@ -3703,13 +3708,13 @@ describe("WorkbenchApp Training And Preview", () => {
       "my__folder",
     ]) {
       await user.clear(input);
-      await user.type(input, value);
+      await user.paste(value);
       expect(screen.getByRole("button", { name: /start training/i })).toBeDisabled();
       expect(screen.getByRole("alert")).toHaveTextContent(/single underscores/i);
     }
 
     await user.clear(input);
-    await user.type(input, "my_experiment");
+    await user.paste("my_experiment");
     expect(screen.getByRole("button", { name: /start training/i })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: /start training/i }));

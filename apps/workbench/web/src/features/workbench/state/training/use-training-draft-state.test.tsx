@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -29,6 +30,7 @@ const hiddenDim: ConfigField = {
   flag: "--hidden-dim",
   label: "Hidden dim",
   section: "Model",
+  ...configFieldSectionFixture(["Model"]),
   sectionPath: ["Model"],
   type: "int",
   default: 256,

@@ -78,4 +78,4 @@ def inspection_response(result: InspectionResult) -> InspectResponse:
     )
 
 
-__all__ = ["inspection_response"]
+__all__ = ["graph_edge_payload", "graph_node_payload", "inspection_response"]

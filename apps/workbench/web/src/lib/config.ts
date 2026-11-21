@@ -79,135 +79,6 @@ export function overrideValue(overrides: OverrideValues, key: string) {
   return entry?.[1];
 }
 
-// Older backends send headings without canonical section metadata.
-const LEGACY_SECTION_CONTROL_KEYS = new Map([
-  ["Attention Mode", "expert_attention_flag"],
-  ["Gate Options", "stack_gate_flag"],
-  ["Gate Stack Options", "gate_stack_independent_flag"],
-  ["Halting Options", "stack_halting_flag"],
-  ["Halting Stack Options", "halting_stack_independent_flag"],
-  ["Memory Options", "memory_flag"],
-  ["Memory Stack Options", "memory_stack_independent_flag"],
-  ["Router Gate Options", "router_stack_gate_flag"],
-  ["Router Gate Stack Options", "router_gate_stack_independent_flag"],
-  ["Router Halting Options", "router_stack_halting_flag"],
-  ["Router Halting Stack Options", "router_halting_stack_independent_flag"],
-  ["Router Memory Options", "router_memory_flag"],
-  ["Router Memory Stack Options", "router_memory_stack_independent_flag"],
-  ["Router Recurrent Layer Options", "router_recurrent_flag"],
-  ["Router Recurrent Gate Options", "router_recurrent_stack_gate_flag"],
-  [
-    "Router Recurrent Gate Stack Options",
-    "router_recurrent_gate_stack_independent_flag",
-  ],
-  ["Router Recurrent Halting Options", "router_recurrent_stack_halting_flag"],
-  [
-    "Router Recurrent Halting Stack Options",
-    "router_recurrent_halting_stack_independent_flag",
-  ],
-  ["Expert Gate Options", "expert_stack_gate_flag"],
-  ["Expert Gate Stack Options", "expert_gate_stack_independent_flag"],
-  ["Expert Halting Options", "expert_stack_halting_flag"],
-  ["Expert Halting Stack Options", "expert_halting_stack_independent_flag"],
-  ["Expert Memory Options", "expert_memory_flag"],
-  ["Expert Memory Stack Options", "expert_memory_stack_independent_flag"],
-  ["Expert Recurrent Layer Options", "expert_recurrent_flag"],
-  ["Expert Recurrent Gate Options", "expert_recurrent_stack_gate_flag"],
-  [
-    "Expert Recurrent Gate Stack Options",
-    "expert_recurrent_gate_stack_independent_flag",
-  ],
-  ["Expert Recurrent Halting Options", "expert_recurrent_stack_halting_flag"],
-  [
-    "Expert Recurrent Halting Stack Options",
-    "expert_recurrent_halting_stack_independent_flag",
-  ],
-  ["Feed-Forward Gate Options", "ff_stack_gate_flag"],
-  ["Feed-Forward Gate Stack Options", "ff_gate_stack_independent_flag"],
-  ["Feed-Forward Halting Options", "ff_stack_halting_flag"],
-  ["Feed-Forward Halting Stack Options", "ff_halting_stack_independent_flag"],
-  ["Feed-Forward Memory Options", "ff_memory_flag"],
-  ["Feed-Forward Memory Stack Options", "ff_memory_stack_independent_flag"],
-  ["Feed-Forward Recurrent Layer Options", "ff_recurrent_flag"],
-  ["Feed-Forward Recurrent Gate Options", "ff_recurrent_stack_gate_flag"],
-  [
-    "Feed-Forward Recurrent Gate Stack Options",
-    "ff_recurrent_gate_stack_independent_flag",
-  ],
-  ["Feed-Forward Recurrent Halting Options", "ff_recurrent_stack_halting_flag"],
-  [
-    "Feed-Forward Recurrent Halting Stack Options",
-    "ff_recurrent_halting_stack_independent_flag",
-  ],
-  ["Attention Projection Gate Options", "attn_stack_gate_flag"],
-  [
-    "Attention Projection Gate Stack Options",
-    "attn_gate_stack_independent_flag",
-  ],
-  ["Attention Projection Halting Options", "attn_stack_halting_flag"],
-  [
-    "Attention Projection Halting Stack Options",
-    "attn_halting_stack_independent_flag",
-  ],
-  ["Attention Projection Memory Options", "attn_memory_flag"],
-  [
-    "Attention Projection Memory Stack Options",
-    "attn_memory_stack_independent_flag",
-  ],
-  ["Attention Projection Recurrent Layer Options", "attn_recurrent_flag"],
-  [
-    "Attention Projection Recurrent Gate Options",
-    "attn_recurrent_stack_gate_flag",
-  ],
-  [
-    "Attention Projection Recurrent Gate Stack Options",
-    "attn_recurrent_gate_stack_independent_flag",
-  ],
-  [
-    "Attention Projection Recurrent Halting Options",
-    "attn_recurrent_stack_halting_flag",
-  ],
-  [
-    "Attention Projection Recurrent Halting Stack Options",
-    "attn_recurrent_halting_stack_independent_flag",
-  ],
-  ["Recurrent Layer Options", "recurrent_flag"],
-  ["Recurrent Gate Options", "recurrent_stack_gate_flag"],
-  ["Recurrent Gate Stack Options", "recurrent_gate_stack_independent_flag"],
-  ["Recurrent Halting Options", "recurrent_stack_halting_flag"],
-  ["Recurrent Halting Stack Options", "recurrent_halting_stack_independent_flag"],
-  ["Weight Options", "weight_option_flag"],
-  ["Weight Generator Options", "weight_option_flag"],
-  ["Weight Generator Stack Options", "weight_generator_stack_independent_flag"],
-  ["Bias Options", "bias_option_flag"],
-  ["Bias Generator Options", "bias_option_flag"],
-  ["Bias Generator Stack Options", "bias_generator_stack_independent_flag"],
-  ["Diagonal Options", "diagonal_option_flag"],
-  ["Diagonal Generator Options", "diagonal_option_flag"],
-  ["Diagonal Generator Stack Options", "diagonal_generator_stack_independent_flag"],
-  ["Mask Options", "mask_option_flag"],
-  ["Mask Stack Options", "mask_generator_stack_independent_flag"],
-  ["Router Weight Generator Options", "router_weight_option_flag"],
-  [
-    "Router Weight Generator Stack Options",
-    "router_weight_generator_stack_independent_flag",
-  ],
-  ["Router Bias Generator Options", "router_bias_option_flag"],
-  [
-    "Router Bias Generator Stack Options",
-    "router_bias_generator_stack_independent_flag",
-  ],
-  ["Router Diagonal Generator Options", "router_diagonal_option_flag"],
-  [
-    "Router Diagonal Generator Stack Options",
-    "router_diagonal_generator_stack_independent_flag",
-  ],
-  ["Router Mask Options", "router_mask_option_flag"],
-  [
-    "Router Mask Stack Options",
-    "router_mask_generator_stack_independent_flag",
-  ],
-]);
 
 const INHERITED_STACK_SECTIONS_BY_CONTROL = new Map([
   [
@@ -447,8 +318,6 @@ const GENERAL_CONFIG_SECTION = "General";
 const GLOBAL_CONFIG_SECTION = "Global";
 const LAYER_STACK_OPTIONS_SECTION = "Layer Stack Options";
 const LAYER_STACK_SUBMODULE_OPTIONS_SECTION = "Layer Stack Submodule Options";
-const INPUT_BOUNDARY_MODEL_SECTION = "Input Boundary Model Options";
-const OUTPUT_BOUNDARY_MODEL_SECTION = "Output Boundary Model Options";
 const ADAPTIVE_GENERATOR_STACK_SECTION = "Adaptive Generator Stack Options";
 const MIXTURE_OF_EXPERTS_SECTION = "Mixture Of Experts Model Options";
 const ATTENTION_MODE_SECTION = "Attention Mode";
@@ -517,10 +386,8 @@ function displaySectionField(field: ConfigField): ConfigField {
     ...field,
     section: ATTENTION_MODE_SECTION,
     sectionPath: [rootTitle, ATTENTION_MODE_SECTION],
-    ...(field.sectionIdPath && {
-      sectionIdPath: [MIXTURE_OF_EXPERTS_ID, ATTENTION_MODE_ID],
-      sectionControlFieldKey: "expert_attention_flag",
-    }),
+    sectionIdPath: [MIXTURE_OF_EXPERTS_ID, ATTENTION_MODE_ID],
+    sectionControlFieldKey: "expert_attention_flag",
   };
 }
 
@@ -584,7 +451,7 @@ export function displayConfigFieldLabel(
     return explicitLabel;
   }
 
-  const controlFieldKey = sectionControlKey(section);
+  const controlFieldKey = section.controlFieldKey;
   if (
     controlFieldKey &&
     configFieldMatchesKey(field, controlFieldKey)
@@ -641,7 +508,10 @@ export function configSectionsFields(sections: ConfigSection[]): ConfigField[] {
 }
 
 export function configSectionKey(section: Pick<ConfigSection, "title" | "idPath">) {
-  return section.idPath?.join("/") ?? section.title;
+  if (!section.idPath?.length) {
+    throw new Error(`Config section ${section.title} is missing its schema identity.`);
+  }
+  return section.idPath.join("/");
 }
 
 export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSection[] {
@@ -654,7 +524,7 @@ export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSec
   function getOrCreateChildSection(
     parent: DraftSection[] | DraftSection,
     title: string,
-    idPath?: string[],
+    idPath: string[],
   ) {
     const children = Array.isArray(parent) ? parent : parent.children;
     const identity = configSectionKey({ title, idPath });
@@ -669,24 +539,23 @@ export function groupConfigFieldsBySectionPath(fields: ConfigField[]): ConfigSec
   for (const rawField of fields) {
     const field = displaySectionField(normalizeConfigFieldForDisplay(rawField));
     const sectionPath = normalizedFieldSectionPath(field);
-    const idPath = field.sectionIdPath?.length === sectionPath.length
-      ? field.sectionIdPath
-      : undefined;
+    const idPath = field.sectionIdPath;
+    if (idPath.length !== sectionPath.length) {
+      throw new Error(`Config field ${field.key} has inconsistent section metadata.`);
+    }
     let currentSection = getOrCreateChildSection(
       rootSections,
       sectionPath[0]!,
-      idPath?.slice(0, 1),
+      idPath.slice(0, 1),
     );
     for (const [index, sectionTitle] of sectionPath.slice(1).entries()) {
       currentSection = getOrCreateChildSection(
         currentSection,
         sectionTitle,
-        idPath?.slice(0, index + 2),
+        idPath.slice(0, index + 2),
       );
     }
-    if (idPath && field.sectionControlFieldKey !== undefined) {
-      currentSection.controlFieldKey = field.sectionControlFieldKey;
-    }
+    currentSection.controlFieldKey = field.sectionControlFieldKey;
     currentSection.fields.push(field);
   }
 
@@ -782,9 +651,7 @@ export function inheritedHiddenModelFieldHint(
   section: ConfigSection,
   allFields: ConfigField[],
 ): InheritedConfigFieldHint | undefined {
-  const isLayerStack = section.idPath
-    ? section.idPath.at(-1) === "stack_num_layers"
-    : section.title === LAYER_STACK_OPTIONS_SECTION;
+  const isLayerStack = section.idPath?.at(-1) === "stack_num_layers";
   if (!isLayerStack) {
     return undefined;
   }
@@ -888,14 +755,8 @@ export function isEnabledConfigValue(value: string) {
   return ["true", "1", "yes", "on"].includes(value.trim().toLowerCase());
 }
 
-function sectionControlKey(section: ConfigSection) {
-  return section.controlFieldKey === undefined
-    ? LEGACY_SECTION_CONTROL_KEYS.get(section.title)
-    : section.controlFieldKey;
-}
-
 export function controlledSectionFlagField(section: ConfigSection) {
-  const controlFieldKey = sectionControlKey(section);
+  const controlFieldKey = section.controlFieldKey;
   if (controlFieldKey) {
     return section.fields.find((field) => configFieldMatchesKey(field, controlFieldKey));
   }
@@ -1128,10 +989,10 @@ export function filterConfigSectionsForSearch(
 
 function boundaryModelPrefix(section: ConfigSection) {
   const anchor = section.idPath?.at(-1);
-  if (anchor === "input_layer_weight_option" || (!anchor && section.title === INPUT_BOUNDARY_MODEL_SECTION)) {
+  if (anchor === "input_layer_weight_option") {
     return "input_layer_";
   }
-  if (anchor === "output_layer_weight_option" || (!anchor && section.title === OUTPUT_BOUNDARY_MODEL_SECTION)) {
+  if (anchor === "output_layer_weight_option") {
     return "output_layer_";
   }
   return undefined;
@@ -1236,7 +1097,7 @@ export function boundaryModelFieldGroups(
 }
 
 function withSectionControlField(section: ConfigSection): ConfigSection {
-  const controlFieldKey = sectionControlKey(section);
+  const controlFieldKey = section.controlFieldKey;
   const children = section.children?.map(withSectionControlField);
   return {
     ...section,
