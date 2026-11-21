@@ -12,6 +12,7 @@ from pathlib import Path
 from threading import RLock
 from typing import Any
 
+import yaml
 from model_runtime.runs import NonFiniteJsonValue, replace_non_finite_json
 
 import emperor_workbench.tensorboard as tensorboard
@@ -228,8 +229,12 @@ def _parse_hparam_value(raw_value: str) -> bool | int | float | str | None:
     value = raw_value.strip()
     if not value:
         return ""
-    if " #" in value:
-        value = value.split(" #", 1)[0].strip()
+    if value.startswith(("'", '"')):
+        node = yaml.compose(value, Loader=yaml.BaseLoader)
+        if not isinstance(node, yaml.ScalarNode):
+            raise ValueError("Expected a quoted YAML scalar.")
+        return node.value
+    value = re.split(r"\s+#", value, maxsplit=1)[0].rstrip()
     normalized = value.lower()
     if normalized in {"null", "none", "~"}:
         return None
@@ -237,8 +242,6 @@ def _parse_hparam_value(raw_value: str) -> bool | int | float | str | None:
         return True
     if normalized == "false":
         return False
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
     if HPARAM_INT_RE.fullmatch(value):
         try:
             return int(value)
@@ -271,8 +274,10 @@ def _read_hparams_flat(
 
     values: dict[str, Any] = {}
     for raw_line in lines:
+        if raw_line[:1].isspace():
+            continue
         line = raw_line.strip()
-        if not line or line.startswith("#") or ":" not in line:
+        if not line or line.startswith(("#", "- ", "? ", ": ")) or ":" not in line:
             continue
         key, raw_value = line.split(":", 1)
         key = key.strip()
@@ -280,11 +285,13 @@ def _read_hparams_flat(
         if (
             not key
             or not value
-            or value in {"|", ">"}
-            or value.startswith(("[", "{", "- "))
+            or value.startswith(("[", "{", "|", ">", "#", "- ", "!", "&", "*"))
         ):
             continue
-        values[key] = _parse_hparam_value(value)
+        try:
+            values[key] = _parse_hparam_value(value)
+        except (ValueError, yaml.YAMLError):
+            continue
     return values
 
 
