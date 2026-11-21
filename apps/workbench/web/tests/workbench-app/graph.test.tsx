@@ -110,7 +110,7 @@ describe("WorkbenchApp Graph Workspace", () => {
     );
 
     const gateNode = await screen.findByTestId(
-      "node-main_model.layers.0.postprocessing.gate",
+      "node-main_model.layers.0.pipeline.postprocessing.gate",
     );
     expect(within(gateNode).queryByTitle(/parameters/)).not.toBeInTheDocument();
   });
@@ -242,10 +242,7 @@ describe("WorkbenchApp Graph Workspace", () => {
 
     const fullLayerNode = screen.getByTestId("node-main_model.layers.0");
     expect(
-      within(fullLayerNode).getByText("LayerPostprocessingDelegate"),
-    ).toBeInTheDocument();
-    expect(
-      within(fullLayerNode).getByText("LayerNormalizationDelegate"),
+      within(fullLayerNode).getByText("LayerProcessingPipeline"),
     ).toBeInTheDocument();
     expect(within(fullLayerNode).getByText("SelfAttentionProcessor")).toBeInTheDocument();
   });
@@ -343,10 +340,10 @@ describe("WorkbenchApp Graph Workspace", () => {
     );
     expect(screen.queryByTestId("node-main_model.layers.0.processor")).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      screen.queryByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId("node-main_model.layers.0.normalization.module"),
+      screen.queryByTestId("node-main_model.layers.0.pipeline.normalization.module"),
     ).not.toBeInTheDocument();
   });
 
@@ -397,7 +394,7 @@ describe("WorkbenchApp Graph Workspace", () => {
     expect(await screen.findByText("Sequential")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Gate · main_model.layers.0.postprocessing.gate",
+        "Gate · main_model.layers.0.pipeline.postprocessing.gate",
       ),
     ).toBeInTheDocument();
     expect(await screen.findByText("main_model.layers.0.processor.projection")).toBeInTheDocument();
@@ -583,10 +580,10 @@ describe("WorkbenchApp Graph Workspace", () => {
     ).toBeInTheDocument();
     expect(screen.queryByTestId("node-main_model.layers.0.processor")).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      screen.queryByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByTestId("node-main_model.layers.0.normalization.module"),
+      screen.queryByTestId("node-main_model.layers.0.pipeline.normalization.module"),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("BEFORE")).not.toBeInTheDocument();
   });
@@ -720,28 +717,33 @@ describe("WorkbenchApp Graph Workspace", () => {
     expect(screen.queryByText("LayerNorm")).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: /full/i }));
+    await user.click(
+      await screen.findByRole("button", {
+        name: /^select and expand main_model\.layers\.0\.pipeline$/i,
+      }),
+    );
     expect(
-      await screen.findByTestId("node-main_model.layers.0.postprocessing"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.postprocessing"),
     ).toBeInTheDocument();
     expect(
-      await screen.findByTestId("node-main_model.layers.0.normalization"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.normalization"),
     ).toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", {
-        name: /select and expand main_model\.layers\.0\.postprocessing/i,
+        name: /^select and expand main_model\.layers\.0\.pipeline\.postprocessing$/i,
       }),
     );
     await user.click(
       screen.getByRole("button", {
-        name: /select and expand main_model\.layers\.0\.normalization/i,
+        name: /^select and expand main_model\.layers\.0\.pipeline\.normalization$/i,
       }),
     );
     expect(
-      await screen.findByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).toBeInTheDocument();
     expect(
-      await screen.findByTestId("node-main_model.layers.0.normalization.module"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.normalization.module"),
     ).toBeInTheDocument();
     expect(await screen.findByTestId("node-main_model.layers.0.processor")).toBeInTheDocument();
     expect(
@@ -769,10 +771,10 @@ describe("WorkbenchApp Graph Workspace", () => {
 
     await user.click(screen.getByRole("radio", { name: /full/i }));
     expect(
-      await screen.findByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).toBeInTheDocument();
     expect(
-      await screen.findByTestId("node-main_model.layers.0.normalization.module"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.normalization.module"),
     ).toBeInTheDocument();
     expect(await screen.findByTestId("node-loss_fn")).toBeInTheDocument();
     expect(await screen.findByTestId("node-metrics")).toBeInTheDocument();
@@ -789,12 +791,17 @@ describe("WorkbenchApp Graph Workspace", () => {
     );
     await user.click(screen.getByRole("radio", { name: /full/i }));
     await user.click(
+      await screen.findByRole("button", {
+        name: /^select and expand main_model\.layers\.0\.pipeline$/i,
+      }),
+    );
+    await user.click(
       screen.getByRole("button", {
-        name: /select and expand main_model\.layers\.0\.postprocessing/i,
+        name: /^select and expand main_model\.layers\.0\.pipeline\.postprocessing$/i,
       }),
     );
     expect(
-      await screen.findByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      await screen.findByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /collapse all/i }));
@@ -803,11 +810,11 @@ describe("WorkbenchApp Graph Workspace", () => {
       "true",
     );
     expect(
-      screen.queryByTestId("node-main_model.layers.0.postprocessing.dropout"),
+      screen.queryByTestId("node-main_model.layers.0.pipeline.postprocessing.dropout"),
     ).not.toBeInTheDocument();
     expect(
       within(screen.getByTestId("node-main_model.layers.0")).getByText(
-        "LayerPostprocessingDelegate",
+        "LayerProcessingPipeline",
       ),
     ).toBeInTheDocument();
   });

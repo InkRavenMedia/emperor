@@ -1317,7 +1317,9 @@ class TestLinearPresetsAndMetadata(unittest.TestCase):
                 layers = Model(cfg).main_model.layers
                 self.assertTrue(layers)
                 self.assertEqual(
-                    all(layer.normalization.module is None for layer in layers),
+                    all(
+                        layer.pipeline.normalization.module is None for layer in layers
+                    ),
                     expected_position is LayerNormPositionOptions.DISABLED,
                 )
 
@@ -1524,7 +1526,7 @@ class TestLinearModelBehavior(unittest.TestCase):
         memory_parameters = [
             parameter
             for name, parameter in model.named_parameters()
-            if ".memory.model." in name and parameter.requires_grad
+            if ".pipeline.memory.model." in name and parameter.requires_grad
         ]
         self.assertTrue(memory_parameters)
         self.assertTrue(
@@ -1574,7 +1576,8 @@ class TestLinearModelBehavior(unittest.TestCase):
                 residual_parameters = [
                     parameter
                     for name, parameter in model.named_parameters()
-                    if ".residual.connection." in name and parameter.requires_grad
+                    if ".pipeline.residual.connection." in name
+                    and parameter.requires_grad
                 ]
                 self.assertTrue(residual_parameters)
                 self.assertTrue(
@@ -1613,7 +1616,7 @@ class TestLinearModelBehavior(unittest.TestCase):
                 memory_parameters = [
                     parameter
                     for name, parameter in model.named_parameters()
-                    if ".memory.model." in name and parameter.requires_grad
+                    if ".pipeline.memory.model." in name and parameter.requires_grad
                 ]
                 self.assertTrue(memory_parameters)
                 self.assertTrue(
@@ -1666,13 +1669,14 @@ class TestLinearModelBehavior(unittest.TestCase):
             parameter
             for name, parameter in model.named_parameters()
             if "block_model" in name
-            and ".postprocessing.gate." in name
+            and ".pipeline.postprocessing.gate." in name
             and parameter.requires_grad
         ]
         outer_gate_parameters = [
             parameter
             for name, parameter in model.named_parameters()
-            if "recurrent_gate" in name and parameter.requires_grad
+            if name.startswith("main_model.step.pipeline.postprocessing.gate.")
+            and parameter.requires_grad
         ]
         for scope, parameters in (
             ("inner", inner_gate_parameters),
@@ -1720,13 +1724,13 @@ class TestLinearModelBehavior(unittest.TestCase):
             parameter
             for name, parameter in model.named_parameters()
             if "block_model" in name
-            and ".halting.model." in name
+            and ".pipeline.halting.model." in name
             and parameter.requires_grad
         ]
         outer_halting_parameters = [
             parameter
             for name, parameter in model.named_parameters()
-            if name.startswith("main_model.utilities.halting_model")
+            if name.startswith("main_model.step.pipeline.halting.model")
             and parameter.requires_grad
         ]
         for scope, parameters in (

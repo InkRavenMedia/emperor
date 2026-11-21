@@ -86,7 +86,7 @@ class ParametricHandlerMutationContractTests(unittest.TestCase):
             )
         inputs = torch.tensor([[1.0, -2.0], [0.5, 4.0]])
         state = LayerState(hidden=inputs)
-        residual_state = handler.residual.connection.new_state(inputs)
+        residual_state = handler.pipeline.residual.connection.new_state(inputs)
         state.residual_state = residual_state
 
         returned = handler(state)

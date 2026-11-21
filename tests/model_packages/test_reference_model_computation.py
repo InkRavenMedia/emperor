@@ -226,7 +226,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         hidden = _rms_norm(
             parameters,
             hidden + attention_output,
-            f"{attention_prefix}normalization.module",
+            f"{attention_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         feed_forward_prefix = f"{block_prefix}feed_forward_layer."
@@ -239,7 +239,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         hidden = _rms_norm(
             parameters,
             hidden + feed_forward_output,
-            f"{feed_forward_prefix}normalization.module",
+            f"{feed_forward_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         expected_mlm = F.linear(
@@ -319,7 +319,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             hidden,
-            f"{attention_prefix}normalization.module",
+            f"{attention_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         hidden = hidden + _attention(
@@ -335,7 +335,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             hidden,
-            f"{feed_forward_prefix}normalization.module",
+            f"{feed_forward_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         hidden = hidden + _feed_forward(
@@ -398,7 +398,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             encoder_hidden,
-            f"{encoder_attention_prefix}normalization.module",
+            f"{encoder_attention_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         encoder_hidden = encoder_hidden + _attention(
@@ -413,7 +413,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             encoder_hidden,
-            f"{encoder_feed_forward_prefix}normalization.module",
+            f"{encoder_feed_forward_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         encoder_hidden = encoder_hidden + _feed_forward(
@@ -436,7 +436,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             decoder_hidden,
-            f"{decoder_attention_prefix}normalization.module",
+            f"{decoder_attention_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         decoder_hidden = decoder_hidden + _attention(
@@ -452,7 +452,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             decoder_hidden,
-            f"{cross_attention_prefix}normalization.module",
+            f"{cross_attention_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         decoder_hidden = decoder_hidden + _attention(
@@ -467,7 +467,7 @@ class TestReferenceModelComputation(unittest.TestCase):
         normalized = _rms_norm(
             parameters,
             decoder_hidden,
-            f"{decoder_feed_forward_prefix}normalization.module",
+            f"{decoder_feed_forward_prefix}pipeline.normalization.module",
             hidden_dim,
         )
         decoder_hidden = decoder_hidden + _feed_forward(

@@ -393,12 +393,10 @@ class TestTransformerLinearModel(unittest.TestCase):
         self.assertTrue(
             any(parameter.grad is not None for parameter in transition_parameters)
         )
-        self.assertIsNotNone(model.encoder.utilities.recurrent_gate)
+        gate_model = model.encoder.pipeline.postprocessing.gate
+        self.assertIsNotNone(gate_model)
         self.assertTrue(
-            any(
-                parameter.grad is not None
-                for parameter in model.encoder.utilities.recurrent_gate.parameters()
-            )
+            any(parameter.grad is not None for parameter in gate_model.parameters())
         )
 
         checkpoint = model.state_dict()
@@ -460,21 +458,21 @@ class TestTransformerLinearModel(unittest.TestCase):
                 for parameter in model.encoder.low_model.parameters()
             )
         )
-        self.assertIsNotNone(model.encoder.utilities.halting_model)
+        halting_model = model.encoder.pipeline.halting.model
+        self.assertIsNotNone(halting_model)
         self.assertTrue(
-            any(
-                parameter.grad is not None
-                for parameter in model.encoder.utilities.halting_model.parameters()
-            )
+            any(parameter.grad is not None for parameter in halting_model.parameters())
         )
 
         checkpoint = model.state_dict()
-        self.assertIn("encoder.high_initial", checkpoint)
-        self.assertIn("encoder.low_initial", checkpoint)
+        self.assertIn("encoder.step.high_initial", checkpoint)
+        self.assertIn("encoder.step.low_initial", checkpoint)
         self.assertTrue(
-            any(key.startswith("encoder.high_model.") for key in checkpoint)
+            any(key.startswith("encoder.step.high_model.") for key in checkpoint)
         )
-        self.assertTrue(any(key.startswith("encoder.low_model.") for key in checkpoint))
+        self.assertTrue(
+            any(key.startswith("encoder.step.low_model.") for key in checkpoint)
+        )
         self.assertFalse(any("reasoning_process" in key for key in checkpoint))
         restored = Model(cfg).eval()
         restored.load_state_dict(checkpoint, strict=True)
