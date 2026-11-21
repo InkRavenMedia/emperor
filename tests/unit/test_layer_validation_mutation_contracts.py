@@ -7,6 +7,7 @@ import torch
 from emperor.config import ConfigBase, optional_field
 from emperor.convs import Conv2dLayerConfig
 from emperor.halting import (
+    HaltingBase,
     HaltingConfig,
     HaltingHiddenStateModeOptions,
     StickBreakingConfig,
@@ -582,7 +583,7 @@ class TestLayerValidationMutationContracts(unittest.TestCase):
     def test_typed_halting_owner_reporting_false_is_rejected_by_exact_name(
         self,
     ) -> None:
-        class RejectingHaltingOwner:
+        class RejectingHaltingOwner(HaltingBase):
             calls = 0
 
             @classmethod
@@ -590,7 +591,7 @@ class TestLayerValidationMutationContracts(unittest.TestCase):
                 cls.calls += 1
                 return False
 
-        class AcceptingHaltingOwner:
+        class AcceptingHaltingOwner(HaltingBase):
             calls = 0
 
             @classmethod
