@@ -10,15 +10,12 @@ from emperor.experiments import (
     experiment_task_name,
     resolve_experiment_task,
 )
+from model_runtime.packages.annotations import ModuleAnnotations
 from model_runtime.packages.configuration import (
-    config_key_to_model_param,
     iter_supported_config_keys,
     normalize_key,
 )
-from model_runtime.packages.configuration_metadata import (
-    RuntimeDefaultsSection,
-    configuration_field_metadata,
-)
+from model_runtime.packages.configuration_metadata import RuntimeDefaultsSection
 from model_runtime.packages.identity import ModelIdentity
 from model_runtime.packages.runtime_defaults import (
     RuntimeDefaultsError,
@@ -91,14 +88,6 @@ def _coerce_default_experiment_task(
             "DATASET_OPTIONS_BY_TASK."
         )
     return default_task
-
-
-def _keys_by_alias(supported_keys: tuple[str, ...]) -> dict[str, str]:
-    keys_by_alias: dict[str, str] = {}
-    for config_key in supported_keys:
-        keys_by_alias[normalize_key(config_key)] = config_key
-        keys_by_alias[normalize_key(config_key_to_model_param(config_key))] = config_key
-    return keys_by_alias
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,12 +295,10 @@ class ModelMetadata:
     _dataset_options_source: ModuleType = field(repr=False)
     _monitor_options_source: ModuleType = field(repr=False)
     _search_space_source: ModuleType = field(repr=False)
-    _configuration_metadata_sections: tuple[RuntimeDefaultsSection, ...] | None = field(
+    _configuration_metadata_sections: tuple[RuntimeDefaultsSection, ...] = field(
         repr=False
     )
-    _search_metadata_sections: tuple[RuntimeDefaultsSection, ...] | None = field(
-        repr=False
-    )
+    _search_metadata_sections: tuple[RuntimeDefaultsSection, ...] = field(repr=False)
     _dataset_options_by_task: Mapping[ExperimentTask, tuple[type, ...]] = field(
         init=False,
         repr=False,
@@ -337,16 +324,9 @@ class ModelMetadata:
         monitor_options_source: ModuleType,
         search_space: ModuleType,
         *,
-        configuration_metadata_sections: Sequence[RuntimeDefaultsSection] | None = None,
-        search_metadata_sections: Sequence[RuntimeDefaultsSection] | None = None,
+        configuration_metadata_sections: Sequence[RuntimeDefaultsSection],
+        search_metadata_sections: Sequence[RuntimeDefaultsSection],
     ) -> None:
-        if (configuration_metadata_sections is None) != (
-            search_metadata_sections is None
-        ):
-            raise ValueError(
-                "ModelMetadata requires configuration and search metadata "
-                "declarations together."
-            )
         object.__setattr__(self, "identity", identity)
         object.__setattr__(self, "_runtime_defaults_source", runtime_defaults)
         object.__setattr__(self, "_dataset_options_source", dataset_options)
@@ -355,20 +335,12 @@ class ModelMetadata:
         object.__setattr__(
             self,
             "_configuration_metadata_sections",
-            (
-                None
-                if configuration_metadata_sections is None
-                else tuple(configuration_metadata_sections)
-            ),
+            tuple(configuration_metadata_sections),
         )
         object.__setattr__(
             self,
             "_search_metadata_sections",
-            (
-                None
-                if search_metadata_sections is None
-                else tuple(search_metadata_sections)
-            ),
+            tuple(search_metadata_sections),
         )
         self.__post_init__()
 
@@ -409,7 +381,9 @@ class ModelMetadata:
             config_module = self._runtime_defaults_source
             search_space_module = self._search_space_source
             supported_keys = tuple(iter_supported_config_keys(config_module))
-            keys_by_alias = _keys_by_alias(supported_keys)
+            keys_by_normalized_name = {
+                normalize_key(key): key for key in supported_keys
+            }
             search_values = {
                 key: tuple(values) for key, values in self.search_space_items.items()
             }
@@ -435,13 +409,9 @@ class ModelMetadata:
             _config_module=config_module,
             _search_space_module=search_space_module,
             supported_keys=supported_keys,
-            keys_by_alias=MappingProxyType(keys_by_alias),
-            annotations=MappingProxyType(
-                dict(getattr(config_module, "__annotations__", {}))
-            ),
-            search_annotations=MappingProxyType(
-                dict(getattr(search_space_module, "__annotations__", {}))
-            ),
+            keys_by_normalized_name=MappingProxyType(keys_by_normalized_name),
+            annotations=ModuleAnnotations(config_module),
+            search_annotations=ModuleAnnotations(search_space_module),
             configuration_metadata=_nested_metadata(config_metadata),
             search_metadata=_nested_metadata(search_metadata),
             search_values=MappingProxyType(search_values),
@@ -454,15 +424,12 @@ class ModelMetadata:
         supported_keys: tuple[str, ...],
         skipped_schema_keys: frozenset[str],
     ) -> dict[str, dict[str, Any]]:
-        sections = self._configuration_metadata_sections
-        if sections is None:
-            return configuration_field_metadata(self._runtime_defaults_source)
         required_keys = tuple(
             key for key in supported_keys if key not in skipped_schema_keys
         )
         return _compile_declared_metadata(
             self._runtime_defaults_source,
-            sections,
+            self._configuration_metadata_sections,
             required_keys,
             require_section_path=True,
             exact_keys=False,
@@ -472,15 +439,9 @@ class ModelMetadata:
         self,
         search_keys: tuple[str, ...],
     ) -> dict[str, dict[str, Any]]:
-        sections = self._search_metadata_sections
-        if sections is None:
-            return configuration_field_metadata(
-                self._search_space_source,
-                include_search_space=True,
-            )
         return _compile_declared_metadata(
             self._search_space_source,
-            sections,
+            self._search_metadata_sections,
             search_keys,
             require_section_path=False,
             exact_keys=True,

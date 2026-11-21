@@ -745,7 +745,7 @@ def test_unknown_keys_bypass_annotation_resolution_and_constraints() -> None:
     module = _runtime_config_module(int, constraints=object())
 
     with patch(
-        "model_runtime.packages.runtime_values.get_type_hints",
+        "model_runtime.packages.annotations.get_type_hints",
         side_effect=sentinel,
     ) as resolver:
         validate_runtime_default_value_types(
@@ -762,7 +762,7 @@ def test_full_validator_preserves_unknown_field_precedence() -> None:
     module = _runtime_config_module(int, constraints=object())
 
     with patch(
-        "model_runtime.packages.runtime_values.get_type_hints",
+        "model_runtime.packages.annotations.get_type_hints",
         side_effect=sentinel,
     ) as resolver:
         with pytest.raises(ValueError) as error:
@@ -781,7 +781,7 @@ def test_known_keys_preserve_annotation_resolution_exception_identity() -> None:
     module = _runtime_config_module(int)
 
     with patch(
-        "model_runtime.packages.runtime_values.get_type_hints",
+        "model_runtime.packages.annotations.get_type_hints",
         side_effect=sentinel,
     ):
         with pytest.raises(RuntimeError) as error:
@@ -797,7 +797,7 @@ def test_known_keys_preserve_annotation_resolution_exception_identity() -> None:
 def test_empty_values_do_not_resolve_annotations() -> None:
     module = _runtime_config_module(int)
     with patch(
-        "model_runtime.packages.runtime_values.get_type_hints",
+        "model_runtime.packages.annotations.get_type_hints",
         side_effect=AssertionError("annotation resolution should not run"),
     ) as resolver:
         validate_runtime_default_value_types(
@@ -817,7 +817,7 @@ def test_runtime_defaults_spec_preserves_nested_type_error_as_cause() -> None:
         package.runtime_defaults_spec,
         _config_module=config_module,
         supported_keys=("VALUE",),
-        keys_by_alias=MappingProxyType({"value": "VALUE"}),
+        keys_by_normalized_name=MappingProxyType({"value": "VALUE"}),
         annotations=MappingProxyType({"VALUE": list[int]}),
     )
 

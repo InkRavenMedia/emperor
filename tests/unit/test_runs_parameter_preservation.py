@@ -9,7 +9,12 @@ from unittest.mock import patch
 
 from emperor.config import BaseOptions
 from emperor.experiments import ExperimentTask
-from model_runtime.packages import ModelIdentity, ModelMetadata, ModelPackage
+from model_runtime.packages import (
+    ModelIdentity,
+    ModelMetadata,
+    ModelPackage,
+    RuntimeDefaultsSection,
+)
 from model_runtime.runs import execution, experiment
 from model_runtime.runs._handoff import TrainingRunRequest
 from model_runtime.runs.artifacts import FilesystemRunArtifacts
@@ -62,6 +67,18 @@ class _ParameterPackageAdapter:
             dataset_options=dataset_options,
             monitor_options_source=monitor_options,
             search_space=search_space,
+            configuration_metadata_sections=(
+                RuntimeDefaultsSection(
+                    ("Run",),
+                    (
+                        ("DATA_NUM_WORKERS", 1, (1,)),
+                        ("NUM_EPOCHS", 2, (2,)),
+                        ("RUN_TEST_AFTER_FIT", 3, (3,)),
+                        ("SEED", 4, (4,)),
+                    ),
+                ),
+            ),
+            search_metadata_sections=(),
         )
 
     def load_metadata(self):

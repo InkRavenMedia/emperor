@@ -3,8 +3,8 @@ from __future__ import annotations
 import inspect
 from collections.abc import Mapping, Sequence
 from enum import Enum
-from types import NoneType, UnionType
-from typing import Any, Union, cast, get_args, get_origin
+from types import NoneType
+from typing import Any, cast
 
 from emperor.config import ConfigBase
 from model_runtime.inspection.errors import InspectionError
@@ -28,6 +28,13 @@ from model_runtime.packages import (
     abstract_config_class_error,
     config_key_to_flag,
     serialize_config_value,
+)
+from model_runtime.packages.annotations import (
+    annotation_classes as field_annotation_classes,
+)
+from model_runtime.packages.annotations import (
+    annotation_is_nullable,
+    annotation_options,
 )
 
 DEFAULT_SECTION = "General"
@@ -56,31 +63,8 @@ def _field_section_path(
     )
 
 
-def _annotation_classes(annotation: Any) -> list[type[Any]]:
-    if annotation is None:
-        return []
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    if origin in {UnionType, Union}:
-        return [item for arg in args for item in _annotation_classes(arg)]
-    if annotation is NoneType:
-        return []
-    if origin is type and args and isinstance(args[0], type):
-        return [cast(type[Any], args[0])]
-    if inspect.isclass(annotation):
-        return [annotation]
-    return []
-
-
-def _annotation_is_nullable(annotation: Any) -> bool:
-    origin = get_origin(annotation)
-    return origin in {UnionType, Union} and any(
-        arg is NoneType for arg in get_args(annotation)
-    )
-
-
 def _annotation_primitive_kind(annotation: Any) -> str | None:
-    classes = _annotation_classes(annotation)
+    classes = field_annotation_classes(annotation)
     for primitive_type, kind in PRIMITIVE_ANNOTATION_KINDS.items():
         if primitive_type in classes:
             return kind
@@ -88,11 +72,7 @@ def _annotation_primitive_kind(annotation: Any) -> str | None:
 
 
 def _annotation_requires_config_object(annotation: Any) -> bool:
-    options = (
-        get_args(annotation)
-        if get_origin(annotation) in {UnionType, Union}
-        else (annotation,)
-    )
+    options = annotation_options(annotation)
     non_null_options = [option for option in options if option is not NoneType]
     return bool(non_null_options) and all(
         isinstance(option, type) and issubclass(option, ConfigBase)
@@ -134,7 +114,7 @@ def _none_value_kind(annotation: Any, annotation_classes: list[type[Any]]) -> st
 
 
 def _value_kind(value: Any, annotation: Any) -> str:
-    annotation_classes = _annotation_classes(annotation)
+    annotation_classes = field_annotation_classes(annotation)
     kind = _concrete_value_kind(value)
     if kind is not None:
         return kind
@@ -146,7 +126,7 @@ def _value_kind(value: Any, annotation: Any) -> str:
 def _enum_choices(value: Any, annotation: Any) -> list[str]:
     enum_type = type(value) if isinstance(value, Enum) else None
     if enum_type is None:
-        for cls in _annotation_classes(annotation):
+        for cls in field_annotation_classes(annotation):
             if issubclass(cls, Enum):
                 enum_type = cls
                 break
@@ -195,7 +175,7 @@ class _ChoiceResolver:
     ) -> list[str]:
         expected: list[type[Any]] = [
             cls
-            for cls in _annotation_classes(annotation)
+            for cls in field_annotation_classes(annotation)
             if not issubclass(cls, Enum) and cls not in PRIMITIVE_ANNOTATION_KINDS
         ]
         if inspect.isclass(current_value):
@@ -476,7 +456,7 @@ def _configuration_schema(
         annotation = spec.annotations.get(key)
         kind = _value_kind(value, annotation)
         section_path = _field_section_path(key, metadata.get(key, {}))
-        nullable = value is None or _annotation_is_nullable(annotation)
+        nullable = value is None or annotation_is_nullable(annotation)
         lock = locks.get(spec.model_parameter(key))
         locked_value = lock.value if lock is not None else None
         fields.append(

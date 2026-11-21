@@ -822,7 +822,7 @@ class InspectionSchemaInterfaceTests(unittest.TestCase):
             catalog_package.inspection_construction_limits,
         )
         with patch(
-            "model_runtime.packages.metadata.configuration_field_metadata",
+            "model_runtime.packages.configuration_metadata.configuration_field_metadata",
             autospec=True,
             side_effect=configuration_field_metadata,
         ) as metadata:
@@ -837,30 +837,19 @@ class InspectionSchemaInterfaceTests(unittest.TestCase):
     def test_runtime_defaults_metadata_is_a_defensive_cached_snapshot(self) -> None:
         catalog_package = model_package("linears/linear")
         assert catalog_package is not None
-        catalog_metadata = catalog_package._adapter.load_metadata()
-        legacy_metadata = ModelMetadata(
-            catalog_package.identity,
-            catalog_metadata._runtime_defaults_source,
-            catalog_metadata._dataset_options_source,
-            catalog_metadata._monitor_options_source,
-            catalog_metadata._search_space_source,
-        )
-        package = ModelPackage(
-            catalog_package.identity,
-            _SchemaReplacingAdapter(catalog_package._adapter, legacy_metadata),
-            catalog_package.inspection_construction_limits,
-        )
+        from model_runtime.packages import metadata as metadata_owner
+
+        package = ModelPackage(catalog_package.identity, catalog_package._adapter)
         captured_metadata: list[dict[str, dict[str, Any]]] = []
+        compile_metadata = metadata_owner._compile_declared_metadata
 
         def capture_metadata(*args: Any, **kwargs: Any) -> dict[str, dict[str, Any]]:
-            metadata = configuration_field_metadata(*args, **kwargs)
+            metadata = compile_metadata(*args, **kwargs)
             captured_metadata.append(metadata)
             return metadata
 
-        with patch(
-            "model_runtime.packages.metadata.configuration_field_metadata",
-            autospec=True,
-            side_effect=capture_metadata,
+        with patch.object(
+            metadata_owner, "_compile_declared_metadata", side_effect=capture_metadata
         ):
             spec = runtime_defaults_spec(package)
 
@@ -1527,7 +1516,7 @@ class InspectionSchemaInterfaceTests(unittest.TestCase):
                 create=True,
             ),
             patch(
-                "model_runtime.packages.metadata.configuration_field_metadata",
+                "model_runtime.packages.metadata.ModelMetadata._configuration_metadata",
                 return_value={},
             ),
             self.assertRaisesRegex(
@@ -1655,3 +1644,47 @@ class InspectionSchemaInterfaceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_postponed_annotated_nullable_enum_parses_validates_and_describes_one_field():
+    from enum import Enum
+    from typing import Annotated
+
+    class Choice(Enum):
+        FIRST = 1
+        SECOND = 2
+
+    source = _fresh_package("linears/linear")
+    original = source._adapter.load_metadata()
+    config = ModuleType("annotated_runtime_fixture")
+    config.__dict__.update(vars(original._runtime_defaults_source))
+    config.CALLBACK_EARLY_STOPPING_METRIC = None
+    config.Choice, config.Annotated = Choice, Annotated
+    config.__annotations__ = {
+        **config.__annotations__,
+        "CALLBACK_EARLY_STOPPING_METRIC": "Annotated[Choice | None, 'choice']",
+    }
+    metadata = ModelMetadata(
+        source.identity,
+        config,
+        original._dataset_options_source,
+        original._monitor_options_source,
+        original._search_space_source,
+        configuration_metadata_sections=original._configuration_metadata_sections,
+        search_metadata_sections=original._search_metadata_sections,
+    )
+    package = ModelPackage(
+        source.identity,
+        _SchemaReplacingAdapter(source._adapter, metadata),
+        source.inspection_construction_limits,
+    )
+    spec = package.runtime_defaults_spec
+    assert spec.parse_value("CALLBACK_EARLY_STOPPING_METRIC", "FIRST") is Choice.FIRST
+    spec.validate_typed_values({"callback_early_stopping_metric": Choice.FIRST})
+    field = next(
+        field
+        for field in configuration_schema(package).fields
+        if field.key == "CALLBACK_EARLY_STOPPING_METRIC"
+    )
+    assert field.value_type == "enum" and field.nullable
+    assert [value.rsplit(".", 1)[-1] for value in field.choices] == ["FIRST", "SECOND"]
