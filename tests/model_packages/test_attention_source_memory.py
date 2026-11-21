@@ -3,11 +3,11 @@
 import pytest
 import torch
 
-from emperor.attention._base import MultiHeadAttentionAbstract
 from emperor.layers import LayerStackConfig, RecurrentLayerConfig
 from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
 from models.catalog import model_package
+from tests.support.attention import is_configured_attention
 
 PACKAGES = tuple(
     f"{family}/{variant}"
@@ -104,7 +104,7 @@ def test_source_memory_composed_generators_have_flat_runtime_options(
     memory = next(
         attention.projector.source_memory
         for attention in model.modules()
-        if isinstance(attention, MultiHeadAttentionAbstract)
+        if is_configured_attention(attention)
     )
     assert isinstance(memory.generator_model_config, config_type)
     if field == "STACK_NUM_LAYERS":
@@ -120,9 +120,7 @@ def test_source_memory_does_not_require_a_separate_controller_stack(package_name
     model = package.build_model(
         configuration(package_name, default_source_stack=True)
     ).eval()
-    attentions = [
-        m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
-    ]
+    attentions = [m for m in model.modules() if is_configured_attention(m)]
     assert attentions and all(m.projector.source_memory is not None for m in attentions)
     assert torch.isfinite(run_model(model, package_name)[0]).all()
 
@@ -132,9 +130,7 @@ def test_public_options_build_and_execute_memory_in_every_package(package_name):
     torch.manual_seed(81)
     package = model_package(package_name)
     model = package.build_model(configuration(package_name)).eval()
-    attentions = [
-        m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
-    ]
+    attentions = [m for m in model.modules() if is_configured_attention(m)]
     assert attentions
     calls = []
     handles = []
@@ -185,9 +181,7 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
     values = {key.lower(): spec.parse_value(key, value) for key, value in raw.items()}
     config = configuration(package_name, attn_memory_flag=True, **values)
     model = package.build_model(config)
-    attentions = [
-        m for m in model.modules() if isinstance(m, MultiHeadAttentionAbstract)
-    ]
+    attentions = [m for m in model.modules() if is_configured_attention(m)]
     for attention in attentions:
         assert isinstance(
             attention.projector.source_memory.model.cfg, LinearLayerConfig
@@ -202,7 +196,7 @@ def test_source_memory_options_are_visible_parseable_and_independent(package_nam
     assert all(
         m.projector.source_memory is None
         for m in disabled.modules()
-        if isinstance(m, MultiHeadAttentionAbstract)
+        if is_configured_attention(m)
     )
 
 
@@ -251,7 +245,7 @@ def test_soft_expert_packages_preserve_causality_samples_and_checkpoints(
     model.train()
     run(model, ids).square().mean().backward()
     for module in model.modules():
-        if isinstance(module, MultiHeadAttentionAbstract):
+        if is_configured_attention(module):
             assert any(
                 p.grad is not None and p.grad.abs().sum() > 0
                 for p in module.projector.source_memory.model.parameters()

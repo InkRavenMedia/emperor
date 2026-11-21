@@ -355,3 +355,13 @@ def build_attention_config(
         )
 
     return config_class(**shared_kwargs)
+
+
+def is_configured_attention(module) -> bool:
+    """Select the attention constructed by its config, including concrete variants."""
+    from emperor.attention import MultiHeadAttentionConfig
+
+    config = getattr(module, "cfg", None)
+    return isinstance(config, MultiHeadAttentionConfig) and isinstance(
+        module, config.registry_owner()
+    )
