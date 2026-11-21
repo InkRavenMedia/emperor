@@ -665,7 +665,7 @@ describe("Logs workspace state", () => {
     const artifacts = {
       runId: "a-cifar",
       params: { learning_rate: 0.001 },
-      metrics: { validation_accuracy: 0.95 },
+      metrics: { "validation/accuracy": 0.95 },
       artifacts: [],
       checkpoints: [],
     };

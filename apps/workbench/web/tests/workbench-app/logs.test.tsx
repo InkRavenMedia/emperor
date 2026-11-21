@@ -377,7 +377,7 @@ describe("WorkbenchApp Logs Workspace", () => {
     const connection = await screen.findByRole("dialog", { name: /api connection/i });
     const url = within(connection).getByLabelText("API base URL");
     await user.clear(url);
-    await user.type(url, "https://logs-reset.example.test");
+    await user.paste("https://logs-reset.example.test");
     await user.click(within(connection).getByRole("button", { name: /^use api url$/i }));
     await waitFor(() => {
       expect(within(connection).getByText("https://logs-reset.example.test"))
@@ -797,6 +797,7 @@ describe("WorkbenchApp Logs Workspace", () => {
       .toBeInTheDocument();
 
     const tagList = await openLogFilter(user, "Scalar Tags");
+    const tagSearch = screen.getByLabelText(/^search scalar tags$/i);
     for (const tag of DEFAULT_EPOCH_SCALAR_TAGS) {
       expectLogOptionSelected(
         await within(tagList).findByRole("option", { name: logOptionName(tag) }),
@@ -819,9 +820,9 @@ describe("WorkbenchApp Logs Workspace", () => {
       "validation/per_class/class_0/f1_score",
       "validation/kaggle_auc",
     ]) {
+      fireEvent.change(tagSearch, { target: { value: tag } });
       expectLogOptionSelected(
-        await findSearchedLogOption(user, "Scalar Tags", tag),
-        false,
+        await within(tagList).findByRole("option", { name: logOptionName(tag) }), false,
       );
     }
 
@@ -837,6 +838,7 @@ describe("WorkbenchApp Logs Workspace", () => {
         name: /^Validation plots\s+2 \/ 7 selected$/i,
       }),
     ).toBeInTheDocument();
+    const trainPlots = within(await openMetricPlotSelector(user, "Train"));
     for (const tag of [
       "train/loss",
       "train/accuracy",
@@ -844,11 +846,12 @@ describe("WorkbenchApp Logs Workspace", () => {
       "train/confidence/mean",
       "train/f1_score",
     ]) {
-      expectLogOptionSelected(await findMetricPlotOption(user, "Train", tag), false);
+      expectLogOptionSelected(trainPlots.getByRole("option", { name: logOptionName(tag) }), false);
     }
     for (const tag of ["train/per_class/class_0/f1_score", "train/kaggle_logloss"]) {
-      expect(await queryMetricPlotOption(user, "Train", tag)).not.toBeInTheDocument();
+      expect(trainPlots.queryByRole("option", { name: logOptionName(tag) })).not.toBeInTheDocument();
     }
+    const validationPlots = within(await openMetricPlotSelector(user, "Validation"));
     for (const tag of [
       "validation/loss",
       "validation/accuracy",
@@ -857,7 +860,7 @@ describe("WorkbenchApp Logs Workspace", () => {
       "validation/f1_score",
     ]) {
       expectLogOptionSelected(
-        await findMetricPlotOption(user, "Validation", tag),
+        validationPlots.getByRole("option", { name: logOptionName(tag) }),
         false,
       );
     }
@@ -865,7 +868,7 @@ describe("WorkbenchApp Logs Workspace", () => {
       "validation/per_class/class_0/f1_score",
       "validation/kaggle_auc",
     ]) {
-      expect(await queryMetricPlotOption(user, "Validation", tag))
+      expect(validationPlots.queryByRole("option", { name: logOptionName(tag) }))
         .not.toBeInTheDocument();
     }
   });
