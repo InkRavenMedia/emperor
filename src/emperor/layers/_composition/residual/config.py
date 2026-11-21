@@ -26,9 +26,7 @@ class ResidualConfig(ConfigBase):
 @dataclass
 class AdditiveResidualConfig(ResidualConfig):
     def _registry_owner(self) -> type:
-        from emperor.layers._composition.residual.variants.additive import (
-            AdditiveResidual,
-        )
+        from emperor.layers._composition.residual.variants import AdditiveResidual
 
         return AdditiveResidual
 
@@ -49,9 +47,7 @@ class WeightedResidualConfig(ResidualConfig):
     )
 
     def _registry_owner(self) -> type:
-        from emperor.layers._composition.residual.variants.weighted import (
-            WeightedResidual,
-        )
+        from emperor.layers._composition.residual.variants import WeightedResidual
 
         return WeightedResidual
 
@@ -73,9 +69,7 @@ class WeightedBlendResidualConfig(ResidualConfig):
     )
 
     def _registry_owner(self) -> type:
-        from emperor.layers._composition.residual.variants.weighted_blend import (
-            WeightedBlendResidual,
-        )
+        from emperor.layers._composition.residual.variants import WeightedBlendResidual
 
         return WeightedBlendResidual
 
@@ -102,8 +96,6 @@ class AttentionResidualConfig(ResidualConfig):
     )
 
     def _registry_owner(self) -> type:
-        from emperor.layers._composition.residual.variants.attention import (
-            AttentionResidual,
-        )
+        from emperor.layers._composition.residual.variants import AttentionResidual
 
         return AttentionResidual
