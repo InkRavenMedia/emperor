@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from emperor_workbench.model_packages import normalize_preset_token
 from emperor_workbench.run_plans._records import (
     TrainingRunPlanSummaryView,
     TrainingRunPlanView,
@@ -45,51 +44,44 @@ def _summarize(runs: list[TrainingRunView]) -> TrainingRunPlanSummaryView:
     )
 
 
-def _run_for_progress_event(
-    *,
-    event: dict[str, Any],
-    runs: list[TrainingRunView],
-    run_by_id: dict[str, int],
-) -> int | None:
-    run_id = event.get("runId")
-    if isinstance(run_id, str) and run_id in run_by_id:
-        return run_by_id[run_id]
-
-    run_index = event.get("runIndex")
-    if isinstance(run_index, int):
-        if 1 <= run_index <= len(runs):
-            return run_index - 1
-        if 0 <= run_index < len(runs):
-            return run_index
-
-    dataset = event.get("dataset")
-    preset = normalize_preset_token(event.get("preset"))
-    if dataset is None:
-        return None
-    candidates = [
-        index
-        for index, run in enumerate(runs)
-        if run.dataset == dataset
-        and (
-            preset is None
-            or normalize_preset_token(run.preset) == normalize_preset_token(preset)
-        )
-    ]
-    return next(
-        (
-            index
-            for index in candidates
-            if runs[index].status not in {"Completed", "Failed", "Cancelled"}
-        ),
-        candidates[0] if candidates else None,
-    )
-
-
 def _progress_event_epoch(event: dict[str, Any], total_epochs: int) -> int:
     raw_epoch = event.get("epoch")
     if not isinstance(raw_epoch, int):
         return 0
     return min(total_epochs, max(0, raw_epoch + 1))
+
+
+def _reconcile_committed_runs(
+    runs: list[TrainingRunView], event: dict[str, Any]
+) -> list[TrainingRunView] | None:
+    affected_id = event.get("affectedRunId")
+    indexes = event.get("committedRunIndexes")
+    if not isinstance(affected_id, str) or not isinstance(indexes, list):
+        return None
+    if not all(type(index) is int and 1 <= index <= len(runs) for index in indexes):
+        return None
+    committed = {runs[index - 1].id for index in indexes}
+    reconciled = []
+    for run in runs:
+        if run.id in committed:
+            run = replace(
+                run,
+                status="Completed",
+                current_epoch=run.total_epochs,
+                error=None,
+                error_traceback=None,
+            )
+        elif run.id == affected_id:
+            run = replace(
+                run,
+                status="Failed",
+                error=event.get("error") or "Training failed",
+                error_traceback=event.get("traceback"),
+            )
+        elif run.status in {"Pending", "Running"}:
+            run = replace(run, status="Skipped")
+        reconciled.append(run)
+    return reconciled
 
 
 class RunPlanProgressProjector:
@@ -110,11 +102,8 @@ class RunPlanProgressProjector:
         run_by_id: dict[str, int],
         event: dict[str, Any],
     ) -> TrainingRunPlanView:
-        run_index = _run_for_progress_event(
-            event=event,
-            runs=plan.runs,
-            run_by_id=run_by_id,
-        )
+        run_id = event.get("runId")
+        run_index = run_by_id.get(run_id) if isinstance(run_id, str) else None
         if run_index is None:
             return plan
 
@@ -177,6 +166,9 @@ class RunPlanProgressProjector:
                 elif run.status == "Pending":
                     runs[index] = replace(run, status="Skipped")
         elif job_status == "failed":
+            reconciled = _reconcile_committed_runs(runs, latest_failed_event)
+            if reconciled is not None:
+                return replace(plan, runs=reconciled, summary=_summarize(reconciled))
             failed_seen = any(run.status == "Failed" for run in runs)
             for index, run in enumerate(runs):
                 if run.status == "Running":
