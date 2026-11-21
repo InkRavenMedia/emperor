@@ -131,9 +131,6 @@ command from the repository root with the WikiText-2 text files available in
 `data/wikitext-2/wikitext-2/`. The flags enable the hierarchical input encoder,
 Soft MoE in attention and feedforward layers, and attention memory.
 
-<details>
-<summary>Full training command (Bash)</summary>
-
 ```bash
 mise run experiment -- \
   --model-type bert \
@@ -232,8 +229,6 @@ mise run experiment -- \
   --grouping-method SumGroupingConfig \
   --attn-grouping-input-order SEQUENCE_FIRST
 ```
-
-</details>
 
 ### WikiText-2 validation results
 
