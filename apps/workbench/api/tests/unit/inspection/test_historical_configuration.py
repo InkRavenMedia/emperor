@@ -13,13 +13,11 @@ from model_runtime.inspection import (
     InspectionResult,
 )
 
+from emperor_workbench.api.v1.inspection import inspection_response
 from emperor_workbench.inspection import (
     InspectionFailure,
 )
-from tests.support.inspection import (
-    inspect_model,
-    inspection_response,
-)
+from tests.support.inspection import inspect_model
 from tests.support.training_jobs import write_tensorboard_run
 from tests.unit.inspection._graph_support import (
     nodes_by_id,
@@ -135,9 +133,11 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            (run_dir / "checkpoints" / "last.ckpt").write_text(
-                "placeholder",
-                encoding="utf-8",
+            torch.save(
+                checkpoint_state_dict(
+                    input_dim=7, hidden_dim=8, output_dim=4, layer_count=1
+                ),
+                run_dir / "checkpoints" / "last.ckpt",
             )
             torch.save(
                 {
@@ -290,7 +290,7 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
                 for gate_index in range(2):
                     state_dict[
                         "main_model.layers."
-                        f"{outer_index}.postprocessing.gate.model.layers.{gate_index}."
+                        f"{outer_index}.pipeline.postprocessing.gate.model.layers.{gate_index}."
                         "model.weight_params"
                     ] = torch.zeros(16, 16)
             torch.save(
@@ -314,7 +314,7 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
         node_by_id = nodes_by_id(result["nodes"])
         self.assertEqual(node_by_id["main_model"]["details"]["numLayers"], 2)
         self.assertTrue(node_by_id["main_model.layers.0"]["details"]["gate"])
-        self.assertIn("main_model.layers.0.postprocessing.gate", node_by_id)
+        self.assertIn("main_model.layers.0.pipeline.postprocessing.gate", node_by_id)
         self.assertEqual(
             node_by_id["__root__"]["details"]["checkpoint"],
             {"status": "matched", "tensorCount": len(state_dict)},
@@ -414,13 +414,13 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
                 encoding="utf-8",
             )
             state_dict = {
-                "main_model.layers.0.postprocessing.gate.model.layers.0."
+                "main_model.layers.0.pipeline.postprocessing.gate.model.layers.0."
                 "model.weight_params": torch.zeros(32, 32),
-                "main_model.layers.0.postprocessing.gate.model.layers.0."
+                "main_model.layers.0.pipeline.postprocessing.gate.model.layers.0."
                 "model.bias_params": torch.zeros(32),
-                "main_model.layers.0.postprocessing.gate.model.layers.1."
+                "main_model.layers.0.pipeline.postprocessing.gate.model.layers.1."
                 "model.weight_params": torch.zeros(32, 32),
-                "main_model.layers.0.postprocessing.gate.model.layers.1."
+                "main_model.layers.0.pipeline.postprocessing.gate.model.layers.1."
                 "model.bias_params": torch.zeros(32),
             }
             torch.save(
@@ -443,7 +443,7 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
 
         node_by_id = nodes_by_id(result["nodes"])
         gate_details = node_by_id[
-            "main_model.layers.0.postprocessing.gate.model.layers.0.model"
+            "main_model.layers.0.pipeline.postprocessing.gate.model.layers.0.model"
         ]["details"]
         self.assertEqual(gate_details["weightShape"], "32 x 32")
         self.assertEqual(gate_details["biasShape"], "32")
@@ -475,7 +475,7 @@ class HistoricalInspectionConfigurationTests(unittest.TestCase):
                 layer_count=1,
             )
             state_dict[
-                "main_model.layers.0.postprocessing.gate.model.layers.0."
+                "main_model.layers.0.pipeline.postprocessing.gate.model.layers.0."
                 "model.weight_params"
             ] = torch.zeros(16, 16)
             torch.save(

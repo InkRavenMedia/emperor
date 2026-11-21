@@ -6,6 +6,7 @@ from typing import Any
 import torch
 from model_runtime.inspection import InspectionResult
 
+from emperor_workbench.api.v1.inspection import inspection_response
 from emperor_workbench.inspection import (
     InProcessInspectionExecutor,
     InspectionService,
@@ -18,7 +19,6 @@ from emperor_workbench.run_history import (
     HistoricalInspectionSource,
     RunHistoryService,
 )
-from tests.support.inspection import inspection_response
 from tests.support.model_packages import (
     model_identity_resolver,
     project_adapter_client,

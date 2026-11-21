@@ -23,32 +23,27 @@ _DIRECT_STACK_WEIGHT_RE = re.compile(
     r"^main_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
 )
 _RECURRENT_STACK_WEIGHT_RE = re.compile(
-    r"^main_model\.block_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
+    r"^main_model\.(?:step\.)?block_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
 )
 _PRIMARY_STACK_PATTERNS = (
     re.compile(r"^main_model\.layers\.(?P<index>\d+)(?:\.|$)"),
-    re.compile(r"^main_model\.block_model\.layers\.(?P<index>\d+)(?:\.|$)"),
+    re.compile(r"^main_model\.(?:step\.)?block_model\.layers\.(?P<index>\d+)(?:\.|$)"),
     re.compile(r"^main_model\.expert_stack\.layers\.(?P<index>\d+)(?:\.|$)"),
     re.compile(r"^transformer\.layers\.(?P<index>\d+)(?:\.|$)"),
 )
-_GATE_STACK_RE = re.compile(
-    r"^(?P<parent>(?:main_model(?:\.block_model)?\.layers\.\d+|"
-    r"main_model\.expert_stack\.layers\.\d+)"
-    r"\.postprocessing\.gate\.model)"
-    r"\.layers\.(?P<index>\d+)(?:\.|$)"
-)
-_HALTING_STACK_RE = re.compile(
-    r"^(?P<parent>(?:main_model(?:\.block_model)?\.layers\.\d+|"
-    r"main_model\.expert_stack\.layers\.\d+)"
-    r"\.halting\.model"
-    r"\.halting_gate_model)\.layers\.(?P<index>\d+)(?:\.|$)"
-)
-_MEMORY_STACK_RE = re.compile(
-    r"^(?P<parent>(?:main_model(?:\.block_model)?\.layers\.\d+|"
-    r"main_model\.expert_stack\.layers\.\d+)"
-    r"\.memory\.model"
-    r"\.memory_model)\.layers\.(?P<index>\d+)(?:\.|$)"
-)
+
+
+def _controller_stack_pattern(controller_path: str) -> re.Pattern[str]:
+    return re.compile(
+        r"^(?P<parent>main_model(?:\.(?:step\.)?block_model|\.expert_stack)?"
+        rf"\.layers\.\d+\.pipeline\.{re.escape(controller_path)})"
+        r"\.layers\.(?P<index>\d+)(?:\.|$)"
+    )
+
+
+_GATE_STACK_RE = _controller_stack_pattern("postprocessing.gate.model")
+_HALTING_STACK_RE = _controller_stack_pattern("halting.model.halting_gate_model")
+_MEMORY_STACK_RE = _controller_stack_pattern("memory.model.memory_model")
 _EXPERT_STACK_RE = re.compile(
     r"^(?P<parent>main_model\.expert_stack\.layers\.\d+\.model"
     r"\.expert_modules\.\d+)\.layers\.(?P<index>\d+)(?:\.|$)"
@@ -197,8 +192,10 @@ def load_checkpoint_graph_shapes(
                 fallback_reasons.append("checkpointChanged")
                 continue
 
-        state_dict = _state_dict_from_checkpoint(checkpoint)
-        if state_dict is None:
+        if not isinstance(checkpoint, Mapping):
+            continue
+        state_dict = checkpoint.get("state_dict")
+        if not isinstance(state_dict, Mapping):
             continue
         shapes = checkpoint_graph_shapes_from_state_dict(
             state_dict,
@@ -242,31 +239,19 @@ def checkpoint_graph_shapes_from_state_dict(
             diagnostics.append("packageCheckpointMetadataUnavailable")
         else:
             config_overrides.update(package_overrides)
+    parameter_shapes = _parameter_shapes(tensor_shapes)
+    coverage_counts = _coverage_counts(tensor_shapes)
+    recurrent_aliases = _recurrent_step_tensor_aliases(tensor_shapes, coverage_counts)
+    if recurrent_aliases:
+        parameter_shapes = _parameter_shapes(recurrent_aliases) | parameter_shapes
+        coverage_counts = _coverage_counts(recurrent_aliases) | coverage_counts
     return CheckpointGraphShapes(
         config_overrides=config_overrides,
-        parameter_shapes=_parameter_shapes(tensor_shapes),
-        coverage_counts=_coverage_counts(tensor_shapes),
+        parameter_shapes=parameter_shapes,
+        coverage_counts=coverage_counts,
         tensor_count=len(tensor_shapes),
         diagnostics=CheckpointGraphDiagnostics(tuple(diagnostics)),
     )
-
-
-def _state_dict_from_checkpoint(
-    checkpoint: object,
-) -> Mapping[str, Any] | None:
-    if not isinstance(checkpoint, Mapping):
-        return None
-
-    nested_state_dict = checkpoint.get("state_dict")
-    if isinstance(nested_state_dict, Mapping):
-        return nested_state_dict
-
-    if any(
-        isinstance(key, str) and torch.is_tensor(value)
-        for key, value in checkpoint.items()
-    ):
-        return checkpoint
-    return None
 
 
 def _tensor_shapes(state_dict: Mapping[str, Any]) -> dict[str, TensorShape]:
@@ -276,6 +261,35 @@ def _tensor_shapes(state_dict: Mapping[str, Any]) -> dict[str, TensorShape]:
             continue
         shapes[key] = tuple(int(dimension) for dimension in value.shape)
     return shapes
+
+
+def _recurrent_step_tensor_aliases(
+    tensor_shapes: Mapping[str, TensorShape], coverage_counts: Mapping[str, int]
+) -> dict[str, TensorShape]:
+    schedule = "recurrent_iteration_schedule.forward_call_progress"
+    legacy_modules: set[str] = set()
+    for key in tensor_shapes:
+        if key == schedule or key.endswith(f".{schedule}"):
+            prefix = key.removesuffix(schedule)
+            for module in ("pipeline", "block_model", "high_model", "low_model"):
+                module_path = f"{prefix}{module}"
+                if module_path in coverage_counts:
+                    legacy_modules.add(module_path)
+    if not legacy_modules:
+        return {}
+
+    aliases = {}
+    for key, shape in tensor_shapes.items():
+        parts = key.split(".")
+        graph_parts = []
+        for index, part in enumerate(parts):
+            if ".".join(parts[: index + 1]) in legacy_modules:
+                graph_parts.append("step")
+            graph_parts.append(part)
+        graph_path = ".".join(graph_parts)
+        if graph_path != key:
+            aliases[graph_path] = shape
+    return aliases
 
 
 def _config_overrides(
