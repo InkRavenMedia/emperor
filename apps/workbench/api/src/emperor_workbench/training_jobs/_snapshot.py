@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from collections import deque
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -48,10 +49,10 @@ class TrainingJobProjector:
             presets=list(job.presets),
             experiment_task=job.experiment_task,
             datasets=list(job.datasets),
-            overrides=dict(job.overrides),
-            search=job.search,
+            overrides=deepcopy(job.overrides),
+            search=deepcopy(job.search),
             planned_run_count=job.planned_run_count,
-            run_plan=projection.run_plan,
+            run_plan=deepcopy(projection.run_plan),
             monitors=list(job.monitors),
             log_folder=job.log_folder,
             created_at=job.created_at,
@@ -63,13 +64,13 @@ class TrainingJobProjector:
             current_dataset=_optional_str(latest_event.get("dataset")),
             epoch=_optional_int(latest_event.get("epoch")),
             step=_optional_int(latest_event.get("step")),
-            metrics=dict(metrics_event.get("metrics") or {}),
+            metrics=deepcopy(metrics_event.get("metrics") or {}),
             log_dir=_optional_str(latest_event.get("logDir")),
-            events=list(projection.events_tail),
+            events=deepcopy(projection.events_tail),
             event_count=projection.event_count,
             event_counts=dict(projection.event_counts),
             events_truncated=projection.events_truncated,
-            cluster_growth=list(projection.cluster_growth),
+            cluster_growth=deepcopy(projection.cluster_growth),
             log_tail=list(log_tail.lines),
             result_links=[
                 TrainingResultLinkView(
