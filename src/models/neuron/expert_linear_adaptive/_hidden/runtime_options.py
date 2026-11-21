@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-from typing import Protocol
 
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
@@ -33,6 +32,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.neuron.expert_linear_adaptive import _generation
 from models.neuron.expert_linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
@@ -50,7 +50,7 @@ class ExpertsStackOptions:
     )
     num_layers: int
     activation: ActivationOptions
-    residual_connection_option: type[ResidualConfig]
+    residual_connection_option: type[ResidualConfig] | None
     residual_model_flag: bool = field(default=False, kw_only=True)
     residual_block_size: int | None = field(default=None, kw_only=True)
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
@@ -73,7 +73,7 @@ class ExpertsSubmoduleStackOptions:
     normalization: NormalizationOptions = field(
         default=NormalizationOptions.RMS_NORM, kw_only=True
     )
-    residual_connection_option: type[ResidualConfig]
+    residual_connection_option: type[ResidualConfig] | None
     residual_model_flag: bool = field(default=False, kw_only=True)
     residual_block_size: int | None = field(default=None, kw_only=True)
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
@@ -311,7 +311,7 @@ class AdaptiveGeneratorStackOptions:
     )
     num_layers: int
     activation: ActivationOptions
-    residual_connection_option: type[ResidualConfig]
+    residual_connection_option: type[ResidualConfig] | None
     residual_model_flag: bool = field(default=False, kw_only=True)
     residual_block_size: int | None = field(default=None, kw_only=True)
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
@@ -375,16 +375,22 @@ class HiddenAdaptiveMaskOptions:
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
 
-class AdaptiveBoundaryModelOptions(Protocol):
-    grouping_config: GroupingConfig | None
-    weight_generation: WeightGenerationOptions
-    bias_generation: BiasGenerationOptions
+@dataclass(frozen=True, slots=True)
+class AdaptiveBoundaryModelOptions:
+    grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
+    weight_generation: WeightGenerationOptions = field(
+        default_factory=WeightGenerationOptions, kw_only=True
+    )
+    bias_generation: BiasGenerationOptions = field(
+        default_factory=BiasGenerationOptions, kw_only=True
+    )
     weight_option: type[DynamicWeightConfig] | None
     generator_depth: int
     weight_decay_schedule: WeightDecayScheduleOptions
     weight_decay_rate: float
     weight_decay_warmup_batches: int
     weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_learnable_scale_flag: bool
     weight_normalization_position_option: WeightNormalizationPositionOptions
     weight_bank_expansion_factor: BankExpansionFactorOptions
     bias_option: type[DynamicBiasConfig] | None
@@ -399,7 +405,6 @@ class AdaptiveBoundaryModelOptions(Protocol):
     mask_surrogate_scale: float
     mask_floor: float
     mask_transition_width: float
-    weight_normalization_learnable_scale_flag: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,11 +4,12 @@ from types import ModuleType
 from typing import Final
 
 import models.experts.linear_adaptive.config as config
-from model_runtime.packages.runtime_values import validate_runtime_default_value_types
+from model_runtime.packages.runtime_values import runtime_default_mapping
 from models import _learned_grouping
+from models._runtime_default_fields import apply_runtime_default_fields
 from models.experts.linear_adaptive._config_implementation import (
-    _RuntimeDefaultsResolver,
-    _RuntimeDefaultValues,
+    ResolvedRuntimeDefaults,
+    RuntimeDefaultValues,
     resolve_runtime_defaults,
 )
 from models.experts.linear_adaptive._generation import (
@@ -17,21 +18,15 @@ from models.experts.linear_adaptive._generation import (
 )
 from models.experts.linear_adaptive.runtime_options import RuntimeOptions
 
-
-def builder_kwargs_from_flat(
-    flat_kwargs: Mapping[str, object],
-    config_module: ModuleType,
-) -> dict[str, object]:
-    del config_module
-    return dict(flat_kwargs)
+_DEFAULT_VALUES: Final = RuntimeDefaultValues()
 
 
-def _runtime_from_resolver(
-    resolver: _RuntimeDefaultsResolver,
+def _runtime_options_from_defaults(
+    defaults: ResolvedRuntimeDefaults,
 ) -> RuntimeOptions:
-    core = resolver.core
-    control = resolver.control
-    adaptive = resolver.adaptive
+    core = defaults.core
+    control = defaults.control
+    adaptive = defaults.adaptive
     return RuntimeOptions(
         batch_size=core.batch_size,
         learning_rate=core.learning_rate,
@@ -75,30 +70,16 @@ def runtime_from_flat(
     flat_kwargs: Mapping[str, object] | None = None,
     config_module: ModuleType = config,
 ) -> RuntimeOptions:
-    generation_values = dict(flat_kwargs or {})
-    feature_keys = generation_keys(config_module)
-    flat_values = builder_kwargs_from_flat(
-        {
-            key: value
-            for key, value in generation_values.items()
-            if key not in feature_keys
-        },
-        config_module,
-    )
-    validate_runtime_default_value_types(
-        flat_values,
-        package="models.experts.linear_adaptive",
+    package = "models.experts.linear_adaptive"
+    generation_values = runtime_default_mapping(flat_kwargs, package=package)
+    values = apply_runtime_default_fields(
+        _DEFAULT_VALUES,
+        generation_values,
+        package=package,
         config_module=config_module,
+        delegated=generation_keys(config_module),
     )
-    try:
-        values = _RuntimeDefaultValues(**flat_values)
-    except TypeError as error:
-        message = str(error).replace(
-            "_RuntimeDefaultValues.__init__",
-            "_RuntimeDefaultsResolver.__init__",
-        )
-        raise TypeError(message) from None
-    runtime = _runtime_from_resolver(resolve_runtime_defaults(values))
+    runtime = _runtime_options_from_defaults(resolve_runtime_defaults(values))
     runtime_values = {
         item.name: getattr(runtime, item.name) for item in fields(runtime)
     }
@@ -132,8 +113,4 @@ def runtime_from_flat(
 DEFAULT_RUNTIME: Final[RuntimeOptions] = runtime_from_flat()
 
 
-__all__ = [
-    "DEFAULT_RUNTIME",
-    "builder_kwargs_from_flat",
-    "runtime_from_flat",
-]
+__all__ = ["DEFAULT_RUNTIME", "runtime_from_flat"]

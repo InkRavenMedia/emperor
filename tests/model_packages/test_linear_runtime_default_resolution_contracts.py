@@ -26,16 +26,12 @@ _RUNTIME_CASES = (
     ),
 )
 
-_NEURON_RUNTIME_CASES = (
-    ("linear", "_NeuronLinearRuntimeDefaultsResolver"),
-    ("linear_adaptive", "_NeuronLinearAdaptiveRuntimeDefaultsResolver"),
-    ("expert_linear", "_NeuronExpertLinearRuntimeDefaultsResolver"),
-    (
-        "expert_linear_adaptive",
-        "_NeuronExpertLinearAdaptiveRuntimeDefaultsResolver",
-    ),
+_NEURON_VARIANTS = (
+    "linear",
+    "linear_adaptive",
+    "expert_linear",
+    "expert_linear_adaptive",
 )
-_NEURON_VARIANTS = tuple(variant for variant, _ in _NEURON_RUNTIME_CASES)
 
 
 @pytest.mark.parametrize(("runtime_module_name", "config_module_name"), _RUNTIME_CASES)
@@ -114,22 +110,18 @@ def test_neuron_outer_defaults_remain_frozen_after_config_mutation(
     )
 
 
-@pytest.mark.parametrize(("variant", "resolver_name"), _NEURON_RUNTIME_CASES)
-def test_neuron_outer_runtime_defaults_keep_exact_unknown_key_errors(
-    variant: str,
-    resolver_name: str,
-) -> None:
+@pytest.mark.parametrize("variant", _NEURON_VARIANTS)
+def test_neuron_runtime_defaults_report_the_unknown_option(variant: str) -> None:
     runtime_from_flat = import_module(
         f"models.neuron.{variant}.runtime_defaults"
     ).runtime_from_flat
 
-    with pytest.raises(TypeError) as raised:
+    with pytest.raises(
+        (TypeError, ValueError), match="unknown_runtime_field"
+    ) as raised:
         runtime_from_flat({"unknown_runtime_field": object()})
 
-    assert str(raised.value) == (
-        f"{resolver_name}.__init__() got an unexpected keyword argument "
-        "'unknown_runtime_field'"
-    )
+    assert "__init__" not in str(raised.value)
 
 
 @pytest.mark.parametrize("variant", _NEURON_VARIANTS)
@@ -144,4 +136,30 @@ def test_neuron_outer_runtime_defaults_keep_non_string_key_errors(
     with pytest.raises(TypeError) as raised:
         runtime_from_flat(invalid_values)
 
-    assert str(raised.value) == "keywords must be strings"
+    assert (
+        str(raised.value)
+        == f"models.neuron.{variant}: Runtime Defaults keys must be strings"
+    )
+
+
+@pytest.mark.parametrize(
+    "module_name",
+    ("models.experts.linear_adaptive", "models.neuron.expert_linear_adaptive._hidden"),
+)
+def test_adaptive_expert_runtime_checks_structured_and_flat_fields(module_name):
+    defaults = import_module(f"{module_name}.runtime_defaults")
+    stack_options = defaults.DEFAULT_RUNTIME.stack_options
+    provided = {"stack_options": stack_options, "batch_size": 3}
+    runtime = defaults.runtime_from_flat(provided)
+    assert runtime.stack_options == stack_options
+    assert runtime.batch_size == 3
+    assert provided == {"stack_options": stack_options, "batch_size": 3}
+
+    with pytest.raises(
+        TypeError, match="runtime key 'stack_options'.*ExpertsStackOptions"
+    ):
+        defaults.runtime_from_flat({"stack_options": object()})
+    with pytest.raises(TypeError, match="runtime key 'batch_size'.*int"):
+        defaults.runtime_from_flat({"stack_options": stack_options, "batch_size": "3"})
+    with pytest.raises(TypeError, match="unknown runtime option.*'unrecognized_stack'"):
+        defaults.runtime_from_flat({"unrecognized_stack": object()})

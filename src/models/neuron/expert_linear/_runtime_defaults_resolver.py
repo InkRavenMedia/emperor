@@ -651,7 +651,7 @@ def _hidden_flat_options(values: dict[str, object]) -> dict[str, object]:
     return hidden_options
 
 
-class _NeuronExpertLinearRuntimeDefaultsResolver:
+class NeuronExpertLinearRuntimeDefaultsResolver:
     hidden_runtime: HiddenRuntimeOptions
     cluster_capacity_options: NeuronClusterCapacityOptions
     terminal_options: NeuronTerminalOptions
