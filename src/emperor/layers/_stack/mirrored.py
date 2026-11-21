@@ -1,4 +1,4 @@
-from emperor.layers._stack.core import LayerStack
+from emperor.layers._stack import LayerStack
 
 
 class MirroredLayerStack(LayerStack):
