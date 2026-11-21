@@ -21,11 +21,6 @@ changes, and use the evidence to decide which ideas to explore next.
 [Experiment CLI](#running-experiments) ·
 [Results and logs](#results-and-logs)
 
-## About the author
-
-Emperor is my personal machine learning research project. You can also find me
-at [InkRaven](https://inkraven.de/).
-
 ## Research mission
 
 Emperor investigates how far architectural improvements can take small neural
