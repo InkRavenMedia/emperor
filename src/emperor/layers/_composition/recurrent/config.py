@@ -52,7 +52,7 @@ class RecurrentCompositionConfig(ConfigBase):
     smooth_iteration_growth_flag: bool | None = optional_field(
         "Linearly hand off each one-iteration loop-length increase during the "
         "first half of its successful-forward interval. False or None preserves "
-        "hard iteration growth. A positive gradient suffix uses the legacy branch "
+        "hard iteration growth. A positive gradient suffix uses the source/target branch "
         "handoff; an explicit zero no-gradient prefix uses the nested all-gradient "
         "handoff."
     )
