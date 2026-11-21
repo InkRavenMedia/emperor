@@ -92,7 +92,7 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
     "RECURRENT_GRADIENT_TRANSITION_COUNT": (
         "Sets how many final active recurrent transitions track gradients. Earlier "
         "transitions run without gradients. A positive value with smooth growth "
-        "selects the legacy source/target branch handoff."
+        "selects the source/target branch handoff."
     ),
     "RECURRENT_NO_GRADIENT_TRANSITION_COUNT": (
         "Sets how many initial recurrent transitions run without gradients. "
@@ -101,7 +101,7 @@ EXPLICIT_FIELD_DESCRIPTIONS = {
     ),
     "RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG": (
         "Controls adjacent-depth interpolation while recurrent depth grows. A "
-        "positive gradient suffix uses the legacy branch handoff; explicit zero for "
+        "positive gradient suffix uses the source/target branch handoff. Explicit zero for "
         "the no-gradient prefix uses the full-gradient nested handoff."
     ),
     "RUN_TEST_AFTER_FIT": (
