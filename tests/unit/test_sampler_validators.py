@@ -2,34 +2,17 @@ import unittest
 
 import torch
 
-from emperor.sampler import SamplerConfig
 from emperor.sampler._selection.base import SamplerBase
 from emperor.sampler._selection.full import SamplerFull
 from emperor.sampler._selection.sparse import SamplerSparse
 from emperor.sampler._selection.top_k import SamplerTopk
+from support.sampler import sampler_config
 
 
 class TestSamplerValidators(unittest.TestCase):
-    def preset(self, **overrides) -> SamplerConfig:
-        values = {
-            "top_k": 2,
-            "threshold": 0.0,
-            "filter_above_threshold": False,
-            "num_topk_samples": 0,
-            "normalize_probabilities_flag": False,
-            "noisy_topk_flag": False,
-            "num_experts": 4,
-            "coefficient_of_variation_loss_weight": 0.0,
-            "switch_loss_weight": 0.0,
-            "zero_centred_loss_weight": 0.0,
-            "mutual_information_loss_weight": 0.0,
-            "router_config": None,
-        }
-        values.update(overrides)
-        return SamplerConfig(**values)
 
     def test_base_validator_accepts_valid_config(self):
-        model = SamplerBase(self.preset())
+        model = SamplerBase(sampler_config())
 
         self.assertEqual(model.top_k, 2)
         self.assertEqual(model.num_experts, 4)
@@ -53,7 +36,7 @@ class TestSamplerValidators(unittest.TestCase):
         for field_name, value, error_type in cases:
             with self.subTest(field_name=field_name, value=value):
                 with self.assertRaises(error_type):
-                    SamplerBase(self.preset(**{field_name: value}))
+                    SamplerBase(sampler_config(**{field_name: value}))
 
     def test_sparse_validator_rejects_unsupported_options(self):
         cases = [
@@ -64,13 +47,13 @@ class TestSamplerValidators(unittest.TestCase):
         for overrides in cases:
             with self.subTest(overrides=overrides):
                 with self.assertRaises(ValueError):
-                    SamplerSparse(self.preset(top_k=1, **overrides))
+                    SamplerSparse(sampler_config(top_k=1, **overrides))
 
     def test_topk_validator_requires_partial_topk(self):
         for top_k in [4, 5]:
             with self.subTest(top_k=top_k):
                 with self.assertRaises(ValueError):
-                    SamplerTopk(self.preset(top_k=top_k, num_experts=4))
+                    SamplerTopk(sampler_config(top_k=top_k, num_experts=4))
 
     def test_full_validator_rejects_unsupported_options(self):
         cases = [
@@ -86,10 +69,10 @@ class TestSamplerValidators(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     values = {"top_k": 4, "num_experts": 4}
                     values.update(overrides)
-                    SamplerFull(self.preset(**values))
+                    SamplerFull(sampler_config(**values))
 
     def test_get_probabilities_and_indices_validates_runtime_inputs(self):
-        model = SamplerTopk(self.preset(top_k=2, num_experts=4))
+        model = SamplerTopk(sampler_config(top_k=2, num_experts=4))
 
         invalid_type_inputs = [
             [[1.0, 2.0, 3.0, 4.0]],
@@ -110,7 +93,7 @@ class TestSamplerValidators(unittest.TestCase):
                     model.get_probabilities_and_indices(router_logit_scores)
 
     def test_get_probabilities_and_indices_validates_skip_mask(self):
-        model = SamplerTopk(self.preset(top_k=2, num_experts=4))
+        model = SamplerTopk(sampler_config(top_k=2, num_experts=4))
         router_logit_scores = torch.randn(3, 4)
 
         with self.assertRaises(TypeError):

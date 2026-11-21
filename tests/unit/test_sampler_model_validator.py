@@ -12,33 +12,16 @@ from emperor.layers import (
 from emperor.linears import LinearLayerConfig
 from emperor.sampler import (
     RouterConfig,
-    SamplerConfig,
     SamplerModel,
 )
 from emperor.sampler._selection.full import SamplerFull
 from emperor.sampler._selection.sparse import SamplerSparse
 from emperor.sampler._selection.top_k import SamplerTopk
+from support.sampler import sampler_config
 from unit.test_routers import ConstantRouterConfig
 
 
 class TestSamplerModelValidator(unittest.TestCase):
-    def sampler_config(self, **overrides) -> SamplerConfig:
-        values = {
-            "top_k": 2,
-            "threshold": 0.0,
-            "filter_above_threshold": False,
-            "num_topk_samples": 0,
-            "normalize_probabilities_flag": False,
-            "noisy_topk_flag": False,
-            "num_experts": 4,
-            "coefficient_of_variation_loss_weight": 0.0,
-            "switch_loss_weight": 0.0,
-            "zero_centred_loss_weight": 0.0,
-            "mutual_information_loss_weight": 0.0,
-            "router_config": None,
-        }
-        values.update(overrides)
-        return SamplerConfig(**values)
 
     def router_config(
         self,
@@ -79,12 +62,12 @@ class TestSamplerModelValidator(unittest.TestCase):
         ]
         for top_k, expected_cls in cases:
             with self.subTest(top_k=top_k):
-                model = SamplerModel(self.sampler_config(top_k=top_k, num_experts=4))
+                model = SamplerModel(sampler_config(top_k=top_k, num_experts=4))
 
                 self.assertIsInstance(model.sampler_model, expected_cls)
 
     def test_accepts_optional_router_config(self):
-        cfg = self.sampler_config(router_config=self.router_config())
+        cfg = sampler_config(router_config=self.router_config())
         model = SamplerModel(cfg)
 
         self.assertIsNotNone(model.router)
@@ -93,9 +76,7 @@ class TestSamplerModelValidator(unittest.TestCase):
         for noisy in (False, True):
             with self.subTest(noisy_topk_flag=noisy):
                 router_config = self.router_config(noisy_topk_flag=noisy)
-                cfg = self.sampler_config(
-                    noisy_topk_flag=noisy, router_config=router_config
-                )
+                cfg = sampler_config(noisy_topk_flag=noisy, router_config=router_config)
                 router_config.output_dim = cfg.required_logit_width()
                 cfg.validate_for_router_input_dim()
                 model = cfg.build()
@@ -112,7 +93,7 @@ class TestSamplerModelValidator(unittest.TestCase):
                     cfg.build()
 
     def test_router_preserves_exact_state_keys_and_strict_roundtrip(self):
-        cfg = self.sampler_config(router_config=self.router_config())
+        cfg = sampler_config(router_config=self.router_config())
         source = SamplerModel(cfg)
         expected_keys = (
             "sampler_model.default_loss",
@@ -140,7 +121,7 @@ class TestSamplerModelValidator(unittest.TestCase):
     def test_accepts_router_config_with_config_base_model_config(self):
         router_config = self.router_config(input_dim=6)
         router_config.model_config = ConstantRouterConfig(input_dim=6, output_dim=4)
-        cfg = self.sampler_config(router_config=router_config)
+        cfg = sampler_config(router_config=router_config)
         model = SamplerModel(cfg)
 
         probabilities, indices, skip_mask, loss = (
@@ -159,7 +140,7 @@ class TestSamplerModelValidator(unittest.TestCase):
         ]
         for noisy_topk_flag, expected_router_output_dim in cases:
             with self.subTest(noisy_topk_flag=noisy_topk_flag):
-                cfg = self.sampler_config(
+                cfg = sampler_config(
                     top_k=2,
                     num_experts=4,
                     noisy_topk_flag=noisy_topk_flag,
@@ -189,7 +170,7 @@ class TestSamplerModelValidator(unittest.TestCase):
             num_experts=4,
             noisy_topk_flag=True,
         )
-        cfg = self.sampler_config(
+        cfg = sampler_config(
             top_k=2,
             num_experts=4,
             noisy_topk_flag=True,
@@ -204,7 +185,7 @@ class TestSamplerModelValidator(unittest.TestCase):
         self.assertEqual(router_logits.shape, (2, 8))
 
     def test_build_with_router_input_dim_requires_router_config(self):
-        cfg = self.sampler_config(router_config=None)
+        cfg = sampler_config(router_config=None)
 
         with self.assertRaises(ValueError):
             cfg.build_with_router_input_dim(6)
@@ -212,7 +193,7 @@ class TestSamplerModelValidator(unittest.TestCase):
     def test_config_preflight_uses_effective_router_input_without_mutation_or_rng(self):
         router_config = self.router_config(input_dim=4)
         router_config.input_dim = None
-        cfg = self.sampler_config(router_config=router_config)
+        cfg = sampler_config(router_config=router_config)
         torch.manual_seed(20260719)
         rng_before = torch.random.get_rng_state().clone()
 
@@ -222,8 +203,8 @@ class TestSamplerModelValidator(unittest.TestCase):
         torch.testing.assert_close(torch.random.get_rng_state(), rng_before)
 
     def test_config_preflight_covers_logits_only_and_selection_contracts(self):
-        logits_only_config = self.sampler_config(router_config=None)
-        invalid_selection_config = self.sampler_config(
+        logits_only_config = sampler_config(router_config=None)
+        invalid_selection_config = sampler_config(
             router_config=None,
             threshold=-0.5,
         )
@@ -249,7 +230,7 @@ class TestSamplerModelValidator(unittest.TestCase):
         for field_name, value, error_type in cases:
             with self.subTest(field_name=field_name, value=value):
                 with self.assertRaises(error_type):
-                    SamplerModel(self.sampler_config(**{field_name: value}))
+                    SamplerModel(sampler_config(**{field_name: value}))
 
     def test_rejects_mismatched_router_config_values(self):
         cases = [
@@ -266,7 +247,7 @@ class TestSamplerModelValidator(unittest.TestCase):
             with self.subTest(router_overrides=router_overrides):
                 with self.assertRaises(ValueError):
                     SamplerModel(
-                        self.sampler_config(
+                        sampler_config(
                             top_k=2,
                             num_experts=4,
                             noisy_topk_flag=False,
@@ -283,10 +264,10 @@ class TestSamplerModelValidator(unittest.TestCase):
         )
 
         with self.assertRaises(TypeError):
-            SamplerModel(self.sampler_config(router_config=router_config))
+            SamplerModel(sampler_config(router_config=router_config))
 
     def test_sample_probabilities_and_indices_validates_input_matrix(self):
-        model = SamplerModel(self.sampler_config(top_k=2, num_experts=4))
+        model = SamplerModel(sampler_config(top_k=2, num_experts=4))
         invalid_type_inputs = [
             [[1.0, 2.0, 3.0, 4.0]],
         ]
@@ -306,7 +287,7 @@ class TestSamplerModelValidator(unittest.TestCase):
                     model.sample_probabilities_and_indices(input_matrix)
 
     def test_sample_probabilities_and_indices_runs_without_router(self):
-        model = SamplerModel(self.sampler_config(top_k=2, num_experts=4))
+        model = SamplerModel(sampler_config(top_k=2, num_experts=4))
         probabilities, indices, skip_mask, loss = (
             model.sample_probabilities_and_indices(torch.randn(3, 4))
         )
