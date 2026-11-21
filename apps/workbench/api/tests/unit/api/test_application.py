@@ -772,5 +772,23 @@ class AppFactoryTests(unittest.TestCase):
         )
 
 
+def test_lifespan_uses_test_owned_storage(tmp_path: Path) -> None:
+    from emperor_workbench.api import create_app
+    from emperor_workbench.settings import get_workbench_api_settings
+
+    settings = get_workbench_api_settings()
+    for root in (settings.logs_root, settings.snapshots_root, settings.state_root):
+        assert Path(root).parent == tmp_path
+
+    async def exercise() -> None:
+        application = create_app()
+        async with application.router.lifespan_context(application):
+            assert Path(
+                application.state.workbench_container.settings.state_root
+            ).is_dir()
+
+    asyncio.run(exercise())
+
+
 if __name__ == "__main__":
     unittest.main()
