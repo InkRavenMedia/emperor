@@ -451,7 +451,9 @@ class TestTranslationExperiment(unittest.TestCase):
             }
         )
         config = TransformerLinearConfigBuilder(runtime=runtime).build()
-        training_run = SimpleNamespace(config=config)
+        training_run = SimpleNamespace(
+            config=config, experiment_task=ExperimentTask.TEXT_TRANSLATION
+        )
         self.assertEqual(
             experiment._dataset_constructor_kwargs(training_run),
             {
