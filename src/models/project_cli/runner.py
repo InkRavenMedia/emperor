@@ -29,32 +29,14 @@ def run_tests(argv: Sequence[str], *, repository_root: Path | None = None) -> in
         "PYTHONPATH": os.pathsep.join((str(root), str(test_root))),
     }
     arguments = list(argv)
-    if arguments:
-        file_name = arguments[0].removesuffix(".py")
-        test_path = test_root / "unit" / f"test_{file_name}.py"
-        if not test_path.is_file():
-            print(f"Error: {test_path} not found", file=sys.stderr)
-            return 1
-        target = f"unit.test_{file_name}"
-        if len(arguments) >= 2:
-            target += f".{arguments[1]}"
-        if len(arguments) >= 3:
-            target += f".{arguments[2]}"
-        command = [sys.executable, "-P", "-m", "unittest", "-f", target]
-    else:
-        command = [
-            sys.executable,
-            "-P",
-            "-m",
-            "unittest",
-            "discover",
-            "-f",
-            "-s",
-            str(test_root),
-            "-t",
-            str(test_root),
-        ]
-    return subprocess.run(  # noqa: S603 - fixed interpreter and unittest module
+    if not arguments:
+        arguments = [str(test_root)]
+    elif all(argument.startswith("-") for argument in arguments):
+        arguments.append(str(test_root))
+    if not any(argument == "-m" or argument.startswith("-m") for argument in arguments):
+        arguments[:0] = ["-m", "not training"]
+    command = [sys.executable, "-P", "-m", "pytest", *arguments]
+    return subprocess.run(  # noqa: S603 - fixed interpreter and pytest module
         command,
         cwd=root,
         env=environment,
