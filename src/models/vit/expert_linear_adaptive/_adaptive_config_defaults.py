@@ -2,9 +2,9 @@ from collections.abc import Callable, Mapping
 from enum import Enum, auto
 from types import MappingProxyType, ModuleType
 
+from models.vit.expert_linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.vit.expert_linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,
     HiddenAdaptiveMaskOptions,

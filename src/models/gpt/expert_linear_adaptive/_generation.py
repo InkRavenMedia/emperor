@@ -2,20 +2,42 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
 from emperor.augmentations.adaptive_parameters import LowRankFactorSourceOptions
+from emperor.layers import (
+    ActivationOptions,
+    LastLayerBiasOptions,
+    LayerNormPositionOptions,
+    NormalizationOptions,
+    ResidualConfig,
+)
 from emperor.sampler import RouterConfig, SamplerConfig
 
 if TYPE_CHECKING:
     from models.gpt.expert_linear_adaptive._adaptive_generator_stack_config_factory import (
         AdaptiveGeneratorStackConfigFactory,
     )
-    from models.gpt.expert_linear_adaptive.runtime_options import (
-        AdaptiveGeneratorStackSource,
-    )
+
+
+@dataclass(frozen=True, slots=True)
+class AdaptiveGeneratorStackSource:
+    independent_flag: bool
+    hidden_dim: int | None
+    layer_norm_position: LayerNormPositionOptions | None
+    normalization: NormalizationOptions | None = field(default=None, kw_only=True)
+    num_layers: int | None
+    activation: ActivationOptions | None
+    residual_connection_option: type[ResidualConfig] | None
+    residual_model_flag: bool = field(default=False, kw_only=True)
+    residual_block_size: int | None = field(default=None, kw_only=True)
+    residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
+    dropout_probability: float | None
+    last_layer_bias_option: LastLayerBiasOptions | None
+    apply_output_postprocessing_flag: bool | None
+    bias_flag: bool | None
 
 
 @dataclass(frozen=True)
@@ -82,10 +104,6 @@ def _generation_value(values, config_module, prefix, name):
 
 
 def _stack_source(values, config_module, prefix, name):
-    from models.gpt.expert_linear_adaptive.runtime_options import (
-        AdaptiveGeneratorStackSource,
-    )
-
     return AdaptiveGeneratorStackSource(
         **{
             field: _generation_value(values, config_module, prefix, name + "_" + field)

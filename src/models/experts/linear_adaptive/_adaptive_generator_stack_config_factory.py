@@ -1,8 +1,8 @@
 from emperor.layers import LayerConfig, LayerStackConfig
 from emperor.linears import LinearLayerConfig
+from models.experts.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.experts.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
 )
 
 from ._residual import build_residual_config

@@ -30,6 +30,7 @@ from models.neuron.expert_linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
 from models.neuron.expert_linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     mixture_generation_fields,
     weight_generation_fields,
 )
@@ -54,7 +55,6 @@ from models.neuron.expert_linear_adaptive._hidden._router_controller_config impo
 )
 from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
     ExpertsMixtureOptions,
