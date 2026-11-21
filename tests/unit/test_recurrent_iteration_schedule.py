@@ -594,11 +594,14 @@ class TestRecurrentIterationSchedule(unittest.TestCase):
                     {"forward_call_progress"},
                 )
 
-    def test_checkpoint_without_progress_loads_strictly_from_zero(self) -> None:
+    def test_checkpoint_without_progress_reports_the_missing_counter(self) -> None:
         restored = _standard_schedule()
 
-        restored.load_state_dict({}, strict=True)
-
+        with self.assertRaisesRegex(RuntimeError, "forward_call_progress"):
+            restored.load_state_dict({}, strict=True)
+        missing = restored.load_state_dict({}, strict=False)
+        self.assertEqual(missing.missing_keys, ["forward_call_progress"])
+        self.assertEqual(missing.unexpected_keys, [])
         self.assertEqual(restored.snapshot().forward_call_progress, 0)
         self.assertEqual(restored.active_iterations, 2)
 
