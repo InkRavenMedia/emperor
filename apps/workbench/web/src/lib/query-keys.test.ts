@@ -180,36 +180,17 @@ describe("query key factories", () => {
     ]);
   });
 
-  it("normalizes object-like training run-plan query key values", () => {
-    const firstKey = trainingQueryKeys.runPlan(
-      0,
-      trainingRunPlanInput({
-        overrides: { z_field: "2", a_field: "1" },
-        search: {
-          mode: "grid",
-          values: {
-            z_axis: [2],
-            a_axis: ["one"],
-          },
-        },
-      }),
-    );
-    const secondKey = trainingQueryKeys.runPlan(
-      0,
-      trainingRunPlanInput({
-        overrides: { a_field: "1", z_field: "2" },
-        search: {
-          mode: "grid",
-          values: {
-            a_axis: ["one"],
-            z_axis: [2],
-          },
-        },
-      }),
-    );
-
-    expect(firstKey).toEqual(secondKey);
-    expect(JSON.stringify(firstKey)).toBe(JSON.stringify(secondKey));
+  it("preserves search-axis order while normalizing unordered overrides", () => {
+    const firstAxes = { width: [1, 2], depth: [3, 4] };
+    const reversedAxes = { depth: [3, 4], width: [1, 2] };
+    function key(values: typeof firstAxes, overrides: Record<string, string>) {
+      return trainingQueryKeys.runPlan(0, trainingRunPlanInput({
+        overrides, search: { mode: "grid", values },
+      }));
+    }
+    const first = key(firstAxes, { z: "2", a: "1" });
+    expect(first).toEqual(key(firstAxes, { a: "1", z: "2" }));
+    expect(first).not.toEqual(key(reversedAxes, { z: "2", a: "1" }));
   });
 
   it("keeps training run-plan array order visible in the query key", () => {

@@ -68,7 +68,9 @@ function trainingRunPlanInputKey({
     preset,
     presets: [...presets],
     experimentTask,
-    search: normalizedQueryValue(search ?? null),
+    search: search
+      ? normalizedQueryValue({ ...search, values: Object.entries(search.values) })
+      : null,
   };
 }
 
