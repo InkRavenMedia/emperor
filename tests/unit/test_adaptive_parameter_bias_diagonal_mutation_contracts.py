@@ -52,47 +52,10 @@ from emperor.augmentations.adaptive_parameters._linear_adapter import (
     AdaptiveLinearLayer,
 )
 from emperor.layers import (
-    ActivationOptions,
-    LastLayerBiasOptions,
-    LayerConfig,
-    LayerNormPositionOptions,
     LayerStack,
-    LayerStackConfig,
 )
-from emperor.linears import LinearLayer, LinearLayerConfig
-
-
-def linear_stack_config(
-    input_dim: int,
-    output_dim: int,
-) -> LayerStackConfig:
-    return LayerStackConfig(
-        input_dim=input_dim,
-        hidden_dim=max(input_dim, output_dim),
-        output_dim=output_dim,
-        num_layers=1,
-        apply_output_postprocessing_flag=False,
-        last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-        shared_gate_config=None,
-        shared_halting_config=None,
-        shared_memory_config=None,
-        layer_config=LayerConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            activation=ActivationOptions.DISABLED,
-            residual_config=None,
-            dropout_probability=0.0,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            gate_config=None,
-            halting_config=None,
-            memory_config=None,
-            layer_model_config=LinearLayerConfig(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                bias_flag=True,
-            ),
-        ),
-    )
+from emperor.linears import LinearLayer
+from support.adaptive_grouping import linear_stack_config
 
 
 def common_bias_arguments(

@@ -53,46 +53,14 @@ from emperor.augmentations.adaptive_parameters._weights.validation import (
     DynamicWeightValidator,
 )
 from emperor.layers import (
-    ActivationOptions,
-    LastLayerBiasOptions,
-    LayerConfig,
-    LayerNormPositionOptions,
     LayerStackConfig,
 )
 from emperor.linears import LinearLayerConfig
+from support.adaptive_grouping import linear_stack_config as build_linear_stack
 
 
-def linear_stack_config(
-    input_dim: int = 2,
-    output_dim: int = 3,
-) -> LayerStackConfig:
-    return LayerStackConfig(
-        input_dim=input_dim,
-        hidden_dim=max(input_dim, output_dim),
-        output_dim=output_dim,
-        num_layers=1,
-        apply_output_postprocessing_flag=False,
-        last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-        shared_gate_config=None,
-        shared_halting_config=None,
-        shared_memory_config=None,
-        layer_config=LayerConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            activation=ActivationOptions.DISABLED,
-            residual_config=None,
-            dropout_probability=0.0,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            gate_config=None,
-            halting_config=None,
-            memory_config=None,
-            layer_model_config=LinearLayerConfig(
-                input_dim=input_dim,
-                output_dim=output_dim,
-                bias_flag=True,
-            ),
-        ),
-    )
+def linear_stack_config(input_dim: int = 2, output_dim: int = 3) -> LayerStackConfig:
+    return build_linear_stack(input_dim, output_dim)
 
 
 def depth_mapping_config(
