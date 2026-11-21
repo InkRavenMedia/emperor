@@ -104,6 +104,7 @@ class DistributionOwnershipTests(unittest.TestCase):
                 "coverage",
                 "mutmut",
                 "psutil",
+                "pytest",
                 "ruff",
             },
         )
@@ -120,6 +121,7 @@ class DistributionOwnershipTests(unittest.TestCase):
                 "pydantic",
                 "pydantic-settings",
                 "pywin32",
+                "pyyaml",
                 "starlette",
                 "tensorboard",
                 "torch",

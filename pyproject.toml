@@ -39,6 +39,7 @@ dev = [
   "coverage[toml]>=7.15,<8",
   "mutmut>=3.6,<4",
   "psutil>=7,<8",
+  "pytest>=9,<10",
   "ruff>=0.8,<0.14",
 ]
 
@@ -91,6 +92,7 @@ ignore = ["E501"]
 known-first-party = ["emperor", "model_runtime", "models"]
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 markers = [
   "training: executes Trainer.fit or an optimizer step and is excluded from non-training verification",
 ]

@@ -53,10 +53,15 @@ def _run(command: Sequence[str], *, environment: Mapping[str, str]) -> int:
     ).returncode
 
 
+def _runtime_test_arguments(modules: Sequence[str]) -> list[str]:
+    paths = [str(Path(*module.split(".")).with_suffix(".py")) for module in modules]
+    return ["-m", "pytest", "-m", "not training", *paths]
+
+
 def run_tests(manifest: Mapping[str, Any]) -> int:
     tests = cast(list[str], manifest["coverage"]["tests"])
     return _run(
-        [sys.executable, "-m", "unittest", *tests],
+        [sys.executable, *_runtime_test_arguments(tests)],
         environment=_python_environment(),
     )
 
@@ -515,9 +520,7 @@ def run_coverage(manifest: Mapping[str, Any]) -> int:
                 "run",
                 "--branch",
                 f"--source={coverage_source}",
-                "-m",
-                "unittest",
-                *tests,
+                *_runtime_test_arguments(tests),
             ],
             [
                 sys.executable,
