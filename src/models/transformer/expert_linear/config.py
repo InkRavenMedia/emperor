@@ -243,6 +243,7 @@ ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
 
 # Feed-Forward Stack Options
 FF_NUM_LAYERS: int = 1
+# Expert feed-forward leaves use bias when the selected FF path and EXPERT_BIAS_FLAG both enable it.
 FF_BIAS_FLAG: bool = True
 FF_STACK_HIDDEN_DIM: int = 512
 FF_STACK_ACTIVATION: ActivationOptions = ActivationOptions.RELU
