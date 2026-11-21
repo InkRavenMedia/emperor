@@ -338,7 +338,7 @@ class LogRunScanner:
             if not isinstance(entry, dict):
                 return None
             run = self._run_from_catalog_entry(root, entry)
-            if run is None:
+            if run is None or not is_valid_log_experiment_name(run.experiment):
                 return None
             runs.append(run)
         generation = payload["generation"]
@@ -452,7 +452,7 @@ class LogRunScanner:
             )
         return observations, tuple(fingerprint)
 
-    def list_experiments(self, *, include_legacy: bool = False) -> list[LogExperiment]:
+    def list_experiments(self) -> list[LogExperiment]:
         root = self.resolved_root()
         if not root.exists():
             return []
@@ -465,9 +465,7 @@ class LogRunScanner:
             if not child.is_dir() or child.is_symlink():
                 continue
             run_count = run_counts[child.name]
-            if not is_valid_log_experiment_name(child.name) and not (
-                include_legacy and run_count
-            ):
+            if not is_valid_log_experiment_name(child.name):
                 continue
             resolved = self.resolve_under_root(child, root)
             if resolved is None:
@@ -501,7 +499,7 @@ class LogRunScanner:
             return None
 
         parts = relative.parts
-        if len(parts) < 5:
+        if len(parts) < 5 or not is_valid_log_experiment_name(parts[0]):
             return None
 
         version = parts[-1]

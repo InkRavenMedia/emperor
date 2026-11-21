@@ -285,3 +285,19 @@ class RequestStrictnessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_experiment_listing_accepts_only_current_pagination_options():
+    async def check():
+        async with lifespan_client(create_app()) as client:
+            page = await client.get(
+                "/logs/experiments", params={"limit": 2, "offset": 1}
+            )
+            assert page.status_code == 200, page.text
+            obsolete = await client.get(
+                "/logs/experiments", params={"includeLegacy": True}
+            )
+            assert obsolete.status_code == 422, obsolete.text
+            assert obsolete.json()["detail"][0]["loc"] == ["query", "includeLegacy"]
+
+    asyncio.run(check())

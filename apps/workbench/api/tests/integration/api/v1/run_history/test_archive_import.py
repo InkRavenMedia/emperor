@@ -361,7 +361,7 @@ class LogArchiveImportApiTests(unittest.TestCase):
         for index, (label, headers, expected_status) in enumerate(cases):
             with self.subTest(case=label), tempfile.TemporaryDirectory() as tmp:
                 logs_root = Path(tmp) / "logs"
-                relative_path = f"{index}_{label}/result.json"
+                relative_path = "proof_experiment/result.json"
                 response = asyncio.run(
                     post_archive(
                         logs_root=logs_root,

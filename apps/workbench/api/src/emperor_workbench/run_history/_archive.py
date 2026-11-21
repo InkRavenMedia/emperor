@@ -19,6 +19,7 @@ from emperor_workbench.filesystem import (
     resolve_root,
     resolve_under_root,
 )
+from emperor_workbench.log_experiments import is_valid_log_experiment_name
 from emperor_workbench.run_history._errors import RunHistoryFailure
 from emperor_workbench.run_history._records import LogArchiveImportResult
 
@@ -98,6 +99,8 @@ def _archive_relative_parts(
             "Log archives must be rooted directly at experiment paths; "
             "a top-level logs/ wrapper is not supported."
         )
+    if not is_valid_log_experiment_name(parts[0]):
+        raise RunHistoryFailure(f"Invalid log experiment name in archive: {parts[0]}")
     return parts
 
 

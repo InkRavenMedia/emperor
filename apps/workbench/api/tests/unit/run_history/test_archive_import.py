@@ -232,7 +232,7 @@ class LogArchiveImportTests(unittest.TestCase):
             self.assertEqual(result.skipped_file_count, 1)
             self.assertFalse((logs_root / "new_exp/nested/result.json").exists())
 
-    def test_import_preserves_safe_legacy_experiment_names_outside_ui_grammar(
+    def test_import_rejects_experiment_names_outside_current_grammar(
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -249,24 +249,18 @@ class LogArchiveImportTests(unittest.TestCase):
                 )
             )
 
-            service.import_archive(
-                archive=archive,
-                filename="logs.zip",
-                max_upload_size=None,
-                max_extracted_size=None,
-                max_member_count=TEST_ARCHIVE_MEMBER_LIMIT,
-                max_path_bytes=TEST_ARCHIVE_PATH_BYTE_LIMIT,
-            )
-
-            runs = service.list_runs(limit=10, offset=0)
-            experiments = service.list_experiments(limit=10, offset=0)
-            history = service.list_experiments(limit=10, offset=0, include_legacy=True)
-            self.assertEqual(runs.runs[0].experiment, "legacy-name")
-            self.assertEqual(experiments.experiments, ())
-            self.assertEqual(
-                [(entry.experiment, entry.run_count) for entry in history.experiments],
-                [("legacy-name", 1)],
-            )
+            with self.assertRaisesRegex(
+                RunHistoryFailure, "Invalid log experiment name"
+            ):
+                service.import_archive(
+                    archive=archive,
+                    filename="logs.zip",
+                    max_upload_size=None,
+                    max_extracted_size=None,
+                    max_member_count=TEST_ARCHIVE_MEMBER_LIMIT,
+                    max_path_bytes=TEST_ARCHIVE_PATH_BYTE_LIMIT,
+                )
+            self.assertFalse((logs_root / "legacy-name").exists())
 
 
 if __name__ == "__main__":
