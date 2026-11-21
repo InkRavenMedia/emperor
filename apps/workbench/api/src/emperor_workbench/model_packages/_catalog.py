@@ -6,6 +6,7 @@ from typing import Any
 
 from model_runtime.packages import model_key
 
+from emperor_workbench.failures import FailureKind
 from emperor_workbench.model_packages._errors import ModelPackageFailure
 from emperor_workbench.model_packages._records import ModelPackageIdentity
 from emperor_workbench.model_packages._selection import SelectedModelPackage
@@ -48,6 +49,8 @@ class ModelPackageCatalog:
             model_id = model_key(model_type, model)
             self.select(model_id)
         except (ModelPackageFailure, ValueError) as exc:
+            if isinstance(exc, ModelPackageFailure) and exc.kind != FailureKind.INVALID:
+                raise
             raise ModelPackageFailure(
                 f"Unknown model: --model-type {model_type} --model {model}"
             ) from exc

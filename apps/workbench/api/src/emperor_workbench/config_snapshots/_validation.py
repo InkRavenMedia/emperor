@@ -11,6 +11,7 @@ from model_runtime.inspection import (
 from model_runtime.packages import normalize_key
 
 from emperor_workbench.config_snapshots._errors import ConfigSnapshotFailure
+from emperor_workbench.failures import FailureKind
 from emperor_workbench.model_packages import (
     ModelPackageCatalog,
     ModelPackageFailure,
@@ -25,7 +26,7 @@ def configuration_schema(
     try:
         return model_packages.select(model).configuration(preset)
     except ModelPackageFailure as exc:
-        raise ConfigSnapshotFailure(exc.detail) from exc
+        raise ConfigSnapshotFailure(exc.detail, kind=exc.kind) from exc
 
 
 def validate_config_snapshot(
@@ -40,16 +41,13 @@ def validate_config_snapshot(
             InspectionRequest(preset=preset, overrides=overrides)
         )
     except ModelPackageFailure as exc:
+        if exc.kind != FailureKind.INVALID:
+            raise ConfigSnapshotFailure(exc.detail, kind=exc.kind) from exc
         cause = exc.__cause__
         detail_source = cause if isinstance(cause, Exception) else exc
         raise ConfigSnapshotFailure(
             "Invalid config snapshot overrides: "
             f"{_snapshot_config_error_detail(detail_source)}"
-        ) from exc
-    except Exception as exc:
-        detail = str(exc) or type(exc).__name__
-        raise ConfigSnapshotFailure(
-            f"Invalid config snapshot overrides: {detail}"
         ) from exc
 
 
@@ -85,6 +83,8 @@ def _serialized_override_values(
     try:
         serialized = model_packages.select(model).serialize_overrides(overrides)
     except ModelPackageFailure as exc:
+        if exc.kind != FailureKind.INVALID:
+            raise ConfigSnapshotFailure(exc.detail, kind=exc.kind) from exc
         raise ConfigSnapshotFailure(
             f"Invalid config snapshot overrides: {_snapshot_config_error_detail(exc)}"
         ) from exc
