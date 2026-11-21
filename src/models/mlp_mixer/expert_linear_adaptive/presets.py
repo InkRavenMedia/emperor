@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import models.mlp_mixer.expert_linear_adaptive.config as config
 from emperor.config import BaseOptions
+from emperor.experiments import ExperimentTask
 from emperor.layers import LayerNormPositionOptions
 from model_runtime.packages import (
     BuilderBackedExperimentPresetsBase,
@@ -10,6 +11,7 @@ from model_runtime.packages import (
 from model_runtime.runs import ExperimentBase
 
 from .config_builder import MlpMixerExpertLinearAdaptiveConfigBuilder
+from .dataset_options import DATASET_OPTIONS_BY_TASK
 from .runtime_defaults import runtime_from_flat
 
 
@@ -113,7 +115,8 @@ class ExperimentPresets(BuilderBackedExperimentPresetsBase):
 
     def _dataset_config(self, dataset: type) -> dict:
         dataset_config = super()._dataset_config(dataset)
-        if getattr(dataset, "hierarchical_masked_word_flag", False):
+        masked_word_datasets = DATASET_OPTIONS_BY_TASK[ExperimentTask.BERT_PRETRAINING]
+        if issubclass(dataset, tuple(masked_word_datasets)):
             return {
                 **dataset_config,
                 "hierarchical_masked_word_flag": True,

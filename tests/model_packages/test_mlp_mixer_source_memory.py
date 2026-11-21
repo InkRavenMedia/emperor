@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from emperor.attention._variants.mixer.layer import MixerAttention
+from emperor.attention import MixerAttentionConfig
 from emperor.memory import AttentionDynamicMemoryConfig
 from models.catalog import model_package
 
@@ -56,7 +56,11 @@ def configuration(name, **updates):
 def test_mlp_mixer_source_memory_is_optional_and_differentiable(name):
     package = model_package(name)
     disabled = package.build_model(configuration(name))
-    mixers = [m for m in disabled.modules() if isinstance(m, MixerAttention)]
+    mixers = [
+        m
+        for m in disabled.modules()
+        if isinstance(m, MixerAttentionConfig().registry_owner())
+    ]
     assert mixers and all(m.source_memory is None for m in mixers)
     assert all(
         m.processor.mixing_sequence_length == m.sequence_length == 4 for m in mixers
@@ -68,7 +72,11 @@ def test_mlp_mixer_source_memory_is_optional_and_differentiable(name):
         token_mixer_source_memory_num_memory_slots=3,
     )
     model = package.build_model(enabled_config).eval()
-    mixers = [m for m in model.modules() if isinstance(m, MixerAttention)]
+    mixers = [
+        m
+        for m in model.modules()
+        if isinstance(m, MixerAttentionConfig().registry_owner())
+    ]
     calls = []
     handles = []
     for mixer in mixers:
@@ -138,7 +146,11 @@ def test_source_memory_public_options_parse_and_coexist_with_existing_controls(n
             token_mixer_stack_hidden_dim=8,
         )
         model = package.build_model(config).eval()
-        for mixer in (m for m in model.modules() if isinstance(m, MixerAttention)):
+        for mixer in (
+            m
+            for m in model.modules()
+            if isinstance(m, MixerAttentionConfig().registry_owner())
+        ):
             assert type(mixer.source_memory.cfg) is variant
             assert mixer.source_memory.test_time_training_learning_rate == 0.01
             assert mixer.source_memory.test_time_training_num_inner_steps == 1
@@ -151,5 +163,5 @@ def test_source_memory_public_options_parse_and_coexist_with_existing_controls(n
     assert all(
         m.source_memory is None
         for m in disabled.modules()
-        if isinstance(m, MixerAttention)
+        if isinstance(m, MixerAttentionConfig().registry_owner())
     )
