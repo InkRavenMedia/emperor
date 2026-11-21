@@ -12,6 +12,7 @@ from model_runtime.packages import (
 )
 from model_runtime.runs import RunRequest
 
+from emperor_workbench.failures import FailureKind
 from emperor_workbench.model_packages import (
     ModelPackageCatalog,
     ModelPackageFailure,
@@ -39,7 +40,7 @@ def require_package(
     try:
         return model_packages.select(model).reference
     except ModelPackageFailure as exc:
-        raise RunPlanFailure(exc.detail) from exc
+        raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
 
 
 def resolve_presets(
@@ -58,7 +59,12 @@ def resolve_presets(
             continue
         try:
             preset_member = package.resolve_preset(raw_preset)
-        except (ProjectAdapterFailure, ValueError):
+        except ProjectAdapterFailure as exc:
+            if exc.kind != FailureKind.INVALID:
+                raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
+            unknown.append(raw_preset)
+            continue
+        except ValueError:
             unknown.append(raw_preset)
             continue
         if preset_member.name in seen:
@@ -114,7 +120,7 @@ def _validate_overrides(
                 parsed_overrides,
             )
     except ModelPackageFailure as exc:
-        raise RunPlanFailure(exc.detail) from exc
+        raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
 
 
 def resolve_inputs(
@@ -197,7 +203,7 @@ def configuration_fields(
     try:
         fields = model_packages.select(model).configuration(preset).fields
     except ModelPackageFailure as exc:
-        raise RunPlanFailure(exc.detail) from exc
+        raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
     by_key: dict[str, ConfigurationField] = {}
     for config_field in fields:
         by_key[normalize_key(config_field.key)] = config_field
