@@ -14,7 +14,14 @@ from emperor.embedding.hierarchical.decoder import (
     OUTPUT_SYMBOLS,
     HierarchicalByteDecoderOutput,
 )
-from emperor.layers import LayerStackConfig
+from emperor.layers import (
+    ActivationOptions,
+    LastLayerBiasOptions,
+    LayerConfig,
+    LayerNormPositionOptions,
+    LayerStackConfig,
+)
+from emperor.linears import LinearLayerConfig
 from emperor.nn import freeze_forward_schedules
 from emperor.transformer import (
     TransformerConfig,
@@ -82,8 +89,10 @@ def build_masked_word_decoder(
         max_token_bytes=encoder.max_token_bytes,
         byte_position_config=encoder.byte_position_config,
         decoder_config=TransformerConfig(decoder_stack_config=decoder_stack),
-        conditioning_projection_config=_linear_stack(encoder.output_dim, byte_dim),
-        output_projection_config=_linear_stack(byte_dim, OUTPUT_SYMBOLS),
+        conditioning_projection_config=_decoder_projection(
+            encoder.output_dim, byte_dim
+        ),
+        output_projection_config=_decoder_projection(byte_dim, OUTPUT_SYMBOLS),
     )
 
 
