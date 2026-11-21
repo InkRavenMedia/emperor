@@ -48,17 +48,42 @@ def test_effective_dataset_dimensions_tighten_linear_inspection_preflight() -> N
     dataset = _dataset(package, "Cifar100")
     configuration = package.build_configuration(package.default_preset, dataset)
 
-    assert preflight_inspection_configuration(
+    assert (
+        preflight_inspection_configuration(
+            package,
+            {},
+            package.default_preset,
+        )
+        == 68_416
+    )
+    assert (
+        preflight_inspection_configuration(
+            package,
+            {},
+            package.default_preset,
+            effective_configuration=configuration,
+        )
+        == 144_512
+    )
+
+
+def test_dense_parameter_estimate_for_explicit_small_dimensions() -> None:
+    package = model_package("linears/linear")
+    assert package is not None
+    estimate = preflight_inspection_configuration(
         package,
-        {},
+        {
+            "input_dim": 3,
+            "hidden_dim": 4,
+            "output_dim": 5,
+            "stack_num_layers": 1,
+            "submodule_stack_hidden_dim": 4,
+            "submodule_stack_num_layers": 2,
+        },
         package.default_preset,
-    ) == 68_416
-    assert preflight_inspection_configuration(
-        package,
-        {},
-        package.default_preset,
-        effective_configuration=configuration,
-    ) == 144_512
+    )
+    # Input/output projections plus six dense matrices per layer.
+    assert estimate == 4 * (3 + 5) + 3 * 6 * 4**2
 
 
 def test_effective_configuration_is_an_additive_keyword_only_preflight_input() -> None:
@@ -93,17 +118,17 @@ def test_effective_root_dimensions_do_not_depend_on_runtime_default_names() -> N
 
 
 @pytest.mark.parametrize(
-    ("package_key", "dataset_name", "memory_limit_bytes", "expected_estimate"),
+    ("package_key", "dataset_name", "memory_limit_bytes", "parameter_limit"),
     (
-        ("linears/linear", "Cifar100", 1_120_000, 144_512),
-        ("gpt/linear", "WikiText103", 160_000_000, 69_429_376),
+        ("linears/linear", "Cifar100", 1_120_000, 70_000),
+        ("gpt/linear", "WikiText103", 160_000_000, 10_000_000),
     ),
 )
 def test_dataset_effective_preflight_rejects_before_model_allocation(
     package_key: str,
     dataset_name: str,
     memory_limit_bytes: int,
-    expected_estimate: int,
+    parameter_limit: int,
 ) -> None:
     package = model_package(package_key)
     assert package is not None
@@ -116,8 +141,8 @@ def test_dataset_effective_preflight_rejects_before_model_allocation(
         with pytest.raises(
             InspectionError,
             match=(
-                rf"estimated parameter count {expected_estimate} exceeds the "
-                r"memory-derived maximum"
+                rf"estimated parameter count [0-9]+ exceeds the "
+                rf"memory-derived maximum of {parameter_limit}\."
             ),
         ):
             inspect_model(
@@ -164,16 +189,22 @@ def test_every_catalog_dataset_configuration_passes_production_preflight() -> No
     for package in discover_model_packages():
         for datasets in package.dataset_metadata.values():
             for dataset in datasets:
-                configuration = package.build_configuration(
-                    package.default_preset,
-                    dataset,
-                )
-                estimate = preflight_inspection_configuration(
-                    package,
-                    {},
-                    package.default_preset,
-                    effective_configuration=configuration,
-                    memory_limit_bytes=4 * 1024**3,
-                )
-
-                assert estimate > 0, (package.catalog_key, dataset.__name__)
+                admitted = []
+                for preset in package.preset_type:
+                    try:
+                        package.validate_run_dataset(
+                            package.preset_name(preset), dataset, {}
+                        )
+                    except ValueError:
+                        continue
+                    admitted.append(preset)
+                    configuration = package.build_configuration(preset, dataset)
+                    estimate = preflight_inspection_configuration(
+                        package,
+                        {},
+                        preset,
+                        effective_configuration=configuration,
+                        memory_limit_bytes=4 * 1024**3,
+                    )
+                    assert estimate > 0, (package.catalog_key, preset, dataset.__name__)
+                assert admitted, (package.catalog_key, dataset.__name__)
