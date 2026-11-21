@@ -96,6 +96,7 @@ class ConfigSnapshotApiTests(unittest.TestCase):
             WorkbenchApiSettings(
                 logs_root=str(root / "logs"),
                 snapshots_root=str(root / "snapshots"),
+                state_root=str(root / "state"),
                 auth_mode="none",
                 allow_unsafe_local_mutations=True,
             )
