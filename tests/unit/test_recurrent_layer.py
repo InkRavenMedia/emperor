@@ -23,6 +23,7 @@ from emperor.experts import (
 )
 from emperor.experts._model import MixtureOfExpertsModel
 from emperor.halting import (
+    HaltingBase,
     HaltingConfig,
     HaltingHiddenStateModeOptions,
     HaltingStateBase,
@@ -575,26 +576,22 @@ class DummyHaltingState(HaltingStateBase):
 
 
 @dataclass
-class LegacyHaltingConfig(HaltingConfig):
+class ImmediateHaltingConfig(HaltingConfig):
     def _registry_owner(self) -> type:
-        return LegacyHalting
+        return ImmediateHalting
 
 
-class LegacyHalting(Module):
-    @classmethod
-    def implements_halting_interface(cls) -> bool:
-        return True
-
+class ImmediateHalting(HaltingBase[DummyHaltingState]):
     def __init__(
         self,
-        cfg: LegacyHaltingConfig,
-        overrides: LegacyHaltingConfig | None = None,
+        cfg: ImmediateHaltingConfig,
+        overrides: ImmediateHaltingConfig | None = None,
     ) -> None:
         super().__init__()
         self.cfg = self._override_config(cfg, overrides)
 
     def update_halting_state(self, previous_state, model_hidden_state):
-        state = DummyHaltingState(marker="legacy")
+        state = DummyHaltingState(marker="immediate")
         state.halt_mask = torch.zeros(
             model_hidden_state.shape[:-1],
             dtype=torch.bool,
@@ -617,12 +614,8 @@ class StochasticHaltingConfig(HaltingConfig):
         return StochasticHalting
 
 
-class StochasticHalting(Module):
+class StochasticHalting(HaltingBase[StochasticHaltingState]):
     supports_minimum_step_delay = True
-
-    @classmethod
-    def implements_halting_interface(cls) -> bool:
-        return True
 
     def __init__(
         self,
@@ -1735,7 +1728,7 @@ class TestRecurrentLayer(unittest.TestCase):
     def test_non_default_minimum_requires_halting_delay_support(self):
         config = self.recurrent_config(
             max_steps=3,
-            halting_config=LegacyHaltingConfig(min_steps=2),
+            halting_config=ImmediateHaltingConfig(min_steps=2),
         )
 
         with self.assertRaisesRegex(
@@ -1744,12 +1737,23 @@ class TestRecurrentLayer(unittest.TestCase):
         ):
             config.build()
 
-    def test_default_minimum_preserves_legacy_halting_strategies(self):
+    def test_custom_halting_with_a_step_delay_requires_a_bounded_owner(self):
+        config = self.layer_block_config(
+            input_dim=2,
+            output_dim=2,
+            halting_config=StochasticHaltingConfig(min_steps=2),
+        )
+        with self.assertRaisesRegex(
+            ValueError, "LayerConfig.*no defined owner step limit"
+        ):
+            config.build()
+
+    def test_default_minimum_allows_immediate_halting_strategies(self):
         model = self.recurrent_config(
             dim=2,
             max_steps=2,
             block_config=self.layer_block_config(increment=1.0),
-            halting_config=LegacyHaltingConfig(),
+            halting_config=ImmediateHaltingConfig(),
         ).build()
 
         result = model(LayerState(hidden=torch.zeros(1, 2)))
