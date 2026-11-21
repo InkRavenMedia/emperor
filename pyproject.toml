@@ -15,7 +15,7 @@ keywords = ["machine learning", "deep learning", "pytorch", "transformers"]
 dependencies = [
   "torch",
   "torchvision",
-  "torchtext",
+  "torchtext==0.6.0",
   "torchmetrics",
   "datasets",
   "matplotlib",
