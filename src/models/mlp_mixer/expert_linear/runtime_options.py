@@ -101,23 +101,6 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     residual_stack_last_layer_bias_option: LastLayerBiasOptions | None
     residual_stack_apply_output_postprocessing_flag: bool | None
     residual_stack_bias_flag: bool | None
-    controller_stack_hidden_dim: int
-    controller_stack_layer_norm_position: LayerNormPositionOptions
-    controller_stack_normalization: NormalizationOptions = field(
-        default=NormalizationOptions.RMS_NORM, kw_only=True
-    )
-    controller_stack_num_layers: int
-    controller_stack_activation: ActivationOptions
-    controller_stack_residual_connection_option: type[ResidualConfig] | None
-    controller_stack_residual_model_flag: bool = field(default=False, kw_only=True)
-    controller_stack_residual_block_size: int | None = field(default=None, kw_only=True)
-    controller_stack_residual_rms_norm_epsilon: float | None = field(
-        default=None, kw_only=True
-    )
-    controller_stack_dropout_probability: float
-    controller_stack_last_layer_bias_option: LastLayerBiasOptions
-    controller_stack_apply_output_postprocessing_flag: bool
-    controller_stack_bias_flag: bool
     token_mixer_source_memory_flag: bool = field(default=False, kw_only=True)
     token_mixer_source_memory_option: type[DynamicMemoryConfig] = field(
         default=GatedResidualDynamicMemoryConfig, kw_only=True
