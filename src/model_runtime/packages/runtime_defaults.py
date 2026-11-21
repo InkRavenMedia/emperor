@@ -3,9 +3,10 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from types import ModuleType, NoneType
-from typing import TYPE_CHECKING, Any, cast, get_args
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, cast
 
+from model_runtime.packages.annotations import annotation_is_nullable
 from model_runtime.packages.configuration import (
     abstract_config_class_error,
     config_key_to_model_param,
@@ -33,18 +34,6 @@ def _package_error(package: ModelPackage, exc: Exception) -> RuntimeDefaultsErro
     )
 
 
-def _annotation_accepts_none(annotation: Any) -> bool:
-    if annotation is None:
-        return False
-    if annotation is NoneType:
-        return True
-    if isinstance(annotation, str):
-        return "None" in annotation or "Optional" in annotation
-    if NoneType in get_args(annotation):
-        return True
-    return any(_annotation_accepts_none(arg) for arg in get_args(annotation))
-
-
 def _snapshot_preset_lock(lock: object) -> PresetLock:
     from model_runtime.packages.presets import PresetLock
 
@@ -61,7 +50,7 @@ class RuntimeDefaultsSpec:
     _config_module: ModuleType = dataclass_field(repr=False)
     _search_space_module: ModuleType = dataclass_field(repr=False)
     supported_keys: tuple[str, ...]
-    keys_by_alias: Mapping[str, str]
+    keys_by_normalized_name: Mapping[str, str]
     annotations: Mapping[str, Any]
     search_annotations: Mapping[str, Any]
     configuration_metadata: Mapping[str, Mapping[str, Any]]
@@ -71,7 +60,7 @@ class RuntimeDefaultsSpec:
     inspection_limits: InspectionConstructionLimits
 
     def resolve_key(self, key: str) -> str | None:
-        return self.keys_by_alias.get(normalize_key(key))
+        return self.keys_by_normalized_name.get(normalize_key(key))
 
     def model_parameter(self, config_key: str) -> str:
         return config_key_to_model_param(config_key)
@@ -142,7 +131,7 @@ class RuntimeDefaultsSpec:
             value is None for value in cast(list[Any], current_value)
         ):
             return True
-        return _annotation_accepts_none(self.annotations.get(config_key))
+        return annotation_is_nullable(self.annotations.get(config_key))
 
     def validate_typed_values(self, values: Mapping[str, object]) -> None:
         """Enforce declared package types before construction is dispatched."""

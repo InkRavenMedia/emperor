@@ -15,6 +15,7 @@ from model_runtime.inspection import InspectionError, configuration_schema
 from model_runtime.packages import (
     ModelMetadata,
     ModelPackage,
+    RuntimeDefaultsSection,
     config_key_to_model_param,
 )
 from model_runtime.runs import (
@@ -127,6 +128,16 @@ def _linears_linear_with_duplicate_implicit_axes() -> ModelPackage:
         dataset_options=linears_linear_datasets,
         monitor_options_source=linears_linear_monitors,
         search_space=search_space,
+        configuration_metadata_sections=package._adapter.load_metadata()._configuration_metadata_sections,
+        search_metadata_sections=(
+            RuntimeDefaultsSection(
+                (),
+                (
+                    ("SEARCH_SPACE_HIDDEN_DIM", 1, (1,)),
+                    ("SEARCH_SPACE_HIDDEN-DIM", 2, (2,)),
+                ),
+            ),
+        ),
     )
     return ModelPackage(
         package.identity,
@@ -147,23 +158,8 @@ class RunsPlanningTests(unittest.TestCase):
         self,
     ) -> None:
         package = _linears_linear()
-        catalog_metadata = package._adapter.load_metadata()
-        legacy_metadata = ModelMetadata(
-            package.identity,
-            catalog_metadata._runtime_defaults_source,
-            catalog_metadata._dataset_options_source,
-            catalog_metadata._monitor_options_source,
-            catalog_metadata._search_space_source,
-        )
-        package_without_headings = ModelPackage(
-            package.identity,
-            _SearchMetadataAdapter(package, legacy_metadata),
-            package.inspection_construction_limits,
-        )
-        with patch(
-            "model_runtime.packages.metadata.configuration_field_metadata",
-            return_value={},
-        ):
+        package_without_headings = ModelPackage(package.identity, package._adapter)
+        with patch.object(ModelMetadata, "_configuration_metadata", return_value={}):
             plan = plan_runs(
                 package_without_headings,
                 RunRequest(
@@ -280,7 +276,7 @@ class RunsPlanningTests(unittest.TestCase):
                 ),
             )
 
-    def test_implicit_search_preserves_present_legacy_none_lock(self) -> None:
+    def test_implicit_search_respects_explicit_null_lock(self) -> None:
         package = _linears_linear()
         with patch.object(
             ModelPackage,

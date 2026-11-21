@@ -209,3 +209,40 @@ class ConfigurationValueParsingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_config_object_codec_preserves_tagged_children_enums_and_errors():
+    from dataclasses import dataclass
+
+    import pytest
+
+    from emperor.config import ConfigBase
+
+    class Choice(Enum):
+        FIRST = 1
+
+    @dataclass
+    class Child(ConfigBase):
+        choice: Choice = Choice.FIRST
+
+    @dataclass
+    class Parent(ConfigBase):
+        child: Child | None = None
+
+    module = ModuleType("fixture_configuration_codec")
+    module.Child, module.Parent, module.Choice = Child, Parent, Choice
+    module.OPTION = None
+    module.__annotations__ = {"OPTION": Parent | None}
+    expected = Parent(Child())
+    encoded = serialize_config_value(expected)
+    assert parse_config_value(module, "OPTION", encoded) == expected
+    for data, message in (
+        ('{"type":false}', "Configuration objects require a string 'type' field"),
+        (
+            '{"type":"Parent","child":{"type":"Child","typo":1}}',
+            "Unknown Child fields: ['typo']",
+        ),
+    ):
+        with pytest.raises(ConfigValueError) as error:
+            parse_config_value(module, "OPTION", data)
+        assert message in str(error.value)

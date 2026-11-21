@@ -4,7 +4,6 @@ import inspect
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from functools import cache
 from types import MappingProxyType, ModuleType, NoneType, UnionType
 from typing import (
     Annotated,
@@ -13,10 +12,13 @@ from typing import (
     cast,
     get_args,
     get_origin,
-    get_type_hints,
     is_typeddict,
 )
 
+from model_runtime.packages.annotations import (
+    resolved_annotations,
+    transparent_annotation,
+)
 from model_runtime.packages.configuration import (
     abstract_config_class_error,
     config_key_to_model_param,
@@ -47,21 +49,20 @@ def positive_runtime_fields(*config_keys: str) -> RuntimeValueConstraints:
 _EMPTY_RUNTIME_VALUE_CONSTRAINTS = RuntimeValueConstraints()
 
 
-def _runtime_default_mapping(value: object) -> dict[object, object]:
-    if value is None:
+def runtime_default_mapping(values: object, *, package: str) -> dict[str, object]:
+    """Take a caller-independent, string-keyed snapshot of Runtime Defaults."""
+    if values is None:
         return {}
-    if not isinstance(value, Mapping):
-        raise TypeError("Runtime Defaults values must be a mapping")
-    return dict(cast(Mapping[object, object], value))
-
-
-@cache
-def _resolved_annotations(config_module: ModuleType) -> Mapping[str, Any]:
-    return MappingProxyType(get_type_hints(config_module, include_extras=True))
+    if not isinstance(values, Mapping):
+        raise TypeError(f"{package}: Runtime Defaults values must be a mapping")
+    supplied = dict(cast(Mapping[object, object], values))
+    if any(not isinstance(key, str) for key in supplied):
+        raise TypeError(f"{package}: Runtime Defaults keys must be strings")
+    return cast(dict[str, object], supplied)
 
 
 def _runtime_annotation(config_module: ModuleType, config_key: str) -> Any | None:
-    annotation = _resolved_annotations(config_module).get(config_key)
+    annotation = resolved_annotations(config_module).get(config_key)
     if annotation is not None:
         return annotation
     current_value = getattr(config_module, config_key)
@@ -93,12 +94,6 @@ def _is_empty_tuple_annotation(annotation: Any) -> bool:
         and not get_args(annotation)
         and hasattr(annotation, "__args__")
     )
-
-
-def _transparent_annotation(annotation: Any) -> Any:
-    while get_origin(annotation) is Annotated:
-        annotation = get_args(annotation)[0]
-    return annotation
 
 
 def _first_unsupported_annotation(
@@ -152,7 +147,7 @@ def _unsupported_runtime_annotation(
         if len(arguments) != 1:
             unsupported = annotation
         else:
-            expected_base = _transparent_annotation(arguments[0])
+            expected_base = transparent_annotation(arguments[0])
             unsupported = (
                 None
                 if expected_base is Any
@@ -318,7 +313,7 @@ def _parameterized_value_mismatch(
     elif origin is Annotated:
         mismatch = _runtime_value_mismatch(arguments[0], value, path)
     elif origin is type:
-        expected_base = _transparent_annotation(arguments[0])
+        expected_base = transparent_annotation(arguments[0])
         if inspect.isclass(value) and (
             expected_base is Any
             or expected_base is object
@@ -545,12 +540,11 @@ def _invalid_config_class_error(
     )
 
 
-def _runtime_keys_by_alias(config_module: ModuleType) -> dict[str, str]:
-    aliases: dict[str, str] = {}
-    for config_key in iter_supported_config_keys(config_module):
-        aliases[config_key.lower()] = config_key
-        aliases[config_key_to_model_param(config_key)] = config_key
-    return aliases
+def _config_keys_by_parameter(config_module: ModuleType) -> dict[str, str]:
+    return {
+        config_key_to_model_param(key): key
+        for key in iter_supported_config_keys(config_module)
+    }
 
 
 def _declared_runtime_value_constraints(
@@ -605,6 +599,25 @@ def _validate_runtime_value_constraints(
             )
 
 
+def validate_annotated_runtime_value(
+    annotation: Any, value: object, *, package: str, key: str
+) -> None:
+    """Check a single supplied value against its owner's resolved annotation."""
+    if annotation is None:
+        return
+    unsupported = _unsupported_runtime_annotation(annotation)
+    if unsupported is not None:
+        raise _unsupported_annotation_error(
+            package=package, key=key, annotation=unsupported
+        )
+    mismatch = _runtime_value_mismatch(annotation, value)
+    if mismatch is not None:
+        raise _runtime_value_type_error(package=package, key=key, mismatch=mismatch)
+    invalid = _ConfigClassValidator().invalid(annotation, value, root=True)
+    if invalid is not None:
+        raise _invalid_config_class_error(package=package, key=key, invalid=invalid)
+
+
 def validate_runtime_default_value_types(
     values: Mapping[str, object],
     *,
@@ -613,43 +626,16 @@ def validate_runtime_default_value_types(
 ) -> None:
     """Validate known overrides against their package-owned declared types.
 
-    Unknown keys remain the responsibility of the package adapter so this shared
-    boundary does not change package-local alias or error-order semantics.
+    The package adapter reports unknown parameters before type validation.
     """
 
-    accepted = _runtime_keys_by_alias(config_module)
+    accepted = _config_keys_by_parameter(config_module)
     if any(key not in accepted for key in values):
         return
     for key, value in values.items():
         config_key = accepted[key]
         annotation = _runtime_annotation(config_module, config_key)
-        if annotation is None:
-            continue
-        unsupported = _unsupported_runtime_annotation(annotation)
-        if unsupported is not None:
-            raise _unsupported_annotation_error(
-                package=package,
-                key=key,
-                annotation=unsupported,
-            )
-        mismatch = _runtime_value_mismatch(annotation, value)
-        if mismatch is not None:
-            raise _runtime_value_type_error(
-                package=package,
-                key=key,
-                mismatch=mismatch,
-            )
-        invalid = _ConfigClassValidator().invalid(
-            annotation,
-            value,
-            root=True,
-        )
-        if invalid is not None:
-            raise _invalid_config_class_error(
-                package=package,
-                key=key,
-                invalid=invalid,
-            )
+        validate_annotated_runtime_value(annotation, value, package=package, key=key)
     _validate_runtime_value_constraints(
         values,
         package=package,
@@ -667,14 +653,8 @@ def validate_runtime_default_values(
     package: str,
     config_module: ModuleType,
 ) -> dict[str, object]:
-    try:
-        resolved = _runtime_default_mapping(values)
-    except TypeError as exc:
-        raise TypeError(f"{package}: {exc}") from exc
-    if any(not isinstance(key, str) for key in resolved):
-        raise TypeError(f"{package}: Runtime Defaults keys must be strings")
-    normalized = {cast(str, key): value for key, value in resolved.items()}
-    accepted = set(_runtime_keys_by_alias(config_module))
+    normalized = runtime_default_mapping(values, package=package)
+    accepted = set(_config_keys_by_parameter(config_module))
     unknown = sorted(set(normalized) - accepted)
     if unknown:
         fields = ", ".join(repr(key) for key in unknown)
@@ -706,6 +686,8 @@ __all__ = [
     "ResolvedRuntimeOptions",
     "RuntimeValueConstraints",
     "positive_runtime_fields",
+    "runtime_default_mapping",
+    "validate_annotated_runtime_value",
     "validate_runtime_default_value_types",
     "validate_runtime_default_values",
 ]

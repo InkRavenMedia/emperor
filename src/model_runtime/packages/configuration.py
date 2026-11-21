@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import inspect
 import json
+from collections.abc import Sequence
 from dataclasses import fields
 from enum import Enum
-from types import ModuleType, NoneType, UnionType
-from typing import Any, Union, cast, get_args, get_origin
+from types import ModuleType
+from typing import Any, TypeAlias, cast
 
 from emperor.config import ConfigBase
+from model_runtime.packages.annotations import (
+    annotation_classes,
+    annotation_is_nullable,
+    resolved_annotations,
+)
+
+_ConfigJson: TypeAlias = (
+    bool | int | float | str | None | list["_ConfigJson"] | dict[str, "_ConfigJson"]
+)
 
 SKIP_CONFIG_KEYS = {
     "CONFIG_SCHEMA_SKIP_KEYS",
@@ -30,12 +40,8 @@ def config_key_to_flag(key: str) -> str:
     return "--" + key.lower().replace("_", "-")
 
 
-def config_key_to_param(key: str) -> str:
-    return key.lower()
-
-
 def config_key_to_model_param(key: str) -> str:
-    return config_key_to_param(key)
+    return key.lower()
 
 
 def search_key_to_config_key(key: str) -> str:
@@ -99,22 +105,6 @@ def _enum_lookup(enum_type: type[Enum], raw_value: str) -> Enum:
         ) from exc
 
 
-def _annotation_classes(annotation: Any) -> list[type]:
-    if annotation is None:
-        return []
-    origin = get_origin(annotation)
-    args = get_args(annotation)
-    if origin in {UnionType, Union}:
-        return [item for arg in args for item in _annotation_classes(arg)]
-    if annotation is NoneType:
-        return []
-    if origin is type and args and isinstance(args[0], type):
-        return [args[0]]
-    if inspect.isclass(annotation):
-        return [annotation]
-    return []
-
-
 def _parse_from_annotation(
     config_module: ModuleType,
     annotation: Any,
@@ -122,13 +112,13 @@ def _parse_from_annotation(
 ) -> Any:
     if raw_value.lower() in {"none", "null"}:
         return None
-    classes = _annotation_classes(annotation)
+    classes = annotation_classes(annotation)
     enum_classes = [cls for cls in classes if issubclass(cls, Enum)]
     if enum_classes:
         try:
             parsed: Any = _enum_lookup(enum_classes[0], raw_value)
         except ConfigValueError as exc:
-            if NoneType in get_args(annotation):
+            if annotation_is_nullable(annotation):
                 raise ConfigValueError(
                     f"{exc}. Use None to leave this optional setting unset."
                 ) from exc
@@ -197,26 +187,28 @@ def parse_config_value(
     key: str,
     raw_value: str,
 ) -> Any:
-    annotation = getattr(config_module, "__annotations__", {}).get(key)
+    annotation = resolved_annotations(config_module).get(key)
     if raw_value.lstrip().startswith("{") and any(
         issubclass(candidate, ConfigBase)
-        for candidate in _annotation_classes(annotation)
+        for candidate in annotation_classes(annotation)
     ):
         try:
-            return _parse_config_object(config_module, json.loads(raw_value))
+            payload = cast(_ConfigJson, json.loads(raw_value))
+            return _parse_config_object(config_module, payload)
         except (TypeError, ValueError) as exc:
             raise ConfigValueError(
                 f"Invalid configuration object for {key}: {exc}"
             ) from exc
-    return _parse_from_current_value(
+    parsed = _parse_from_current_value(
         config_module,
         getattr(config_module, key, None),
-        getattr(config_module, "__annotations__", {}).get(key),
+        annotation,
         raw_value,
     )
+    return parsed
 
 
-def _parse_config_object(config_module: ModuleType, value: Any) -> Any:
+def _parse_config_object(config_module: ModuleType, value: _ConfigJson) -> object:
     """Decode only package-exposed config constructors and qualified enum members."""
     if isinstance(value, dict):
         name = value.get("type")
@@ -244,7 +236,7 @@ def _parse_config_object(config_module: ModuleType, value: Any) -> Any:
     return value
 
 
-def _config_json_value(value: Any) -> Any:
+def _config_json_value(value: object) -> object:
     if isinstance(value, ConfigBase):
         return {
             "type": type(value).__name__,
@@ -257,7 +249,7 @@ def _config_json_value(value: Any) -> Any:
     if isinstance(value, Enum):
         return f"{type(value).__name__}.{value.name}"
     if isinstance(value, (list, tuple)):
-        return [_config_json_value(item) for item in value]
+        return [_config_json_value(item) for item in cast(Sequence[object], value)]
     return value
 
 
@@ -281,10 +273,11 @@ def abstract_config_class_error(candidate: type) -> str | None:
 def serialize_config_value(value: Any) -> bool | int | float | str | None:
     if isinstance(value, ConfigBase):
         try:
-            return json.dumps(_config_json_value(value), separators=(",", ":"))
+            serialized = json.dumps(_config_json_value(value), separators=(",", ":"))
         except TypeError:
-            # Preserve the existing display form for configs containing non-JSON values.
-            return str(value)
+            # Preserve the display form for configs containing non-JSON values.
+            serialized = str(value)
+        return serialized
     if isinstance(value, Enum) and value.name.lower() in {"none", "null"}:
         return f"{type(value).__name__}.{value.name}"
     if hasattr(value, "name"):
@@ -303,7 +296,6 @@ __all__ = [
     "canonical_config_key",
     "config_key_to_flag",
     "config_key_to_model_param",
-    "config_key_to_param",
     "iter_supported_config_keys",
     "normalize_key",
     "parse_config_value",

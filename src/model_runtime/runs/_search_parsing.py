@@ -216,7 +216,7 @@ def _axis_definition(
     if axis is not None:
         return axis
     if selection.allow_custom_values:
-        config_key = context.runtime_defaults.keys_by_alias.get(normalized_key)
+        config_key = context.runtime_defaults.resolve_key(normalized_key)
         if config_key is not None:
             return _custom_axis_definition(context, config_key)
     raise InvalidRunRequest(f"Unknown search axis '{selection.key}'.")
