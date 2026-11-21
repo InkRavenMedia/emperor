@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
 from threading import Lock, RLock
@@ -26,6 +27,8 @@ from emperor_workbench.filesystem import (
     write_json_atomic,
 )
 from emperor_workbench.model_packages import ModelPackageIdentity
+
+logger = logging.getLogger(__name__)
 
 SNAPSHOT_FILENAME_SUFFIX = ".json"
 
@@ -73,6 +76,7 @@ class FileSystemConfigSnapshotStore:
             require_no_snapshot_conflict(snapshot, tuple(self._index.values()))
             if snapshot_path.exists() or snapshot_path.is_symlink():
                 raise ConfigSnapshotConflictError(ConfigSnapshotConflictReason.ID)
+            self._invalidate_catalog()
             write_json_atomic(snapshot_path, _record_to_metadata(snapshot))
             self._index[snapshot.id] = snapshot
             self._index_generation += 1
@@ -99,6 +103,7 @@ class FileSystemConfigSnapshotStore:
                 exclude_snapshot_id=current.id,
             )
             snapshot_path = self._snapshot_path(current.model, current.id)
+            self._invalidate_catalog()
             write_json_atomic(snapshot_path, _record_to_metadata(replacement))
             self._index[current.id] = replacement
             self._index_generation += 1
@@ -159,6 +164,7 @@ class FileSystemConfigSnapshotStore:
                 self._index_generation += 1
                 self._publish_index()
                 return False
+            self._invalidate_catalog()
             snapshot_path.unlink()
             self._index.pop(snapshot_id, None)
             self._index_generation += 1
@@ -204,7 +210,8 @@ class FileSystemConfigSnapshotStore:
         self._index = {record.id: record for record in records}
         self._index_generation += 1
         self._next_reconciliation = now + self._reconciliation_interval_seconds
-        self._publish_index()
+        if not force:
+            self._publish_index()
 
     def _load_index(
         self,
@@ -237,14 +244,23 @@ class FileSystemConfigSnapshotStore:
     def _publish_index(self) -> None:
         if self._catalog is None or self._index is None:
             return
-        self._catalog.publish(
-            kind="config-snapshots",
-            generation=self._index_generation,
-            entries=[
-                _record_to_metadata(snapshot)
-                for snapshot in sorted(self._index.values(), key=snapshot_sort_key)
-            ],
-        )
+        try:
+            self._catalog.publish(
+                kind="config-snapshots",
+                generation=self._index_generation,
+                entries=[
+                    _record_to_metadata(snapshot)
+                    for snapshot in sorted(self._index.values(), key=snapshot_sort_key)
+                ],
+            )
+        except OSError:
+            self._next_reconciliation = 0.0
+            logger.warning("Could not publish the snapshot catalog", exc_info=True)
+
+    def _invalidate_catalog(self) -> None:
+        # A restart must discover new files even if the next publication fails.
+        if self._catalog is not None:
+            self._catalog.invalidate()
 
     def _read_metadata(self, snapshot_path: Path) -> ConfigSnapshotRecord | None:
         resolved_path = self._resolve_existing_snapshot_path(snapshot_path)
