@@ -61,6 +61,7 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,
 )
 from models.catalog import model_package
+from models.experts.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.experts.linear_adaptive._router_controller_config import (
     RouterControllerModelConfig,
 )
@@ -74,7 +75,6 @@ from models.experts.linear_adaptive.presets import (
 from models.experts.linear_adaptive.runtime_defaults import runtime_from_flat
 from models.experts.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
     ExpertsMixtureOptions,

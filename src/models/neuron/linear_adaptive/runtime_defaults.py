@@ -3,50 +3,26 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Final
 
-from model_runtime.packages.runtime_values import validate_runtime_default_value_types
-
-from . import config
-from ._runtime_defaults_resolver import _NeuronLinearAdaptiveRuntimeDefaultsResolver
-from .runtime_options import RuntimeOptions
-
-_UNKNOWN_KEY_MARKERS = (
-    "unknown runtime override",
-    "unknown runtime key",
-    "unexpected hidden runtime option",
-    "got an unexpected keyword argument",
+from model_runtime.packages.runtime_values import (
+    runtime_default_mapping,
+    validate_runtime_default_value_types,
 )
 
-
-def _keyword_values(**values: object) -> dict[str, object]:
-    return values
-
-
-def _raise_outer_unknown_key(
-    values: Mapping[str, object],
-    error: TypeError | ValueError,
-) -> None:
-    message = str(error)
-    if not any(marker in message for marker in _UNKNOWN_KEY_MARKERS):
-        raise error
-    for key in values:
-        if repr(key) in message:
-            raise TypeError(
-                f"_NeuronLinearAdaptiveRuntimeDefaultsResolver.__init__() got an unexpected keyword argument {key!r}"
-            ) from None
-    raise error
+from . import config
+from ._runtime_defaults_resolver import NeuronLinearAdaptiveRuntimeDefaultsResolver
+from .runtime_options import RuntimeOptions
 
 
 def runtime_from_flat(values: Mapping[str, object] | None = None) -> RuntimeOptions:
-    flat_values = _keyword_values(**dict(values or {}))
+    flat_values = runtime_default_mapping(
+        values, package="models.neuron.linear_adaptive"
+    )
     validate_runtime_default_value_types(
         flat_values,
         package="models.neuron.linear_adaptive",
         config_module=config,
     )
-    try:
-        resolver = _NeuronLinearAdaptiveRuntimeDefaultsResolver(flat_values)
-    except (TypeError, ValueError) as error:
-        _raise_outer_unknown_key(flat_values, error)
+    resolver = NeuronLinearAdaptiveRuntimeDefaultsResolver(flat_values)
     return RuntimeOptions(
         {
             "hidden_runtime": resolver.hidden_runtime,

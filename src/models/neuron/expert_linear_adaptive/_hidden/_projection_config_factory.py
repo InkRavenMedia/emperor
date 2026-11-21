@@ -1,19 +1,9 @@
 # ruff: noqa: E501
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
-    AxisMaskConfig,
-    BankExpansionFactorOptions,
-    DynamicBiasConfig,
-    DynamicDiagonalConfig,
-    DynamicWeightConfig,
-    GroupingConfig,
-    MaskDimensionOptions,
-    WeightDecayScheduleOptions,
-    WeightNormalizationOptions,
-    WeightNormalizationPositionOptions,
 )
 from emperor.layers import (
     ActivationOptions,
@@ -25,11 +15,10 @@ from models.neuron.expert_linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
 from models.neuron.expert_linear_adaptive._generation import (
-    BiasGenerationOptions,
-    WeightGenerationOptions,
     mixture_generation_fields,
     weight_generation_fields,
 )
+from models.neuron.expert_linear_adaptive._hidden import runtime_options
 from models.neuron.expert_linear_adaptive._hidden._adaptive_generator_stack_config_factory import (
     AdaptiveGeneratorStackConfigFactory,
 )
@@ -46,42 +35,10 @@ from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
 
 
 @dataclass(frozen=True, slots=True)
-class AdaptiveBoundaryModelOptions:
-    grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
-    weight_generation: WeightGenerationOptions = field(
-        default_factory=WeightGenerationOptions, kw_only=True
-    )
-    bias_generation: BiasGenerationOptions = field(
-        default_factory=BiasGenerationOptions, kw_only=True
-    )
-    weight_option: type[DynamicWeightConfig] | None
-    generator_depth: int
-    weight_decay_schedule: WeightDecayScheduleOptions
-    weight_decay_rate: float
-    weight_decay_warmup_batches: int
-    weight_normalization_option: WeightNormalizationOptions
-    weight_normalization_learnable_scale_flag: bool
-    weight_normalization_position_option: WeightNormalizationPositionOptions
-    weight_bank_expansion_factor: BankExpansionFactorOptions
-    bias_option: type[DynamicBiasConfig] | None
-    bias_decay_schedule: WeightDecayScheduleOptions
-    bias_decay_rate: float
-    bias_decay_warmup_batches: int
-    bias_bank_expansion_factor: BankExpansionFactorOptions
-    diagonal_option: type[DynamicDiagonalConfig] | None
-    row_mask_option: type[AxisMaskConfig] | None
-    mask_dimension_option: MaskDimensionOptions
-    mask_threshold: float
-    mask_surrogate_scale: float
-    mask_floor: float
-    mask_transition_width: float
-
-
-@dataclass(frozen=True, slots=True)
 class BoundaryModelConfigDependencies:
     stack_options: ExpertsStackOptions
-    input_boundary_options: AdaptiveBoundaryModelOptions
-    output_boundary_options: AdaptiveBoundaryModelOptions
+    input_boundary_options: runtime_options.AdaptiveBoundaryModelOptions
+    output_boundary_options: runtime_options.AdaptiveBoundaryModelOptions
     adaptive_generator_stack_options: AdaptiveGeneratorStackOptions
 
 
@@ -116,7 +73,7 @@ class BoundaryModelConfigFactory:
 
     def __build_boundary_layer_config(
         self,
-        options: AdaptiveBoundaryModelOptions,
+        options: runtime_options.AdaptiveBoundaryModelOptions,
         *,
         activation: ActivationOptions,
     ) -> LayerConfig:
@@ -133,7 +90,7 @@ class BoundaryModelConfigFactory:
 
     def __build_boundary_layer_model_config(
         self,
-        options: AdaptiveBoundaryModelOptions,
+        options: runtime_options.AdaptiveBoundaryModelOptions,
     ) -> AdaptiveLinearLayerConfig:
         augmentation = AdaptiveParameterAugmentationConfig(
             grouping_config=options.grouping_config,

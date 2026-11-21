@@ -1,11 +1,14 @@
 """Package-owned scalar grouping resolution."""
 
+from collections.abc import Mapping
 from dataclasses import replace
+from types import ModuleType
+from typing import Any
 
 from models import _learned_grouping
 
 
-def grouping_keys(config_module):
+def grouping_keys(config_module: ModuleType) -> set[str]:
     return {
         name.lower()
         for name in vars(config_module)
@@ -16,7 +19,9 @@ def grouping_keys(config_module):
     }
 
 
-def apply_grouping_options(options, values, config_module):
+def apply_grouping_options(
+    options: dict[str, Any], values: Mapping[str, object], config_module: ModuleType
+) -> dict[str, Any]:
     result = dict(options)
     for role, prefix in (
         ("", ""),

@@ -22,6 +22,7 @@ from emperor.layers import (
 )
 from models.experts.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.experts.linear_adaptive.runtime_options import (
+    AdaptiveBoundaryModelOptions,
     AdaptiveGeneratorStackOptions,
     ExpertsAdaptiveGeneratorStackOptions,
     HiddenAdaptiveBiasOptions,
