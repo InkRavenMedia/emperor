@@ -4,13 +4,15 @@ from typing import TYPE_CHECKING, assert_never
 
 from torch import nn
 
-from emperor.layers._layer.pipeline.normalization_variants import (
+from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
+from emperor.layers._pipeline.delegates.normalization_variants import (
     DynamicErf,
     DynamicISRU,
     DynamicTanh,
 )
-from emperor.layers._layer.validation import LayerNormalizationDelegateValidator
-from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
+from emperor.layers._pipeline.delegates.validation import (
+    LayerNormalizationDelegateValidator,
+)
 from emperor.nn import Module
 
 if TYPE_CHECKING:

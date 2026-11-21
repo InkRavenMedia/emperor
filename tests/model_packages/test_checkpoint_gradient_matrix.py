@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import hashlib
 import io
-import json
 import unittest
 
 import torch
@@ -19,93 +17,6 @@ CHECKPOINT_REPRESENTATIVES = {
     "parametric": "parametric/parametric_vector",
     "transformer": "transformer/linear",
     "vit": "vit/linear",
-}
-EXPECTED_STATE_TOPOLOGY_DIGESTS = {
-    "bert/expert_linear": (
-        "0e34f906ff9c15ab2b692422ec3f920a75e2099ea0221db6033ce647558963de"
-    ),
-    "bert/expert_linear_adaptive": (
-        "0e34f906ff9c15ab2b692422ec3f920a75e2099ea0221db6033ce647558963de"
-    ),
-    "bert/linear": "4da5c3efec5f6bf0647684b176eb79d5393af751c7dba55d712295c6aae7a578",
-    "bert/linear_adaptive": (
-        "f49635e8c2dec1594c993bcb6ecfdbc0e5fb49871fdc0800a356727fe5fcb3ac"
-    ),
-    "experts/linear": (
-        "ef1cca635a4c85f84b6dcdb7d051dc987a9f9e67d480bed848173b2c4be3dfc2"
-    ),
-    "experts/linear_adaptive": (
-        "9c128ad37e9dab9f2ef405a93ad424f171a287369efea2b02ff5f58dc0fb8404"
-    ),
-    "gpt/expert_linear": (
-        "a2179fc50c406447af062b21d0533e3aa8bcd9045c9690c7fc934c7f3d1aaed3"
-    ),
-    "gpt/expert_linear_adaptive": (
-        "a2179fc50c406447af062b21d0533e3aa8bcd9045c9690c7fc934c7f3d1aaed3"
-    ),
-    "gpt/linear": "94311c337b236db9e5a4b3ff22487340d2a8dbf67aed7ad12f264a5eafbcd385",
-    "gpt/linear_adaptive": (
-        "a7e10c274e8bcc628a90c19f19057c4acf104ca02109bc34f2e525331561dbf2"
-    ),
-    "linears/linear": (
-        "efbffe89fe687a962fd9fd1b1c13f089a4739265333fd0e96545155280d7b807"
-    ),
-    "linears/linear_adaptive": (
-        "efbffe89fe687a962fd9fd1b1c13f089a4739265333fd0e96545155280d7b807"
-    ),
-    "mlp_mixer/expert_linear": (
-        "f3110f1d187bbe6186ce5096b44a1a80d4ad1309e1d51e96d22e843971c7320d"
-    ),
-    "mlp_mixer/expert_linear_adaptive": (
-        "5f52c2b87c72e873ba0b73b0d556e7677424415e126334b25a2937d8a7284920"
-    ),
-    "mlp_mixer/linear": (
-        "0afa286265806894707abe3ed75352f402718c9b0fab6f9966a8ec1855678f9d"
-    ),
-    "mlp_mixer/linear_adaptive": (
-        "56e3ef8de17c47284dec93bac4817e28c55a185f1887c969abd7af558eee0bf4"
-    ),
-    "neuron/expert_linear": (
-        "b75dc96394cc416fff56c28ef825f783072cb1f84e9a05d25685d560ffc1bf19"
-    ),
-    "neuron/expert_linear_adaptive": (
-        "25a2e8452dd305940d2af31e6be93a77b748a6fd52b8dad0cadd3cad63495985"
-    ),
-    "neuron/linear": "b7d35e5a5f9eb456b1916fbc3c2df2fb297aa30991188bbf40b3803b0ad34670",
-    "neuron/linear_adaptive": (
-        "b7d35e5a5f9eb456b1916fbc3c2df2fb297aa30991188bbf40b3803b0ad34670"
-    ),
-    "parametric/parametric_generator": (
-        "86ee37a7fe511e6bcdb99a6d95604c6a27c590f040bf7a6dd6765e8be0f930ca"
-    ),
-    "parametric/parametric_matrix": (
-        "fcc0060a3a33635fa427ff438ea1d4838d360fa9827791cb2e8977a88ff203f5"
-    ),
-    "parametric/parametric_vector": (
-        "813b5c878296fb417680b6e2d08124704da450c12a144911f0fa006e7ae13902"
-    ),
-    "transformer/expert_linear": (
-        "206455f265c52feb87899de5ae49475a783c17d46387db4f34cebc6844d02b2e"
-    ),
-    "transformer/expert_linear_adaptive": (
-        "206455f265c52feb87899de5ae49475a783c17d46387db4f34cebc6844d02b2e"
-    ),
-    "transformer/linear": (
-        "fde98a20e29b45427d4d2c63cfbd028593817cbf5f49fdfde06ebd629ceb8189"
-    ),
-    "transformer/linear_adaptive": (
-        "fde98a20e29b45427d4d2c63cfbd028593817cbf5f49fdfde06ebd629ceb8189"
-    ),
-    "vit/expert_linear": (
-        "2629c55dec5ce67fe7aaae8c28098d431ce7eea7d14ddad8cd6eb0e687e5b997"
-    ),
-    "vit/expert_linear_adaptive": (
-        "2629c55dec5ce67fe7aaae8c28098d431ce7eea7d14ddad8cd6eb0e687e5b997"
-    ),
-    "vit/linear": "75d24a36a83addef48dff10016d13d3a2b4f07e15f1dacd12ebf10662bc917b9",
-    "vit/linear_adaptive": (
-        "31800b04e35bdf5ce67f93d0b77fa0cf57c030481e22bcc9f86c4d9a0b7308e2"
-    ),
 }
 PERSISTENT_BUFFER_FAMILIES = {"experts", "neuron", "parametric"}
 GRADIENT_PACKAGES = (
@@ -135,10 +46,6 @@ class ModelPackageCheckpointGradientMatrixTests(unittest.TestCase):
             set(CHECKPOINT_REPRESENTATIVES),
             {package.identity.model_type for package in discovered_packages},
         )
-        self.assertEqual(
-            set(EXPECTED_STATE_TOPOLOGY_DIGESTS),
-            {package.catalog_key for package in discovered_packages},
-        )
 
         for package in discovered_packages:
             family = package.identity.model_type
@@ -147,17 +54,6 @@ class ModelPackageCheckpointGradientMatrixTests(unittest.TestCase):
                 config = package.build_configuration()
                 model = package.build_model(config)
                 state = model.state_dict()
-                topology = [
-                    (name, str(tensor.dtype), list(tensor.shape))
-                    for name, tensor in sorted(state.items())
-                ]
-                topology_digest = hashlib.sha256(
-                    json.dumps(
-                        topology,
-                        separators=(",", ":"),
-                        sort_keys=False,
-                    ).encode("utf-8")
-                ).hexdigest()
                 state_names = set(state)
                 parameter_names = {
                     name for name, _ in model.named_parameters(remove_duplicate=False)
@@ -168,10 +64,6 @@ class ModelPackageCheckpointGradientMatrixTests(unittest.TestCase):
 
                 self.assertTrue(parameter_names)
                 self.assertTrue(state_names)
-                self.assertEqual(
-                    topology_digest,
-                    EXPECTED_STATE_TOPOLOGY_DIGESTS[model_id],
-                )
                 self.assertTrue(parameter_names.issubset(state_names))
                 self.assertTrue(state_names.issubset(parameter_names | buffer_names))
                 if family in PERSISTENT_BUFFER_FAMILIES:

@@ -12,7 +12,6 @@ from emperor.layers._composition.recurrent.runtime.handoff import RecurrentDepth
 from emperor.layers._composition.recurrent.runtime.iteration_schedule import (
     RecurrentIterationSchedule,
 )
-from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
 from emperor.layers._composition.recurrent.validation import RecurrentLayerValidator
 from emperor.layers._composition.recurrent.variants.standard.step import (
     StandardRecurrentStep,
@@ -28,6 +27,7 @@ if TYPE_CHECKING:
 
 class RecurrentLayer(RecurrentCompositionAbstract):
     VALIDATOR = RecurrentLayerValidator
+    _STEP_OWNED_NAMES = ("pipeline", "block_model")
     supports_recurrent_diagnostics = True
 
     def __init__(
@@ -38,26 +38,18 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         super().__init__(cfg, overrides)
         self.cfg: RecurrentLayerConfig
         self.recurrent_iteration_schedule = RecurrentIterationSchedule(self.cfg)
-        self.utilities = RecurrentUtilities(self.cfg)
         self.max_steps: int = self.cfg.max_steps
-        self.reinject_original_hidden_flag: bool = (
-            self.cfg.reinject_original_hidden_flag is True
-        )
         self.block_config: ConfigBase = self.cfg.block_config
 
-        self.block_model = self._build_transition_model(self.block_config)
         self.step = self._build_step()
-        self.handoff = RecurrentDepthHandoff(
-            self.step, self.recurrent_iteration_schedule
-        )
+        self.reinject_original_hidden_flag: bool = self.step.reinject_original_hidden
+        self.handoff = self.__build_handoff()
 
     def _build_step(self) -> StandardRecurrentStep:
-        return StandardRecurrentStep(
-            utilities=self.utilities,
-            output_dim=self.output_dim,
-            get_module=self.get_submodule,
-            reinject_original_hidden=self.reinject_original_hidden_flag,
-        )
+        return StandardRecurrentStep(self.cfg)
+
+    def __build_handoff(self) -> RecurrentDepthHandoff[StandardRecurrentState]:
+        return RecurrentDepthHandoff(self.step, self.recurrent_iteration_schedule)
 
     def forward(self, state: LayerState) -> LayerState:
         self.VALIDATOR.validate_state(state, self.input_dim)
@@ -66,47 +58,49 @@ class RecurrentLayer(RecurrentCompositionAbstract):
                 return self.handoff.run_and_blend_depth_results(
                     state, runtime_modules=self.modules
                 )
-            step_limit = self.recurrent_iteration_schedule.active_transition_count
-            no_gradient_steps = (
-                self.recurrent_iteration_schedule.no_gradient_transition_count
-            )
-            return self.__run_recurrence_with_step_limit(
-                state, step_limit, no_gradient_steps
-            )
+            updated_state = self.__run_recurrence_with_step_limit(state)
+            self.recurrent_iteration_schedule.record_successful_forward()
+            return updated_state
 
-    def __run_recurrence_with_step_limit(
-        self, state: LayerState, step_limit: int, no_gradient_steps: int
-    ) -> LayerState:
-        recurrent_state = self.step.initialize(state)
-        while self.__has_remaining_steps_and_active_items(recurrent_state, step_limit):
-            if self.__is_first_step_after_no_gradient_prefix(
-                recurrent_state, no_gradient_steps
-            ):
-                recurrent_state = recurrent_state.detach()
-            tracks_gradients = recurrent_state.transition_index >= no_gradient_steps
+    def __run_recurrence_with_step_limit(self, state: LayerState) -> LayerState:
+        recurrent_state = self.step.initialize_recurrent_state(state)
+        while self.__has_remaining_steps_and_active_items(recurrent_state):
+            recurrent_state = self.__maybe_detach_recurrent_state(recurrent_state)
+            tracks_gradients = self.__should_track_gradients(recurrent_state)
             with self.__gradient_context_for_step(tracks_gradients):
-                recurrent_state = self.step.forward(recurrent_state, tracks_gradients)
+                recurrent_state = self.step(recurrent_state, tracks_gradients)
         output_state = self.step.finalize(recurrent_state)
-        state.hidden = output_state.hidden
-        state.loss = output_state.loss
-        state.commit_recurrent_context(output_state)
-        self.recurrent_iteration_schedule.record_successful_forward()
-        return state
+        return self.__update_state_from_output(state, output_state)
 
     def __has_remaining_steps_and_active_items(
-        self, recurrent_state: StandardRecurrentState, step_limit: int
+        self, recurrent_state: StandardRecurrentState
     ) -> bool:
-        return (
-            recurrent_state.transition_index < step_limit
-            and not recurrent_state.all_items_halted
-        )
+        step_limit = self.recurrent_iteration_schedule.active_transition_count
+        has_remaining_steps = recurrent_state.transition_index < step_limit
+        has_active_items = not recurrent_state.all_items_halted
+        return has_remaining_steps and has_active_items
+
+    def __maybe_detach_recurrent_state(
+        self, recurrent_state: StandardRecurrentState
+    ) -> StandardRecurrentState:
+        if self.__is_first_step_after_no_gradient_prefix(recurrent_state):
+            recurrent_state = recurrent_state.detach()
+        return recurrent_state
 
     def __is_first_step_after_no_gradient_prefix(
-        self, recurrent_state: StandardRecurrentState, no_gradient_steps: int
+        self, recurrent_state: StandardRecurrentState
     ) -> bool:
+        no_gradient_steps = (
+            self.recurrent_iteration_schedule.no_gradient_transition_count
+        )
+        has_steps_without_gradients = no_gradient_steps > 0
+        is_first_gradient_step = recurrent_state.transition_index == no_gradient_steps
+        return has_steps_without_gradients and is_first_gradient_step
+
+    def __should_track_gradients(self, recurrent_state: StandardRecurrentState) -> bool:
         return (
-            no_gradient_steps > 0
-            and recurrent_state.transition_index == no_gradient_steps
+            recurrent_state.transition_index
+            >= self.recurrent_iteration_schedule.no_gradient_transition_count
         )
 
     def __gradient_context_for_step(
@@ -115,3 +109,11 @@ class RecurrentLayer(RecurrentCompositionAbstract):
         if tracks_gradients:
             return nullcontext()
         return torch.no_grad()
+
+    def __update_state_from_output(
+        self, state: LayerState, output_state: LayerState
+    ) -> LayerState:
+        state.hidden = output_state.hidden
+        state.loss = output_state.loss
+        state.commit_recurrent_context(output_state)
+        return state

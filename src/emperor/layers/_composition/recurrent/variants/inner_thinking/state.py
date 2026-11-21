@@ -6,7 +6,7 @@ from math import prod
 import torch
 from torch import Tensor
 
-from emperor.layers._composition.recurrent.validation.inner_thinking import (
+from emperor.layers._composition.recurrent.validation import (
     InnerThinkingRecurrentValidator,
 )
 from emperor.layers._state import LayerState
@@ -97,6 +97,8 @@ class InnerThinkingTokenSelection:
                     -1, selected_token_count, -1
                 ),
             )
-        if self.indices.ndim == 1 and mask.ndim == 2:
+        is_unbatched_selection = self.indices.ndim == 1
+        is_shared_attention_mask = mask.ndim == 2
+        if is_unbatched_selection and is_shared_attention_mask:
             return selected_mask[0]
         return selected_mask

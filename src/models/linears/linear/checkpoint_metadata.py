@@ -10,7 +10,7 @@ _DIRECT_LAYER_WEIGHT = re.compile(
     r"^main_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
 )
 _RECURRENT_LAYER_WEIGHT = re.compile(
-    r"^main_model\.block_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
+    r"^main_model\.(?:step\.)?block_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
 )
 
 

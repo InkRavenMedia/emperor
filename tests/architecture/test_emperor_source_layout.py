@@ -39,20 +39,20 @@ _LAYER_CONFIG_CONSTRUCTOR_OWNERS = {
     ),
     ("_composition/residual/variants/attention/core.py", "AttentionResidual"),
     ("_layer/core.py", "Layer"),
-    ("_layer/pipeline/halting.py", "LayerHaltingDelegate"),
-    ("_layer/pipeline/memory.py", "LayerMemoryDelegate"),
-    ("_layer/pipeline/normalization.py", "LayerNormalizationDelegate"),
-    ("_layer/pipeline/postprocessing.py", "LayerPostprocessingDelegate"),
-    ("_layer/pipeline/residual.py", "LayerResidualDelegate"),
+    ("_pipeline/delegates/halting.py", "LayerHaltingDelegate"),
+    ("_pipeline/delegates/memory.py", "LayerMemoryDelegate"),
+    ("_pipeline/delegates/normalization.py", "LayerNormalizationDelegate"),
+    ("_pipeline/delegates/postprocessing.py", "LayerPostprocessingDelegate"),
+    ("_pipeline/delegates/residual.py", "LayerResidualDelegate"),
     ("_stack/builder.py", "LayerStackBuilder"),
     ("_stack/core.py", "LayerStack"),
     ("_stack/shared_controllers.py", "LayerStackSharedControllers"),
     ("_stack/topology.py", "LayerStackTopology"),
 }
 
-_LAYER_DELEGATE_INITIALIZER_OWNERS = {
-    ("_layer/core.py", "Layer"),
-    ("_stack/core.py", "LayerStack"),
+_LAYER_DELEGATE_INITIALIZERS = {
+    ("_layer/core.py", "Layer"): "LayerProcessingPipeline",
+    ("_stack/core.py", "LayerStack"): "self.__initialize_delegates",
 }
 
 
@@ -121,13 +121,18 @@ class EmperorSourceLayoutTests(unittest.TestCase):
                     ]
                     for method in methods.values()
                 }
-                config_reads_outside_constructor = [
+                is_recurrent_step = owner[0].startswith(
+                    "_composition/recurrent/"
+                ) and owner[0].endswith("/step.py")
+                runtime_config_fields = {"output_dim"} if is_recurrent_step else set()
+                unexpected_config_reads = [
                     (method_name, node.lineno, ast.unparse(node))
                     for method_name, config_reads in config_reads_by_method.items()
                     if method_name != "__init__"
                     for node in config_reads
+                    if node.attr not in runtime_config_fields
                 ]
-                self.assertEqual(config_reads_outside_constructor, [])
+                self.assertEqual(unexpected_config_reads, [])
                 config_reads = config_reads_by_method.get("__init__", [])
                 if owner in _LAYER_CONFIG_CONSTRUCTOR_OWNERS:
                     self.assertTrue(config_reads)
@@ -167,16 +172,15 @@ class EmperorSourceLayoutTests(unittest.TestCase):
                         super_initializer_call.end_lineno, first_config_read_line
                     )
 
-                if owner not in _LAYER_DELEGATE_INITIALIZER_OWNERS:
+                delegate_initializer = _LAYER_DELEGATE_INITIALIZERS.get(owner)
+                if delegate_initializer is None:
                     continue
-                self.assertIn("__initialize_delegates", methods)
+                if delegate_initializer.startswith("self."):
+                    self.assertIn(delegate_initializer.removeprefix("self."), methods)
                 delegate_initializer_calls = [
                     node
                     for node in constructor_calls
-                    if isinstance(node.func, ast.Attribute)
-                    and isinstance(node.func.value, ast.Name)
-                    and node.func.value.id == "self"
-                    and node.func.attr == "__initialize_delegates"
+                    if ast.unparse(node.func) == delegate_initializer
                 ]
                 self.assertEqual(len(delegate_initializer_calls), 1)
                 self.assertLess(

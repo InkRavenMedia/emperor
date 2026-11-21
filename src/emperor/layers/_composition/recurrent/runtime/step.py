@@ -5,51 +5,47 @@ from contextlib import contextmanager
 from dataclasses import replace
 from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
+from emperor.layers._composition.recurrent.state import RecurrentState
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
     RecurrentLayerValidator,
     TinyRecursiveModelRecurrentValidator,
 )
-from emperor.memory import MemoryPositionOptions
+from emperor.layers._pipeline import LayerProcessingPipeline
+from emperor.nn import Module
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     from torch import Tensor
 
+    from emperor.config import ConfigBase
     from emperor.halting import HaltingStateBase
-    from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
-    from emperor.layers._composition.recurrent.variants.hierarchical_reasoning_model.state import (
-        HierarchicalReasoningModelState,
-    )
-    from emperor.layers._composition.recurrent.variants.standard.state import (
-        StandardRecurrentState,
-    )
-    from emperor.layers._composition.recurrent.variants.tiny_recursive_model.state import (
-        TinyRecursiveModelState,
-    )
-    from emperor.layers._composition.residual.base import ResidualState
+    from emperor.layers._composition.recurrent.config import RecurrentCompositionConfig
     from emperor.layers._state import LayerState
 
 
-RecurrentStateT = TypeVar(
-    "RecurrentStateT",
-    bound="StandardRecurrentState | TinyRecursiveModelState | HierarchicalReasoningModelState",
-)
+RecurrentStateT = TypeVar("RecurrentStateT", bound=RecurrentState)
 
 
-class RecurrentStep(Generic[RecurrentStateT], ABC):
+class RecurrentStep(Module, Generic[RecurrentStateT], ABC):
     VALIDATOR: ClassVar[
         type[RecurrentLayerValidator]
         | type[TinyRecursiveModelRecurrentValidator]
         | type[HierarchicalReasoningModelRecurrentValidator]
     ]
 
-    def __init__(self, utilities: RecurrentUtilities, output_dim: int) -> None:
-        self.utilities = utilities
-        self.output_dim = output_dim
+    def __init__(self, cfg: RecurrentCompositionConfig) -> None:
+        super().__init__()
+        self.cfg = cfg
+        self.pipeline = LayerProcessingPipeline(self.cfg)
         self.diagnostic_observer: Callable[[Tensor, Tensor], None] | None = None
         self.__diagnostic_suppression_depth = 0
+
+    def _build_transition_model(self, block_config: ConfigBase) -> Module:
+        return self._build_from_config(
+            block_config, input_dim=self.cfg.output_dim, output_dim=self.cfg.output_dim
+        )
 
     @abstractmethod
     def forward(
@@ -61,7 +57,7 @@ class RecurrentStep(Generic[RecurrentStateT], ABC):
         pass
 
     @abstractmethod
-    def initialize(
+    def initialize_recurrent_state(
         self, state: LayerState, include_caller_loss: bool = True
     ) -> RecurrentStateT:
         pass
@@ -88,55 +84,12 @@ class RecurrentStep(Generic[RecurrentStateT], ABC):
         return replace(recurrent_state)
 
     def finalize(self, recurrent_state: RecurrentStateT) -> LayerState:
-        finalized_hidden, finalized_loss = self.utilities.finalize_halting(
+        hidden, loss = self.pipeline.halting.finalize_accumulation(
+            recurrent_state.halting_state,
             recurrent_state.output_hidden,
             recurrent_state.branch_loss,
-            recurrent_state.halting_state,
         )
-        return replace(
-            recurrent_state.context_state, hidden=finalized_hidden, loss=finalized_loss
-        )
-
-    def _compute_block_output(
-        self,
-        state: LayerState,
-        previous_hidden: Tensor,
-        previous_context: LayerState,
-        block: Callable[[LayerState], LayerState],
-        transition_index: int,
-        residual_state: ResidualState | None = None,
-        target_residual_state: ResidualState | None = None,
-    ) -> LayerState:
-        state = self.utilities.normalize_before_model(state)
-        block_input = self.utilities.apply_memory(
-            state.hidden, MemoryPositionOptions.BEFORE_AFFINE
-        )
-        state.hidden = block_input
-        output_state = block(state)
-        self.VALIDATOR.validate_transition_output(
-            output_state, block_input, self.output_dim
-        )
-        candidate_hidden = self.utilities.apply_memory(
-            output_state.hidden, MemoryPositionOptions.AFTER_AFFINE
-        )
-        candidate_state = replace(output_state, hidden=candidate_hidden)
-        candidate_state = self.utilities.normalize_after_model(candidate_state)
-        candidate_state.hidden = self.utilities.apply_gate(candidate_state.hidden)
-        residual_input = candidate_state.hidden
-        aligned_previous_hidden = output_state.align_recurrent_hidden(
-            previous_hidden, source_state=previous_context
-        )
-        candidate_state.hidden = self.utilities.apply_residual(
-            candidate_state.hidden,
-            aligned_previous_hidden,
-            residual_state,
-            transition_index,
-        )
-        candidate_state = self.utilities.normalize_after_residual(candidate_state)
-        self.utilities.advance_detached_target_residual_state(
-            residual_input, previous_hidden, target_residual_state, transition_index
-        )
-        return candidate_state
+        return replace(recurrent_state.context_state, hidden=hidden, loss=loss)
 
     def _apply_halting(
         self,
@@ -146,10 +99,8 @@ class RecurrentStep(Generic[RecurrentStateT], ABC):
         update_enabled: bool,
         observe_transition: bool,
     ) -> tuple[HaltingStateBase | None, Tensor]:
-        halting_state, output_hidden = self.utilities.apply_halting(
-            recurrent_state.halting_state,
-            output_state.hidden,
-            update_enabled=update_enabled,
+        halting_state, output_hidden = self.__maybe_update_halting(
+            recurrent_state.halting_state, output_state.hidden, update_enabled
         )
         if observe_transition:
             aligned_previous_hidden = output_state.align_recurrent_hidden(
@@ -157,6 +108,19 @@ class RecurrentStep(Generic[RecurrentStateT], ABC):
             )
             if self.diagnostic_observer is not None:
                 self.diagnostic_observer(aligned_previous_hidden, output_hidden)
+        return halting_state, output_hidden
+
+    def __maybe_update_halting(
+        self,
+        halting_state: HaltingStateBase | None,
+        hidden: Tensor,
+        update_enabled: bool,
+    ) -> tuple[HaltingStateBase | None, Tensor]:
+        model = self.pipeline.halting.model
+        if model is None or not update_enabled:
+            return halting_state, hidden
+        halting_state, output_hidden = model.update_halting_state(halting_state, hidden)
+        self.VALIDATOR.validate_halting_output(output_hidden, hidden)
         return halting_state, output_hidden
 
     def set_diagnostic_observer(

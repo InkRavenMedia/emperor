@@ -141,15 +141,15 @@ class TestMirroredLayerStack(unittest.TestCase):
 
         for layer in stack[:-1]:
             self.assertEqual(
-                layer.postprocessing.activation_function,
+                layer.pipeline.postprocessing.activation_function,
                 ActivationOptions.RELU,
             )
-            self.assertIsNotNone(layer.postprocessing.dropout)
+            self.assertIsNotNone(layer.pipeline.postprocessing.dropout)
         self.assertEqual(
-            stack[-1].postprocessing.activation_function,
+            stack[-1].pipeline.postprocessing.activation_function,
             ActivationOptions.DISABLED,
         )
-        self.assertIsNone(stack[-1].postprocessing.dropout)
+        self.assertIsNone(stack[-1].pipeline.postprocessing.dropout)
 
     def test_preserves_shape_dtype_and_gradients(self):
         stack = make_mirrored_config(6, 12, 4, 3).build().double()
@@ -186,7 +186,7 @@ class TestMirroredLayerStack(unittest.TestCase):
         ).build()
 
         self.assertEqual(len(stack), 2)
-        self.assertTrue(all(layer.halting.model is not None for layer in stack))
+        self.assertTrue(all(layer.pipeline.halting.model is not None for layer in stack))
 
 
 if __name__ == "__main__":

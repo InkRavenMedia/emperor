@@ -44,6 +44,19 @@ class TestInnerThinkingRecurrent(unittest.TestCase):
         torch.testing.assert_close(hidden, original)
         torch.testing.assert_close(result.loss, torch.tensor(2.75))
 
+    def test_reinjects_original_input_before_initial_and_selected_blocks(self):
+        model = config(
+            max_steps=2, initial_iterations=2, reinject_original_hidden_flag=True
+        ).build()
+        set_router(model, 0, 1)
+        hidden = torch.tensor([[[1.0, 0.0], [3.0, 2.0]]])
+
+        model(LayerState(hidden))
+
+        initial_pass, selected_pass = model.block_model.calls
+        torch.testing.assert_close(initial_pass.hidden, 2 * hidden)
+        torch.testing.assert_close(selected_pass.hidden, 3 * hidden[:, 1:])
+
     def test_batch_items_route_independently_and_skipped_gradients_survive(self):
         model = config(max_steps=2, initial_iterations=2).build()
         set_router(model, 0, 1)

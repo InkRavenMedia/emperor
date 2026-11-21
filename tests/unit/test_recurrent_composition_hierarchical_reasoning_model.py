@@ -6,7 +6,7 @@ import torch
 
 from emperor.attention import AttentionLayerState
 from emperor.config import ConfigBase, optional_field
-from emperor.halting import HaltingConfig, HaltingUsageTrackerManager
+from emperor.halting import HaltingBase, HaltingConfig, HaltingUsageTrackerManager
 from emperor.layers import (
     AdditiveResidualConfig,
     AttentionResidualConfig,
@@ -109,7 +109,7 @@ class _RecordingHaltingConfig(HaltingConfig):
         return _RecordingHalting
 
 
-class _RecordingHalting(Module):
+class _RecordingHalting(HaltingBase[_RecordingHaltingState]):
     def __init__(
         self,
         cfg: _RecordingHaltingConfig,
@@ -119,10 +119,6 @@ class _RecordingHalting(Module):
         self.cfg = self._override_config(cfg, overrides)
         self.update_inputs: list[torch.Tensor] = []
         self.finalize_calls = 0
-
-    @classmethod
-    def implements_halting_interface(cls) -> bool:
-        return True
 
     def update_halting_state(
         self,
@@ -361,14 +357,14 @@ class TestHierarchicalReasoningModelRecurrentConfig(unittest.TestCase):
         self.assertIs(type(runtime), HierarchicalReasoningModelRecurrent)
         self.assertIsInstance(runtime, RecurrentCompositionAbstract)
         self.assertIs(
-            runtime.utilities.recurrent_layer_norm_position,
+            runtime.pipeline.normalization.position,
             LayerNormPositionOptions.DISABLED,
         )
-        self.assertIsNone(runtime.utilities.recurrent_gate)
-        self.assertIsNone(runtime.utilities.residual_connection)
-        self.assertIsNone(runtime.utilities.halting_model)
-        self.assertIsNone(runtime.utilities.memory_model)
-        self.assertIsNone(runtime.utilities.normalization.module)
+        self.assertIsNone(runtime.pipeline.postprocessing.gate)
+        self.assertIsNone(runtime.pipeline.residual.connection)
+        self.assertIsNone(runtime.pipeline.halting.model)
+        self.assertIsNone(runtime.pipeline.memory.model)
+        self.assertIsNone(runtime.pipeline.normalization.module)
 
     def test_nested_recurrent_compositions_are_rejected(self) -> None:
         nested_recurrent = TinyRecursiveModelRecurrentConfig(
@@ -878,8 +874,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         self.assertEqual(len(runtime.low_model.inputs), 2)
         self.assertEqual(len(runtime.high_model.inputs), 1)
-        self.assertEqual(len(runtime.utilities.halting_model.update_inputs), 1)
-        self.assertEqual(runtime.utilities.halting_model.finalize_calls, 1)
+        self.assertEqual(len(runtime.pipeline.halting.model.update_inputs), 1)
+        self.assertEqual(runtime.pipeline.halting.model.finalize_calls, 1)
 
     def test_smooth_checkpoint_restores_the_exact_next_high_cycle(self) -> None:
         config = self._smooth_oracle_config(
@@ -1011,24 +1007,24 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         config.halting_config = _RecordingHaltingConfig(halt_after_updates=1)
         runtime = config.build()
         tracker_manager = HaltingUsageTrackerManager()
-        tracker = tracker_manager.attach(runtime.utilities.halting_model)
+        tracker = tracker_manager.attach(runtime.pipeline.halting.model)
         for _ in range(4):
             runtime(LayerState(hidden=torch.ones(1, 1)))
-        update_count_before = len(runtime.utilities.halting_model.update_inputs)
-        finalize_count_before = runtime.utilities.halting_model.finalize_calls
+        update_count_before = len(runtime.pipeline.halting.model.update_inputs)
+        finalize_count_before = runtime.pipeline.halting.model.finalize_calls
 
         runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(
-            len(runtime.utilities.halting_model.update_inputs) - update_count_before,
+            len(runtime.pipeline.halting.model.update_inputs) - update_count_before,
             2,
         )
         self.assertEqual(
-            runtime.utilities.halting_model.finalize_calls - finalize_count_before,
+            runtime.pipeline.halting.model.finalize_calls - finalize_count_before,
             2,
         )
         torch.testing.assert_close(tracker.last_step_count, torch.tensor(1.0))
-        tracker_manager.detach(runtime.utilities.halting_model)
+        tracker_manager.detach(runtime.pipeline.halting.model)
 
     def test_residual_uses_the_previous_low_and_high_target_states(self) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
@@ -1104,8 +1100,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         self.assertEqual(len(recurrent.low_model.inputs), 4)
         self.assertEqual(len(recurrent.high_model.inputs), 2)
-        self.assertEqual(len(recurrent.utilities.halting_model.update_inputs), 2)
-        self.assertEqual(recurrent.utilities.halting_model.finalize_calls, 1)
+        self.assertEqual(len(recurrent.pipeline.halting.model.update_inputs), 2)
+        self.assertEqual(recurrent.pipeline.halting.model.finalize_calls, 1)
         self.assertIs(result.halting_state, owner_halting_state)
 
     def test_halting_restricts_one_internal_layout_for_low_and_high_transitions(
@@ -1175,11 +1171,11 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
 
         recurrent(LayerState(hidden=inputs)).hidden.sum().backward()
 
-        self.assertIsNotNone(recurrent.utilities.memory_model)
+        self.assertIsNotNone(recurrent.pipeline.memory.model)
         self.assertTrue(
             any(
                 parameter.grad is not None
-                for parameter in recurrent.utilities.memory_model.parameters()
+                for parameter in recurrent.pipeline.memory.model.parameters()
             )
         )
         self.assertIsNotNone(inputs.grad)
@@ -1384,18 +1380,34 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             set(checkpoint),
             {
                 "recurrent_iteration_schedule.forward_call_progress",
-                "high_initial",
-                "low_initial",
-                "high_model.scale",
-                "low_model.scale",
+                "step.high_initial",
+                "step.low_initial",
+                "step.high_model.scale",
+                "step.low_model.scale",
             },
         )
         self.assertIsNot(recurrent.high_model.scale, recurrent.low_model.scale)
-        torch.manual_seed(99)
-        restored = config.build()
-        restored.load_state_dict(checkpoint, strict=True)
-        actual = restored(LayerState(hidden=inputs.clone())).hidden
-        torch.testing.assert_close(actual, expected)
+        legacy_checkpoint = checkpoint.copy()
+        for name in ("high_initial", "low_initial"):
+            self.assertIs(recurrent.step.get_buffer(name), getattr(recurrent, name))
+            legacy_checkpoint[name] = legacy_checkpoint.pop(f"step.{name}")
+
+        for layout, saved_state in (
+            ("current", checkpoint),
+            ("legacy", legacy_checkpoint),
+        ):
+            with self.subTest(layout=layout):
+                torch.manual_seed(99)
+                restored = config.build()
+                restored.load_state_dict(saved_state, strict=True)
+                torch.testing.assert_close(
+                    restored.step.high_initial, recurrent.step.high_initial
+                )
+                torch.testing.assert_close(
+                    restored.step.low_initial, recurrent.step.low_initial
+                )
+                actual = restored(LayerState(hidden=inputs.clone())).hidden
+                torch.testing.assert_close(actual, expected)
 
     def test_state_validation_reports_the_hierarchical_reasoning_model_feature_contract(
         self,
@@ -1501,11 +1513,11 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             name: parameter.grad for name, parameter in recurrent.named_parameters()
         }
         torch.testing.assert_close(
-            gradients["high_model.scale"],
+            gradients["step.high_model.scale"],
             torch.tensor(50.0),
         )
         torch.testing.assert_close(
-            gradients["low_model.scale"],
+            gradients["step.low_model.scale"],
             torch.tensor(35.0),
         )
         torch.testing.assert_close(inputs.grad, torch.ones_like(inputs))
@@ -1576,7 +1588,7 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             high_cycles=1,
             initial_iterations=1,
         ).build()
-        state = recurrent.step.initialize(
+        state = recurrent.step.initialize_recurrent_state(
             LayerState(hidden=torch.ones(1, 1)),
         )
         transition_loss = torch.tensor(2.0, requires_grad=True)

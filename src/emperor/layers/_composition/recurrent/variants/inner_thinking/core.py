@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from emperor.layers._composition.recurrent.config import InnerThinkingRecurrentConfig
-from emperor.layers._composition.recurrent.validation.inner_thinking import (
+from emperor.layers._composition.recurrent.validation import (
     InnerThinkingRecurrentValidator,
 )
 from emperor.layers._composition.recurrent.variants.inner_thinking.step import (
@@ -23,11 +23,7 @@ class InnerThinkingRecurrent(RecurrentLayer):
     ) -> None:
         super().__init__(cfg, overrides)
         self.cfg: InnerThinkingRecurrentConfig
-        self.thinking_step_scale = (
-            1.0
-            if self.cfg.thinking_step_scale is None
-            else float(self.cfg.thinking_step_scale)
-        )
+        self.thinking_step_scale = self.step.thinking_step_scale
         self.sampler_config = self.cfg.sampler_config
 
         self.samplers = nn.ModuleList(
@@ -40,10 +36,7 @@ class InnerThinkingRecurrent(RecurrentLayer):
 
     def _build_step(self) -> InnerThinkingRecurrentStep:
         return InnerThinkingRecurrentStep(
-            utilities=self.utilities,
-            output_dim=self.output_dim,
+            cfg=self.cfg,
             get_module=self.get_submodule,
             get_parameter=self.get_parameter,
-            reinject_original_hidden=self.reinject_original_hidden_flag,
-            cfg=self.cfg,
         )

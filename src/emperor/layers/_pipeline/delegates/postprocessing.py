@@ -5,8 +5,10 @@ from typing import TYPE_CHECKING
 from torch import Tensor, nn
 
 from emperor.layers._composition.gate import LayerGate
-from emperor.layers._layer.validation import LayerPostprocessingDelegateValidator
 from emperor.layers._options import ActivationOptions
+from emperor.layers._pipeline.delegates.validation import (
+    LayerPostprocessingDelegateValidator,
+)
 from emperor.nn import Module
 
 if TYPE_CHECKING:

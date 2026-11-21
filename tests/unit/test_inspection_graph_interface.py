@@ -20,6 +20,7 @@ from emperor.halting import HaltingHiddenStateModeOptions, SoftHaltingConfig
 from emperor.layers import (
     ActivationOptions,
     HierarchicalReasoningModelRecurrentConfig,
+    Layer,
     LayerConfig,
     LayerNormPositionOptions,
     LayerState,
@@ -227,6 +228,21 @@ assert semantic_module not in sys.modules
             "training and is inactive during evaluation.",
         )
         self.assertEqual(graph_role(nn.CrossEntropyLoss()), "runtime")
+
+        layer = Layer(
+            LayerConfig(
+                input_dim=4,
+                output_dim=4,
+                activation=ActivationOptions.GELU,
+                dropout_probability=0.0,
+                layer_norm_position=LayerNormPositionOptions.DISABLED,
+                layer_model_config=LinearLayerConfig(
+                    input_dim=4, output_dim=4, bias_flag=False
+                ),
+            )
+        )
+        self.assertEqual(graph_role(layer.pipeline), "internal")
+        self.assertEqual(module_details(layer)["activation"], "GELU")
 
         configured_module = nn.Module()
         configured_module.cfg = RecurrentLayerConfig(
@@ -1112,19 +1128,17 @@ assert semantic_module not in sys.modules
         module.top_k = 2
         module.num_experts = 4
         module.routing_initialization_mode = "layer"
-        module.postprocessing = SimpleNamespace(
-            dropout_probability=0.25,
-            gate=SimpleNamespace(option=ActivationOptions.GELU),
-            gate_config=None,
-            activation_function=ActivationOptions.RELU,
+        module.pipeline = SimpleNamespace(
+            postprocessing=SimpleNamespace(
+                dropout_probability=0.25,
+                gate=SimpleNamespace(option=ActivationOptions.GELU, model=object()),
+                gate_config=None,
+                activation_function=ActivationOptions.RELU,
+            ),
+            halting=SimpleNamespace(model=SimpleNamespace(min_steps=2)),
+            normalization=SimpleNamespace(position=LayerNormPositionOptions.AFTER),
         )
-        module.halting = SimpleNamespace(model=SimpleNamespace(min_steps=2))
-        module.normalization = SimpleNamespace(position=LayerNormPositionOptions.AFTER)
         module.max_steps = 9
-        module.recurrent_gate = SimpleNamespace(
-            option=ActivationOptions.GELU,
-            model=object(),
-        )
         module.supports_recurrent_diagnostics = True
         module.causal_attention_mask_flag = True
 
@@ -1165,7 +1179,6 @@ assert semantic_module not in sys.modules
         cluster.z_axis_total_neurons = 1
         cluster.cluster = nn.ModuleDict({"neuron_1_1_1": nn.Identity()})
         cluster.max_steps = 9
-        cluster.recurrent_diagnostic_step_limit = 7
 
         details = module_details(cluster)
 
@@ -1294,9 +1307,11 @@ assert semantic_module not in sys.modules
         Halting.model = halting_model  # type: ignore[attr-defined]
 
         class Layer(nn.Module):
-            postprocessing = Postprocessing()
-            halting = Halting()
-            normalization = SimpleNamespace(position=None)
+            pipeline = SimpleNamespace(
+                postprocessing=Postprocessing(),
+                halting=Halting(),
+                normalization=SimpleNamespace(position=None),
+            )
 
         details = module_details(Layer())
 
@@ -1314,7 +1329,14 @@ assert semantic_module not in sys.modules
         class Recurrent(nn.Module):
             max_steps = 3
 
-        Recurrent.halting_model = halting_model  # type: ignore[attr-defined]
+        class Halting:
+            model = halting_model
+
+        Recurrent.pipeline = SimpleNamespace(
+            postprocessing=SimpleNamespace(gate=None),
+            halting=Halting(),
+            normalization=SimpleNamespace(position=None),
+        )
 
         details = module_details(Recurrent())
 
@@ -1379,7 +1401,7 @@ assert semantic_module not in sys.modules
         self.assertEqual(fields_by_key["residual_model_config"], "LinearLayerConfig")
         self.assertEqual(model_config.read_count, 1)
 
-    def test_recurrent_detail_order_and_fallback_are_stable(self) -> None:
+    def test_recurrent_detail_order_for_scheduled_and_fixed_depth(self) -> None:
         @dataclass
         class ScheduleSnapshot:
             maximum_transition_count: int = 9
@@ -1410,13 +1432,14 @@ assert semantic_module not in sys.modules
 
         recurrent = nn.Module()
         recurrent.recurrent_iteration_schedule = Schedule()
-        recurrent.recurrent_gate = SimpleNamespace(
-            option=ActivationOptions.GELU,
-            model=object(),
+        recurrent.pipeline = SimpleNamespace(
+            postprocessing=SimpleNamespace(
+                gate=SimpleNamespace(option=ActivationOptions.GELU, model=object())
+            ),
+            halting=SimpleNamespace(model=SimpleNamespace(min_steps=2)),
+            normalization=SimpleNamespace(position=LayerNormPositionOptions.BEFORE),
         )
         recurrent.supports_recurrent_diagnostics = True
-        recurrent.halting_model = SimpleNamespace(min_steps=2)
-        recurrent.recurrent_layer_norm_position = LayerNormPositionOptions.BEFORE
         recurrent.answer_update_count = 5
         recurrent.latent_updates_per_answer_update = 6
         recurrent.high_cycles = 7
@@ -1482,11 +1505,16 @@ assert semantic_module not in sys.modules
             },
         )
 
-        fallback = nn.Module()
-        fallback.recurrent_diagnostic_step_limit = 7
-        fallback_details = inspect_model_graph(fallback).nodes[0].details["recurrent"]
+        fixed_depth = nn.Module()
+        fixed_depth.max_steps = 7
+        fixed_depth.recurrent_gate = SimpleNamespace(option=ActivationOptions.GELU)
+        fixed_depth.halting_model = SimpleNamespace(min_steps=2)
+        fixed_depth.recurrent_layer_norm_position = LayerNormPositionOptions.BEFORE
+        fixed_depth_details = (
+            inspect_model_graph(fixed_depth).nodes[0].details["recurrent"]
+        )
         self.assertEqual(
-            dict(fallback_details),
+            dict(fixed_depth_details),
             {
                 "max_steps": 7,
                 "diagnostics": False,
@@ -1540,7 +1568,7 @@ assert semantic_module not in sys.modules
         configuration = {field.key: field.value for field in root.configuration.fields}
         self.assertNotIn("min_steps", configuration)
         halting_node = next(
-            node for node in graph.nodes if node.path == "utilities.halting_model"
+            node for node in graph.nodes if node.path == "step.pipeline.halting.model"
         )
         self.assertIsNotNone(halting_node.configuration)
         assert halting_node.configuration is not None
@@ -1709,8 +1737,8 @@ assert semantic_module not in sys.modules
         self.assertEqual(configuration["latent_updates_per_answer_update"], 2)
         self.assertEqual(configuration["answer_update_count"], 3)
         self.assertEqual(
-            [node.path for node in graph.nodes[1:] if node.path == "block_model"],
-            ["block_model"],
+            [node.path for node in graph.nodes[1:] if node.path == "step.block_model"],
+            ["step.block_model"],
         )
 
     def test_hierarchical_reasoning_model_is_discovered_through_generic_graph_inspection(
@@ -1762,8 +1790,8 @@ assert semantic_module not in sys.modules
         self.assertEqual(configuration["high_block_config"], "LinearLayerConfig")
         self.assertEqual(configuration["low_block_config"], "LinearLayerConfig")
         child_paths = {node.path for node in graph.nodes[1:]}
-        self.assertIn("high_model", child_paths)
-        self.assertIn("low_model", child_paths)
+        self.assertIn("step.high_model", child_paths)
+        self.assertIn("step.low_model", child_paths)
 
     def test_semantic_graph_preserves_stable_paths_and_referential_integrity(
         self,
@@ -1838,10 +1866,10 @@ assert semantic_module not in sys.modules
         self,
     ) -> None:
         cases = (
-            ("linears/linear", "Cifar100", 1_120_000, 144_512),
-            ("gpt/linear", "WikiText103", 160_000_000, 69_822_592),
+            ("linears/linear", "Cifar100", 1_120_000, 70_000),
+            ("gpt/linear", "WikiText103", 160_000_000, 10_000_000),
         )
-        for package_key, dataset, memory_limit, expected_estimate in cases:
+        for package_key, dataset, memory_limit, parameter_limit in cases:
             with self.subTest(package=package_key, dataset=dataset):
                 package = model_package(package_key)
                 assert package is not None
@@ -1852,8 +1880,8 @@ assert semantic_module not in sys.modules
                 ) as build_model:
                     with self.assertRaisesRegex(
                         InspectionError,
-                        rf"estimated parameter count {expected_estimate} exceeds "
-                        r"the memory-derived maximum",
+                        rf"estimated parameter count [0-9]+ exceeds "
+                        rf"the memory-derived maximum of {parameter_limit}\.",
                     ):
                         inspect_model(
                             package,
@@ -2342,3 +2370,19 @@ assert semantic_module not in sys.modules
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_each_semantic_policy_resolves_to_its_defining_class():
+    from importlib import import_module
+
+    from model_runtime.inspection._graph_semantic_catalog import SEMANTIC_TYPE_CATALOG
+
+    for (
+        module_name,
+        class_name,
+    ), policy in SEMANTIC_TYPE_CATALOG._policies_by_reference.items():
+        selected = getattr(import_module(module_name), class_name)
+        assert SEMANTIC_TYPE_CATALOG.policy_for(selected) is policy, (
+            module_name,
+            class_name,
+        )

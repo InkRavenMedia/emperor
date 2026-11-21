@@ -8,14 +8,13 @@ from typing import cast
 import torch.nn as nn
 from torch import Tensor
 
-from emperor.layers._composition.recurrent.validation import (
-    RecurrentResidualScheduleValidator,
-)
 from emperor.layers._composition.residual.base import (
     ResidualConnectionAbstract,
     ResidualState,
 )
-from emperor.layers._composition.residual.variants.attention import AttentionResidual
+from emperor.layers._pipeline.delegates.validation import (
+    RecurrentResidualScheduleValidator,
+)
 
 
 class RecurrentResidualSchedule(nn.Module, ABC):
@@ -142,17 +141,3 @@ class DepthwiseRecurrentResidualSchedule(RecurrentResidualSchedule):
             ResidualConnectionAbstract,
             self.subsequent_connections[transition_index - 1],
         )
-
-
-def build_recurrent_residual_schedule(
-    primary_connection: ResidualConnectionAbstract | None,
-    transition_count: int,
-) -> RecurrentResidualSchedule | None:
-    if primary_connection is None:
-        return None
-    if isinstance(primary_connection, AttentionResidual):
-        return DepthwiseRecurrentResidualSchedule.from_connection(
-            primary_connection,
-            transition_count,
-        )
-    return SharedRecurrentResidualSchedule(transition_count)

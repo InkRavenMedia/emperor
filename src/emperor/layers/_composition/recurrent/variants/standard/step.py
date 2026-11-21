@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from functools import partial
 from typing import TYPE_CHECKING
 
 from emperor.layers._composition.recurrent.runtime.step import RecurrentStep
@@ -11,32 +9,24 @@ from emperor.layers._composition.recurrent.variants.standard.state import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from torch import Tensor
 
-    from torch import nn
-
-    from emperor.layers._composition.recurrent.utilities import RecurrentUtilities
+    from emperor.layers._composition.recurrent.config import RecurrentLayerConfig
     from emperor.layers._state import LayerState
 
 
 class StandardRecurrentStep(RecurrentStep[StandardRecurrentState]):
     VALIDATOR = RecurrentLayerValidator
 
-    def __init__(
-        self,
-        utilities: RecurrentUtilities,
-        output_dim: int,
-        get_module: Callable[[str], nn.Module],
-        reinject_original_hidden: bool,
-    ) -> None:
-        super().__init__(utilities, output_dim)
-        self.reinject_original_hidden = reinject_original_hidden
-        self._get_module = get_module
+    def __init__(self, cfg: RecurrentLayerConfig) -> None:
+        super().__init__(cfg)
+        self.reinject_original_hidden = cfg.reinject_original_hidden_flag is True
+        self.block_model = self._build_transition_model(cfg.block_config)
 
-    def initialize(
+    def initialize_recurrent_state(
         self, state: LayerState, include_caller_loss: bool = True
     ) -> StandardRecurrentState:
-        residual_state = self.utilities.initialize_residual_state(state.hidden)
+        residual_state = self.pipeline.new_recurrent_residual_state(state.hidden)
         return StandardRecurrentState(
             hidden=state.hidden,
             fixed_input=state.hidden,
@@ -63,29 +53,29 @@ class StandardRecurrentStep(RecurrentStep[StandardRecurrentState]):
         recurrent_state: StandardRecurrentState,
         target_state: StandardRecurrentState | None = None,
     ) -> LayerState:
-        transition_input = recurrent_state.hidden
-        if self.reinject_original_hidden:
-            transition_input = transition_input + recurrent_state.fixed_input
-        transition_state = replace(
-            recurrent_state.context_state,
-            hidden=transition_input,
-            loss=recurrent_state.loss,
-            halting_state=None,
-        )
-        return self._compute_block_output(
+        transition_input = self._maybe_reinject_original_input(recurrent_state)
+        transition_state = recurrent_state.layer_state_for_transition(transition_input)
+        return self.pipeline.process_recurrent_transition(
             transition_state,
-            recurrent_state.hidden,
-            recurrent_state.context_state,
-            partial(self._run_block, recurrent_state=recurrent_state),
-            recurrent_state.transition_index,
-            recurrent_state.residual_state,
-            target_state.residual_state if target_state is not None else None,
+            run_model=self._run_block,
+            recurrent_state=recurrent_state,
+            target_state=target_state,
         )
 
-    def _run_block(
-        self, state: LayerState, recurrent_state: StandardRecurrentState
-    ) -> LayerState:
-        return self._get_module("block_model")(state)
+    def _maybe_reinject_original_input(
+        self, recurrent_state: StandardRecurrentState
+    ) -> Tensor:
+        if self.reinject_original_hidden:
+            return recurrent_state.hidden + recurrent_state.fixed_input
+        return recurrent_state.hidden
+
+    def _run_block(self, state: LayerState) -> LayerState:
+        block_input = state.hidden
+        output_state = self.block_model(state)
+        self.VALIDATOR.validate_transition_output(
+            output_state, block_input, self.cfg.output_dim
+        )
+        return output_state
 
     def update_state(
         self,
@@ -94,31 +84,17 @@ class StandardRecurrentStep(RecurrentStep[StandardRecurrentState]):
         tracks_gradients: bool,
         observe_transition: bool = True,
     ) -> StandardRecurrentState:
-        halting_state, output_hidden = self._apply_halting(
+        halting_update = self._apply_halting(
             recurrent_state,
             output_state,
             recurrent_state.hidden,
             tracks_gradients,
             observe_transition,
         )
-        context_state = replace(output_state, hidden=output_hidden)
-        return replace(
-            recurrent_state,
-            hidden=output_hidden,
-            loss=output_state.loss,
-            context_state=context_state,
-            fixed_input=context_state.align_recurrent_hidden(
-                recurrent_state.fixed_input, source_state=recurrent_state.context_state
-            ),
-            transition_index=recurrent_state.transition_index + 1,
-            halting_state=halting_state,
-            all_items_halted=self.utilities.all_items_halted(halting_state),
-        )
+        return recurrent_state.next_state_from_output(output_state, halting_update)
 
     def fork(self, recurrent_state: StandardRecurrentState) -> StandardRecurrentState:
-        return replace(
-            recurrent_state,
-            residual_state=self.utilities.fork_residual_state(
-                recurrent_state.residual_state
-            ),
+        forked_residual_state = self.pipeline.fork_recurrent_residual_state(
+            recurrent_state.residual_state
         )
+        return recurrent_state.with_forked_residual_state(forked_residual_state)

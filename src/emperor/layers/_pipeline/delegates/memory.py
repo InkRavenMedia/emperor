@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from emperor.layers._layer.validation import LayerMemoryDelegateValidator
+from emperor.layers._pipeline.delegates.validation import LayerMemoryDelegateValidator
 from emperor.layers._state import LayerState
 from emperor.memory import MemoryPositionOptions
 from emperor.nn import Module

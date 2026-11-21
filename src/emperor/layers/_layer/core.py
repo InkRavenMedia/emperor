@@ -5,14 +5,8 @@ from typing import TYPE_CHECKING
 from torch import Tensor
 
 from emperor.layers._config import LayerConfig
-from emperor.layers._layer.pipeline import (
-    LayerHaltingDelegate,
-    LayerMemoryDelegate,
-    LayerNormalizationDelegate,
-    LayerPostprocessingDelegate,
-    LayerResidualDelegate,
-)
 from emperor.layers._layer.validation import LayerValidator
+from emperor.layers._pipeline import LayerProcessingPipeline
 from emperor.layers._state import LayerState, _MaskedInputLayerState
 from emperor.layers._support import LayerModuleBase
 
@@ -39,15 +33,8 @@ class Layer(LayerModuleBase):
         self.output_dim: int = self.cfg.output_dim
         self.layer_model_config = self.cfg.layer_model_config
 
-        self.__initialize_delegates()
+        self.pipeline = LayerProcessingPipeline(self.cfg)
         self.model = self.__build_model()
-
-    def __initialize_delegates(self) -> None:
-        self.postprocessing = LayerPostprocessingDelegate(self.cfg)
-        self.halting = LayerHaltingDelegate(self.cfg)
-        self.memory = LayerMemoryDelegate(self.cfg)
-        self.residual = LayerResidualDelegate(self.cfg)
-        self.normalization = LayerNormalizationDelegate(self.cfg)
 
     def __build_model(self) -> Module:
         model = self._build_from_config(
@@ -87,7 +74,7 @@ class Layer(LayerModuleBase):
         self,
         state: LayerState,
     ) -> LayerState:
-        if self.halting.should_skip(state):
+        if self.pipeline.halting.should_skip(state):
             return state
         state = self._handle_layer_input(state)
         state = self._handle_layer_processing(state)
@@ -97,17 +84,9 @@ class Layer(LayerModuleBase):
         return state
 
     def _handle_layer_processing(self, state: LayerState) -> LayerState:
-        residual = state.hidden
-        state = self.normalization.before_model(state)
-        state = self.memory.before_model(state)
-        state = self._handle_model_processing(state)
-        state = self.memory.after_model(state)
-        state = self.normalization.after_model(state)
-        state = self.postprocessing.process(state)
-        state = self.residual.apply_residual(state, residual)
-        state = self.normalization.after_residual(state)
-        state = self.halting.apply_halting(state)
-        return state
+        return self.pipeline.process_normal_layer(
+            state, run_model=self._handle_model_processing, halting_already_checked=True
+        )
 
     def _handle_model_processing(
         self,
@@ -131,16 +110,16 @@ class Layer(LayerModuleBase):
         return state
 
     def _bind_shared_gate(self, config: GateConfig, model: LayerGate) -> None:
-        self.postprocessing.bind_shared_gate(config, model)
+        self.pipeline.postprocessing.bind_shared_gate(config, model)
 
     def _bind_shared_halting(
         self,
         model: HaltingInterface[HaltingStateBase],
     ) -> None:
-        self.halting.bind_shared(model)
+        self.pipeline.halting.bind_shared(model)
 
     def _bind_shared_memory(self, model: MemoryInterface) -> None:
-        self.memory.bind_shared(model)
+        self.pipeline.memory.bind_shared(model)
 
     def _mark_as_last_layer(self) -> None:
-        self.halting.mark_as_terminal_layer()
+        self.pipeline.halting.mark_as_terminal_layer()
