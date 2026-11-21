@@ -11,6 +11,7 @@ os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 import torch
 
+from emperor_workbench.api.v1.inspection import inspection_response
 from emperor_workbench.failures import FailureKind
 from emperor_workbench.inspection import (
     InProcessInspectionExecutor,
@@ -24,10 +25,7 @@ from emperor_workbench.inspection._historical._inspection import (
     HistoricalInspection,
 )
 from emperor_workbench.model_packages import ModelPackageCatalog
-from tests.support.inspection import (
-    inspect_model,
-    inspection_response,
-)
+from tests.support.inspection import inspect_model
 from tests.support.model_packages import (
     project_adapter_client,
 )
