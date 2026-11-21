@@ -7,8 +7,7 @@ from emperor.augmentations.adaptive_parameters import AdaptiveLinearLayerConfig
 from emperor.experts import SoftMoEConfig
 from emperor.experts._routing.soft import SoftMoERouter
 from emperor.linears import LinearLayerConfig
-from emperor.memory import AttentionDynamicMemoryConfig
-from emperor.memory._base import DynamicMemoryAbstract
+from emperor.memory import AttentionDynamicMemoryConfig, DynamicMemoryConfig
 from emperor.sampler import RouterConfig
 from emperor.transformer import FeedForward
 from models._attention_source_memory import SOURCE_MEMORY_FIELDS
@@ -183,7 +182,8 @@ def test_attention_memory_slots_reach_every_supported_layer_role(name, role, slo
     memories = [
         module
         for path, module in model.named_modules()
-        if isinstance(module, DynamicMemoryAbstract) and "source_memory" not in path
+        if isinstance(getattr(module, "cfg", None), DynamicMemoryConfig)
+        and "source_memory" not in path
     ]
     assert memories
     assert all(
@@ -223,7 +223,7 @@ def test_mixer_recurrent_memory_uses_selected_type_and_inherits_slot_count(varia
     memories = [
         memory
         for memory in model.modules()
-        if isinstance(memory, DynamicMemoryAbstract)
+        if isinstance(getattr(memory, "cfg", None), DynamicMemoryConfig)
         and isinstance(memory.cfg, AttentionDynamicMemoryConfig)
     ]
     assert memories and all(memory.num_memory_slots == 3 for memory in memories)

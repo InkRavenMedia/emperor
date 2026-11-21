@@ -6,19 +6,15 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from emperor.attention._variants.mixture.soft import (
-    SoftMixtureOfAttentionHeadsProjector,
-)
+from emperor.attention import MixtureOfAttentionHeadsConfig
 from emperor.augmentations.adaptive_parameters import (
+    AdaptiveLinearLayerConfig,
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
     CombinedDynamicDiagonalConfig,
     DualModelDynamicWeightConfig,
     GeneratorDynamicBiasConfig,
     SumGroupingConfig,
-)
-from emperor.augmentations.adaptive_parameters._linear_adapter import (
-    AdaptiveLinearLayer,
 )
 from emperor.halting import StickBreakingConfig
 from models.catalog import model_package
@@ -84,7 +80,7 @@ def test_every_adaptive_layer_groups_and_trains_with_soft_attention_and_memory()
     adaptive_layers = {
         name: module
         for name, module in model.named_modules()
-        if isinstance(module, AdaptiveLinearLayer)
+        if isinstance(module, AdaptiveLinearLayerConfig().registry_owner())
     }
     assert adaptive_layers
     observed_context_counts = {name: [] for name in adaptive_layers}
@@ -188,8 +184,8 @@ def test_grouped_soft_bert_preserves_padding_and_sample_independence():
             torch.testing.assert_close(original[0][sample], separate[0][0])
             torch.testing.assert_close(original[1][sample], separate[1][0])
     projector = next(
-        module
+        module.projector
         for module in model.modules()
-        if isinstance(module, SoftMixtureOfAttentionHeadsProjector)
+        if isinstance(module, MixtureOfAttentionHeadsConfig().registry_owner())
     )
     assert projector.source_memory_flag
