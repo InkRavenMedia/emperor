@@ -1,6 +1,6 @@
 {
   "canonicalization": "UTF-8 JSON; object keys sorted; compact separators; array order preserved",
-  "documentSha256": "3a0548a04f853fd6c5318e8e1677733d5b84b89178ddd3d186695faa526d1ca5",
+  "documentSha256": "1dcd1483cdc398348bf75275845ba5ea53050485bba3f6e53366a18a83d712ee",
   "info": {
     "title": "Emperor Model Workbench API",
     "version": "1.0.0"
@@ -206,7 +206,7 @@
     },
     {
       "name": "ConfigFieldResponse",
-      "sha256": "6c8b2eafbfabd83b4da8fdb019d5a232c9421380b4b6b903869f76c12b279957"
+      "sha256": "a393ea6683e2861e122ec81037ea853db870a6a2bb4c1cfc7e250bc6c5439cd7"
     },
     {
       "name": "ConfigSchemaResponse",

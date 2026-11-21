@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../fixtures/config-sections";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -283,7 +284,7 @@ function configFixtureField({
   sectionPath,
   description,
   type,
-  legacyJson,
+  hasFlatControls,
   default: defaultValue,
   nullable,
   choices,
@@ -297,10 +298,11 @@ function configFixtureField({
     flag: flag ?? `--${key.replace(/_/g, "-")}`,
     label: label ?? key.replace(/_/g, " "),
     section,
+    ...configFieldSectionFixture(sectionPath ?? fixtureSectionPath(section)),
     sectionPath: sectionPath ?? fixtureSectionPath(section),
     description: description ?? "",
     type,
-    legacyJson,
+    hasFlatControls: hasFlatControls ?? false,
     default: defaultValue,
     nullable: nullable ?? defaultValue === null,
     choices: choices ?? [],
@@ -4024,7 +4026,7 @@ describe("WorkbenchApp Full Config", () => {
     );
   });
 
-  it("copies native sequence expansion options without an empty legacy JSON field", async () => {
+  it("copies native sequence expansion options without an empty JSON field with flat controls", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     const user = userEvent.setup();
     Object.defineProperty(navigator, "clipboard", {
@@ -4055,7 +4057,7 @@ describe("WorkbenchApp Full Config", () => {
             key: "sequence_expansion_model_config",
             section,
             type: "json",
-            legacyJson: true,
+            hasFlatControls: true,
             default: null,
           }),
         ],

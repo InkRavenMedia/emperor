@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 import {
   configSnapshotOverrideCount,
@@ -11,13 +12,15 @@ import {
 } from "@/lib/config-snapshots";
 import type { ConfigField } from "@/lib/api/models";
 
-type ConfigFieldFixture = Omit<ConfigField, "applicableWhen" | "sectionPath"> &
-  Partial<Pick<ConfigField, "applicableWhen" | "sectionPath">>;
+type FixtureDefaults = "applicableWhen" | "sectionPath" | "sectionIdPath" | "sectionControlFieldKey" | "hasFlatControls";
+type ConfigFieldFixture = Omit<ConfigField, FixtureDefaults> &
+  Partial<Pick<ConfigField, FixtureDefaults>>;
 
 function withSectionPaths(fields: ConfigFieldFixture[]): ConfigField[] {
   return fields.map((field) => ({
     ...field,
     applicableWhen: field.applicableWhen ?? [],
+    ...configFieldSectionFixture(field.sectionPath ?? [field.section || "General"]),
     sectionPath: field.sectionPath ?? [field.section || "General"],
   }));
 }

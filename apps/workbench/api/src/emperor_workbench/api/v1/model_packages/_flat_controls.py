@@ -1,10 +1,10 @@
-"""Identify saved configuration objects with flat Workbench controls."""
+"""Identify structured configuration fields with flat Workbench controls."""
 
 from collections.abc import Mapping
 
 from model_runtime.inspection import ConfigurationField
 
-_REPLACEMENT_SUFFIXES = {
+_FLAT_CONTROL_SUFFIXES = {
     "ATTN_SOURCE_MEMORY_CONFIG": (
         "FLAG",
         "CHUNK_SIZE",
@@ -30,7 +30,7 @@ def has_flat_config_controls(
     if field.value_type != "json":
         return False
     stem = field.key.removesuffix("_CONFIG")
-    for owner, suffixes in _REPLACEMENT_SUFFIXES.items():
+    for owner, suffixes in _FLAT_CONTROL_SUFFIXES.items():
         if field.key == owner or field.key.endswith(f"_{owner}"):
             return all(
                 (control := fields_by_key.get(f"{stem}_{suffix}")) is not None

@@ -21,7 +21,7 @@ from emperor_workbench.api.v1.model_packages._contracts import (
     SearchAxisResponse,
     SearchSpaceResponse,
 )
-from emperor_workbench.api.v1.model_packages._legacy_config import (
+from emperor_workbench.api.v1.model_packages._flat_controls import (
     has_flat_config_controls,
 )
 from emperor_workbench.model_packages import (
@@ -129,7 +129,7 @@ def config_schema_response(schema: ConfigurationSchema) -> ConfigSchemaResponse:
                 sectionControlFieldKey=section_metadata[field.section_path][1],
                 description=field.description,
                 type=field.value_type,
-                legacyJson=has_flat_config_controls(field, fields_by_key),
+                hasFlatControls=has_flat_config_controls(field, fields_by_key),
                 default=field.default,
                 nullable=field.nullable,
                 choices=list(field.choices),

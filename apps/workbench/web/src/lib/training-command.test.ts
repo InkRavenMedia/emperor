@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 
 import type { ConfigField } from "@/lib/api/models";
@@ -11,6 +12,7 @@ function field(key: string): ConfigField {
     flag: `--${key.replace(/_/g, "-")}`,
     label: key,
     section: "Router Options",
+    ...configFieldSectionFixture(["Router Options"]),
     sectionPath: ["Router Options"],
     type: "bool",
     default: false,

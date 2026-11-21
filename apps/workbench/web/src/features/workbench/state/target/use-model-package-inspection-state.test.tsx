@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -192,6 +193,7 @@ function configField(
     flag: overrides.flag ?? `--${overrides.key.replace(/_/g, "-")}`,
     label: overrides.label ?? overrides.key,
     section,
+    ...configFieldSectionFixture(overrides.sectionPath ?? [section || "General"]),
     sectionPath: overrides.sectionPath ?? [section || "General"],
     type: overrides.type ?? "int",
     default: "default" in overrides ? overrides.default ?? null : 64,

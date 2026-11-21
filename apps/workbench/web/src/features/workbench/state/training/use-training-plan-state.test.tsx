@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
@@ -31,6 +32,7 @@ const fields: ConfigField[] = [
     flag: "--hidden-dim",
     label: "Hidden Dim",
     section: "Model",
+    ...configFieldSectionFixture(["Model"]),
     sectionPath: ["Model"],
     type: "int",
     default: 64,
@@ -45,6 +47,7 @@ const fields: ConfigField[] = [
     flag: "--num-epochs",
     label: "Epochs",
     section: "Training",
+    ...configFieldSectionFixture(["Training"]),
     sectionPath: ["Training"],
     type: "int",
     default: 10,
@@ -114,6 +117,7 @@ function runPlan({
     search,
     presetSearches: { baseline: search },
     logFolder: "runs",
+    snapshotRevisions: [],
     isRandomSearch: search?.mode === "random",
     runs: Array.from({ length: totalRuns }, (_, offset) => ({
       id: `${runPrefix}-${offset + 1}`,
@@ -236,6 +240,29 @@ beforeEach(() => {
 });
 
 describe("useTrainingPlanState", () => {
+  it("fetches a fresh preview for reordered axes and reuses the original order", async () => {
+    const axes = [...searchAxes, { ...searchAxes[0], key: "num_epochs", configKey: "NUM_EPOCHS",
+      searchKey: "SEARCH_SPACE_NUM_EPOCHS", label: "Epochs", values: [2, 4] }];
+    const first = planInput({ axes, search: { ...gridSearch, selectedValues: {
+      hidden_dim: [128, 256], num_epochs: [2, 4],
+    } } });
+    const second = planInput({ axes, search: { ...gridSearch, selectedValues: {
+      num_epochs: [2, 4], hidden_dim: [128, 256],
+    } } });
+    mocks.fetchTrainingRunPlan.mockImplementation(async (request) =>
+      runPlan({ runPrefix: Object.keys(request.search.values)[0] }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+    const rendered = renderHook(({ value }: { value: PlanInput }) => useTrainingPlanState(value), {
+      initialProps: { value: first }, wrapper: queryClientWrapper(queryClient),
+    });
+    await waitFor(() => expect(rendered.result.current.displayRunPlan?.runs[0].id).toBe("hidden_dim-1"));
+    rendered.rerender({ value: second });
+    await waitFor(() => expect(rendered.result.current.displayRunPlan?.runs[0].id).toBe("num_epochs-1"));
+    rendered.rerender({ value: first });
+    await waitFor(() => expect(rendered.result.current.displayRunPlan?.runs[0].id).toBe("hidden_dim-1"));
+    expect(mocks.fetchTrainingRunPlan).toHaveBeenCalledTimes(2);
+  });
+
   it("uses the backend-authoritative Config Snapshot plan and revisions", async () => {
     const launch = vi.fn();
     const authoritativePlan = runPlan({ totalRuns: 2 });
@@ -401,6 +428,7 @@ describe("useTrainingPlanState", () => {
       totalRuns: 2,
       search: {
         mode: "grid",
+        randomSamples: null,
         values: { hidden_dim: [128, 256] },
       },
     });

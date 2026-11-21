@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { describe, expect, it } from "vitest";
 import {
   deriveModelPackageSelection,
@@ -14,6 +15,7 @@ function field(overrides: Partial<ConfigField> & Pick<ConfigField, "key">): Conf
     flag: overrides.flag ?? `--${overrides.key.replace(/_/g, "-")}`,
     label: overrides.label ?? overrides.key,
     section,
+    ...configFieldSectionFixture(overrides.sectionPath ?? [section || "General"]),
     sectionPath: overrides.sectionPath ?? [section || "General"],
     type: overrides.type ?? "int",
     default: overrides.default ?? 0,
@@ -174,16 +176,23 @@ describe("target selection", () => {
         field({
           key: "recurrent_flag",
           section: "Recurrent Layer Options",
+          ...configFieldSectionFixture(["Recurrent Layer Options"]),
           sectionPath: ["Recurrent Layer Options"],
         }),
         field({
           key: "recurrent_stack_gate_flag",
           section: "Recurrent Gate Options",
+          ...configFieldSectionFixture(["Recurrent Layer Options", "Recurrent Gate Options"]),
           sectionPath: ["Recurrent Layer Options", "Recurrent Gate Options"],
         }),
         field({
           key: "recurrent_gate_stack_hidden_dim",
           section: "Recurrent Gate Stack Options",
+          ...configFieldSectionFixture([
+            "Recurrent Layer Options",
+            "Recurrent Gate Options",
+            "Recurrent Gate Stack Options",
+          ]),
           sectionPath: [
             "Recurrent Layer Options",
             "Recurrent Gate Options",

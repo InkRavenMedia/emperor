@@ -1,3 +1,4 @@
+import { configFieldSectionFixture } from "../../../../../tests/fixtures/config-sections";
 import { useState } from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -23,6 +24,7 @@ const configOption: RuntimeDefaultsSearchOptionPresentation = {
       flag: "--hidden-dim",
       label: "Hidden Dim",
       section: "Model",
+      ...configFieldSectionFixture(["Model"]),
       sectionPath: ["Model"],
       type: "int",
       default: 64,
