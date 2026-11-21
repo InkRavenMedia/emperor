@@ -42,7 +42,7 @@ raw = true
 run = "python tools/emperor_dev.py experiment"
 
 [tasks.test]
-description = "Run Emperor's unittest suite"
+description = "Run Emperor's pytest suite (excludes training by default)"
 raw = true
 run = "python tools/emperor_dev.py test"
 
