@@ -51,7 +51,7 @@ class ProjectCliDispatchContracts(unittest.TestCase):
         models.assert_not_called()
 
         with (
-            patch("models.project_cli.main.model_id_from_parts", return_value="id"),
+            patch("models.catalog.model_id_from_parts", return_value="id"),
             patch("models.project_cli.main.show_dataset_list_usage") as datasets,
             patch("models.project_cli.main.show_monitor_list_usage") as monitors,
         ):
