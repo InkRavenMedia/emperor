@@ -87,3 +87,51 @@ class TestSourceModelShapeInspectionCli(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_inspection_forms_reject_irrelevant_run_controls(capsys):
+    from models.project_cli import main
+
+    selectors = ["--model-type", "linears", "--model", "linear"]
+    for controls in (
+        ["--all-presets"],
+        ["--presets", "baseline", "weighted-residual"],
+        ["--preset", "baseline", "--datasets", "mnist", "fashion-mnist"],
+        ["--preset", "baseline", "--datasets", "mnist", "--datasets", "fashion-mnist"],
+        ["--preset", "baseline", "--dataset", "mnist"],
+        ["--preset", "baseline", "--preset", "weighted-residual"],
+        ["--preset", "baseline", "--resume-checkpoint", "absent.ckpt"],
+        ["--preset", "baseline", "--grid-search"],
+        ["--preset", "baseline", "--monitors", "linear"],
+    ):
+        for start, end in ((["inspect"], []), ([], ["--print-model"])):
+            try:
+                status = main([*start, *selectors, *controls, *end])
+            except SystemExit as error:
+                status = error.code
+            assert status != 0, (start, controls)
+            captured = capsys.readouterr()
+            assert "Traceback" not in captured.err
+
+
+def test_both_inspection_forms_describe_the_same_single_dataset(capsys):
+    import json
+
+    from models.project_cli import main
+
+    arguments = [
+        "--model-type",
+        "linears",
+        "--model",
+        "linear",
+        "--preset",
+        "baseline",
+        "--datasets",
+        "mnist",
+        "--format",
+        "json",
+    ]
+    assert main(["inspect", *arguments]) == 0
+    direct = json.loads(capsys.readouterr().out)
+    assert main([*arguments, "--print-model"]) == 0
+    assert json.loads(capsys.readouterr().out) == direct

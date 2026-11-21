@@ -83,6 +83,8 @@ def parse_search_set(
 def add_config_override_arguments(
     parser: argparse.ArgumentParser,
     package: ModelPackage,
+    *,
+    include_search: bool = True,
 ) -> dict[str, str]:
     if not isinstance(package, ModelPackage):
         raise TypeError("CLI overrides require a selected ModelPackage.")
@@ -107,13 +109,14 @@ def add_config_override_arguments(
             ),
         )
         dest_to_key[dest] = key
-    parser.add_argument(
-        "--search-set",
-        action="append",
-        default=[],
-        metavar="KEY=v1,v2",
-        help="Replace one canonical search axis for grid or random search.",
-    )
+    if include_search:
+        parser.add_argument(
+            "--search-set",
+            action="append",
+            default=[],
+            metavar="KEY=v1,v2",
+            help="Replace one canonical search axis for grid or random search.",
+        )
     return dest_to_key
 
 
