@@ -52,3 +52,22 @@ def test_default_command_propagates_failures_and_accepts_pytest_node_ids(tmp_pat
     assert run_tests(["example", "Example", "test_ok"], repository_root=tmp_path) != 0
     assert run_tests([], repository_root=tmp_path) == 1
     assert run_tests(["--collect-only", "-q"], repository_root=tmp_path) == 0
+
+
+def test_package_main_remains_callable_after_submodule_import_and_dispatch():
+    import subprocess
+    import sys
+
+    program = """import sys
+from models.project_cli import main as first
+assert 'torch' not in sys.modules
+assert first(['experiment', '--list-model-types']) == 0
+from models.project_cli.main import run_experiment
+from models.project_cli import main as second
+assert second is first
+assert second(['experiment', '--list-model-types']) == 0
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", program], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr

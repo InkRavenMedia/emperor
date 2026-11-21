@@ -4,21 +4,6 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from model_runtime.runs import InvalidRunRequest
-from models.catalog import (
-    discover_model_identities,
-    discover_model_identities_for_type,
-    discover_model_types,
-    model_id_from_parts,
-    model_type_exists,
-)
-from models.config_overrides import (
-    dataset_option_names,
-    monitor_option_names,
-    print_config_options,
-    print_preset_options,
-)
-
 COMMAND = "mise run experiment --"
 MODEL_TYPE_ARG = "<type>"
 MODEL_NAME_ARG = "<name>"
@@ -33,12 +18,19 @@ INSPECTION_FLAGS = {
 
 
 def list_model_types() -> None:
+    from models.catalog import discover_model_types
+
     print("Available model types:")
     for model_type in discover_model_types():
         print(f"  --model-type {model_type}")
 
 
 def list_models(model_type: str = "") -> None:
+    from models.catalog import (
+        discover_model_identities,
+        discover_model_identities_for_type,
+    )
+
     if model_type:
         identities = discover_model_identities_for_type(model_type)
         print(f"Available models for --model-type {model_type}:")
@@ -51,6 +43,8 @@ def list_models(model_type: str = "") -> None:
 
 
 def list_datasets(model_type: str, model: str) -> None:
+    from models.config_overrides import dataset_option_names
+
     model_id = f"{model_type}/{model}"
     print(f"Available datasets for --model-type {model_type} --model {model}:")
     for dataset in dataset_option_names(model_id):
@@ -58,6 +52,8 @@ def list_datasets(model_type: str, model: str) -> None:
 
 
 def list_monitors(model_type: str, model: str) -> None:
+    from models.config_overrides import monitor_option_names
+
     model_id = f"{model_type}/{model}"
     print(f"Available monitors for --model-type {model_type} --model {model}:")
     for monitor in monitor_option_names(model_id):
@@ -321,6 +317,8 @@ def run_model_command(
     model: str,
     arguments: Sequence[str],
 ) -> int:
+    from models.catalog import model_id_from_parts
+
     if _print_model_errors(model_type, model, arguments):
         return 1
     selected_flag = next(
@@ -403,6 +401,8 @@ def _parse_experiment_invocation(
 
 
 def _dispatch_listing(invocation: _ExperimentInvocation) -> int | None:
+    from models.catalog import model_id_from_parts, model_type_exists
+
     if invocation.list_model_types_requested:
         show_model_type_list_usage()
         return 0
@@ -428,6 +428,9 @@ def _dispatch_listing(invocation: _ExperimentInvocation) -> int | None:
 
 
 def _dispatch_selected_model(invocation: _ExperimentInvocation) -> int:
+    from models.catalog import model_id_from_parts
+    from models.config_overrides import print_config_options, print_preset_options
+
     if not invocation.model_type or not invocation.model:
         show_missing_model_selector_error()
         return 1
@@ -453,6 +456,8 @@ def _dispatch_selected_model(invocation: _ExperimentInvocation) -> int:
 
 
 def run_experiment(argv: Sequence[str] | None = None) -> int:
+    from model_runtime.runs import InvalidRunRequest
+
     arguments = list(sys.argv[1:] if argv is None else argv)
     if not arguments:
         show_no_argument_usage_help()
@@ -475,6 +480,14 @@ def run_experiment(argv: Sequence[str] | None = None) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments and arguments[0] == "test":
+        from models.project_cli.runner import run_tests
+
+        return run_tests(arguments[1:])
+    if arguments and arguments[0] == "logs:archive":
+        from models.project_cli.logs_archive import archive_logs
+
+        return archive_logs(arguments[1:])
     if arguments and arguments[0] == "experiment":
         arguments.pop(0)
     if arguments and arguments[0] == "inspect":
@@ -482,10 +495,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return run_inspection(arguments[1:])
     return run_experiment(arguments)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
 
 
 __all__ = ["main", "run_experiment", "run_model_command"]

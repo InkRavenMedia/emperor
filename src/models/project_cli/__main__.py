@@ -1,3 +1,3 @@
-from models.project_cli.entrypoint import main
+from models.project_cli import main
 
 raise SystemExit(main())
