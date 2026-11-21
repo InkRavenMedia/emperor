@@ -12,7 +12,9 @@ from emperor.halting import (
 )
 from emperor.neuron import NeuronCluster, TerminalRoutingTreeDepthOptions
 from emperor.sampler import SamplerModel
-from model_packages.test_neuron_terminal_routing_tree_runtime import PACKAGE_BUILDERS
+from tests.model_packages.test_neuron_terminal_routing_tree_runtime import (
+    PACKAGE_BUILDERS,
+)
 
 
 def _build_model(package, builder_name, beam_width, tree_depth, **overrides):
@@ -131,10 +133,12 @@ def test_neuron_packages_support_cpu_autocast(
     model = _build_model(package, builder_name, beam_width, tree_depth)
     logit_margins = []
     # Sparse expert choices are discontinuous at ties. Use a real, trainable
-    # router with separated logits for the cross-precision gradient oracle.
+    # router with separated logits for every learned nucleus or terminal-tree decision.
     with torch.no_grad():
         for name, sampler in model.named_modules():
-            if not isinstance(sampler, SamplerModel) or ".nucleus." not in name:
+            if not isinstance(sampler, SamplerModel) or not any(
+                owner in name for owner in (".nucleus.", ".terminal.")
+            ):
                 continue
             final = sampler.router.model.layers[-1].model
             final.weight_params.mul_(0.02)
