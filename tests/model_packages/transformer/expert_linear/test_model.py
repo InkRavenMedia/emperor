@@ -332,3 +332,33 @@ class TestTransformerExpertLinearModel(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.mark.parametrize(
+    "name", ("transformer/expert_linear", "transformer/expert_linear_adaptive")
+)
+@pytest.mark.parametrize(
+    ("flags", "expected"),
+    (
+        ({"ff_bias_flag": False}, (False, False)),
+        ({"encoder_ff_bias_flag": False}, (False, True)),
+        ({"decoder_ff_bias_flag": False}, (True, False)),
+        ({"ff_bias_flag": False, "encoder_ff_bias_flag": True}, (True, False)),
+        ({"ff_bias_flag": True, "expert_bias_flag": False}, (False, False)),
+        ({"ff_bias_flag": False, "expert_bias_flag": True}, (False, False)),
+    ),
+)
+def test_expert_path_and_feed_forward_path_must_both_enable_leaf_bias(
+    name, flags, expected
+):
+    experiment = (
+        model_package(name)
+        .build_configuration(config_overrides=flags)
+        .experiment_config
+    )
+    actual = []
+    for block in (experiment.encoder_config, experiment.decoder_config):
+        ff = block.layer_config.layer_model_config.feed_forward_config
+        expert = ff.stack_config.stack_config.layer_config.layer_model_config.expert_model_config
+        actual.append(expert.layer_config.layer_model_config.bias_flag)
+    assert tuple(actual) == expected

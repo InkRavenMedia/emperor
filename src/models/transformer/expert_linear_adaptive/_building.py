@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
 import torch
 
@@ -528,8 +528,11 @@ def _experts_config(
     *,
     bias_flag: bool = True,
 ):
+    expert_options = options.expert_path_options.stack_options
     expert_stack = _adaptive_stack(
-        stack_options=options.expert_path_options.stack_options,
+        stack_options=replace(
+            expert_options, bias_flag=bias_flag and expert_options.bias_flag
+        ),
         adaptive_options=adaptive_options,
         residual_stack_options=_residual_stack(runtime),
     )
