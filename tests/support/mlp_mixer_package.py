@@ -4,6 +4,7 @@ import io
 import os
 import subprocess
 import sys
+from dataclasses import fields
 from importlib import import_module
 from pathlib import Path
 
@@ -118,7 +119,7 @@ class MlpMixerPackageContractMixin:
         self.assertEqual(runtime.channel_mixer_num_layers, 2)
         self.assertIs(runtime.layer_norm_position, LayerNormPositionOptions.BEFORE)
 
-        runtime_fields = set(package.runtime_options_type.__dataclass_fields__)
+        runtime_fields = {field.name for field in fields(package.runtime_options_type)}
         self.assertGreaterEqual(
             runtime_fields,
             {
@@ -344,14 +345,18 @@ class MlpMixerPackageContractMixin:
         token_gate_stack = token_stack.layer_config.gate_config.model_config
         self.assertFalse(token_gate_stack.layer_config.layer_model_config.bias_flag)
 
-        runtime_defaults = import_module(
-            "models." + self.MODEL_ID.replace("/", ".") + ".runtime_defaults"
-        )
-        compatibility_runtime = runtime_defaults.runtime_from_flat(
-            {"controller_stack_hidden_dim": 7}
-        )
-        self.assertEqual(compatibility_runtime.controller_stack_hidden_dim, 7)
-        self.assertEqual(compatibility_runtime.submodule_stack_hidden_dim, 7)
+        package = self._package()
+        runtime = package.bind_runtime_defaults({"submodule_stack_hidden_dim": 7})
+        self.assertEqual(runtime.submodule_stack_hidden_dim, 7)
+        spec = package.runtime_defaults_spec
+        stack_fields = {
+            key for key in spec.supported_keys if key.startswith("SUBMODULE_STACK_")
+        }
+        option_names = {field.name for field in fields(runtime)}
+        for key in stack_fields:
+            other = key.replace("SUBMODULE_", "CONTROLLER_", 1)
+            self.assertIsNone(spec.resolve_key(other))
+            self.assertNotIn(other.lower(), option_names)
 
         specialized_config = self._configuration(
             stack_activation=ActivationOptions.MISH,
@@ -433,31 +438,31 @@ class MlpMixerPackageContractMixin:
         block = self._block(model)
         values = torch.randn(2, 4, 8)
 
-        token_normalized = block.self_attention_layer.normalization.module(values)
+        token_pipeline = block.self_attention_layer.pipeline
+        channel_pipeline = block.feed_forward_layer.pipeline
+        token_normalized = token_pipeline.normalization.module(values)
         token_mixed, _, _ = block.self_attention_model(
             token_normalized,
             token_normalized,
             token_normalized,
         )
         after_token_mixing = values + token_mixed
-        channel_normalized = block.feed_forward_layer.normalization.module(
-            after_token_mixing
-        )
+        channel_normalized = channel_pipeline.normalization.module(after_token_mixing)
         channel_mixed, _ = block.feed_forward_model(channel_normalized)
         expected = after_token_mixing + channel_mixed
 
         actual, auxiliary_loss = block(values)
 
         self.assertIs(
-            block.self_attention_layer.normalization.position,
+            token_pipeline.normalization.position,
             LayerNormPositionOptions.BEFORE,
         )
         self.assertIs(
-            block.feed_forward_layer.normalization.position,
+            channel_pipeline.normalization.position,
             LayerNormPositionOptions.BEFORE,
         )
-        self.assertIsNotNone(block.self_attention_layer.residual.connection)
-        self.assertIsNotNone(block.feed_forward_layer.residual.connection)
+        self.assertIsNotNone(token_pipeline.residual.connection)
+        self.assertIsNotNone(channel_pipeline.residual.connection)
         torch.testing.assert_close(actual, expected)
         self.assertTrue(torch.isfinite(auxiliary_loss).item())
 
