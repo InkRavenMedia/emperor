@@ -20,12 +20,9 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
-from models.experts.linear_adaptive._projection_config_factory import (
-    AdaptiveBoundaryModelOptions,
-)
+from models.experts.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.experts.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     ExpertsAdaptiveGeneratorStackOptions,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,

@@ -33,6 +33,7 @@ from models.vit.linear_adaptive._adaptive_parameter_config_factory import (
 )
 from models.vit.linear_adaptive._gate_config_factory import GateConfigFactory
 from models.vit.linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     mixture_generation_fields,
     weight_generation_fields,
 )
@@ -41,7 +42,6 @@ from models.vit.linear_adaptive._memory_config_factory import MemoryConfigFactor
 from models.vit.linear_adaptive._recurrent_config_factory import RecurrentConfigFactory
 from models.vit.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     DynamicMemoryOptions,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,

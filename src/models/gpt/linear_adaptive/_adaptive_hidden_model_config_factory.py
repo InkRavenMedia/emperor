@@ -33,6 +33,7 @@ from models.gpt.linear_adaptive._adaptive_parameter_config_factory import (
 )
 from models.gpt.linear_adaptive._gate_config_factory import GateConfigFactory
 from models.gpt.linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     mixture_generation_fields,
     weight_generation_fields,
 )
@@ -43,7 +44,6 @@ from models.gpt.linear_adaptive._recurrent_config_factory import (
 )
 from models.gpt.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     DynamicMemoryOptions,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,

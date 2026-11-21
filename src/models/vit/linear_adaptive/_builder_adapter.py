@@ -12,6 +12,7 @@ from models import _sequence_expansion
 from models.vit.linear_adaptive import _config_defaults as config_defaults
 from models.vit.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.vit.linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     apply_generation_options,
     generation_keys,
 )
@@ -29,7 +30,6 @@ from models.vit.linear_adaptive._residual import (
 )
 from models.vit.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     DynamicMemoryOptions,
     HiddenAdaptiveBiasOptions,
     HiddenAdaptiveDiagonalOptions,

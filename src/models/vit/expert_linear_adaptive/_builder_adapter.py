@@ -34,6 +34,7 @@ from models.vit.expert_linear_adaptive._flat_updates import (
     pop_updates as _pop_updates,
 )
 from models.vit.expert_linear_adaptive._generation import (
+    AdaptiveGeneratorStackSource,
     apply_generation_options,
     generation_keys,
 )
@@ -54,7 +55,6 @@ from models.vit.expert_linear_adaptive._residual import (
 )
 from models.vit.expert_linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
-    AdaptiveGeneratorStackSource,
     DynamicMemoryOptions,
     ExpertsAdaptiveGeneratorStackOptions,
     ExpertsDynamicMemoryOptions,

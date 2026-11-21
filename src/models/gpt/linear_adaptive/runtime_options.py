@@ -283,24 +283,6 @@ class TransformerFeedForwardOptions:
 
 
 @dataclass(frozen=True)
-class AdaptiveGeneratorStackSource:
-    independent_flag: bool
-    hidden_dim: int | None
-    layer_norm_position: LayerNormPositionOptions | None
-    normalization: NormalizationOptions | None = field(default=None, kw_only=True)
-    num_layers: int | None
-    activation: ActivationOptions | None
-    residual_connection_option: type[ResidualConfig] | None
-    residual_model_flag: bool = field(default=False, kw_only=True)
-    residual_block_size: int | None = field(default=None, kw_only=True)
-    residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
-    dropout_probability: float | None
-    last_layer_bias_option: LastLayerBiasOptions | None
-    apply_output_postprocessing_flag: bool | None
-    bias_flag: bool | None
-
-
-@dataclass(frozen=True)
 class AdaptiveGeneratorStackOptions:
     hidden_dim: int
     layer_norm_position: LayerNormPositionOptions
@@ -336,7 +318,7 @@ class HiddenAdaptiveWeightOptions:
     decay_rate: float
     decay_warmup_batches: int
     bank_expansion_factor: BankExpansionFactorOptions
-    generator_stack_source: AdaptiveGeneratorStackSource
+    generator_stack_source: _generation.AdaptiveGeneratorStackSource
     normalization_learnable_scale_flag: bool = False
 
 
@@ -351,14 +333,14 @@ class HiddenAdaptiveBiasOptions:
     decay_rate: float
     decay_warmup_batches: int
     bank_expansion_factor: BankExpansionFactorOptions
-    generator_stack_source: AdaptiveGeneratorStackSource
+    generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
 
 @dataclass(frozen=True)
 class HiddenAdaptiveDiagonalOptions:
     option_flag: bool
     option: type[DynamicDiagonalConfig] | None
-    generator_stack_source: AdaptiveGeneratorStackSource
+    generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
 
 @dataclass(frozen=True)
@@ -370,7 +352,7 @@ class HiddenAdaptiveMaskOptions:
     mask_surrogate_scale: float
     mask_floor: float
     mask_transition_width: float
-    generator_stack_source: AdaptiveGeneratorStackSource
+    generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
 
 @dataclass(frozen=True, slots=True)
