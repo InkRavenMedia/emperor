@@ -563,6 +563,7 @@ class TestProjectCatalogCli(unittest.TestCase):
                 "  --datasets penn-treebank",
                 "  --datasets wiki-text103",
                 "  --datasets open-web-text",
+                "  --datasets wiki-text103-hierarchical",
             ],
         )
 
