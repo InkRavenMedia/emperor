@@ -114,7 +114,7 @@ def resolve_projection_model(
 def prefer_scoped_projection_model(
     updates: dict[str, Any], prefix: str, *, has_scoped_model: bool
 ) -> None:
-    """Clear inherited flat controls when a path supplies a legacy model config."""
+    """Use the scoped component configuration for this projection."""
     if has_scoped_model:
         updates.setdefault(f"{prefix}_model_option", None)
         updates.setdefault(f"{prefix}_model_bias_flag", None)
