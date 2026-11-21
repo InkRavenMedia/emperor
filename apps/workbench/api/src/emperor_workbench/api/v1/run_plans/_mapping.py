@@ -76,11 +76,13 @@ def _run_change_to_payload(change: TrainingRunChangeView) -> dict[str, Any]:
 
 
 def _run_to_payload(run: TrainingRunView) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+    return {
         "id": run.id,
         "index": run.index,
         "status": run.status,
         "preset": run.preset,
+        "snapshotId": run.snapshot_id,
+        "snapshotName": run.snapshot_name,
         "dataset": run.dataset,
         "experimentTask": run.experiment_task,
         "changes": [_run_change_to_payload(change) for change in run.changes],
@@ -97,11 +99,6 @@ def _run_to_payload(run: TrainingRunView) -> dict[str, Any]:
         "error": run.error,
         "errorTraceback": run.error_traceback,
     }
-    if run.snapshot_id_present or run.snapshot_id is not None:
-        payload["snapshotId"] = run.snapshot_id
-    if run.snapshot_name_present or run.snapshot_name is not None:
-        payload["snapshotName"] = run.snapshot_name
-    return payload
 
 
 def _summary_to_payload(summary: TrainingRunPlanSummaryView) -> dict[str, int]:

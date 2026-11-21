@@ -13,6 +13,7 @@ import type { SearchAxis } from "@/lib/api/models";
 import { configValueEquals, valueIsSelected } from "@/lib/selection";
 import {
   DEFAULT_RANDOM_SEARCH_SAMPLES,
+  MAX_RANDOM_SEARCH_SAMPLES,
   DEFAULT_TRAINING_SEARCH_STATE,
   type TrainingSearchMode,
   type TrainingSearchState,
@@ -215,6 +216,7 @@ export function TrainingSearchSetup({
                 name="training-random-samples"
                 type="number"
                 min={1}
+                max={MAX_RANDOM_SEARCH_SAMPLES}
                 step={1}
                 inputMode="numeric"
                 autoComplete="off"

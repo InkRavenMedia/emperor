@@ -1,0 +1,86 @@
+[
+  {
+    "input": {
+      "mode": "grid"
+    },
+    "accepted": true,
+    "count": null
+  },
+  {
+    "input": {
+      "mode": "grid",
+      "randomSamples": null
+    },
+    "accepted": true,
+    "count": null
+  },
+  {
+    "input": {
+      "mode": "grid",
+      "randomSamples": 1
+    },
+    "accepted": false,
+    "field": "randomSamples"
+  },
+  {
+    "input": {
+      "mode": "random"
+    },
+    "accepted": true,
+    "count": 10
+  },
+  {
+    "input": {
+      "mode": "random",
+      "randomSamples": 2
+    },
+    "accepted": true,
+    "count": 2
+  },
+  {
+    "input": {
+      "mode": "random",
+      "randomSamples": 0
+    },
+    "accepted": false,
+    "field": "randomSamples"
+  },
+  {
+    "input": {
+      "mode": "random",
+      "randomSamples": true
+    },
+    "accepted": false,
+    "field": "randomSamples"
+  },
+  {
+    "input": {
+      "mode": "random",
+      "randomSamples": "2"
+    },
+    "accepted": false,
+    "field": "randomSamples"
+  },
+  {
+    "input": {
+      "mode": "random",
+      "randomSamples": 2001
+    },
+    "accepted": false,
+    "field": "randomSamples"
+  },
+  {
+    "input": {
+      "mode": "off"
+    },
+    "accepted": false,
+    "field": "mode"
+  },
+  {
+    "input": {
+      "mode": "unknown"
+    },
+    "accepted": false,
+    "field": "mode"
+  }
+]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from model_runtime.inspection import SearchAxis
@@ -8,10 +9,21 @@ from model_runtime.packages import (
     normalize_key,
     serialize_config_value,
 )
-from model_runtime.runs import RunPlan, SearchAxisSelection, SearchSpec
+from model_runtime.runs import (
+    RunPlan,
+    SearchAxisSelection,
+    SearchMode,
+    SearchOptionError,
+    SearchSpec,
+    resolve_search_options,
+)
 
+from emperor_workbench.failures import FailureKind
 from emperor_workbench.model_packages import ModelPackageFailure, SelectedModelPackage
-from emperor_workbench.project_adapter import ModelPackageReference
+from emperor_workbench.project_adapter import (
+    ModelPackageReference,
+    ProjectAdapterFailure,
+)
 from emperor_workbench.run_plans._errors import RunPlanFailure
 from emperor_workbench.run_plans._limits import (
     MAX_TRAINING_PLANNED_RUNS,
@@ -37,7 +49,9 @@ def _parse_search_value(
                 "value": raw_value,
             },
         )
-    except Exception as exc:
+    except ProjectAdapterFailure as exc:
+        if exc.kind != FailureKind.INVALID:
+            raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
         raise RunPlanFailure(
             f"Invalid search value for axis '{axis.key}': {raw_value!r}. {exc}"
         ) from exc
@@ -54,6 +68,38 @@ def _deduplicate(values: list[Any]) -> tuple[Any, ...]:
     return tuple(deduplicated)
 
 
+def training_search_options(
+    mode: object, random_samples: object, *, path: str = "search"
+) -> tuple[SearchMode, int | None]:
+    try:
+        parsed_mode, count = resolve_search_options(mode, random_samples)
+    except SearchOptionError as exc:
+        field = "randomSamples" if exc.field == "random_samples" else "mode"
+        reason = str(exc).removeprefix(f"{exc.field} ")
+        raise ValueError(f"{path}.{field} {reason}") from exc
+    if count is not None and count > MAX_TRAINING_PLANNED_RUNS:
+        raise ValueError(
+            f"{path}.randomSamples must be an integer between 1 and "
+            f"{MAX_TRAINING_PLANNED_RUNS}."
+        )
+    return parsed_mode, count
+
+
+def materialized_search_options(
+    search: Mapping[str, Any], *, path: str = "search"
+) -> tuple[SearchMode, int | None]:
+    mode, count = training_search_options(
+        search.get("mode"), search.get("randomSamples"), path=path
+    )
+    if mode == "random" and search.get("randomSamples") is None:
+        raise ValueError(
+            f"{path}.randomSamples must contain the materialized random sample count."
+        )
+    if mode == "grid" and "randomSamples" in search:
+        raise ValueError(f"{path}.randomSamples cannot be stored for grid search.")
+    return mode, count
+
+
 def adapt_search(
     package: ModelPackageReference,
     preset_name: str,
@@ -61,8 +107,12 @@ def adapt_search(
 ) -> tuple[SearchSpec | None, set[str]]:
     if search is None:
         return None, set()
-    if search.mode not in {"grid", "random"}:
-        raise RunPlanFailure("Training search mode must be 'grid' or 'random'.")
+    try:
+        mode, random_samples = training_search_options(
+            search.mode, search.random_samples
+        )
+    except ValueError as exc:
+        raise RunPlanFailure(str(exc)) from exc
     values_payload = search.values
     if not values_payload:
         raise RunPlanFailure("Training search requires at least one selected axis.")
@@ -71,26 +121,10 @@ def adapt_search(
             f"Training search accepts at most {MAX_TRAINING_SEARCH_AXES} selected axes."
         )
 
-    random_samples: int | None = None
-    if search.mode == "random":
-        raw_samples = search.random_samples
-        if raw_samples is None:
-            raw_samples = 10
-        if isinstance(raw_samples, bool) or not isinstance(raw_samples, int):
-            raise RunPlanFailure("Random search sample count must be an integer.")
-        if raw_samples < 1:
-            raise RunPlanFailure("Random search sample count must be at least 1.")
-        if raw_samples > MAX_TRAINING_PLANNED_RUNS:
-            raise RunPlanFailure(
-                "Random search sample count must be an integer between 1 and "
-                f"{MAX_TRAINING_PLANNED_RUNS}."
-            )
-        random_samples = raw_samples
-
     try:
         semantic_search = SelectedModelPackage(package).search_space(preset_name)
     except ModelPackageFailure as exc:
-        raise RunPlanFailure(exc.detail) from exc
+        raise RunPlanFailure(exc.detail, kind=exc.kind) from exc
     axes_by_key = {normalize_key(axis.key): axis for axis in semantic_search.axes}
     ordered_keys: list[str] = []
     selections: dict[str, SearchAxisSelection] = {}
@@ -137,7 +171,7 @@ def adapt_search(
 
     return (
         SearchSpec(
-            mode=search.mode,
+            mode=mode,
             axes=tuple(selections[key] for key in ordered_keys),
             random_samples=random_samples,
         ),

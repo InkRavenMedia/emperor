@@ -25,7 +25,10 @@ from emperor_workbench.project_adapter import (
     ProjectAdapterClient,
     ProjectAdapterFailure,
 )
-from emperor_workbench.run_plans._command_projection import project_pending_run
+from emperor_workbench.run_plans._command_projection import (
+    plan_configuration_fields,
+    project_pending_run,
+)
 from emperor_workbench.run_plans._limits import (
     MAX_TRAINING_DATASETS,
     MAX_TRAINING_MONITORS,
@@ -48,6 +51,7 @@ from emperor_workbench.run_plans._progress_projection import (
 )
 from emperor_workbench.run_plans._records import TrainingRunPlanView
 from emperor_workbench.run_plans._search import (
+    materialized_search_options,
     preset_searches_from_plan,
     search_from_spec,
 )
@@ -97,22 +101,7 @@ def _search_spec(
         raise ValueError(
             f"Training search accepts at most {MAX_TRAINING_SEARCH_AXES} selected axes."
         )
-    mode = raw_search.get("mode")
-    if mode not in {"grid", "random"}:
-        raise ValueError("Training search mode must be 'grid' or 'random'.")
-    random_samples = raw_search.get("randomSamples")
-    if mode == "random" and (
-        isinstance(random_samples, bool)
-        or not isinstance(random_samples, int)
-        or random_samples < 1
-        or random_samples > MAX_TRAINING_PLANNED_RUNS
-    ):
-        raise ValueError(
-            "Random search sample count must be an integer between 1 and "
-            f"{MAX_TRAINING_PLANNED_RUNS}."
-        )
-    if mode == "grid" and random_samples is not None:
-        raise ValueError("Grid search must not include a random sample count.")
+    mode, random_samples = materialized_search_options(raw_search)
     raw_custom_value_axes = raw_search.get("customValueAxes", [])
     if not isinstance(raw_custom_value_axes, list) or any(
         not isinstance(key, str) or not key.strip() for key in raw_custom_value_axes
@@ -171,8 +160,6 @@ def _preset_search_payloads(
 ) -> dict[str, object]:
     presets = [str(preset) for preset in run_plan["presets"]]
     raw_preset_searches = run_plan.get("presetSearches")
-    if raw_preset_searches is None:
-        return {preset: run_plan.get("search") for preset in presets}
     if not isinstance(raw_preset_searches, Mapping):
         raise ValueError("Run plan presetSearches must be an object.")
     if set(raw_preset_searches) != set(presets):
@@ -202,7 +189,7 @@ def _preset_searches_from_payloads(
 
 
 def _run_request(run_plan: Mapping[str, Any]) -> RunRequest:
-    raw_presets = run_plan.get("presets") or [run_plan.get("preset")]
+    raw_presets = run_plan["presets"]
     raw_datasets = run_plan.get("datasets")
     if not isinstance(raw_presets, list):
         raise ValueError("Training payload presets must be a list.")
@@ -304,6 +291,8 @@ def _validate_envelope(
         ("datasets", "datasets"),
         ("overrides", "overrides"),
         ("search", "search"),
+        ("presetSearches", "per-preset search metadata"),
+        ("snapshotRevisions", "Snapshot revisions"),
         ("logFolder", "log folder"),
     )
     for field_name, label in required_fields:
@@ -610,6 +599,9 @@ class RunPlanWorkerAcceptance:
         )
 
         model_packages = ModelPackageCatalog(package.client)
+        fields_by_preset = plan_configuration_fields(
+            model_packages, package.catalog_key, semantic_plan
+        )
         expected_rows: list[dict[str, Any]] = []
         for index, (raw_row, semantic_run) in enumerate(
             zip(rows, semantic_plan.runs, strict=True),
@@ -618,7 +610,7 @@ class RunPlanWorkerAcceptance:
             assert isinstance(raw_row, Mapping)
             expected_row = _run_to_payload(
                 project_pending_run(
-                    model_packages,
+                    fields_by_preset[semantic_run.preset],
                     model=package.catalog_key,
                     package=package,
                     run=semantic_run,
@@ -642,8 +634,6 @@ class RunPlanWorkerAcceptance:
                 ),
             )
         )
-        if "snapshotRevisions" not in persisted_plan:
-            expected_plan.pop("snapshotRevisions", None)
         if persisted_plan.get("summary") != expected_plan["summary"]:
             raise ValueError("Run plan summary does not match its accepted Run rows.")
         if dict(persisted_plan) != expected_plan:

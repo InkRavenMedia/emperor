@@ -291,6 +291,7 @@ class TrainingJobLifecycleTests(unittest.TestCase):
                     "type": "dataset_started",
                     "dataset": "Mnist",
                     "preset": "baseline",
+                    "runId": job.run_plan.runs[0].id,
                     "runIndex": 1,
                     "status": "running",
                 },

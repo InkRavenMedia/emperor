@@ -9,14 +9,37 @@ import {
   configValueSchema,
   jsonObjectSchema,
   type ConfigOverrides,
-  type ConfigValue,
 } from "@/lib/api/schemas";
 import { modelIdentitySegmentSchema } from "@/lib/api/model-identity-schema";
+import { DEFAULT_RANDOM_SEARCH_SAMPLES, MAX_RANDOM_SEARCH_SAMPLES } from "@/lib/training-search-state";
 import modelRuntimeProgressEvents from "./model-runtime-progress-events.json";
 
 type ApiRequestOptions = {
   signal?: AbortSignal;
 };
+
+const searchValues = z.record(z.array(configValueSchema));
+const randomSampleCount = z.number().int().min(1).max(MAX_RANDOM_SEARCH_SAMPLES);
+const gridSearch = z.object({
+  mode: z.literal("grid"),
+  values: searchValues,
+  randomSamples: z.null(),
+});
+const randomSearch = z.object({
+  mode: z.literal("random"),
+  values: searchValues,
+  randomSamples: randomSampleCount,
+});
+const trainingSearchSchema = z.discriminatedUnion("mode", [gridSearch, randomSearch]);
+
+export const trainingSearchInputSchema = z.discriminatedUnion("mode", [
+  gridSearch.extend({ randomSamples: z.null().optional() }),
+  randomSearch.extend({ randomSamples: randomSampleCount.nullish() }),
+]).transform((search) =>
+  search.mode === "random"
+    ? { ...search, randomSamples: search.randomSamples ?? DEFAULT_RANDOM_SEARCH_SAMPLES }
+    : { mode: search.mode, values: search.values },
+);
 
 export const trainingRunChangeSchema = z.object({
   key: z.string(),
@@ -80,33 +103,17 @@ export const trainingRunPlanSchema = z.object({
   model: modelIdentitySegmentSchema,
   preset: z.string(),
   presets: z.array(z.string()),
-  experimentTask: z.string().optional(),
+  experimentTask: z.string(),
   datasets: z.array(z.string()),
   overrides: configOverridesSchema,
-  search: z
-    .object({
-      mode: z.enum(["grid", "random"]),
-      values: z.record(z.array(configValueSchema)),
-      randomSamples: z.number().nullable().optional(),
-    })
+  search: trainingSearchSchema
     .nullable(),
-  presetSearches: z
-    .record(
-      z
-        .object({
-          mode: z.enum(["grid", "random"]),
-          values: z.record(z.array(configValueSchema)),
-          randomSamples: z.number().nullable().optional(),
-        })
-        .nullable(),
-    )
-    .optional()
-    .default({}),
+  presetSearches: z.record(trainingSearchSchema.nullable()),
   logFolder: z.string(),
   isRandomSearch: z.boolean(),
   runs: z.array(trainingRunSchema),
   summary: trainingRunPlanSummarySchema,
-  snapshotRevisions: z.array(configSnapshotRevisionSchema).optional(),
+  snapshotRevisions: z.array(configSnapshotRevisionSchema),
 });
 
 const trainingProgressStatusSchema = z.enum([
@@ -299,12 +306,7 @@ export const trainingJobSchema = z.object({
   experimentTask: z.string().optional(),
   datasets: z.array(z.string()),
   overrides: configOverridesSchema,
-  search: z
-    .object({
-      mode: z.enum(["grid", "random"]),
-      values: z.record(z.array(configValueSchema)),
-      randomSamples: z.number().nullable().optional(),
-    })
+  search: trainingSearchSchema
     .nullable()
     .optional(),
   plannedRunCount: z.number().optional(),
@@ -365,11 +367,7 @@ export type TrainingClusterGrowth = z.infer<typeof trainingClusterGrowthSchema>;
 export type TrainingJob = z.infer<typeof trainingJobSchema>;
 export type TrainingJobEvents = z.infer<typeof trainingJobEventsSchema>;
 
-export type TrainingSearchCreateInput = {
-  mode: "grid" | "random";
-  values: Record<string, ConfigValue[]>;
-  randomSamples?: number;
-};
+export type TrainingSearchCreateInput = z.input<typeof trainingSearchInputSchema>;
 
 export type TrainingRunSubmitInput = {
   id: string;
@@ -399,7 +397,7 @@ export function toTrainingRunPlanSubmitInput(
       dataset: run.dataset,
       overrides: run.overrides,
     })),
-    snapshotRevisions: plan.snapshotRevisions ?? [],
+    snapshotRevisions: plan.snapshotRevisions,
   };
 }
 
@@ -438,6 +436,15 @@ export type TrainingRunPlanCreateInput = {
   snapshotIds?: string[];
 };
 
+function trainingRequestBody(
+  input: TrainingJobCreateInput | TrainingRunPlanCreateInput,
+) {
+  if (!input.search) {
+    return JSON.stringify(input);
+  }
+  return JSON.stringify({ ...input, search: trainingSearchInputSchema.parse(input.search) });
+}
+
 export function createTrainingJob(
   input: TrainingJobCreateInput,
   mutation: MutationRequestOptions,
@@ -447,7 +454,7 @@ export function createTrainingJob(
     trainingJobSchema,
     {
       method: "POST",
-      body: JSON.stringify(input),
+      body: trainingRequestBody(input),
     },
     { mutation },
   );
@@ -459,7 +466,7 @@ export function fetchTrainingRunPlan(
 ) {
   return requestJson("/training/run-plan", trainingRunPlanSchema, {
     method: "POST",
-    body: JSON.stringify(input),
+    body: trainingRequestBody(input),
     signal,
   });
 }

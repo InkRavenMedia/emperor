@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from model_runtime.runs import SearchMode
+
 ConfigValue = bool | int | float | str | None
 TrainingRunStatus = Literal[
     "Pending",
@@ -23,7 +25,7 @@ class ConfigSnapshotRevision:
 
 @dataclass(frozen=True, slots=True)
 class TrainingSearch:
-    mode: Literal["grid", "random"]
+    mode: SearchMode
     values: dict[str, list[ConfigValue]] = field(default_factory=dict)
     random_samples: int | None = None
     custom_value_axes: tuple[str, ...] = ()
@@ -60,8 +62,6 @@ class TrainingRunView:
     )
     snapshot_id: str | None = None
     snapshot_name: str | None = None
-    snapshot_id_present: bool = False
-    snapshot_name_present: bool = False
     current_epoch: int = 0
     metrics: dict[str, Any] = field(default_factory=dict)
     log_dir: str | None = None
@@ -96,8 +96,8 @@ class TrainingRunPlanView:
     is_random_search: bool
     runs: list[TrainingRunView]
     summary: TrainingRunPlanSummaryView
+    preset_searches: dict[str, TrainingSearch | None]
     snapshot_revisions: tuple[ConfigSnapshotRevision, ...] = ()
-    preset_searches: dict[str, TrainingSearch | None] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

@@ -34,12 +34,31 @@ class RunPlanPersistenceCodecTests(unittest.TestCase):
         self.assertEqual(restored.search, custom_search)
         self.assertEqual(restored.preset_searches["baseline"], custom_search)
 
-        legacy_payload = copy.deepcopy(payload)
-        del legacy_payload["search"]["customValueAxes"]
-        del legacy_payload["presetSearches"]["baseline"]["customValueAxes"]
-        legacy = RunPlanPersistenceCodec.decode(legacy_payload)
-        self.assertEqual(legacy.search.custom_value_axes, ())
-        self.assertEqual(legacy.preset_searches["baseline"].custom_value_axes, ())
+        standard_search = replace(custom_search, custom_value_axes=())
+        standard_plan = replace(
+            source,
+            search=standard_search,
+            preset_searches={"baseline": standard_search},
+        )
+        standard_payload = RunPlanPersistenceCodec.encode(standard_plan)
+        self.assertNotIn("customValueAxes", standard_payload["search"])
+        self.assertEqual(
+            RunPlanPersistenceCodec.decode(standard_payload), standard_plan
+        )
+
+    def test_only_canonical_materialized_plan_fields_are_accepted(self) -> None:
+        payload = RunPlanPersistenceCodec.encode(make_record().run_plan)
+        for field in (
+            "presetSearches",
+            "search",
+            "snapshotRevisions",
+            "isRandomSearch",
+            "experimentTask",
+        ):
+            incomplete = dict(payload)
+            del incomplete[field]
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, field):
+                RunPlanPersistenceCodec.decode(incomplete)
 
     def test_run_plan_codec_rejects_retired_command_field(self) -> None:
         payload = RunPlanPersistenceCodec.encode(make_record().run_plan)

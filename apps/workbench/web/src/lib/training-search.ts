@@ -6,6 +6,7 @@ import {
   DEFAULT_RANDOM_SEARCH_SAMPLES,
   DEFAULT_TRAINING_SEARCH_STATE,
   LARGE_GRID_RUN_THRESHOLD,
+  MAX_RANDOM_SEARCH_SAMPLES,
   type TrainingSearchLockSummary,
   type TrainingSearchMode,
   type TrainingSearchState,
@@ -15,6 +16,7 @@ export {
   DEFAULT_RANDOM_SEARCH_SAMPLES,
   DEFAULT_TRAINING_SEARCH_STATE,
   LARGE_GRID_RUN_THRESHOLD,
+  MAX_RANDOM_SEARCH_SAMPLES,
 };
 export type {
   TrainingSearchLockSummary,
@@ -246,6 +248,9 @@ export function validateTrainingSearch(
   }
   if (search.mode === "random" && search.randomSamples < 1) {
     return { ready: false, message: "Random samples must be at least 1." };
+  }
+  if (search.mode === "random" && search.randomSamples > MAX_RANDOM_SEARCH_SAMPLES) {
+    return { ready: false, message: `Random samples must be at most ${MAX_RANDOM_SEARCH_SAMPLES}.` };
   }
   return { ready: true, message: "" };
 }

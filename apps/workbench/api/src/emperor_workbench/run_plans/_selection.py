@@ -194,12 +194,18 @@ def resolve_monitor_names(
         raise RunPlanFailure(str(exc)) from exc
 
 
+@dataclass(frozen=True, slots=True)
+class ConfigurationFields:
+    ordered: tuple[ConfigurationField, ...]
+    by_key: dict[str, ConfigurationField]
+
+
 def configuration_fields(
     model_packages: ModelPackageCatalog,
     *,
     model: str,
     preset: str,
-) -> tuple[tuple[ConfigurationField, ...], dict[str, ConfigurationField]]:
+) -> ConfigurationFields:
     try:
         fields = model_packages.select(model).configuration(preset).fields
     except ModelPackageFailure as exc:
@@ -210,7 +216,7 @@ def configuration_fields(
     for config_field in fields:
         model_param_key = normalize_key(config_key_to_model_param(config_field.key))
         by_key.setdefault(model_param_key, config_field)
-    return fields, by_key
+    return ConfigurationFields(fields, by_key)
 
 
 __all__ = [

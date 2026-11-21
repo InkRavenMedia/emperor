@@ -30,7 +30,7 @@ from emperor_workbench.config_snapshots import (
     ConfigSnapshotService,
 )
 from emperor_workbench.failures import FailureKind
-from emperor_workbench.model_packages import ModelPackageCatalog
+from emperor_workbench.model_packages import ModelPackageCatalog, ModelPackageFailure
 from emperor_workbench.run_plans import (
     MAX_TRAINING_PLANNED_RUNS,
     CreateTrainingRunPlanCommand,
@@ -82,6 +82,76 @@ def _snapshot_service() -> ConfigSnapshotService:
 
 
 class TrainingRunPlanTests(unittest.TestCase):
+    def test_preview_preserves_catalog_failure_kind(self) -> None:
+        command = CreateTrainingRunPlanCommand(
+            model="linears/linear",
+            preset="baseline",
+            presets=None,
+            datasets=["Mnist"],
+            overrides={},
+            log_folder="preview",
+        )
+        for kind in (FailureKind.UNAVAILABLE, FailureKind.TIMEOUT):
+            with (
+                self.subTest(kind=kind),
+                patch.object(
+                    ModelPackageCatalog,
+                    "select",
+                    side_effect=ModelPackageFailure("unreachable", kind=kind),
+                ),
+                self.assertRaises(RunPlanFailure) as failure,
+            ):
+                _run_plan_service().preview(command)
+            self.assertEqual(failure.exception.kind, kind)
+
+    def test_preview_reads_configuration_once_per_used_preset_per_request(self) -> None:
+        client = project_adapter_client()
+        command = CreateTrainingRunPlanCommand(
+            model="linears/linear",
+            preset="baseline",
+            presets=["baseline", "gating"],
+            datasets=["Mnist", "Cifar10"],
+            overrides={},
+            log_folder="preview",
+        )
+        service = _run_plan_service()
+        with patch.object(
+            client, "configuration", wraps=client.configuration
+        ) as schema:
+            for index in (1, 2):
+                plan = service.preview(command)
+                self.assertEqual(len(plan.runs), 4)
+                self.assertEqual(schema.call_count, 2 * index)
+                self.assertEqual(
+                    [call.args[1] for call in schema.call_args_list[-2:]],
+                    ["baseline", "gating"],
+                )
+
+            submitted = service.materialize(
+                MaterializeTrainingRunPlanCommand(
+                    model=command.model,
+                    preset=command.preset,
+                    presets=command.presets,
+                    datasets=command.datasets,
+                    overrides={},
+                    log_folder=command.log_folder,
+                    submitted_plan=_submitted_plan(plan),
+                ),
+                validated_log_folder=command.log_folder,
+            )
+            self.assertEqual(schema.call_count, 6)
+            worker_request = {
+                "id": "schema-parity",
+                "runPlan": RunPlanPersistenceCodec.encode(submitted.plan),
+                "plannedRunCount": len(plan.runs),
+                "monitors": [],
+            }
+            accepted = RunPlanWorkerAcceptance.accept(
+                client.package(command.model), worker_request
+            )
+            self.assertEqual(len(accepted.runs), 4)
+            self.assertEqual(schema.call_count, 8)
+
     def test_shared_adapter_owns_preview_submission_persistence_and_worker_decode(
         self,
     ) -> None:
@@ -587,12 +657,9 @@ class TrainingRunPlanTests(unittest.TestCase):
             list(restored.preset_searches),
             ["baseline", "post-norm"],
         )
-        legacy_payload = dict(encoded)
-        del legacy_payload["presetSearches"]
-        legacy = RunPlanPersistenceCodec.decode(legacy_payload)
-        self.assertTrue(
-            all(search == legacy.search for search in legacy.preset_searches.values())
-        )
+        del encoded["presetSearches"]
+        with self.assertRaisesRegex(ValueError, "presetSearches"):
+            RunPlanPersistenceCodec.decode(encoded)
 
     def test_worker_acceptance_uses_each_presets_search_provenance(self) -> None:
         package = model_package("linears/linear")
@@ -895,6 +962,8 @@ class TrainingRunPlanTests(unittest.TestCase):
                 "index",
                 "status",
                 "preset",
+                "snapshotId",
+                "snapshotName",
                 "experimentTask",
                 "dataset",
                 "changes",
