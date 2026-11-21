@@ -2,9 +2,9 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 import {
   callsNamed,
+  declaredUseStateSetters,
   readTypeScriptSource,
   typeLiteralPropertyNames,
-  useStateSetterNames,
 } from "@/test-utils/typescript-ast";
 
 const orchestration = readTypeScriptSource(
@@ -21,19 +21,33 @@ function isIdentifierArgument(
   return argument !== undefined && ts.isIdentifier(argument) && argument.text === name;
 }
 
+const targetSetters = [
+  "setSelectedModel",
+  "setSelectedModelType",
+  "setSelectedPreset",
+  "setSelectedExperimentTask",
+  "setSelectedDatasets",
+  "setPresetOverrides",
+  "setInspectionTransition",
+];
+
+function misplacedTargetSetters(source: ts.SourceFile) {
+  return declaredUseStateSetters(source).filter((setter) => targetSetters.includes(setter));
+}
+
 describe("Inspection target architecture", () => {
-  it("keeps every complete-target field and semantic revision in the lifecycle Module", () => {
-    expect(useStateSetterNames(orchestration)).not.toEqual(
-      expect.arrayContaining([
-        "setSelectedModel",
-        "setSelectedModelType",
-        "setSelectedPreset",
-        "setSelectedExperimentTask",
-        "setSelectedDatasets",
-        "setPresetOverrides",
-        "setInspectionTransition",
-      ]),
+  it.each(targetSetters)("recognizes a single misplaced %s setter", (setter) => {
+    const source = ts.createSourceFile(
+      "fixture.ts",
+      `const [value, ${setter}] = useState(null);`,
+      ts.ScriptTarget.Latest,
+      true,
     );
+    expect(misplacedTargetSetters(source)).toEqual([setter]);
+  });
+
+  it("keeps every complete-target field and semantic revision in the lifecycle Module", () => {
+    expect(misplacedTargetSetters(orchestration)).toEqual([]);
     expect(
       typeLiteralPropertyNames(lifecycle, "InspectionTargetLifecycleState"),
     ).toEqual(
