@@ -68,7 +68,10 @@ def test_readme_command_reaches_standard_training_dispatch(monkeypatch, tmp_path
 def test_readme_flags_build_the_tested_adaptive_architecture():
     configuration = configuration_from_cli(readme_arguments())
     model = model_package(PACKAGE_NAME).build_model(configuration)
-    assert sum(parameter.numel() for parameter in model.parameters()) == 5_023_983
+    trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    frozen = sum(p.numel() for p in model.parameters() if not p.requires_grad)
+    assert trainable == 5_023_711
+    assert frozen == 816
     adaptive_layers = [
         module
         for module in model.modules()
