@@ -55,4 +55,7 @@ class Model(ClassifierExperiment):
         hidden, auxiliary_loss = self.neuron_cluster(hidden)
         output_state = Layer.run_model_from_hidden(self.output_model, hidden)
         logits = output_state.hidden
+        for boundary in (input_state, output_state):
+            if boundary.loss is not None:
+                auxiliary_loss = auxiliary_loss + boundary.loss
         return logits, auxiliary_loss
