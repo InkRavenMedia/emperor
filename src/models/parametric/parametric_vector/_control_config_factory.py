@@ -59,37 +59,39 @@ def build_parametric_stack_config(
         mask_config=None,
         model_config=None,
     )
+    weight_mixture_config = VectorWeightsMixtureConfig(
+        input_dim=input_dim,
+        output_dim=output_dim,
+        top_k=mixture_options.top_k,
+        num_experts=mixture_options.num_experts,
+        weighted_parameters_flag=mixture_options.weighted_parameters_flag,
+        clip_parameter_option=mixture_options.clip_parameter_option,
+        clip_range=mixture_options.clip_range,
+    )
     parametric_layer_config = ParametricLayerConfig(
         input_dim=input_dim,
         output_dim=output_dim,
-        weight_mixture_config=VectorWeightsMixtureConfig(
-            input_dim=input_dim,
-            output_dim=output_dim,
-            top_k=mixture_options.top_k,
-            num_experts=mixture_options.num_experts,
-            weighted_parameters_flag=mixture_options.weighted_parameters_flag,
-            clip_parameter_option=mixture_options.clip_parameter_option,
-            clip_range=mixture_options.clip_range,
-        ),
+        weight_mixture_config=weight_mixture_config,
         bias_mixture_config=None,
         routing_initialization_mode=AdaptiveRouterOptions.INDEPENDENT_ROUTER,
         router_config=router_config,
         sampler_config=sampler_config,
         adaptive_augmentation_config=adaptive_augmentation_config,
     )
+    residual_config = build_residual_config(
+        stack_options.residual_connection_option,
+        stack_options.residual_model_flag,
+        residual_stack_options,
+        residual_block_size=stack_options.residual_block_size,
+        residual_rms_norm_epsilon=stack_options.residual_rms_norm_epsilon,
+        selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
+        model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
+    )
     layer_config = ParametricLayerHandlerConfig(
         input_dim=input_dim,
         output_dim=output_dim,
         activation=stack_options.activation,
-        residual_config=build_residual_config(
-            stack_options.residual_connection_option,
-            stack_options.residual_model_flag,
-            residual_stack_options,
-            residual_block_size=stack_options.residual_block_size,
-            residual_rms_norm_epsilon=stack_options.residual_rms_norm_epsilon,
-            selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
-            model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
-        ),
+        residual_config=residual_config,
         dropout_probability=stack_options.dropout_probability,
         layer_norm_position=LayerNormPositionOptions.DISABLED,
         normalization=NormalizationOptions.RMS_NORM,
