@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.embedding.absolute import (
+    AbsolutePositionalEmbeddingConfig,
     TextSinusoidalPositionalEmbeddingConfig,
 )
 from emperor.halting import (
@@ -26,8 +28,11 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
+from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models._stack_options import resolve_transformer_controller_options
+
+from ._residual import inherit_if_unset as inherit_if_unset
 
 
 @dataclass(frozen=True)
@@ -74,6 +79,23 @@ class TransformerStackOptions(_sequence_expansion.SequenceExpansionOptions):
         default=None, kw_only=True
     )
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        validation.positive_integer("num_layers", self.num_layers)
+        if self.halting_threshold is not None:
+            validation.halting_threshold("halting_threshold", self.halting_threshold)
+        if self.recurrent_halting_threshold is not None:
+            validation.halting_threshold(
+                "recurrent_halting_threshold", self.recurrent_halting_threshold
+            )
+        _attention_settings.validate_residual(
+            "stack_residual_connection_option", self.stack_residual_connection_option
+        )
+        _attention_settings.validate_residual(
+            "recurrent_residual_connection_option",
+            self.recurrent_residual_connection_option,
+        )
+
 
 @dataclass(frozen=True)
 class SubmoduleStackOptions:
@@ -93,6 +115,11 @@ class SubmoduleStackOptions:
     dropout_probability: float = 0.0
     bias_flag: bool = True
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True)
 class ControllerStackOptions:
@@ -111,57 +138,17 @@ class ControllerStackOptions:
     dropout_probability: float | None = None
     bias_flag: bool | None = None
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        _attention_settings.validate_stack_source(validation, self)
+
 
 def resolve_controller_stack_options(
     source: ControllerStackOptions,
     defaults: SubmoduleStackOptions,
 ) -> SubmoduleStackOptions:
-    if not source.independent_flag:
-        return defaults
-    return SubmoduleStackOptions(
-        hidden_dim=defaults.hidden_dim
-        if source.hidden_dim is None
-        else source.hidden_dim,
-        num_layers=defaults.num_layers
-        if source.num_layers is None
-        else source.num_layers,
-        last_layer_bias_option=(
-            defaults.last_layer_bias_option
-            if source.last_layer_bias_option is None
-            else source.last_layer_bias_option
-        ),
-        apply_output_postprocessing_flag=(
-            defaults.apply_output_postprocessing_flag
-            if source.apply_output_postprocessing_flag is None
-            else source.apply_output_postprocessing_flag
-        ),
-        activation=(
-            defaults.activation if source.activation is None else source.activation
-        ),
-        layer_norm_position=(
-            defaults.layer_norm_position
-            if source.layer_norm_position is None
-            else source.layer_norm_position
-        ),
-        normalization=(
-            defaults.normalization
-            if source.normalization is None
-            else source.normalization
-        ),
-        residual_connection_option=(
-            defaults.residual_connection_option
-            if source.residual_connection_option is None
-            else source.residual_connection_option
-        ),
-        residual_block_size=source.residual_block_size,
-        residual_rms_norm_epsilon=source.residual_rms_norm_epsilon,
-        residual_model_flag=source.residual_model_flag,
-        dropout_probability=(
-            defaults.dropout_probability
-            if source.dropout_probability is None
-            else source.dropout_probability
-        ),
-        bias_flag=defaults.bias_flag if source.bias_flag is None else source.bias_flag,
+    return resolve_transformer_controller_options(
+        source, defaults, SubmoduleStackOptions
     )
 
 
@@ -181,6 +168,12 @@ class LayerControllerOptions:
     halting_stack_options: ControllerStackOptions = ControllerStackOptions()
     shared_gate_config: GateConfig | None = None
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        _attention_settings.validate_controller(
+            validation, self, allow_unset_threshold=True
+        )
+
 
 @dataclass(frozen=True)
 class DynamicMemoryOptions:
@@ -191,6 +184,10 @@ class DynamicMemoryOptions:
     memory_test_time_training_num_inner_steps: int | None = None
     memory_stack_options: ControllerStackOptions = ControllerStackOptions()
     memory_num_memory_slots: int = 4
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        _attention_settings.validate_memory(validation, self)
 
 
 @dataclass(frozen=True)
@@ -226,6 +223,12 @@ class RecurrentControllerOptions:
     )
     recurrent_halting_stack_options: ControllerStackOptions = ControllerStackOptions()
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        _attention_settings.validate_recurrent_controller(
+            validation, self, allow_unset_threshold=True
+        )
+
 
 @dataclass(frozen=True)
 class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
@@ -239,6 +242,10 @@ class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
         RecurrentControllerOptions()
     )
     source_memory_flag: bool = False
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        validation.positive_integer("num_heads", self.num_heads)
 
 
 @dataclass(frozen=True)
@@ -311,6 +318,21 @@ class RuntimeOptions:
         TransformerFeedForwardOptions()
     )
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.integer_compatible_validation(__package__)
+        validation.positive_integer("batch_size", self.batch_size)
+        _attention_settings.validate_dimensions(
+            validation, {"learning_rate": self.learning_rate}
+        )
+        validation.positive_integer("vocab_size", self.vocab_size)
+        validation.positive_integer("model_dim", self.model_dim)
+        validation.positive_integer(
+            "source_sequence_length", self.source_sequence_length
+        )
+        validation.positive_integer(
+            "target_sequence_length", self.target_sequence_length
+        )
+
 
 __all__ = [
     "ControllerStackOptions",
@@ -323,3 +345,21 @@ __all__ = [
     "TransformerFeedForwardOptions",
     "TransformerStackOptions",
 ]
+
+
+class PresetValues(TypedDict, total=False):
+    attn_add_key_value_bias_flag: bool
+    attn_bias_flag: bool
+    decoder_layer_norm_position: LayerNormPositionOptions
+    encoder_layer_norm_position: LayerNormPositionOptions
+    halting_threshold: float | None
+    memory_flag: bool
+    positional_embedding_option: type[AbsolutePositionalEmbeddingConfig]
+    recurrent_flag: bool
+    recurrent_halting_threshold: float | None
+    recurrent_residual_connection_option: type[ResidualConfig] | None
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_residual_connection_option: type[ResidualConfig] | None
