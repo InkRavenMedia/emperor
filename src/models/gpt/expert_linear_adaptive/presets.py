@@ -1,3 +1,5 @@
+from typing import Unpack
+
 import models.gpt.expert_linear_adaptive.config as config
 from emperor.augmentations.adaptive_parameters import (
     CombinedDynamicDiagonalConfig,
@@ -25,6 +27,7 @@ from models.gpt.expert_linear_adaptive.config_builder import (
 from models.gpt.expert_linear_adaptive.runtime_defaults import (
     runtime_from_flat,
 )
+from models.gpt.expert_linear_adaptive.runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -54,16 +57,21 @@ class ExperimentPreset(BaseOptions):
     HIERARCHICAL = 24
 
 
+def _define_preset(
+    *,
+    description: str,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    return PresetDefinition(preset_values=values, description=description)
+
+
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.HIERARCHICAL: PresetDefinition(
-        preset_values={
-            "hierarchical_language_model_flag": True,
-            "lm_head_weight_tying_flag": False,
-        },
+    ExperimentPreset.HIERARCHICAL: _define_preset(
         description="HAT-style byte encoder and decoder around the causal GPT backbone; no word vocabulary. Byte widths and depths remain configurable.",
+        hierarchical_language_model_flag=True,
+        lm_head_weight_tying_flag=False,
     ),
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values={},
+    ExperimentPreset.BASELINE: _define_preset(
         description=(
             "Default config: a GPT-style causal language-modeling decoder with "
             "an adaptive Mixture of Attention Heads, Mixture-of-Experts "
@@ -71,216 +79,126 @@ _PRESET_DEFINITIONS = {
             "attention."
         ),
     ),
-    ExperimentPreset.PRE_NORM: PresetDefinition(
-        preset_values={
-            "layer_norm_position": LayerNormPositionOptions.BEFORE,
-        },
+    ExperimentPreset.PRE_NORM: _define_preset(
         description=(
             "Default config with layer normalization applied before each decoder "
             "sub-block."
         ),
+        layer_norm_position=LayerNormPositionOptions.BEFORE,
     ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values={
-            "layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
+    ExperimentPreset.POST_NORM: _define_preset(
         description=(
             "Default config with layer normalization applied after each decoder "
             "sub-block."
         ),
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.SINUSOIDAL: PresetDefinition(
-        preset_values={
-            "positional_embedding_option": TextSinusoidalPositionalEmbeddingConfig,
-        },
+    ExperimentPreset.SINUSOIDAL: _define_preset(
         description="Default config with fixed sinusoidal positional embeddings.",
+        positional_embedding_option=TextSinusoidalPositionalEmbeddingConfig,
     ),
-    ExperimentPreset.ATTENTION_BIAS: PresetDefinition(
-        preset_values={
-            "attn_bias_flag": True,
-            "attn_add_key_value_bias_flag": True,
-        },
-        description="Default config with attention projection bias and key/value bias "
-        "enabled.",
+    ExperimentPreset.ATTENTION_BIAS: _define_preset(
+        description=(
+            "Default config with attention projection bias and key/value bias enabled."
+        ),
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
     ),
-    ExperimentPreset.GATING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-        },
+    ExperimentPreset.GATING: _define_preset(
         description="Default config with per-decoder-block gating enabled.",
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.HALTING: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-        },
+    ExperimentPreset.HALTING: _define_preset(
         description="Default config with decoder-block stack halting enabled.",
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-        },
-        description=(
-            "Default config with both decoder-block gating and halting enabled."
-        ),
+    ExperimentPreset.GATING_HALTING: _define_preset(
+        description="Default config with both decoder-block gating and halting enabled.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.MEMORY: PresetDefinition(
-        preset_values={
-            "memory_flag": True,
-        },
+    ExperimentPreset.MEMORY: _define_preset(
         description="Default config with shared decoder-stack memory enabled.",
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with decoder-block gating and shared memory enabled."
-        ),
+    ExperimentPreset.GATING_MEMORY: _define_preset(
+        description="Default config with decoder-block gating and shared memory enabled.",
+        stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with decoder-block halting and shared memory enabled."
-        ),
+    ExperimentPreset.HALTING_MEMORY: _define_preset(
+        description="Default config with decoder-block halting and shared memory enabled.",
+        stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with decoder-block gating, halting, and shared memory."
-        ),
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
+        description="Default config with decoder-block gating, halting, and shared memory.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-        },
+    ExperimentPreset.RECURRENT: _define_preset(
         description="Default decoder stack wrapped in fixed-step recurrence.",
+        recurrent_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING: _define_preset(
         description="Default recurrent decoder with step-level gating enabled.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
+    ExperimentPreset.RECURRENT_HALTING: _define_preset(
         description="Default recurrent decoder with recurrent halting enabled.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.RECURRENT_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "memory_flag": True,
-        },
+    ExperimentPreset.RECURRENT_MEMORY: _define_preset(
         description="Default recurrent decoder whose reused stack has shared memory.",
+        recurrent_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING_HALTING: _define_preset(
         description="Default recurrent decoder with step-level gating and halting.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default recurrent decoder with step-level gating and shared memory."
-        ),
+    ExperimentPreset.RECURRENT_GATING_MEMORY: _define_preset(
+        description="Default recurrent decoder with step-level gating and shared memory.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default recurrent decoder with recurrent halting and shared memory."
-        ),
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: _define_preset(
+        description="Default recurrent decoder with recurrent halting and shared memory.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _define_preset(
         description=(
             "Default recurrent decoder with step-level gating, recurrent halting, "
             "and shared memory."
         ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.TOP1_SWITCH_AUX: PresetDefinition(
-        preset_values={
-            "top_k": 1,
-            "sampler_normalize_probabilities_flag": False,
-            "sampler_switch_loss_weight": 0.1,
-        },
+    ExperimentPreset.TOP1_SWITCH_AUX: _define_preset(
         description="Default config with top-1 expert routing and switch auxiliary loss.",
+        top_k=1,
+        sampler_normalize_probabilities_flag=False,
+        sampler_switch_loss_weight=0.1,
     ),
-    ExperimentPreset.LOW_RANK_EXPERT_WEIGHT: PresetDefinition(
-        preset_values={
-            "weight_option_flag": True,
-            "weight_option": config.LowRankDynamicWeightConfig,
-        },
-        description="Default config with adaptive low-rank dynamic weights inside expert "
-        "feed-forward internals.",
+    ExperimentPreset.LOW_RANK_EXPERT_WEIGHT: _define_preset(
+        description=(
+            "Default config with adaptive low-rank dynamic weights inside expert "
+            "feed-forward internals."
+        ),
+        weight_option_flag=True,
+        weight_option=config.LowRankDynamicWeightConfig,
     ),
-    ExperimentPreset.SINGLE_LAYER_RECURRENT_ATTENTION_RESIDUAL: PresetDefinition(
-        preset_values={
-            "hidden_dim": 32,
-            "sequence_length": 35,
-            "stack_num_layers": 1,
-            "stack_dropout_probability": 0.0,
-            "attn_num_heads": 4,
-            "ff_stack_hidden_dim": 32,
-            "num_experts": 12,
-            "top_k": 2,
-            "capacity_factor": 0.0,
-            "expert_attention_use_kv_expert_models_flag": False,
-            "sampler_switch_loss_weight": 0.01,
-            "sampler_zero_centred_loss_weight": 0.001,
-            "recurrent_flag": True,
-            "recurrent_max_steps": 10,
-            "recurrent_residual_connection_option": config.AttentionResidualConfig,
-            "recurrent_stack_halting_flag": True,
-            "recurrent_halting_option": config.StickBreakingConfig,
-            "recurrent_halting_threshold": 0.99,
-            "recurrent_halting_hidden_state_mode": (
-                config.HaltingHiddenStateModeOptions.RAW
-            ),
-            "expert_bias_flag": True,
-            "weight_option_flag": True,
-            "weight_option": SingleModelDynamicWeightConfig,
-            "generator_depth": 5,
-            "weight_decay_schedule": WeightDecayScheduleOptions.EXPONENTIAL,
-            "weight_decay_rate": 1e-4,
-            "weight_decay_warmup_batches": 5000,
-            "weight_normalization_option": WeightNormalizationOptions.L2_SCALE,
-            "weight_normalization_position_option": (
-                WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT
-            ),
-            "bias_option_flag": True,
-            "bias_option": GeneratorDynamicBiasConfig,
-            "diagonal_option_flag": True,
-            "diagonal_option": CombinedDynamicDiagonalConfig,
-            "mask_option_flag": False,
-        },
+    ExperimentPreset.SINGLE_LAYER_RECURRENT_ATTENTION_RESIDUAL: _define_preset(
         description=(
             "One dropout-free 32-dimensional decoder layer over 35-token sequences, "
             "with four attention heads and a 32-dimensional feed-forward stack. "
@@ -292,6 +210,39 @@ _PRESET_DEFINITIONS = {
             "L2 normalization, and delayed exponential base-weight decay; generated "
             "biases and combined diagonals are enabled without weight masking."
         ),
+        hidden_dim=32,
+        sequence_length=35,
+        stack_num_layers=1,
+        stack_dropout_probability=0.0,
+        attn_num_heads=4,
+        ff_stack_hidden_dim=32,
+        num_experts=12,
+        top_k=2,
+        capacity_factor=0.0,
+        expert_attention_use_kv_expert_models_flag=False,
+        sampler_switch_loss_weight=0.01,
+        sampler_zero_centred_loss_weight=0.001,
+        recurrent_flag=True,
+        recurrent_max_steps=10,
+        recurrent_residual_connection_option=config.AttentionResidualConfig,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_option=config.StickBreakingConfig,
+        recurrent_halting_threshold=0.99,
+        recurrent_halting_hidden_state_mode=config.HaltingHiddenStateModeOptions.RAW,
+        expert_bias_flag=True,
+        weight_option_flag=True,
+        weight_option=SingleModelDynamicWeightConfig,
+        generator_depth=5,
+        weight_decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
+        weight_decay_rate=0.0001,
+        weight_decay_warmup_batches=5000,
+        weight_normalization_option=WeightNormalizationOptions.L2_SCALE,
+        weight_normalization_position_option=WeightNormalizationPositionOptions.AFTER_OUTER_PRODUCT,
+        bias_option_flag=True,
+        bias_option=GeneratorDynamicBiasConfig,
+        diagonal_option_flag=True,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+        mask_option_flag=False,
     ),
 }
 

@@ -1,28 +1,17 @@
 from dataclasses import dataclass, replace
 from typing import Literal
 
-import torch
-
 import models.gpt.linear.config as config
-from emperor.attention import (
-    SelfAttentionConfig,
-    SelfAttentionProjectionStrategy,
-)
 from emperor.layers import (
-    ActivationOptions,
     AdditiveResidualConfig,
-    LayerNormPositionOptions,
     LayerStackConfig,
-    NormalizationOptions,
+    RecurrentLayerConfig,
 )
 from emperor.transformer import (
-    FeedForwardConfig,
     TransformerDecoderBlockLayerConfig,
     TransformerDecoderLayerConfig,
 )
-from emperor.transformer._soft_moe_config import build_soft_moe_stack
-from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models._dense_text_core import DenseTextCore, TextStageSettings
 from models.gpt.linear import _config_defaults as config_defaults
 from models.gpt.linear._decoder_control_config_factory import (
     GateConfigFactory,
@@ -41,8 +30,6 @@ from models.gpt.linear.runtime_options import (
     TransformerDecoderOptions,
     TransformerFeedForwardOptions,
 )
-
-from ._residual import build_residual_config
 
 
 @dataclass(frozen=True)
@@ -68,7 +55,13 @@ class CoreConfigDependencies:
     linear_layer_config_factory: LinearLayerConfigFactory
 
 
-class CoreConfigFactory:
+class CoreConfigFactory(DenseTextCore):
+    _gate = staticmethod(GateConfigFactory)
+    _halting = staticmethod(HaltingConfigFactory)
+    _memory = staticmethod(MemoryConfigFactory)
+    _recurrent = staticmethod(RecurrentConfigFactory)
+    _block = TransformerDecoderBlockLayerConfig
+
     def __init__(self, dependencies: CoreConfigDependencies) -> None:
         self.batch_size = dependencies.batch_size
         self.sequence_length = dependencies.sequence_length
@@ -152,293 +145,30 @@ class CoreConfigFactory:
             or self.__recurrent_controller_options(role="feed_forward")
         )
 
-    def build_decoder_config(self):
-        decoder_layer_config = self.__build_decoder_layer_config()
-        gate_factory = self.__decoder_gate_factory()
-        halting_factory = self.__decoder_halting_factory()
-        memory_factory = self.__decoder_memory_factory()
-        halting_config = halting_factory.build_halting_config()
-        layer_config = TransformerDecoderBlockLayerConfig(
-            activation=ActivationOptions.DISABLED,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            normalization=NormalizationOptions.RMS_NORM,
-            residual_config=build_residual_config(
-                self.stack_options.residual_connection_option,
-                self.stack_options.residual_model_flag,
-                self.stack_options.residual_stack_options,
-                residual_block_size=self.stack_options.residual_block_size,
-                residual_rms_norm_epsilon=self.stack_options.residual_rms_norm_epsilon,
-            ),
-            dropout_probability=0.0,
-            gate_config=gate_factory.build_gate_config(),
-            halting_config=None,
-            layer_model_config=decoder_layer_config,
-            sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
-                self.decoder_options, self.hidden_dim
-            ),
-        )
-        stack_config = LayerStackConfig(
-            input_dim=self.hidden_dim,
-            hidden_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-            num_layers=self.decoder_options.num_layers,
-            last_layer_bias_option=self.stack_options.last_layer_bias_option,
-            apply_output_postprocessing_flag=(
-                self.stack_options.apply_output_postprocessing_flag
-            ),
-            shared_gate_config=self.layer_controller_options.shared_gate_config,
-            shared_halting_config=halting_config,
-            shared_memory_config=memory_factory.build_memory_config(),
-            layer_config=layer_config,
-        )
-        return self.__decoder_recurrent_factory().build_config(
-            stack_config,
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-        )
+    @property
+    def _stage_options(self) -> TransformerDecoderOptions:
+        return self.decoder_options
 
-    def __build_decoder_layer_config(self) -> TransformerDecoderLayerConfig:
+    def _causal_attention(self, options: TextStageSettings) -> bool:
+        return True
+
+    def build_decoder_config(self) -> LayerStackConfig | RecurrentLayerConfig:
+        return self._build_stage_stack()
+
+    def _build_stage_layer(self) -> TransformerDecoderLayerConfig:
         options = self.decoder_options
+        residual_config = AdditiveResidualConfig()
+        self_attention_config = self._build_attention_config()
+        feed_forward_config = self._build_feed_forward_config()
         return TransformerDecoderLayerConfig(
             embedding_dim=self.hidden_dim,
             layer_norm_position=options.layer_norm_position,
             normalization=options.normalization,
             dropout_probability=options.dropout_probability,
-            residual_config=AdditiveResidualConfig(),
-            self_attention_config=self.__build_attention_config(),
+            residual_config=residual_config,
+            self_attention_config=self_attention_config,
             cross_attention_config=None,
-            feed_forward_config=self.__build_feed_forward_config(),
-        )
-
-    def __build_attention_config(self) -> SelfAttentionConfig:
-        decoder_options = self.decoder_options
-        attention_options = self.attention_options
-        source_memory_flag = attention_options.source_memory_flag
-        return SelfAttentionConfig(
-            batch_size=self.batch_size,
-            num_heads=attention_options.num_heads,
-            embedding_dim=self.hidden_dim,
-            query_key_projection_dim=self.hidden_dim,
-            value_projection_dim=self.hidden_dim,
-            target_sequence_length=self.sequence_length,
-            source_sequence_length=self.sequence_length,
-            target_dtype=torch.float32,
-            dropout_probability=decoder_options.dropout_probability,
-            zero_attention_flag=False,
-            causal_attention_mask_flag=True,
-            add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
-            source_memory_flag=source_memory_flag,
-            source_memory_config=_source_memory.build_source_memory_config(
-                attention_options
-            ),
-            average_attention_weights_flag=False,
-            return_attention_weights_flag=False,
-            batch_first_flag=True,
-            projection_model_config=(self.__build_attention_projection_stack_config()),
-            projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
-        )
-
-    def __build_feed_forward_config(self) -> FeedForwardConfig:
-        return FeedForwardConfig(
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-            stack_config=build_soft_moe_stack(
-                self.__build_feed_forward_stack_config(),
-                self.feed_forward_options.soft_moe_config,
-                self.hidden_dim,
-            ),
-        )
-
-    def __build_attention_projection_stack_config(self):
-        options = self.attention_projection_stack_options
-        stack_config = self.linear_layer_config_factory.build_linear_stack_config(
-            layer_model_config=(
-                self.linear_layer_config_factory.build_backend_linear_layer_config(
-                    bias_flag=options.bias_flag,
-                )
-            ),
-            hidden_dim=options.hidden_dim,
-            num_layers=options.num_layers,
-            activation=options.activation,
-            residual_connection_option=options.residual_connection_option,
-            residual_block_size=options.residual_block_size,
-            residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-            residual_model_flag=options.residual_model_flag,
-            residual_stack_options=options.residual_stack_options,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            dropout_probability=options.dropout_probability,
-            last_layer_bias_option=options.last_layer_bias_option,
-            apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-        )
-        gate_factory = self.__attention_projection_gate_factory()
-        halting_factory = self.__attention_projection_halting_factory()
-        memory_factory = self.__attention_projection_memory_factory()
-        stack_config.layer_config.gate_config = gate_factory.build_gate_config()
-        stack_config.layer_config.halting_config = (
-            halting_factory.build_halting_config()
-        )
-        stack_config.shared_gate_config = (
-            self.attention_projection_layer_controller_options.shared_gate_config
-        )
-        stack_config.shared_memory_config = memory_factory.build_memory_config()
-        return self.__attention_projection_recurrent_factory().build_config(
-            stack_config,
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-        )
-
-    def __build_feed_forward_stack_config(self):
-        options = self.feed_forward_stack_options
-        stack_config = self.linear_layer_config_factory.build_linear_stack_config(
-            layer_model_config=(
-                self.linear_layer_config_factory.build_backend_linear_layer_config(
-                    bias_flag=options.bias_flag,
-                )
-            ),
-            hidden_dim=options.hidden_dim,
-            num_layers=options.num_layers,
-            activation=options.activation,
-            residual_connection_option=options.residual_connection_option,
-            residual_block_size=options.residual_block_size,
-            residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-            residual_model_flag=options.residual_model_flag,
-            residual_stack_options=options.residual_stack_options,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            dropout_probability=options.dropout_probability,
-            last_layer_bias_option=options.last_layer_bias_option,
-            apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-        )
-        gate_factory = self.__feed_forward_gate_factory()
-        halting_factory = self.__feed_forward_halting_factory()
-        memory_factory = self.__feed_forward_memory_factory()
-        stack_config.layer_config.gate_config = gate_factory.build_gate_config()
-        stack_config.layer_config.halting_config = (
-            halting_factory.build_halting_config()
-        )
-        stack_config.shared_gate_config = (
-            self.feed_forward_layer_controller_options.shared_gate_config
-        )
-        stack_config.shared_memory_config = memory_factory.build_memory_config()
-        return self.__feed_forward_recurrent_factory().build_config(
-            stack_config,
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-        )
-
-    def __decoder_gate_factory(self) -> GateConfigFactory:
-        return GateConfigFactory(
-            layer_controller_options=self.layer_controller_options,
-            recurrent_controller_options=self.recurrent_controller_options,
-            submodule_stack_options=self.submodule_stack_options,
-        )
-
-    def __decoder_halting_factory(self) -> HaltingConfigFactory:
-        return HaltingConfigFactory(
-            layer_controller_options=self.layer_controller_options,
-            recurrent_controller_options=self.recurrent_controller_options,
-            submodule_stack_options=self.submodule_stack_options,
-            output_dim=self.hidden_dim,
-        )
-
-    def __decoder_memory_factory(self) -> MemoryConfigFactory:
-        return MemoryConfigFactory(
-            hidden_dim=self.hidden_dim,
-            stack_options=self.stack_options,
-            dynamic_memory_options=self.dynamic_memory_options,
-            submodule_stack_options=self.submodule_stack_options,
-        )
-
-    def __decoder_recurrent_factory(self) -> RecurrentConfigFactory:
-        return RecurrentConfigFactory(
-            recurrent_controller_options=self.recurrent_controller_options,
-            gate_config_factory=self.__decoder_gate_factory(),
-            halting_config_factory=self.__decoder_halting_factory(),
-        )
-
-    def __attention_projection_gate_factory(self) -> GateConfigFactory:
-        return GateConfigFactory(
-            layer_controller_options=(
-                self.attention_projection_layer_controller_options
-            ),
-            recurrent_controller_options=(
-                self.attention_projection_recurrent_controller_options
-            ),
-            submodule_stack_options=self.attention_projection_stack_options,
-            recurrent_stack_inherits_gate_stack=False,
-        )
-
-    def __attention_projection_halting_factory(self) -> HaltingConfigFactory:
-        options = self.attention_projection_stack_options
-        return HaltingConfigFactory(
-            layer_controller_options=(
-                self.attention_projection_layer_controller_options
-            ),
-            recurrent_controller_options=(
-                self.attention_projection_recurrent_controller_options
-            ),
-            submodule_stack_options=options,
-            output_dim=self.hidden_dim,
-            halting_stack_defaults=options,
-            recurrent_stack_inherits_halting_stack=False,
-        )
-
-    def __attention_projection_memory_factory(self) -> MemoryConfigFactory:
-        return MemoryConfigFactory(
-            hidden_dim=self.hidden_dim,
-            stack_options=self.stack_options,
-            dynamic_memory_options=(self.attention_projection_dynamic_memory_options),
-            submodule_stack_options=self.attention_projection_stack_options,
-        )
-
-    def __attention_projection_recurrent_factory(self) -> RecurrentConfigFactory:
-        return RecurrentConfigFactory(
-            recurrent_controller_options=(
-                self.attention_projection_recurrent_controller_options
-            ),
-            gate_config_factory=self.__attention_projection_gate_factory(),
-            halting_config_factory=self.__attention_projection_halting_factory(),
-        )
-
-    def __feed_forward_gate_factory(self) -> GateConfigFactory:
-        return GateConfigFactory(
-            layer_controller_options=self.feed_forward_layer_controller_options,
-            recurrent_controller_options=(
-                self.feed_forward_recurrent_controller_options
-            ),
-            submodule_stack_options=self.feed_forward_stack_options,
-            recurrent_stack_inherits_gate_stack=False,
-        )
-
-    def __feed_forward_halting_factory(self) -> HaltingConfigFactory:
-        options = self.feed_forward_stack_options
-        return HaltingConfigFactory(
-            layer_controller_options=self.feed_forward_layer_controller_options,
-            recurrent_controller_options=(
-                self.feed_forward_recurrent_controller_options
-            ),
-            submodule_stack_options=options,
-            output_dim=self.hidden_dim,
-            halting_stack_defaults=options,
-            recurrent_stack_inherits_halting_stack=False,
-        )
-
-    def __feed_forward_memory_factory(self) -> MemoryConfigFactory:
-        return MemoryConfigFactory(
-            hidden_dim=self.hidden_dim,
-            stack_options=self.stack_options,
-            dynamic_memory_options=self.feed_forward_dynamic_memory_options,
-            submodule_stack_options=self.feed_forward_stack_options,
-        )
-
-    def __feed_forward_recurrent_factory(self) -> RecurrentConfigFactory:
-        return RecurrentConfigFactory(
-            recurrent_controller_options=(
-                self.feed_forward_recurrent_controller_options
-            ),
-            gate_config_factory=self.__feed_forward_gate_factory(),
-            halting_config_factory=self.__feed_forward_halting_factory(),
+            feed_forward_config=feed_forward_config,
         )
 
     def __layer_controller_options(
