@@ -78,11 +78,10 @@ def declare_sequence_expansion_defaults(namespace: dict[str, Any]) -> None:
             key = prefix + field.name.upper()
             namespace.setdefault(key, None)
             annotations[key] = field.type
-            aliases[key] = (
-                f"{prefix}SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG"
-                if field.name.startswith(_POSITION_PREFIX)
-                else f"{prefix}SEQUENCE_EXPANSION_MODEL_CONFIG"
-            )
+            owner_key = f"{prefix}SEQUENCE_EXPANSION_MODEL_CONFIG"
+            if field.name.startswith(_POSITION_PREFIX):
+                owner_key = f"{prefix}SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG"
+            aliases[key] = owner_key
 
 
 def prefer_scoped_sequence_controls(
@@ -153,31 +152,37 @@ def resolve_sequence_expansion_model(
             "Sequence expansion bias generator settings require an adaptive model option."
         )
     if option in (None, _MODEL.LINEAR):
-        return resolve_projection_model(
-            config, None if option is None else ProjectionModelOptions.LINEAR, bias_flag
-        )
+        projection_option = None
+        if option is _MODEL.LINEAR:
+            projection_option = ProjectionModelOptions.LINEAR
+        return resolve_projection_model(config, projection_option, bias_flag)
 
-    predictor = LinearLayerConfig(bias_flag=True if bias_flag is None else bias_flag)
+    if bias_flag is None:
+        bias_flag = True
+    predictor = LinearLayerConfig(bias_flag=bias_flag)
     if option in _ADAPTIVE:
         if bias_flag is False:
             raise ValueError("Adaptive sequence expansion models require model bias.")
+        generator_layer_config = LinearLayerConfig(bias_flag=True)
         generator = projection_stack_config(
-            LinearLayerConfig(bias_flag=True),
+            generator_layer_config,
             hidden_dim=_positive(
                 generator_hidden_dim, embedding_dim, "bias generator hidden dimension"
             ),
             num_layers=_positive(generator_num_layers, 1, "bias generator layer count"),
         )
+        bias_config = AdditiveDynamicBiasConfig(
+            decay_schedule=WeightDecayScheduleOptions.DISABLED,
+            decay_rate=0.0,
+            decay_warmup_batches=0,
+            model_config=generator,
+        )
+        augmentation_config = AdaptiveParameterAugmentationConfig(
+            bias_config=bias_config,
+        )
         predictor = AdaptiveLinearLayerConfig(
             bias_flag=True,
-            adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-                bias_config=AdditiveDynamicBiasConfig(
-                    decay_schedule=WeightDecayScheduleOptions.DISABLED,
-                    decay_rate=0.0,
-                    decay_warmup_batches=0,
-                    model_config=generator,
-                ),
-            ),
+            adaptive_augmentation_config=augmentation_config,
         )
     if option in _STACKED:
         return projection_stack_config(
@@ -215,12 +220,14 @@ def resolve_sequence_expansion_positions(
         raise ValueError(
             "Select a sequence expansion positional embedding option first."
         )
-    capacity = config.num_embeddings if capacity is None else capacity
+    if capacity is None:
+        capacity = config.num_embeddings
     if type(capacity) is not int or capacity < 1:
         raise ValueError(
             "Sequence expansion positional embedding capacity must be a positive integer."
         )
-    padding_idx = config.padding_idx if padding_idx is None else padding_idx
+    if padding_idx is None:
+        padding_idx = config.padding_idx
     if padding_idx is not None and not 0 <= padding_idx < capacity:
         raise ValueError(
             "Sequence expansion positional embedding padding index must be within capacity."
