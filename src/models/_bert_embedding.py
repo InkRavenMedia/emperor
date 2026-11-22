@@ -148,6 +148,13 @@ def _linear_stack(
     hidden_dim: int = 32,
     num_layers: int = 1,
 ) -> LayerStackConfig:
+    linear_config = LinearLayerConfig(bias_flag=True)
+    layer_config = LayerConfig(
+        activation=ActivationOptions.RELU,
+        dropout_probability=0.0,
+        layer_norm_position=LayerNormPositionOptions.DISABLED,
+        layer_model_config=linear_config,
+    )
     return LayerStackConfig(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -155,12 +162,7 @@ def _linear_stack(
         num_layers=num_layers,
         last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
         apply_output_postprocessing_flag=False,
-        layer_config=LayerConfig(
-            activation=ActivationOptions.RELU,
-            dropout_probability=0.0,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            layer_model_config=LinearLayerConfig(bias_flag=True),
-        ),
+        layer_config=layer_config,
     )
 
 
@@ -175,6 +177,7 @@ def build_hierarchical_embedding_config(
     byte_num_heads: int,
     max_token_bytes: int,
 ) -> HierarchicalByteEmbeddingConfig:
+    attention_projection_config = _linear_stack(byte_embedding_dim, byte_embedding_dim)
     attention_config = SelfAttentionConfig(
         batch_size=batch_size * sequence_length,
         num_heads=byte_num_heads,
@@ -192,50 +195,58 @@ def build_hierarchical_embedding_config(
         average_attention_weights_flag=False,
         return_attention_weights_flag=False,
         batch_first_flag=True,
-        projection_model_config=_linear_stack(byte_embedding_dim, byte_embedding_dim),
+        projection_model_config=attention_projection_config,
         projection_strategy=SelfAttentionProjectionStrategy.FUSED,
+    )
+    residual_config = AdditiveResidualConfig()
+    feed_forward_stack_config = _linear_stack(
+        byte_embedding_dim,
+        byte_embedding_dim,
+        hidden_dim=byte_feed_forward_dim,
+    )
+    feed_forward_config = FeedForwardConfig(
+        input_dim=byte_embedding_dim,
+        output_dim=byte_embedding_dim,
+        stack_config=feed_forward_stack_config,
     )
     encoder_layer = TransformerEncoderLayerConfig(
         embedding_dim=byte_embedding_dim,
         layer_norm_position=LayerNormPositionOptions.BEFORE,
         dropout_probability=0.0,
-        residual_config=AdditiveResidualConfig(),
+        residual_config=residual_config,
         attention_config=attention_config,
-        feed_forward_config=FeedForwardConfig(
-            input_dim=byte_embedding_dim,
-            output_dim=byte_embedding_dim,
-            stack_config=_linear_stack(
-                byte_embedding_dim,
-                byte_embedding_dim,
-                hidden_dim=byte_feed_forward_dim,
-            ),
-        ),
+        feed_forward_config=feed_forward_config,
     )
+    byte_position_config = TextLearnedPositionalEmbeddingConfig(
+        num_embeddings=max_token_bytes + 1,
+        embedding_dim=byte_embedding_dim,
+    )
+    encoder_block_config = TransformerEncoderBlockLayerConfig(
+        activation=ActivationOptions.DISABLED,
+        dropout_probability=0.0,
+        layer_norm_position=LayerNormPositionOptions.DISABLED,
+        layer_model_config=encoder_layer,
+    )
+    encoder_stack_config = LayerStackConfig(
+        input_dim=byte_embedding_dim,
+        hidden_dim=byte_embedding_dim,
+        output_dim=byte_embedding_dim,
+        num_layers=byte_encoder_num_layers,
+        last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
+        apply_output_postprocessing_flag=True,
+        layer_config=encoder_block_config,
+    )
+    encoder_config = TransformerConfig(
+        encoder_stack_config=encoder_stack_config,
+    )
+    projection_config = _linear_stack(byte_embedding_dim, hidden_dim)
     return HierarchicalByteEmbeddingConfig(
         byte_embedding_dim=byte_embedding_dim,
         output_dim=hidden_dim,
         max_token_bytes=max_token_bytes,
-        byte_position_config=TextLearnedPositionalEmbeddingConfig(
-            num_embeddings=max_token_bytes + 1,
-            embedding_dim=byte_embedding_dim,
-        ),
-        encoder_config=TransformerConfig(
-            encoder_stack_config=LayerStackConfig(
-                input_dim=byte_embedding_dim,
-                hidden_dim=byte_embedding_dim,
-                output_dim=byte_embedding_dim,
-                num_layers=byte_encoder_num_layers,
-                last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-                apply_output_postprocessing_flag=True,
-                layer_config=TransformerEncoderBlockLayerConfig(
-                    activation=ActivationOptions.DISABLED,
-                    dropout_probability=0.0,
-                    layer_norm_position=LayerNormPositionOptions.DISABLED,
-                    layer_model_config=encoder_layer,
-                ),
-            ),
-        ),
-        projection_config=_linear_stack(byte_embedding_dim, hidden_dim),
+        byte_position_config=byte_position_config,
+        encoder_config=encoder_config,
+        projection_config=projection_config,
     )
 
 
@@ -247,25 +258,30 @@ def _build_contextual_embedding_config(
     kernel_dim: int,
     residual_scale: float,
 ) -> ByteContextualEmbeddingConfig:
+    byte_moe_config = _contextual_moe_config(max_token_bytes * 9, hidden_dim)
+    positional_embedding_config = TextLearnedPositionalEmbeddingConfig(
+        num_embeddings=sequence_length,
+        embedding_dim=hidden_dim,
+        padding_idx=0,
+    )
+    relative_position_config = DynamicPositionalBiasConfig(
+        num_heads=1,
+        embedding_dim=kernel_dim,
+        max_positions=max(1, sequence_length - 1),
+    )
+    prefix_kernel_config = CausalPrefixKernelConfig(
+        hidden_dim=hidden_dim,
+        kernel_dim=kernel_dim,
+        relative_position_config=relative_position_config,
+    )
+    context_moe_config = _contextual_moe_config(hidden_dim * 2, hidden_dim)
     return ByteContextualEmbeddingConfig(
         max_token_bytes=max_token_bytes,
         hidden_dim=hidden_dim,
-        byte_moe_config=_contextual_moe_config(max_token_bytes * 9, hidden_dim),
-        positional_embedding_config=TextLearnedPositionalEmbeddingConfig(
-            num_embeddings=sequence_length,
-            embedding_dim=hidden_dim,
-            padding_idx=0,
-        ),
-        prefix_kernel_config=CausalPrefixKernelConfig(
-            hidden_dim=hidden_dim,
-            kernel_dim=kernel_dim,
-            relative_position_config=DynamicPositionalBiasConfig(
-                num_heads=1,
-                embedding_dim=kernel_dim,
-                max_positions=max(1, sequence_length - 1),
-            ),
-        ),
-        context_moe_config=_contextual_moe_config(hidden_dim * 2, hidden_dim),
+        byte_moe_config=byte_moe_config,
+        positional_embedding_config=positional_embedding_config,
+        prefix_kernel_config=prefix_kernel_config,
+        context_moe_config=context_moe_config,
         residual_scale_initial_value=residual_scale,
     )
 
@@ -274,16 +290,42 @@ def _contextual_moe_config(input_dim: int, hidden_dim: int) -> MixtureOfExpertsC
     # Each contextual MoE owns a token-local router and two-layer adaptive experts.
     num_experts, top_k = 3, 2
     experts = _linear_stack(hidden_dim=hidden_dim, num_layers=2)
+    bias_generator_config = _linear_stack(hidden_dim=hidden_dim)
+    bias_config = AdditiveDynamicBiasConfig(
+        decay_schedule=WeightDecayScheduleOptions.DISABLED,
+        decay_rate=0.0,
+        decay_warmup_batches=0,
+        model_config=bias_generator_config,
+    )
+    augmentation_config = AdaptiveParameterAugmentationConfig(
+        bias_config=bias_config,
+    )
     experts.layer_config.layer_model_config = AdaptiveLinearLayerConfig(
         bias_flag=True,
-        adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-            bias_config=AdditiveDynamicBiasConfig(
-                decay_schedule=WeightDecayScheduleOptions.DISABLED,
-                decay_rate=0.0,
-                decay_warmup_batches=0,
-                model_config=_linear_stack(hidden_dim=hidden_dim),
-            ),
-        ),
+        adaptive_augmentation_config=augmentation_config,
+    )
+    router_model_config = _linear_stack(
+        input_dim, num_experts, hidden_dim=max(input_dim, num_experts)
+    )
+    router_config = RouterConfig(
+        input_dim=input_dim,
+        num_experts=num_experts,
+        noisy_topk_flag=False,
+        model_config=router_model_config,
+    )
+    sampler_config = SamplerConfig(
+        top_k=top_k,
+        threshold=0.0,
+        filter_above_threshold=False,
+        num_topk_samples=0,
+        normalize_probabilities_flag=True,
+        noisy_topk_flag=False,
+        num_experts=num_experts,
+        coefficient_of_variation_loss_weight=0.1,
+        switch_loss_weight=0.0,
+        zero_centred_loss_weight=0.0,
+        mutual_information_loss_weight=0.0,
+        router_config=router_config,
     )
     return MixtureOfExpertsConfig(
         input_dim=input_dim,
@@ -296,26 +338,6 @@ def _contextual_moe_config(input_dim: int, hidden_dim: int) -> MixtureOfExpertsC
         weighted_parameters_flag=True,
         weighting_position_option=ExpertWeightingPositionOptions.AFTER_EXPERTS,
         routing_initialization_mode=RoutingInitializationMode.LAYER,
-        sampler_config=SamplerConfig(
-            top_k=top_k,
-            threshold=0.0,
-            filter_above_threshold=False,
-            num_topk_samples=0,
-            normalize_probabilities_flag=True,
-            noisy_topk_flag=False,
-            num_experts=num_experts,
-            coefficient_of_variation_loss_weight=0.1,
-            switch_loss_weight=0.0,
-            zero_centred_loss_weight=0.0,
-            mutual_information_loss_weight=0.0,
-            router_config=RouterConfig(
-                input_dim=input_dim,
-                num_experts=num_experts,
-                noisy_topk_flag=False,
-                model_config=_linear_stack(
-                    input_dim, num_experts, hidden_dim=max(input_dim, num_experts)
-                ),
-            ),
-        ),
+        sampler_config=sampler_config,
         expert_model_config=experts,
     )
