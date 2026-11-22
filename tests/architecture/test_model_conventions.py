@@ -1,8 +1,11 @@
 import ast
+import inspect
 import os
 import unittest
 from importlib import import_module
+from importlib.util import resolve_name
 from pathlib import Path
+from unittest.mock import patch, sentinel
 
 from emperor.config import ModelConfig
 from emperor.datasets.text.language_modeling import (
@@ -26,6 +29,94 @@ MODEL_PACKAGE_TESTS_ROOT = PROJECT_ROOT / "tests" / "model_packages"
 
 _STANDARD_PUBLIC_EXPORTS = ("MODEL_PACKAGE",)
 
+# Old package imports retained for callers of the extracted implementations.
+_SHARED_COMPATIBILITY_MODULES = {
+    **{
+        f"{package}/_flat_updates.py": "models._flat_updates"
+        for package in (
+            "bert/linear_adaptive",
+            "bert/expert_linear_adaptive",
+            "gpt/linear_adaptive",
+            "gpt/expert_linear_adaptive",
+            "vit/linear_adaptive",
+            "vit/expert_linear_adaptive",
+            "vit/expert_linear_adaptive_cluster",
+        )
+    },
+    **{
+        f"gpt/{variant}/{legacy}.py": f"models.gpt.{shared}"
+        for variant in (
+            "linear",
+            "linear_adaptive",
+            "expert_linear",
+            "expert_linear_adaptive",
+        )
+        for legacy, shared in (
+            ("_hierarchical_config", "_hierarchical_config"),
+            ("checkpoint_metadata", "_checkpoint_metadata"),
+        )
+    },
+    **{
+        f"{family}/{variant}/_grouping.py": "models._adaptive_grouping"
+        for family in ("bert", "gpt", "vit")
+        for variant in ("linear_adaptive", "expert_linear_adaptive")
+    },
+    "vit/expert_linear_adaptive_cluster/_grouping.py": "models._adaptive_grouping",
+    **{
+        f"mlp_mixer/{variant}/_adaptive_options.py": "models.mlp_mixer._adaptive_options"
+        for variant in ("linear_adaptive", "expert_linear_adaptive")
+    },
+    **{
+        f"{package}/_recurrent_config_factory.py": "models._recurrent_block"
+        for package in (
+            "bert/expert_linear",
+            "bert/linear_adaptive",
+            "gpt/expert_linear",
+            "gpt/linear_adaptive",
+            "vit/linear",
+            "vit/linear_adaptive",
+            "vit/expert_linear",
+        )
+    },
+    **{
+        f"{package}/_adaptive_parameter_config_factory.py": "models._adaptive_parameters"
+        for package in (
+            "bert/linear_adaptive",
+            "bert/expert_linear_adaptive",
+            "gpt/linear_adaptive",
+            "gpt/expert_linear_adaptive",
+            "experts/linear_adaptive",
+            "vit/linear_adaptive",
+            "vit/expert_linear_adaptive",
+            "vit/expert_linear_adaptive_cluster",
+        )
+    },
+    **{
+        f"{package}/_adaptive_parameter_config_factory.py": "models._linear_adaptive_parameters"
+        for package in ("linears/linear_adaptive", "neuron/linear_adaptive/_hidden")
+    },
+    **{
+        f"neuron/{variant}/_neuron_controller_stack_config_factory.py": "models.neuron._cluster_builder"
+        for variant in (
+            "linear",
+            "linear_adaptive",
+            "expert_linear",
+            "expert_linear_adaptive",
+        )
+    },
+    **{
+        f"parametric/{variant}/_stack_config_factory.py": (
+            "models.parametric._stacks",
+            f"models.parametric.{variant}.runtime_options",
+        )
+        for variant in (
+            "parametric_generator",
+            "parametric_matrix",
+            "parametric_vector",
+        )
+    },
+}
+
 _BERT_ONLY_PRESETS = {"CAUSAL"}
 
 _EXPECTED_CONFIG_BUILDERS = {
@@ -41,6 +132,7 @@ _EXPECTED_CONFIG_BUILDERS = {
     "models.vit.linear_adaptive": "VitLinearAdaptiveConfigBuilder",
     "models.vit.expert_linear": "VitExpertLinearConfigBuilder",
     "models.vit.expert_linear_adaptive": "VitExpertLinearAdaptiveConfigBuilder",
+    "models.vit.expert_linear_adaptive_cluster": "VitExpertLinearAdaptiveClusterConfigBuilder",
     "models.mlp_mixer.linear": "MlpMixerLinearConfigBuilder",
     "models.mlp_mixer.linear_adaptive": "MlpMixerLinearAdaptiveConfigBuilder",
     "models.mlp_mixer.expert_linear": "MlpMixerExpertLinearConfigBuilder",
@@ -72,6 +164,78 @@ def _package_module(package) -> str:
 
 
 class TestModelConventions(unittest.TestCase):
+    def test_construction_modules_keep_builders_with_their_owners(self):
+        from models._adaptive_runtime_defaults import AdaptiveRuntimeDefaults
+        from models._residual_stack import ResidualBuilder
+        from models._stack_controllers import ControllerStacks
+        from models.mlp_mixer._component_factory import MixerComponentFactory
+        from models.mlp_mixer._control_options import MixerControls
+        from models.transformer._submodule import TransformerSubmoduleFactory
+        from models.vit._control_overrides import ControlOverrides
+
+        builders = (
+            AdaptiveRuntimeDefaults,
+            ControlOverrides,
+            ResidualBuilder,
+            ControllerStacks,
+            MixerComponentFactory,
+            MixerControls,
+            TransformerSubmoduleFactory,
+        )
+        module_bindings = []
+        for path in sorted(MODELS_ROOT.rglob("*.py")):
+            if path.name == "__main__.py":
+                continue
+            module_name = ".".join(path.relative_to(SOURCE_ROOT).with_suffix("").parts)
+            module = import_module(module_name.removesuffix(".__init__"))
+            for name, value in vars(module).items():
+                owner = value
+                if inspect.ismethod(value):
+                    owner = value.__self__
+                if isinstance(owner, builders):
+                    module_bindings.append(f"{module_name}.{name}")
+
+        self.assertEqual(module_bindings, [])
+
+    def test_packages_define_or_import_their_residual_helpers_directly(self):
+        helpers = {
+            "build_residual_config",
+            "build_residual_stack_config",
+            "inherit_if_unset",
+        }
+        for path in sorted(MODELS_ROOT.rglob("_residual.py")):
+            assignments = set()
+            for node in ast.parse(path.read_text()).body:
+                if isinstance(node, ast.Assign):
+                    assignments.update(
+                        target.id
+                        for target in node.targets
+                        if isinstance(target, ast.Name)
+                    )
+                elif isinstance(node, ast.AnnAssign) and isinstance(
+                    node.target, ast.Name
+                ):
+                    assignments.add(node.target.id)
+            with self.subTest(module=str(path.relative_to(MODELS_ROOT))):
+                self.assertEqual(helpers & assignments, set())
+
+    def test_residual_packages_share_inheritance_and_keep_their_option_type(self):
+        from models._residual_stack import resolve_stack_options
+
+        for path in sorted(MODELS_ROOT.rglob("_residual.py")):
+            module_name = ".".join(path.relative_to(SOURCE_ROOT).with_suffix("").parts)
+            module = import_module(module_name)
+            with self.subTest(module=module_name):
+                self.assertIs(module.resolve_stack_options, resolve_stack_options)
+                with patch.object(module, "resolve_stack_options") as resolve:
+                    options = module.resolve_residual_stack_options(
+                        sentinel.source, sentinel.defaults
+                    )
+                resolve.assert_called_once_with(
+                    sentinel.source, sentinel.defaults, module.ResidualStackOptions
+                )
+                self.assertIs(options, resolve.return_value)
+
     def test_gpt_presets_search_axes_and_monitors_match_applicable_bert_metadata(self):
         for backend in (
             "linear",
@@ -247,7 +411,7 @@ class TestModelConventions(unittest.TestCase):
                     ["test_model.py"],
                 )
 
-    def test_non_init_modules_are_not_pure_reexports(self):
+    def test_package_reexports_point_to_shared_implementations(self):
         def is_docstring(node: ast.AST) -> bool:
             return (
                 isinstance(node, ast.Expr)
@@ -275,7 +439,27 @@ class TestModelConventions(unittest.TestCase):
             tree = ast.parse(source)
             body = [node for node in tree.body if not is_docstring(node)]
             if body and all(is_reexport_statement(node) for node in body):
-                pure_reexport_modules.append(path.relative_to(PROJECT_ROOT))
+                package = ".".join(path.parent.relative_to(SOURCE_ROOT).parts)
+                expected = _SHARED_COMPATIBILITY_MODULES.get(
+                    path.relative_to(MODELS_ROOT).as_posix()
+                )
+                imports = [
+                    node
+                    for node in body
+                    if isinstance(node, (ast.Import, ast.ImportFrom))
+                ]
+                targets = {
+                    resolve_name("." * node.level + (node.module or ""), package)
+                    for node in imports
+                    if isinstance(node, ast.ImportFrom) and node.module != "__future__"
+                }
+                expected_targets = (
+                    set(expected) if isinstance(expected, tuple) else {expected}
+                )
+                if targets != expected_targets or any(
+                    isinstance(node, ast.Import) for node in imports
+                ):
+                    pure_reexport_modules.append(path.relative_to(PROJECT_ROOT))
 
         self.assertEqual(pure_reexport_modules, [])
 
@@ -294,26 +478,22 @@ class TestModelConventions(unittest.TestCase):
             if model_class is None:
                 continue
 
-            init = next(
-                (
-                    node
-                    for node in model_class.body
-                    if isinstance(node, ast.FunctionDef) and node.name == "__init__"
-                ),
-                None,
-            )
-            self.assertIsNotNone(init, path)
-            positional_args = init.args.args
+            module_name = ".".join(path.relative_to(SOURCE_ROOT).with_suffix("").parts)
+            constructor = import_module(module_name).Model.__init__
+            parameters = tuple(inspect.signature(constructor).parameters.values())
+            source += inspect.getsource(constructor)
 
             with self.subTest(path=path.relative_to(PROJECT_ROOT)):
-                self.assertGreaterEqual(len(positional_args), 2)
-                self.assertEqual(positional_args[0].arg, "self")
-                self.assertEqual(positional_args[1].arg, "config")
-                self.assertIsNotNone(positional_args[1].annotation)
-                self.assertEqual(
-                    ast.unparse(positional_args[1].annotation).strip("'\""),
-                    "ModelConfig",
+                self.assertGreaterEqual(len(parameters), 2)
+                self.assertEqual(parameters[0].name, "self")
+                self.assertEqual(parameters[1].name, "config")
+                annotation = parameters[1].annotation
+                name = (
+                    annotation.strip("'\"")
+                    if isinstance(annotation, str)
+                    else annotation.__name__
                 )
+                self.assertEqual(name, "ModelConfig")
                 self.assertIn("super().__init__(config)", source)
                 self.assertIn("self.experiment_config", source)
                 self.assertNotIn("model_cfg", source)
