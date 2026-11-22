@@ -26,6 +26,33 @@ class HiddenModelConfigFactory:
         self,
     ) -> LayerStackConfig | RecurrentLayerConfig:
         runtime = self._runtime
+        memory_config = self._control_factory.build_memory_config()
+        residual_config = build_residual_config(
+            runtime.stack.residual_connection_option,
+            runtime.stack.residual_model_flag,
+            runtime.residual_stack,
+            residual_block_size=runtime.stack.residual_block_size,
+            residual_rms_norm_epsilon=runtime.stack.residual_rms_norm_epsilon,
+            selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
+            model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
+        )
+        gate_config = self._control_factory.build_gate_config()
+        halting_config = self._control_factory.build_halting_config()
+        augmentation_config = self._adaptive_factory.build_hidden_config()
+        adaptive_linear_config = AdaptiveLinearLayerTemplateConfig(
+            bias_flag=runtime.stack.bias_flag,
+            adaptive_augmentation_config=augmentation_config,
+        )
+        layer_config = LayerConfig(
+            activation=runtime.stack.activation,
+            layer_norm_position=runtime.stack.layer_norm_position,
+            normalization=runtime.stack.normalization,
+            residual_config=residual_config,
+            dropout_probability=runtime.stack.dropout_probability,
+            gate_config=gate_config,
+            halting_config=halting_config,
+            layer_model_config=adaptive_linear_config,
+        )
         block_config = LayerStackConfig(
             hidden_dim=runtime.hidden_dim,
             num_layers=runtime.stack.num_layers,
@@ -34,31 +61,7 @@ class HiddenModelConfigFactory:
                 runtime.stack.apply_output_postprocessing_flag
             ),
             shared_gate_config=runtime.gate.shared_config,
-            shared_memory_config=self._control_factory.build_memory_config(),
-            layer_config=LayerConfig(
-                activation=runtime.stack.activation,
-                layer_norm_position=runtime.stack.layer_norm_position,
-                normalization=runtime.stack.normalization,
-                residual_config=build_residual_config(
-                    runtime.stack.residual_connection_option,
-                    runtime.stack.residual_model_flag,
-                    runtime.residual_stack,
-                    residual_block_size=runtime.stack.residual_block_size,
-                    residual_rms_norm_epsilon=runtime.stack.residual_rms_norm_epsilon,
-                    selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
-                    model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
-                ),
-                dropout_probability=runtime.stack.dropout_probability,
-                gate_config=self._control_factory.build_gate_config(runtime.gate),
-                halting_config=self._control_factory.build_halting_config(
-                    runtime.halting
-                ),
-                layer_model_config=AdaptiveLinearLayerTemplateConfig(
-                    bias_flag=runtime.stack.bias_flag,
-                    adaptive_augmentation_config=(
-                        self._adaptive_factory.build_hidden_config()
-                    ),
-                ),
-            ),
+            shared_memory_config=memory_config,
+            layer_config=layer_config,
         )
         return self._control_factory.apply_recurrence(block_config)

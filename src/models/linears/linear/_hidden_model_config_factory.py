@@ -1,76 +1,29 @@
-from emperor.halting import HaltingConfig
-from emperor.layers import (
-    GateConfig,
-    LayerConfig,
-    LayerStackConfig,
-    RecurrentLayerConfig,
-)
-from emperor.linears import LinearLayerConfig
-from emperor.memory import DynamicMemoryConfig
+from emperor.layers import LayerStackConfig, RecurrentLayerConfig
 from models.linears.linear._control_config_factory import ControlConfigFactory
-from models.linears.linear._residual import build_residual_config
-from models.linears.linear.runtime_options import RuntimeOptions
+from models.linears.linear.runtime_options import LinearBuildSettings
 
 
 class HiddenModelConfigFactory:
-    def __init__(self, runtime: RuntimeOptions) -> None:
-        self.runtime = runtime
-        self.control_factory = ControlConfigFactory(runtime)
+    def __init__(self, build_settings: LinearBuildSettings) -> None:
+        self.build_settings = build_settings
+        self.control_factory = ControlConfigFactory(build_settings)
 
     def build_hidden_model_config(self) -> LayerStackConfig | RecurrentLayerConfig:
-        gate_config = self.control_factory.build_gate_config()
-        halting_config = self.control_factory.build_halting_config()
-        memory_config = self.control_factory.build_memory_config()
-        stack_config = self._stack_config(
-            memory_config=memory_config,
-            layer_config=self._layer_config(
-                gate_config=gate_config,
-                halting_config=halting_config,
-            ),
-        )
-        return self.control_factory.wrap_recurrent(stack_config)
+        stack_config = self.__build_hidden_stack()
+        hidden_model_config = self.control_factory.wrap_recurrent(stack_config)
+        return hidden_model_config
 
-    def _stack_config(
-        self,
-        *,
-        memory_config: DynamicMemoryConfig | None,
-        layer_config: LayerConfig,
-    ) -> LayerStackConfig:
-        options = self.runtime.stack
+    def __build_hidden_stack(self) -> LayerStackConfig:
+        options = self.build_settings.stack
+        layer_config, memory_config = (
+            self.control_factory.build_hidden_layer_and_shared_memory()
+        )
         return LayerStackConfig(
-            hidden_dim=self.runtime.hidden_dim,
+            hidden_dim=self.build_settings.hidden_dim,
             num_layers=options.num_layers,
             last_layer_bias_option=options.last_layer_bias_option,
             apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-            shared_gate_config=self.runtime.gate.shared_config,
+            shared_gate_config=self.build_settings.gate.shared_config,
             shared_memory_config=memory_config,
             layer_config=layer_config,
-        )
-
-    def _layer_config(
-        self,
-        *,
-        gate_config: GateConfig | None,
-        halting_config: HaltingConfig | None,
-    ) -> LayerConfig:
-        options = self.runtime.stack
-        return LayerConfig(
-            activation=options.activation,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            residual_config=build_residual_config(
-                options.residual_connection_option,
-                options.residual_model_flag,
-                self.runtime.residual_stack,
-                residual_block_size=options.residual_block_size,
-                residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-                selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
-                model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
-            ),
-            dropout_probability=options.dropout_probability,
-            gate_config=gate_config,
-            halting_config=halting_config,
-            layer_model_config=LinearLayerConfig(
-                bias_flag=options.bias_flag,
-            ),
         )
