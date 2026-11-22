@@ -100,6 +100,33 @@ class TestAttentionResidualPackage(unittest.TestCase):
 
 
 class TestAttentionResidual(unittest.TestCase):
+    def test_branch_source_padding_applies_to_one_read_and_excludes_missing_tokens(
+        self,
+    ):
+        residual = AttentionResidualConfig(
+            block_size=2, rms_norm_epsilon=1e-6, residual_dim=1
+        ).build()
+        initial = torch.tensor([[2.0], [0.0]], requires_grad=True)
+        state = residual.new_state(initial)
+        state.append(torch.tensor([[3.0], [0.0]]))
+        current = torch.tensor([[5.0], [7.0]], requires_grad=True)
+        mask = torch.tensor([[False, True], [False, False]])
+        with self.assertRaisesRegex(ValueError, "source padding"):
+            state.next_source_padding = mask[:1]
+        with self.assertRaisesRegex(TypeError, "source padding"):
+            state.next_source_padding = mask.float()
+        state.next_source_padding = mask
+        branch = state.fork()
+        mixed = residual(current, initial, residual_state=branch)
+        self.assertIsNone(branch.next_source_padding)
+        self.assertIs(state.next_source_padding, mask)
+        torch.testing.assert_close(mixed, torch.tensor([[5.0], [7.0]]))
+        initial_grad, current_grad = torch.autograd.grad(
+            mixed.sum(), (initial, current)
+        )
+        torch.testing.assert_close(initial_grad, torch.tensor([[0.5], [0.0]]))
+        torch.testing.assert_close(current_grad, torch.tensor([[0.5], [1.0]]))
+
     def test_missing_required_fields_fail_before_query_model_initialization(self):
         explicit_settings = {
             "residual_dim": 2,
