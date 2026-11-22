@@ -30,6 +30,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from model_runtime.packages.settings_validation import BuildSettingsValidation
 
 _ValueT = TypeVar("_ValueT")
 _ValueT_co = TypeVar("_ValueT_co", covariant=True)
@@ -46,7 +47,7 @@ def _is_implementation(
     base_type: type[_ImplementationT],
 ) -> TypeGuard[type[_ImplementationT]]:
     if base_type is ResidualConfig:
-        return ResidualConfig.is_concrete_implementation(value)
+        return BuildSettingsValidation.is_selectable_residual(value)
     return isinstance(value, type) and issubclass(value, base_type)
 
 

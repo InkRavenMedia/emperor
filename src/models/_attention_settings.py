@@ -141,7 +141,9 @@ def validate_dimensions(
 
 
 def validate_residual(field: str, option: object) -> None:
-    if option is not None and not ResidualConfig.is_concrete_implementation(option):
+    if option is not None and not BuildSettingsValidation.is_selectable_residual(
+        option
+    ):
         raise TypeError(f"{field} must be a concrete ResidualConfig type or None.")
 
 
