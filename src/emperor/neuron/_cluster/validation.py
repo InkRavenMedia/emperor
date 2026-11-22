@@ -5,6 +5,7 @@ from torch import Tensor
 
 from emperor._validation import ValidatorBase
 from emperor.neuron._neuron.validation import NeuronValidator
+from emperor.neuron._options import NeuronSequenceRoutingOptions
 from emperor.neuron._validation.common import NeuronValidationMixin
 
 if TYPE_CHECKING:
@@ -17,6 +18,7 @@ class NeuronClusterValidator(ValidatorBase, NeuronValidationMixin):
     NEURON_VALIDATOR = NeuronValidator
 
     OPTIONAL_FIELDS = {
+        "sequence_routing_mode",
         "beam_width",
         "entry_sampler_config",
         "escape_driven_growth_flag",
@@ -65,6 +67,42 @@ class NeuronClusterValidator(ValidatorBase, NeuronValidationMixin):
         cls.validate_growth_budget_options(model.cfg)
         cls.validate_growth_warmup_steps(model.cfg)
         cls.validate_halting_config(model.cfg)
+        cls.validate_sequence_routing(model.cfg)
+
+    @staticmethod
+    def validate_sequence_routing(cfg: "NeuronClusterConfig") -> None:
+        if cfg.sequence_routing_mode is None:
+            return
+        if cfg.beam_width not in (None, 1):
+            raise ValueError("Whole-sequence top-K routing requires beam_width=1.")
+        residual = cfg.neuron_config.sequence_residual_config
+        if residual is not None and residual.block_size != 1:
+            raise ValueError(
+                "Between-neuron residual history stores one source per round (block_size=1)."
+            )
+        if cfg.sequence_routing_mode is NeuronSequenceRoutingOptions.SEQUENTIAL:
+            if any(
+                value is not None
+                for value in (
+                    cfg.growth_threshold,
+                    cfg.pruning_threshold,
+                    cfg.halting_config,
+                )
+            ):
+                raise ValueError(
+                    "Sequential routing requires fixed membership and completes every neuron visit; use learned routing for growth, pruning or cluster halting."
+                )
+        elif cfg.halting_config is not None:
+            from emperor.halting import StickBreakingConfig
+
+            if not isinstance(cfg.halting_config, StickBreakingConfig):
+                raise ValueError(
+                    "Whole-sequence outer halting requires StickBreakingConfig."
+                )
+            if (cfg.halting_config.min_steps or 1) > cfg.max_steps + 1:
+                raise ValueError(
+                    "Outer halting min_steps exceeds the entry visit plus max_steps."
+                )
 
     @staticmethod
     def __neuron_config_with_validation_positions(

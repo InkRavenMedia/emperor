@@ -16,6 +16,7 @@ from emperor.neuron._monitoring.diagnostics import (
     _NeuronObservation,
     _RouteDiagnosticMetrics,
 )
+from emperor.transformer import TransformerEncoderLayerState
 
 if TYPE_CHECKING:
     from lightning import LightningModule, Trainer
@@ -139,18 +140,29 @@ class NeuronClusterMonitorCallback(Callback):
         original_instance_forward = cluster.__dict__.get("forward")
 
         def monitored_forward(
-            input: Tensor,
+            input: Tensor | TransformerEncoderLayerState,
             return_trace: bool = False,
         ) -> object:
             if not self.__is_capture_step(pl_module):
                 self._latest_observations.pop(module_name, None)
                 self._latest_observation_steps.pop(module_name, None)
                 return original_forward(input, return_trace=return_trace)
-            traced_output = cast(
-                "tuple[Tensor, Tensor, NeuronClusterTrace]",
-                original_forward(input, return_trace=True),
-            )
-            cluster_output, auxiliary_loss, trace = traced_output
+            traced_output = original_forward(input, return_trace=True)
+            if isinstance(input, TransformerEncoderLayerState):
+                output, trace = cast(
+                    "tuple[TransformerEncoderLayerState, NeuronClusterTrace]",
+                    traced_output,
+                )
+                auxiliary_loss = (
+                    output.loss
+                    if output.loss is not None
+                    else output.hidden.new_zeros(())
+                )
+            else:
+                routed, auxiliary_loss, trace = cast(
+                    "tuple[Tensor, Tensor, NeuronClusterTrace]", traced_output
+                )
+                output = (routed, auxiliary_loss)
             self._latest_observations[module_name] = _NeuronObservation(
                 trace=trace,
                 auxiliary_loss=auxiliary_loss.detach(),
@@ -160,7 +172,7 @@ class NeuronClusterMonitorCallback(Callback):
             )
             if return_trace:
                 return traced_output
-            return cluster_output, auxiliary_loss
+            return output
 
         cluster.__dict__[self._OWNER_ATTRIBUTE] = self
         cluster.forward = monitored_forward

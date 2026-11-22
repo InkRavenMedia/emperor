@@ -16,7 +16,7 @@ class NeuronValidator(ValidatorBase, NeuronValidationMixin):
     AXONS_VALIDATOR = AxonsValidator
     TERMINAL_VALIDATOR = Validator
 
-    OPTIONAL_FIELDS = {"coordinate_embedding_flag"}
+    OPTIONAL_FIELDS = {"coordinate_embedding_flag", "sequence_residual_config"}
 
     @classmethod
     def validate(cls, cfg: "NeuronConfig") -> None:

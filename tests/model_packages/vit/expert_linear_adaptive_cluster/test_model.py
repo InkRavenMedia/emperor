@@ -85,6 +85,7 @@ def test_chain_matches_direct_composition_and_checkpoint():
     classifier = model(preset="three-neuron-chain")
     cluster = classifier.transformer
     neurons = list(cluster.cluster.values())
+    assert all(neuron.sequence_residual is None for neuron in neurons)
     parameters = [next(neuron.nucleus.parameters()) for neuron in neurons]
     assert len({p.data_ptr() for p in parameters}) == 3
     tokens = torch.randn(2, 5, 32, requires_grad=True)
@@ -133,8 +134,16 @@ def test_internal_recurrence_and_history_start_fresh_at_each_visit():
         recurrent_min_steps=2,
     )
     neurons = list(classifier.transformer.cluster.values())
-    visits, passes = [], []
+    visits, passes, residual_visits = [], [], []
+
+    def record_residual_visit(module, args, kwargs, output):
+        assert set(kwargs) == {"residual_state"}
+        residual_visits.append(module)
+
     for index, neuron in enumerate(neurons):
+        neuron.sequence_residual.register_forward_hook(
+            record_residual_visit, with_kwargs=True
+        )
         neuron.nucleus.register_forward_pre_hook(
             lambda _, args, i=index: visits.append(
                 (i, args[0].halting_state, args[0].residual_state)
@@ -145,6 +154,7 @@ def test_internal_recurrence_and_history_start_fresh_at_each_visit():
         )
     hidden = torch.randn(2, 5, 32)
     output = classifier.transformer(TransformerEncoderLayerState(hidden=hidden))
+    assert residual_visits == [neuron.sequence_residual for neuron in neurons]
     assert visits == [(0, None, None), (1, None, None), (2, None, None)]
     for index in range(3):
         ids = [block for i, block in passes if i == index]

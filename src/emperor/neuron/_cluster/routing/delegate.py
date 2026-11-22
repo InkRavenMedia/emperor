@@ -168,7 +168,7 @@ class ClusterRoutingDelegate:
             source_hidden.unsqueeze(1).expand(-1, selected_coords.shape[1], -1).clone()
         )
         process_calls_by_neuron, valid_target_mask, escape_mask = (
-            self.__group_valid_process_calls(selected_coords, call_mask)
+            self.group_valid_process_calls(selected_coords, call_mask)
         )
 
         for neuron_name, branch_indices in process_calls_by_neuron.items():
@@ -200,7 +200,7 @@ class ClusterRoutingDelegate:
 
         return branch_outputs, valid_target_mask, escape_mask
 
-    def __group_valid_process_calls(
+    def group_valid_process_calls(
         self,
         selected_coords: Tensor,
         call_mask: Tensor,
@@ -255,13 +255,13 @@ class ClusterRoutingDelegate:
                 raise TypeError("process_signal must return a tensor")
         else:
             processed_output, _, _, _ = neuron(hidden)
-        return self.__blend_warming_up_neuron_output(
+        return self.blend_warming_up_neuron_output(
             neuron,
             hidden,
             processed_output,
         )
 
-    def __blend_warming_up_neuron_output(
+    def blend_warming_up_neuron_output(
         self,
         neuron,
         input: Tensor,

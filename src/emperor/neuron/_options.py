@@ -1,6 +1,11 @@
 from enum import Enum
 
 
+class NeuronSequenceRoutingOptions(Enum):
+    SEQUENTIAL = "sequential"
+    LEARNED = "learned"
+
+
 class TerminalRangeOptions(Enum):
     ONE = 1
     TWO = 2
