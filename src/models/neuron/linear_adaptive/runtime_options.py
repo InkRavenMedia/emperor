@@ -1,5 +1,14 @@
 from dataclasses import dataclass, field
+from typing import TypedDict
 
+from emperor.augmentations.adaptive_parameters import (
+    AxisMaskConfig,
+    DynamicBiasConfig,
+    DynamicDiagonalConfig,
+    DynamicWeightConfig,
+    WeightDecayScheduleOptions,
+    WeightNormalizationOptions,
+)
 from emperor.halting import (
     HaltingConfig,
     HaltingHiddenStateModeOptions,
@@ -17,6 +26,10 @@ from emperor.neuron import (
     TerminalRoutingTreeDepthOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models.neuron.linear_adaptive import SETTINGS_VALIDATION
+from models.neuron.linear_adaptive._hidden.runtime_options import (
+    RuntimeOptions as HiddenRuntimeOptions,
+)
 from models.neuron.linear_adaptive._residual import ResidualStackOptions
 
 
@@ -75,6 +88,10 @@ class NeuronSubmoduleStackOptions:
         default=None, kw_only=True
     )
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("stack_hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
+
 
 @dataclass(frozen=True)
 class NeuronTerminalSamplerOptions:
@@ -99,7 +116,49 @@ class ClusterRouteHaltingOptions:
     output_dim: int
     halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.halting_threshold(
+            "cluster_halting_threshold", self.threshold
+        )
+        SETTINGS_VALIDATION.dropout("cluster_halting_dropout", self.dropout)
+        SETTINGS_VALIDATION.positive_integer(
+            "cluster_halting_output_dim", self.output_dim
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(ResolvedRuntimeOptions):
-    pass
+    """Resolved package-owned neuron construction roles."""
+
+    def __post_init__(self) -> None:
+        ResolvedRuntimeOptions.__post_init__(self)
+        for name, expected in (
+            ("hidden_runtime", HiddenRuntimeOptions),
+            ("cluster_capacity_options", NeuronClusterCapacityOptions),
+            ("terminal_options", NeuronTerminalOptions),
+            ("terminal_router_options", NeuronSubmoduleStackOptions),
+            ("terminal_sampler_options", NeuronTerminalSamplerOptions),
+            ("cluster_halting_options", ClusterRouteHaltingOptions),
+        ):
+            if not isinstance(self._values.get(name), expected):
+                raise TypeError(f"{name} must be a {expected.__name__} value")
+
+
+class PresetValues(TypedDict, total=False):
+    bias_option: type[DynamicBiasConfig] | None
+    diagonal_option: type[DynamicDiagonalConfig] | None
+    generator_depth: int
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
+    row_mask_option: type[AxisMaskConfig] | None
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_residual_connection_option: type[ResidualConfig] | None
+    weight_decay_rate: float
+    weight_decay_schedule: WeightDecayScheduleOptions
+    weight_decay_warmup_batches: int
+    weight_normalization_option: WeightNormalizationOptions
+    weight_option: type[DynamicWeightConfig] | None

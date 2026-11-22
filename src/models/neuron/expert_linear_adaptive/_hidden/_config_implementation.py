@@ -1,5 +1,5 @@
 # ruff: noqa: E501
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 
 import models.neuron.expert_linear_adaptive.config as config
 from emperor.experts import (
@@ -14,6 +14,7 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
+from models._expert_core_defaults import ExpertCoreDefaults, bind_residual_stacks
 from models.neuron.expert_linear_adaptive._hidden._adaptive_defaults import (
     AdaptiveDefaults,
     AdaptiveDefaultValues,
@@ -170,95 +171,17 @@ class CoreDefaults:
     sampler_options: ExpertsSamplerOptions
 
 
+class _Defaults(ExpertCoreDefaults[CoreDefaults]):
+    resolve_stack = staticmethod(resolve_experts_submodule_stack_options)
+    stack_type = ExpertsStackOptions
+    submodule_type = ExpertsSubmoduleStackOptions
+    mixture_type = ExpertsMixtureOptions
+    sampler_type = ExpertsSamplerOptions
+    defaults_type = CoreDefaults
+
+
 def resolve_core_defaults(values: CoreDefaultValues) -> CoreDefaults:
-    stack_options = values.stack_options or ExpertsStackOptions(
-        hidden_dim=values.hidden_dim,
-        bias_flag=values.stack_bias_flag,
-        layer_norm_position=values.layer_norm_position,
-        normalization=values.normalization,
-        num_layers=values.stack_num_layers,
-        activation=values.stack_activation,
-        residual_connection_option=values.stack_residual_connection_option,
-        residual_block_size=values.stack_residual_block_size,
-        residual_rms_norm_epsilon=values.stack_residual_rms_norm_epsilon,
-        residual_model_flag=values.stack_residual_model_flag,
-        dropout_probability=values.stack_dropout_probability,
-        last_layer_bias_option=values.stack_last_layer_bias_option,
-        apply_output_postprocessing_flag=values.stack_apply_output_postprocessing_flag,
-    )
-    submodule_stack_options = (
-        values.submodule_stack_options
-        or ExpertsSubmoduleStackOptions(
-            hidden_dim=values.submodule_stack_hidden_dim,
-            num_layers=values.submodule_stack_num_layers,
-            last_layer_bias_option=values.submodule_stack_last_layer_bias_option,
-            apply_output_postprocessing_flag=values.submodule_stack_apply_output_postprocessing_flag,
-            activation=values.submodule_stack_activation,
-            layer_norm_position=values.submodule_stack_layer_norm_position,
-            normalization=values.submodule_stack_normalization,
-            residual_connection_option=(
-                values.submodule_stack_residual_connection_option
-            ),
-            residual_block_size=values.submodule_stack_residual_block_size,
-            residual_rms_norm_epsilon=values.submodule_stack_residual_rms_norm_epsilon,
-            residual_model_flag=values.submodule_stack_residual_model_flag,
-            dropout_probability=values.submodule_stack_dropout_probability,
-            bias_flag=values.submodule_stack_bias_flag,
-        )
-    )
-    mixture_options = values.mixture_options or ExpertsMixtureOptions(
-        top_k=values.top_k,
-        num_experts=values.num_experts,
-        capacity_factor=values.capacity_factor,
-        dropped_token_behavior=values.dropped_token_behavior,
-        compute_expert_mixture_flag=values.compute_expert_mixture_flag,
-        weighted_parameters_flag=values.weighted_parameters_flag,
-        weighting_position_option=values.weighting_position_option,
-        routing_initialization_mode=values.routing_initialization_mode,
-    )
-    expert_stack_options = (
-        values.expert_stack_options
-        or resolve_experts_submodule_stack_options(
-            submodule_stack_options,
-            hidden_dim=values.expert_stack_hidden_dim,
-            num_layers=values.expert_stack_num_layers,
-            last_layer_bias_option=values.expert_stack_last_layer_bias_option,
-            apply_output_postprocessing_flag=values.expert_stack_apply_output_postprocessing_flag,
-            activation=values.expert_stack_activation,
-            layer_norm_position=values.expert_stack_layer_norm_position,
-            normalization=values.expert_stack_normalization,
-            residual_connection_option=values.expert_stack_residual_connection_option,
-            residual_block_size=values.expert_stack_residual_block_size,
-            residual_rms_norm_epsilon=values.expert_stack_residual_rms_norm_epsilon,
-            residual_model_flag=values.expert_stack_residual_model_flag,
-            dropout_probability=values.expert_stack_dropout_probability,
-            bias_flag=values.expert_bias_flag,
-        )
-    )
-    sampler_options = values.sampler_options or ExpertsSamplerOptions(
-        threshold=values.sampler_threshold,
-        filter_above_threshold=values.sampler_filter_above_threshold,
-        num_topk_samples=values.sampler_num_topk_samples,
-        normalize_probabilities_flag=values.sampler_normalize_probabilities_flag,
-        noisy_topk_flag=values.sampler_noisy_topk_flag,
-        coefficient_of_variation_loss_weight=(
-            values.sampler_coefficient_of_variation_loss_weight
-        ),
-        switch_loss_weight=values.sampler_switch_loss_weight,
-        zero_centred_loss_weight=values.sampler_zero_centred_loss_weight,
-        mutual_information_loss_weight=values.sampler_mutual_information_loss_weight,
-    )
-    return CoreDefaults(
-        batch_size=values.batch_size,
-        learning_rate=values.learning_rate,
-        input_dim=values.input_dim,
-        output_dim=values.output_dim,
-        stack_options=stack_options,
-        submodule_stack_options=submodule_stack_options,
-        mixture_options=mixture_options,
-        expert_stack_options=expert_stack_options,
-        sampler_options=sampler_options,
-    )
+    return _Defaults().resolve_core_defaults(values)
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,33 +195,5 @@ def resolve_runtime_defaults(values: RuntimeDefaultValues) -> ResolvedRuntimeDef
     core = resolve_core_defaults(values)
     control = resolve_control_defaults(values, core.submodule_stack_options)
     adaptive = resolve_adaptive_defaults(values)
-    residual_stack_options = control.residual_stack_options
-    core = replace(
-        core,
-        stack_options=replace(
-            core.stack_options, residual_stack_options=residual_stack_options
-        ),
-        submodule_stack_options=replace(
-            core.submodule_stack_options,
-            residual_stack_options=residual_stack_options,
-        ),
-        expert_stack_options=replace(
-            core.expert_stack_options,
-            residual_stack_options=residual_stack_options,
-        ),
-    )
-    control = replace(
-        control,
-        router_stack_options=replace(
-            control.router_stack_options,
-            residual_stack_options=residual_stack_options,
-        ),
-    )
-    adaptive = replace(
-        adaptive,
-        adaptive_generator_stack_options=replace(
-            adaptive.adaptive_generator_stack_options,
-            residual_stack_options=residual_stack_options,
-        ),
-    )
+    core, control, adaptive = bind_residual_stacks(core, control, adaptive)
     return ResolvedRuntimeDefaults(core=core, control=control, adaptive=adaptive)

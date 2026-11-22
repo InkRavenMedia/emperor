@@ -1,9 +1,9 @@
 # ruff: noqa: E501
-from dataclasses import dataclass
 
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
+    MatrixBiasMixtureConfig,
 )
 from emperor.layers import (
     ActivationOptions,
@@ -15,8 +15,8 @@ from models.neuron.expert_linear_adaptive._adaptive_linear_template import (
     AdaptiveLinearLayerTemplateConfig,
 )
 from models.neuron.expert_linear_adaptive._generation import (
-    mixture_generation_fields,
-    weight_generation_fields,
+    build_mixture_generation_config,
+    build_weight_generation_config,
 )
 from models.neuron.expert_linear_adaptive._hidden import runtime_options
 from models.neuron.expert_linear_adaptive._hidden._adaptive_generator_stack_config_factory import (
@@ -29,30 +29,16 @@ from models.neuron.expert_linear_adaptive._hidden._adaptive_parameter_config_fac
     build_weight_config,
 )
 from models.neuron.expert_linear_adaptive._hidden.runtime_options import (
-    AdaptiveGeneratorStackOptions,
-    ExpertsStackOptions,
+    RuntimeOptions,
 )
 
 
-@dataclass(frozen=True, slots=True)
-class BoundaryModelConfigDependencies:
-    stack_options: ExpertsStackOptions
-    input_boundary_options: runtime_options.AdaptiveBoundaryModelOptions
-    output_boundary_options: runtime_options.AdaptiveBoundaryModelOptions
-    adaptive_generator_stack_options: AdaptiveGeneratorStackOptions
-
-
 class BoundaryModelConfigFactory:
-    def __init__(self, dependencies: BoundaryModelConfigDependencies) -> None:
-        self.stack_options = dependencies.stack_options
-        self.input_boundary_options = dependencies.input_boundary_options
-        self.output_boundary_options = dependencies.output_boundary_options
-        self.adaptive_generator_stack_options = (
-            dependencies.adaptive_generator_stack_options
-        )
+    def __init__(self, runtime: RuntimeOptions) -> None:
+        self.runtime = runtime
         self.adaptive_generator_stack_config_factory = (
             AdaptiveGeneratorStackConfigFactory(
-                dependencies.adaptive_generator_stack_options
+                runtime.adaptive_generator_stack_options
             )
         )
         self.shared_adaptive_generator_stack_config = (
@@ -60,16 +46,18 @@ class BoundaryModelConfigFactory:
         )
 
     def build_input_model_config(self) -> LayerConfig:
-        return self.__build_boundary_layer_config(
-            self.input_boundary_options,
-            activation=self.stack_options.activation,
+        input_model_config = self.__build_boundary_layer_config(
+            self.runtime.input_boundary_options,
+            activation=self.runtime.stack_options.activation,
         )
+        return input_model_config
 
     def build_output_model_config(self) -> LayerConfig:
-        return self.__build_boundary_layer_config(
-            self.output_boundary_options,
+        output_model_config = self.__build_boundary_layer_config(
+            self.runtime.output_boundary_options,
             activation=ActivationOptions.DISABLED,
         )
+        return output_model_config
 
     def __build_boundary_layer_config(
         self,
@@ -77,6 +65,7 @@ class BoundaryModelConfigFactory:
         *,
         activation: ActivationOptions,
     ) -> LayerConfig:
+        layer_model_config = self.__build_boundary_layer_model_config(options)
         return LayerConfig(
             activation=activation,
             layer_norm_position=LayerNormPositionOptions.DISABLED,
@@ -85,55 +74,59 @@ class BoundaryModelConfigFactory:
             dropout_probability=0.0,
             gate_config=None,
             halting_config=None,
-            layer_model_config=self.__build_boundary_layer_model_config(options),
+            layer_model_config=layer_model_config,
         )
 
     def __build_boundary_layer_model_config(
         self,
         options: runtime_options.AdaptiveBoundaryModelOptions,
     ) -> AdaptiveLinearLayerConfig:
+        weight_generation = build_weight_generation_config(
+            options.weight_option,
+            options.weight_generation,
+            self.adaptive_generator_stack_config_factory,
+        )
+        weight_config = build_weight_config(
+            generation=weight_generation,
+            weight_option=options.weight_option,
+            generator_depth=options.generator_depth,
+            decay_schedule=options.weight_decay_schedule,
+            decay_rate=options.weight_decay_rate,
+            decay_warmup_batches=options.weight_decay_warmup_batches,
+            normalization_option=options.weight_normalization_option,
+            normalization_learnable_scale_flag=options.weight_normalization_learnable_scale_flag,
+            normalization_position_option=(
+                options.weight_normalization_position_option
+            ),
+            bank_expansion_factor=options.weight_bank_expansion_factor,
+        )
+        bias_generation = (
+            build_mixture_generation_config(
+                options.bias_generation,
+                self.adaptive_generator_stack_config_factory,
+            )
+            if options.bias_option is MatrixBiasMixtureConfig
+            else None
+        )
+        bias_config = build_bias_config(
+            generation=bias_generation,
+            bias_option=options.bias_option,
+            decay_schedule=options.bias_decay_schedule,
+            decay_rate=options.bias_decay_rate,
+            decay_warmup_batches=options.bias_decay_warmup_batches,
+            bank_expansion_factor=options.bias_bank_expansion_factor,
+        )
+        diagonal_config = build_diagonal_config(options.diagonal_option)
+        mask_config = build_mask_config(options)
         augmentation = AdaptiveParameterAugmentationConfig(
             grouping_config=options.grouping_config,
-            weight_config=build_weight_config(
-                generation_fields=weight_generation_fields(
-                    options.weight_generation,
-                    self.adaptive_generator_stack_config_factory,
-                ),
-                weight_option=options.weight_option,
-                generator_depth=options.generator_depth,
-                decay_schedule=options.weight_decay_schedule,
-                decay_rate=options.weight_decay_rate,
-                decay_warmup_batches=options.weight_decay_warmup_batches,
-                normalization_option=options.weight_normalization_option,
-                normalization_learnable_scale_flag=options.weight_normalization_learnable_scale_flag,
-                normalization_position_option=(
-                    options.weight_normalization_position_option
-                ),
-                bank_expansion_factor=options.weight_bank_expansion_factor,
-            ),
-            bias_config=build_bias_config(
-                generation_fields=mixture_generation_fields(
-                    options.bias_generation,
-                    self.adaptive_generator_stack_config_factory,
-                ),
-                bias_option=options.bias_option,
-                decay_schedule=options.bias_decay_schedule,
-                decay_rate=options.bias_decay_rate,
-                decay_warmup_batches=options.bias_decay_warmup_batches,
-                bank_expansion_factor=options.bias_bank_expansion_factor,
-            ),
-            diagonal_config=build_diagonal_config(options.diagonal_option),
-            mask_config=build_mask_config(
-                row_mask_option=options.row_mask_option,
-                mask_dimension_option=options.mask_dimension_option,
-                mask_threshold=options.mask_threshold,
-                mask_surrogate_scale=options.mask_surrogate_scale,
-                mask_floor=options.mask_floor,
-                mask_transition_width=options.mask_transition_width,
-            ),
+            weight_config=weight_config,
+            bias_config=bias_config,
+            diagonal_config=diagonal_config,
+            mask_config=mask_config,
             model_config=self.shared_adaptive_generator_stack_config,
         )
         return AdaptiveLinearLayerTemplateConfig(
-            bias_flag=self.stack_options.bias_flag,
+            bias_flag=self.runtime.stack_options.bias_flag,
             adaptive_augmentation_config=augmentation,
         )

@@ -16,6 +16,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models._stack_fields import ControllerStackFields
 
 _PACKAGE_NAME = "models.neuron.linear._hidden"
 _EnumT = TypeVar("_EnumT", bound=Enum)
@@ -39,13 +40,6 @@ def _is_implementation(
     base_type: type[_ImplementationT],
 ) -> TypeGuard[type[_ImplementationT]]:
     return isinstance(value, type) and issubclass(value, base_type)
-
-
-def _is_concrete_residual(value: object) -> TypeGuard[type[ResidualConfig]]:
-    return (
-        _is_implementation(value, ResidualConfig)
-        and "_registry_owner" in value.__dict__
-    )
 
 
 @dataclass(slots=True)
@@ -154,7 +148,7 @@ class RuntimeOverrideReader:
         value = self._take(key, default)
         if value is None:
             return None
-        if not _is_concrete_residual(value):
+        if not ResidualConfig.is_concrete_implementation(value):
             self._raise_type_error(key, value, "concrete type[ResidualConfig]")
         return value
 
@@ -266,6 +260,25 @@ class OptionalStackFields:
     residual_rms_norm_epsilon: str
     dropout_probability: str
     bias_flag: str
+
+    @classmethod
+    def for_stack(cls, prefix: str) -> OptionalStackFields:
+        return cls(
+            independent_flag=f"{prefix}_independent_flag",
+            hidden_dim=f"{prefix}_hidden_dim",
+            num_layers=f"{prefix}_num_layers",
+            last_layer_bias_option=f"{prefix}_last_layer_bias_option",
+            apply_output_postprocessing_flag=f"{prefix}_apply_output_postprocessing_flag",
+            activation=f"{prefix}_activation",
+            layer_norm_position=f"{prefix}_layer_norm_position",
+            normalization=f"{prefix}_normalization",
+            residual_connection_option=f"{prefix}_residual_connection_option",
+            residual_block_size=f"{prefix}_residual_block_size",
+            residual_rms_norm_epsilon=f"{prefix}_residual_rms_norm_epsilon",
+            residual_model_flag=f"{prefix}_residual_model_flag",
+            dropout_probability=f"{prefix}_dropout_probability",
+            bias_flag=f"{prefix}_bias_flag",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -380,101 +393,13 @@ class RuntimeDefaultValues:
     control: ControlDefaultValues
 
 
-_RESIDUAL_STACK_FIELDS = OptionalStackFields(
-    independent_flag="residual_stack_independent_flag",
-    hidden_dim="residual_stack_hidden_dim",
-    num_layers="residual_stack_num_layers",
-    last_layer_bias_option="residual_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="residual_stack_apply_output_postprocessing_flag",
-    activation="residual_stack_activation",
-    layer_norm_position="residual_stack_layer_norm_position",
-    normalization="residual_stack_normalization",
-    residual_connection_option="residual_stack_residual_connection_option",
-    residual_block_size="residual_stack_residual_block_size",
-    residual_rms_norm_epsilon="residual_stack_residual_rms_norm_epsilon",
-    residual_model_flag="residual_stack_residual_model_flag",
-    dropout_probability="residual_stack_dropout_probability",
-    bias_flag="residual_stack_bias_flag",
-)
-_GATE_STACK_FIELDS = OptionalStackFields(
-    independent_flag="gate_stack_independent_flag",
-    hidden_dim="gate_stack_hidden_dim",
-    num_layers="gate_stack_num_layers",
-    last_layer_bias_option="gate_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="gate_stack_apply_output_postprocessing_flag",
-    activation="gate_stack_activation",
-    layer_norm_position="gate_stack_layer_norm_position",
-    normalization="gate_stack_normalization",
-    residual_connection_option="gate_stack_residual_connection_option",
-    residual_block_size="gate_stack_residual_block_size",
-    residual_rms_norm_epsilon="gate_stack_residual_rms_norm_epsilon",
-    residual_model_flag="gate_stack_residual_model_flag",
-    dropout_probability="gate_stack_dropout_probability",
-    bias_flag="gate_stack_bias_flag",
-)
-_HALTING_STACK_FIELDS = OptionalStackFields(
-    independent_flag="halting_stack_independent_flag",
-    hidden_dim="halting_stack_hidden_dim",
-    num_layers="halting_stack_num_layers",
-    last_layer_bias_option="halting_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="halting_stack_apply_output_postprocessing_flag",
-    activation="halting_stack_activation",
-    layer_norm_position="halting_stack_layer_norm_position",
-    normalization="halting_stack_normalization",
-    residual_connection_option="halting_stack_residual_connection_option",
-    residual_block_size="halting_stack_residual_block_size",
-    residual_rms_norm_epsilon="halting_stack_residual_rms_norm_epsilon",
-    residual_model_flag="halting_stack_residual_model_flag",
-    dropout_probability="halting_stack_dropout_probability",
-    bias_flag="halting_stack_bias_flag",
-)
-_MEMORY_STACK_FIELDS = OptionalStackFields(
-    independent_flag="memory_stack_independent_flag",
-    hidden_dim="memory_stack_hidden_dim",
-    num_layers="memory_stack_num_layers",
-    last_layer_bias_option="memory_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="memory_stack_apply_output_postprocessing_flag",
-    activation="memory_stack_activation",
-    layer_norm_position="memory_stack_layer_norm_position",
-    normalization="memory_stack_normalization",
-    residual_connection_option="memory_stack_residual_connection_option",
-    residual_block_size="memory_stack_residual_block_size",
-    residual_rms_norm_epsilon="memory_stack_residual_rms_norm_epsilon",
-    residual_model_flag="memory_stack_residual_model_flag",
-    dropout_probability="memory_stack_dropout_probability",
-    bias_flag="memory_stack_bias_flag",
-)
-_RECURRENT_GATE_STACK_FIELDS = OptionalStackFields(
-    independent_flag="recurrent_gate_stack_independent_flag",
-    hidden_dim="recurrent_gate_stack_hidden_dim",
-    num_layers="recurrent_gate_stack_num_layers",
-    last_layer_bias_option="recurrent_gate_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="recurrent_gate_stack_apply_output_postprocessing_flag",
-    activation="recurrent_gate_stack_activation",
-    layer_norm_position="recurrent_gate_stack_layer_norm_position",
-    normalization="recurrent_gate_stack_normalization",
-    residual_connection_option="recurrent_gate_stack_residual_connection_option",
-    residual_block_size="recurrent_gate_stack_residual_block_size",
-    residual_rms_norm_epsilon="recurrent_gate_stack_residual_rms_norm_epsilon",
-    residual_model_flag="recurrent_gate_stack_residual_model_flag",
-    dropout_probability="recurrent_gate_stack_dropout_probability",
-    bias_flag="recurrent_gate_stack_bias_flag",
-)
-_RECURRENT_HALTING_STACK_FIELDS = OptionalStackFields(
-    independent_flag="recurrent_halting_stack_independent_flag",
-    hidden_dim="recurrent_halting_stack_hidden_dim",
-    num_layers="recurrent_halting_stack_num_layers",
-    last_layer_bias_option="recurrent_halting_stack_last_layer_bias_option",
-    apply_output_postprocessing_flag="recurrent_halting_stack_apply_output_postprocessing_flag",
-    activation="recurrent_halting_stack_activation",
-    layer_norm_position="recurrent_halting_stack_layer_norm_position",
-    normalization="recurrent_halting_stack_normalization",
-    residual_connection_option="recurrent_halting_stack_residual_connection_option",
-    residual_block_size="recurrent_halting_stack_residual_block_size",
-    residual_rms_norm_epsilon="recurrent_halting_stack_residual_rms_norm_epsilon",
-    residual_model_flag="recurrent_halting_stack_residual_model_flag",
-    dropout_probability="recurrent_halting_stack_dropout_probability",
-    bias_flag="recurrent_halting_stack_bias_flag",
+_RESIDUAL_STACK_FIELDS = OptionalStackFields.for_stack("residual_stack")
+_GATE_STACK_FIELDS = OptionalStackFields.for_stack("gate_stack")
+_HALTING_STACK_FIELDS = OptionalStackFields.for_stack("halting_stack")
+_MEMORY_STACK_FIELDS = OptionalStackFields.for_stack("memory_stack")
+_RECURRENT_GATE_STACK_FIELDS = OptionalStackFields.for_stack("recurrent_gate_stack")
+_RECURRENT_HALTING_STACK_FIELDS = OptionalStackFields.for_stack(
+    "recurrent_halting_stack"
 )
 
 _DEFAULT_VALUES = RuntimeDefaultValues(
@@ -514,109 +439,15 @@ _DEFAULT_VALUES = RuntimeDefaultValues(
         dropout_probability=config.SUBMODULE_STACK_DROPOUT_PROBABILITY,
         bias_flag=config.SUBMODULE_STACK_BIAS_FLAG,
     ),
-    residual_stack=OptionalStackValues(
-        independent_flag=config.RESIDUAL_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.RESIDUAL_STACK_HIDDEN_DIM,
-        num_layers=config.RESIDUAL_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=config.RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config.RESIDUAL_STACK_ACTIVATION,
-        layer_norm_position=config.RESIDUAL_STACK_LAYER_NORM_POSITION,
-        normalization=config.RESIDUAL_STACK_NORMALIZATION,
-        residual_connection_option=config.RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION,
-        residual_block_size=config.RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.RESIDUAL_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.RESIDUAL_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.RESIDUAL_STACK_BIAS_FLAG,
+    residual_stack=ControllerStackFields.RESIDUAL.read(config, OptionalStackValues),
+    gate_stack=ControllerStackFields.GATE.read(config, OptionalStackValues),
+    halting_stack=ControllerStackFields.HALTING.read(config, OptionalStackValues),
+    memory_stack=ControllerStackFields.MEMORY.read(config, OptionalStackValues),
+    recurrent_gate_stack=ControllerStackFields.RECURRENT_GATE.read(
+        config, OptionalStackValues
     ),
-    gate_stack=OptionalStackValues(
-        independent_flag=config.GATE_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.GATE_STACK_HIDDEN_DIM,
-        num_layers=config.GATE_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.GATE_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=config.GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config.GATE_STACK_ACTIVATION,
-        layer_norm_position=config.GATE_STACK_LAYER_NORM_POSITION,
-        normalization=config.GATE_STACK_NORMALIZATION,
-        residual_connection_option=config.GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-        residual_block_size=config.GATE_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.GATE_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.GATE_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.GATE_STACK_BIAS_FLAG,
-    ),
-    halting_stack=OptionalStackValues(
-        independent_flag=config.HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=config.HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config.HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.HALTING_STACK_NORMALIZATION,
-        residual_connection_option=config.HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-        residual_block_size=config.HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.HALTING_STACK_BIAS_FLAG,
-    ),
-    memory_stack=OptionalStackValues(
-        independent_flag=config.MEMORY_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.MEMORY_STACK_HIDDEN_DIM,
-        num_layers=config.MEMORY_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=config.MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config.MEMORY_STACK_ACTIVATION,
-        layer_norm_position=config.MEMORY_STACK_LAYER_NORM_POSITION,
-        normalization=config.MEMORY_STACK_NORMALIZATION,
-        residual_connection_option=config.MEMORY_STACK_RESIDUAL_CONNECTION_OPTION,
-        residual_block_size=config.MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.MEMORY_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.MEMORY_STACK_BIAS_FLAG,
-    ),
-    recurrent_gate_stack=OptionalStackValues(
-        independent_flag=config.RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.RECURRENT_GATE_STACK_HIDDEN_DIM,
-        num_layers=config.RECURRENT_GATE_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=(
-            config.RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config.RECURRENT_GATE_STACK_ACTIVATION,
-        layer_norm_position=config.RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-        normalization=config.RECURRENT_GATE_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config.RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config.RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.RECURRENT_GATE_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.RECURRENT_GATE_STACK_BIAS_FLAG,
-    ),
-    recurrent_halting_stack=OptionalStackValues(
-        independent_flag=config.RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.RECURRENT_HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.RECURRENT_HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=(
-            config.RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config.RECURRENT_HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.RECURRENT_HALTING_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config.RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config.RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.RECURRENT_HALTING_STACK_BIAS_FLAG,
+    recurrent_halting_stack=ControllerStackFields.RECURRENT_HALTING.read(
+        config, OptionalStackValues
     ),
     control=ControlDefaultValues(
         stack_gate_flag=config.STACK_GATE_FLAG,
@@ -1175,6 +1006,8 @@ _ACCEPTED_KEYS = _accepted_keys()
 def runtime_override_reader(
     overrides: Mapping[str, object] | None,
 ) -> RuntimeOverrideReader:
-    reader = RuntimeOverrideReader({} if overrides is None else overrides)
+    if overrides is None:
+        overrides = {}
+    reader = RuntimeOverrideReader(overrides)
     reader.reject_unknown(_ACCEPTED_KEYS)
     return reader
