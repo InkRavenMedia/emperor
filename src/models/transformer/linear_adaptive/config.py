@@ -100,7 +100,16 @@ BATCH_SIZE: Annotated[int, _general] = 64
 LEARNING_RATE: Annotated[float, _general] = 1.0
 VOCAB_SIZE: Annotated[int, _general] = 8192
 MODEL_DIM: Annotated[int, _general] = 128
-RUNTIME_VALUE_CONSTRAINTS: Annotated[RuntimeValueConstraints, _general] = positive_runtime_fields("MODEL_DIM")
+RUNTIME_VALUE_CONSTRAINTS: Annotated[RuntimeValueConstraints, _general] = (
+    positive_runtime_fields(
+        "MODEL_DIM",
+        "ENCODER_NUM_LAYERS",
+        "DECODER_NUM_LAYERS",
+        "ATTN_NUM_HEADS",
+        "FF_STACK_HIDDEN_DIM",
+        "FF_NUM_LAYERS",
+    )
+)
 SOURCE_SEQUENCE_LENGTH: Annotated[int, _general] = 64
 TARGET_SEQUENCE_LENGTH: Annotated[int, _general] = 64
 SEQUENCE_LENGTH: Annotated[int, _general] = 64
