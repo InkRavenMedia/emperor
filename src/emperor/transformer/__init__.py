@@ -20,6 +20,10 @@ from emperor.transformer._layers import (
     TransformerEncoderLayer,
 )
 from emperor.transformer._model import Transformer
+from emperor.transformer._soft_moe_config import (
+    build_soft_moe_attention_experts,
+    build_soft_moe_stack,
+)
 from emperor.transformer._state import (
     TransformerDecoderLayerState,
     TransformerEncoderLayerState,
@@ -48,6 +52,8 @@ __all__ = (
     "TransformerEncoderBlockLayerConfig",
     "TransformerDecoderBlockLayerConfig",
     "TransformerDecoderLayerConfig",
+    "build_soft_moe_attention_experts",
+    "build_soft_moe_stack",
     "FeedForward",
     "FeedForwardConfig",
     "SwiGLUFeedForward",
