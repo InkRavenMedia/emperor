@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.halting import (
     HaltingConfig,
@@ -15,7 +16,20 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.linears.linear import SETTINGS_VALIDATION
 from models.linears.linear._residual import ResidualStackOptions
+
+
+class LinearPresetValues(TypedDict, total=False):
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_residual_connection_option: type[ResidualConfig] | None
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    memory_option: type[DynamicMemoryConfig]
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +48,9 @@ class MainStackOptions:
     dropout_probability: float
     last_layer_bias_option: LastLayerBiasOptions
     apply_output_postprocessing_flag: bool
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.stack(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +71,10 @@ class ControllerStackOptions:
     dropout_probability: float
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("stack_hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class GateOptions:
@@ -63,6 +84,9 @@ class GateOptions:
     stack: ControllerStackOptions
     shared_config: GateConfig | None = None
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.gate(self.enabled, self.option)
+
 
 @dataclass(frozen=True, slots=True)
 class HaltingOptions:
@@ -71,6 +95,16 @@ class HaltingOptions:
     dropout_probability: float
     hidden_state_mode: HaltingHiddenStateModeOptions
     stack: ControllerStackOptions
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.halting_threshold("halting_threshold", self.threshold)
+        SETTINGS_VALIDATION.dropout("halting_dropout", self.dropout_probability)
+
+
+@dataclass(frozen=True, slots=True)
+class HaltingSelection:
+    options: HaltingOptions
+    implementation: type[HaltingConfig]
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,12 +116,24 @@ class MemoryOptions:
     test_time_training_num_inner_steps: int | None
     stack: ControllerStackOptions
 
+    def __post_init__(self) -> None:
+        if self.test_time_training_learning_rate is not None:
+            SETTINGS_VALIDATION.positive_float(
+                "memory_test_time_training_learning_rate",
+                self.test_time_training_learning_rate,
+            )
+        if self.test_time_training_num_inner_steps is not None:
+            SETTINGS_VALIDATION.positive_integer(
+                "memory_test_time_training_num_inner_steps",
+                self.test_time_training_num_inner_steps,
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class RecurrenceOptions:
     enabled: bool
     max_steps: int
-    initial_iterations: int = field(default=2, kw_only=True)
+    initial_iterations: int | None = field(default=2, kw_only=True)
     gradient_transition_count: int | None = field(default=None, kw_only=True)
     no_gradient_transition_count: int | None = field(default=None, kw_only=True)
     iteration_increment: int = field(default=1, kw_only=True)
@@ -100,9 +146,12 @@ class RecurrenceOptions:
     gate: GateOptions
     halting: HaltingOptions
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("recurrent_max_steps", self.max_steps)
+
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions:
+class LinearBuildSettings:
     batch_size: int
     learning_rate: float
     input_dim: int
@@ -120,3 +169,18 @@ class RuntimeOptions:
     recurrence: RecurrenceOptions
     halting_option: type[HaltingConfig] = StickBreakingConfig
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.shared_gate(self.gate.enabled, self.gate.shared_config)
+
+    @property
+    def layer_halting(self) -> HaltingSelection:
+        return HaltingSelection(self.halting, self.halting_option)
+
+    @property
+    def recurrent_halting(self) -> HaltingSelection:
+        return HaltingSelection(self.recurrence.halting, self.recurrent_halting_option)
+
+
+RuntimeOptions = LinearBuildSettings

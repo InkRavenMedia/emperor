@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
@@ -30,24 +31,10 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.linears.linear_adaptive import SETTINGS_VALIDATION
 from models.linears.linear_adaptive._residual import ResidualStackOptions
 
 _PACKAGE = "models.linears.linear_adaptive"
-
-
-def _positive(name: str, value: int | float) -> None:
-    if value <= 0:
-        raise ValueError(f"{_PACKAGE}: {name!r} must be positive")
-
-
-def _non_negative(name: str, value: int | float) -> None:
-    if value < 0:
-        raise ValueError(f"{_PACKAGE}: {name!r} must be non-negative")
-
-
-def _probability(name: str, value: float) -> None:
-    if not 0.0 <= value <= 1.0:
-        raise ValueError(f"{_PACKAGE}: {name!r} must be between 0 and 1")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,9 +56,8 @@ class StackOptions:
     bias_flag: bool
 
     def __post_init__(self) -> None:
-        _positive("stack.hidden_dim", self.hidden_dim)
-        _positive("stack.num_layers", self.num_layers)
-        _probability("stack.dropout_probability", self.dropout_probability)
+        SETTINGS_VALIDATION.positive_integer("stack.hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,6 +67,9 @@ class GateOptions:
     activation: ActivationOptions | None
     stack: StackOptions
     shared_config: GateConfig | None = None
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.gate(self.enabled, self.option)
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,8 +81,10 @@ class HaltingOptions:
     stack: StackOptions
 
     def __post_init__(self) -> None:
-        _probability("halting.threshold", self.threshold)
-        _probability("halting.dropout_probability", self.dropout_probability)
+        SETTINGS_VALIDATION.halting_threshold("halting_threshold", self.threshold)
+        SETTINGS_VALIDATION.probability(
+            "halting.dropout_probability", self.dropout_probability
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,12 +98,12 @@ class MemoryOptions:
 
     def __post_init__(self) -> None:
         if self.test_time_training_learning_rate is not None:
-            _positive(
+            SETTINGS_VALIDATION.positive_float(
                 "memory.test_time_training_learning_rate",
                 self.test_time_training_learning_rate,
             )
         if self.test_time_training_num_inner_steps is not None:
-            _positive(
+            SETTINGS_VALIDATION.positive_integer(
                 "memory.test_time_training_num_inner_steps",
                 self.test_time_training_num_inner_steps,
             )
@@ -136,7 +127,7 @@ class RecurrenceOptions:
     halting: HaltingOptions
 
     def __post_init__(self) -> None:
-        _positive("recurrence.max_steps", self.max_steps)
+        SETTINGS_VALIDATION.positive_integer("recurrence.max_steps", self.max_steps)
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,8 +174,10 @@ class AdaptiveWeightOptions:
             raise ValueError(
                 f"{_PACKAGE}: 'weight.option' must be set when weight is enabled"
             )
-        _non_negative("weight.decay_rate", self.decay_rate)
-        _non_negative("weight.decay_warmup_batches", self.decay_warmup_batches)
+        SETTINGS_VALIDATION.nonnegative_float("weight.decay_rate", self.decay_rate)
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "weight.decay_warmup_batches", self.decay_warmup_batches
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,8 +195,10 @@ class AdaptiveBiasOptions:
             raise ValueError(
                 f"{_PACKAGE}: 'bias.option' must be set when bias is enabled"
             )
-        _non_negative("bias.decay_rate", self.decay_rate)
-        _non_negative("bias.decay_warmup_batches", self.decay_warmup_batches)
+        SETTINGS_VALIDATION.nonnegative_float("bias.decay_rate", self.decay_rate)
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "bias.decay_warmup_batches", self.decay_warmup_batches
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,10 +230,22 @@ class AdaptiveMaskOptions:
             raise ValueError(
                 f"{_PACKAGE}: 'mask.row_mask_option' must be set when mask is enabled"
             )
-        _probability("mask.threshold", self.threshold)
-        _probability("mask.floor", self.floor)
-        _positive("mask.surrogate_scale", self.surrogate_scale)
-        _positive("mask.transition_width", self.transition_width)
+        SETTINGS_VALIDATION.probability("mask.threshold", self.threshold)
+        SETTINGS_VALIDATION.probability("mask.floor", self.floor)
+        SETTINGS_VALIDATION.positive_float("mask.surrogate_scale", self.surrogate_scale)
+        SETTINGS_VALIDATION.positive_float(
+            "mask.transition_width", self.transition_width
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionMaskOptions:
+    row_mask_option: type[AxisMaskConfig] | None
+    dimension_option: MaskDimensionOptions
+    threshold: float
+    surrogate_scale: float
+    floor: float
+    transition_width: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,20 +277,41 @@ class AdaptiveProjectionOptions:
     weight_normalization_learnable_scale_flag: bool = False
 
     def __post_init__(self) -> None:
-        _non_negative("projection.weight_decay_rate", self.weight_decay_rate)
-        _non_negative(
+        SETTINGS_VALIDATION.nonnegative_float(
+            "projection.weight_decay_rate", self.weight_decay_rate
+        )
+        SETTINGS_VALIDATION.nonnegative_integer(
             "projection.weight_decay_warmup_batches",
             self.weight_decay_warmup_batches,
         )
-        _non_negative("projection.bias_decay_rate", self.bias_decay_rate)
-        _non_negative(
+        SETTINGS_VALIDATION.nonnegative_float(
+            "projection.bias_decay_rate", self.bias_decay_rate
+        )
+        SETTINGS_VALIDATION.nonnegative_integer(
             "projection.bias_decay_warmup_batches",
             self.bias_decay_warmup_batches,
         )
-        _probability("projection.mask_threshold", self.mask_threshold)
-        _probability("projection.mask_floor", self.mask_floor)
-        _positive("projection.mask_surrogate_scale", self.mask_surrogate_scale)
-        _positive("projection.mask_transition_width", self.mask_transition_width)
+        SETTINGS_VALIDATION.probability(
+            "projection.mask_threshold", self.mask_threshold
+        )
+        SETTINGS_VALIDATION.probability("projection.mask_floor", self.mask_floor)
+        SETTINGS_VALIDATION.positive_float(
+            "projection.mask_surrogate_scale", self.mask_surrogate_scale
+        )
+        SETTINGS_VALIDATION.positive_float(
+            "projection.mask_transition_width", self.mask_transition_width
+        )
+
+    @property
+    def mask(self) -> ProjectionMaskOptions:
+        return ProjectionMaskOptions(
+            row_mask_option=self.row_mask_option,
+            dimension_option=self.mask_dimension_option,
+            threshold=self.mask_threshold,
+            surrogate_scale=self.mask_surrogate_scale,
+            floor=self.mask_floor,
+            transition_width=self.mask_transition_width,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -315,13 +343,25 @@ class RuntimeOptions:
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
 
     def __post_init__(self) -> None:
-        _positive("batch_size", self.batch_size)
-        _positive("learning_rate", self.learning_rate)
-        _positive("input_dim", self.input_dim)
-        _positive("hidden_dim", self.hidden_dim)
-        _positive("output_dim", self.output_dim)
-        if self.gate.enabled and self.gate.shared_config is not None:
-            raise ValueError(
-                f"{_PACKAGE}: enabled gate and shared gate config are mutually "
-                "exclusive"
-            )
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.shared_gate(self.gate.enabled, self.gate.shared_config)
+
+
+class PresetValues(TypedDict, total=False):
+    bias_option: type[DynamicBiasConfig] | None
+    diagonal_option: type[DynamicDiagonalConfig] | None
+    generator_depth: int
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
+    row_mask_option: type[AxisMaskConfig] | None
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_residual_connection_option: type[ResidualConfig] | None
+    weight_decay_rate: float
+    weight_decay_schedule: WeightDecayScheduleOptions
+    weight_decay_warmup_batches: int
+    weight_normalization_option: WeightNormalizationOptions
+    weight_option: type[DynamicWeightConfig] | None

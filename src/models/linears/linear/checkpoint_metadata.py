@@ -2,82 +2,90 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any
+from dataclasses import dataclass, field
 
 TensorShape = tuple[int, ...]
 
-_DIRECT_LAYER_WEIGHT = re.compile(
-    r"^main_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
+_LAYER_WEIGHT = re.compile(
+    r"main_model\.(?P<recurrent>(?:step\.)?block_model\.)?"
+    r"layers\.(?P<index>\d+)\.model\.weight_params"
 )
-_RECURRENT_LAYER_WEIGHT = re.compile(
-    r"^main_model\.(?:step\.)?block_model\.layers\.(?P<index>\d+)\.model\.weight_params$"
-)
-
-
-def _matrix(shape: TensorShape | None) -> tuple[int, int] | None:
-    if shape is None or len(shape) != 2:
-        return None
-    return shape[0], shape[1]
-
-
-def _layer_indices(
-    tensor_shapes: Mapping[str, TensorShape],
-    pattern: re.Pattern[str],
-) -> list[int]:
-    return sorted(
-        {
-            int(match.group("index"))
-            for key in tensor_shapes
-            if (match := pattern.fullmatch(key)) is not None
-        }
-    )
-
-
-def _layer_shapes(
-    tensor_shapes: Mapping[str, TensorShape],
-    pattern: re.Pattern[str],
-) -> list[tuple[int, int]]:
-    indexed: list[tuple[int, tuple[int, int]]] = []
-    for key, shape in tensor_shapes.items():
-        match = pattern.fullmatch(key)
-        matrix = _matrix(shape)
-        if match is not None and matrix is not None:
-            indexed.append((int(match.group("index")), matrix))
-    return [shape for _index, shape in sorted(indexed)]
 
 
 def checkpoint_config_overrides(
     tensor_shapes: Mapping[str, TensorShape],
-) -> Mapping[str, Any]:
+) -> dict[str, int]:
     """Recover the stable Linear package dimensions from its state-dict layout."""
 
-    overrides: dict[str, Any] = {}
-    input_weight = _matrix(tensor_shapes.get("input_model.model.weight_params"))
-    output_weight = _matrix(tensor_shapes.get("output_model.model.weight_params"))
-    if input_weight is not None:
-        overrides["input_dim"] = input_weight[0]
-    if output_weight is not None:
-        overrides["output_dim"] = output_weight[1]
-
-    hidden_candidates: list[int] = []
-    if input_weight is not None:
-        hidden_candidates.append(input_weight[1])
-    if output_weight is not None:
-        hidden_candidates.append(output_weight[0])
-    layer_shapes = _layer_shapes(tensor_shapes, _DIRECT_LAYER_WEIGHT)
-    if not layer_shapes:
-        layer_shapes = _layer_shapes(tensor_shapes, _RECURRENT_LAYER_WEIGHT)
-    for input_dim, output_dim in layer_shapes:
-        hidden_candidates.extend((input_dim, output_dim))
-    if hidden_candidates and len(set(hidden_candidates)) == 1:
-        overrides["hidden_dim"] = hidden_candidates[0]
-
-    indices = _layer_indices(tensor_shapes, _DIRECT_LAYER_WEIGHT)
-    if not indices:
-        indices = _layer_indices(tensor_shapes, _RECURRENT_LAYER_WEIGHT)
-    if indices and indices == list(range(len(indices))):
-        overrides["stack_num_layers"] = len(indices)
+    overrides, projection_widths = _read_projection_dimensions(tensor_shapes)
+    stack = _read_stack_weights(tensor_shapes)
+    _add_hidden_dimension(overrides, projection_widths, stack.matrix_dimensions)
+    _add_stack_layer_count(overrides, stack.index_labels)
     return overrides
+
+
+def _read_projection_dimensions(
+    tensor_shapes: Mapping[str, TensorShape],
+) -> tuple[dict[str, int], set[int]]:
+    overrides: dict[str, int] = {}
+    hidden_widths: set[int] = set()
+    input_weight = _matrix_shape(tensor_shapes.get("input_model.model.weight_params"))
+    if input_weight is not None:
+        input_dim, hidden_dim = input_weight
+        overrides["input_dim"] = input_dim
+        hidden_widths.add(hidden_dim)
+
+    output_weight = _matrix_shape(tensor_shapes.get("output_model.model.weight_params"))
+    if output_weight is not None:
+        hidden_dim, output_dim = output_weight
+        overrides["output_dim"] = output_dim
+        hidden_widths.add(hidden_dim)
+    return overrides, hidden_widths
+
+
+@dataclass
+class _StackWeights:
+    index_labels: set[str] = field(default_factory=set[str])
+    matrix_dimensions: set[int] = field(default_factory=set[int])
+
+
+def _read_stack_weights(tensor_shapes: Mapping[str, TensorShape]) -> _StackWeights:
+    direct = _StackWeights()
+    recurrent = _StackWeights()
+    for name, shape in tensor_shapes.items():
+        match = _LAYER_WEIGHT.fullmatch(name)
+        if match is None:
+            continue
+        stack = recurrent if match["recurrent"] else direct
+        stack.index_labels.add(match["index"])
+        matrix = _matrix_shape(shape)
+        if matrix is not None:
+            stack.matrix_dimensions.update(matrix)
+    return _StackWeights(
+        index_labels=direct.index_labels or recurrent.index_labels,
+        matrix_dimensions=direct.matrix_dimensions or recurrent.matrix_dimensions,
+    )
+
+
+def _add_hidden_dimension(
+    overrides: dict[str, int], projection_widths: set[int], stack_widths: set[int]
+) -> None:
+    widths = projection_widths | stack_widths
+    if len(widths) == 1:
+        overrides["hidden_dim"] = widths.pop()
+
+
+def _add_stack_layer_count(overrides: dict[str, int], index_labels: set[str]) -> None:
+    indices = {int(label) for label in index_labels}
+    layer_count = len(indices)
+    if layer_count and indices == set(range(layer_count)):
+        overrides["stack_num_layers"] = layer_count
+
+
+def _matrix_shape(shape: TensorShape | None) -> tuple[int, int] | None:
+    if shape is None or len(shape) != 2:
+        return None
+    return shape[0], shape[1]
 
 
 __all__ = ["checkpoint_config_overrides"]
