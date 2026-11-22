@@ -135,6 +135,12 @@ def _package_module(package) -> str:
     return f"models.{package.identity.model_type}.{package.identity.model}"
 
 
+_MODEL_FAMILIES = frozenset(
+    _package_module(entry).rsplit(".", 1)[0] for entry in MODEL_CATALOG.values()
+)
+_MODEL_NAMESPACES = _MODEL_FAMILIES | {"models"}
+
+
 def _module_name(path: Path) -> str:
     relative = path.relative_to(SOURCE_ROOT).with_suffix("")
     parts = list(relative.parts)
@@ -158,18 +164,31 @@ def _imported_modules(path: Path) -> list[tuple[int, str]]:
             continue
         if not isinstance(node, ast.ImportFrom):
             continue
+        module = node.module or ""
         if node.level:
-            relative = "." * node.level + (node.module or "")
-            imported.append((node.lineno, resolve_name(relative, package)))
-        elif node.module:
-            imported.append((node.lineno, node.module))
+            module = resolve_name("." * node.level + module, package)
+        if module in _MODEL_NAMESPACES:
+            imported.extend(
+                (node.lineno, f"{module}.{alias.name}") for alias in node.names
+            )
+        else:
+            imported.append((node.lineno, module))
     return imported
 
 
-def _is_allowed(package: str, imported: str) -> bool:
-    if imported == package or imported.startswith(package + "."):
+def _is_allowed(owner: str, imported: str) -> bool:
+    if owner not in _MODEL_NAMESPACES and (
+        imported == owner or imported.startswith(owner + ".")
+    ):
         return True
-    if imported == "emperor" or imported.startswith("emperor."):
+    if imported.startswith("models._"):
+        return True
+    parts = imported.split(".")
+    if (
+        len(parts) >= 3
+        and ".".join(parts[:2]) in _MODEL_FAMILIES
+        and parts[2].startswith("_")
+    ):
         return True
     return any(
         imported == allowed or imported.startswith(allowed + ".")
@@ -259,7 +278,13 @@ class TestModelPackageIsolation(unittest.TestCase):
             "boundary, not importable Model Packages.",
         )
 
-    def test_catalog_packages_have_no_construction_imports_outside_themselves(self):
+    def test_shared_helpers_can_be_reused_across_model_families(self):
+        owner = "models.vit.linear"
+        self.assertTrue(_is_allowed(owner, "models._adaptive_linear_template"))
+        self.assertTrue(_is_allowed(owner, "models.neuron._hidden_block"))
+        self.assertFalse(_is_allowed(owner, "models.neuron.linear._hidden_block"))
+
+    def test_catalog_packages_only_use_their_own_or_shared_model_modules(self):
         violations = []
         for entry in MODEL_CATALOG.values():
             package = _package_module(entry)
@@ -274,6 +299,21 @@ class TestModelPackageIsolation(unittest.TestCase):
                         f"{path.relative_to(PROJECT_ROOT)}:{line}: {imported}"
                     )
         self.assertEqual(violations, [], "\n" + "\n".join(violations))
+
+    def test_shared_model_implementations_are_independent_of_concrete_packages(self):
+        violations = []
+        for namespace in sorted(_MODEL_NAMESPACES):
+            root = SOURCE_ROOT.joinpath(*namespace.split("."))
+            for path in sorted(root.rglob("*.py")):
+                if not path.relative_to(root).parts[0].startswith("_"):
+                    continue
+                owner = _module_name(path)
+                for line, imported in _imported_modules(path):
+                    if imported.startswith("models.") and not _is_allowed(
+                        owner, imported
+                    ):
+                        violations.append(f"{owner}:{line}: {imported}")
+        self.assertEqual(violations, [])
 
     def test_importing_one_catalog_package_does_not_load_another(self):
         packages = sorted({_package_module(entry) for entry in MODEL_CATALOG.values()})
