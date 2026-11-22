@@ -86,19 +86,20 @@ def build_parametric_stack_config(
         sampler_config=sampler_config,
         adaptive_augmentation_config=adaptive_augmentation_config,
     )
+    residual_config = build_residual_config(
+        stack_options.residual_connection_option,
+        stack_options.residual_model_flag,
+        residual_stack_options,
+        residual_block_size=stack_options.residual_block_size,
+        residual_rms_norm_epsilon=stack_options.residual_rms_norm_epsilon,
+        selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
+        model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
+    )
     layer_config = ParametricLayerHandlerConfig(
         input_dim=input_dim,
         output_dim=output_dim,
         activation=stack_options.activation,
-        residual_config=build_residual_config(
-            stack_options.residual_connection_option,
-            stack_options.residual_model_flag,
-            residual_stack_options,
-            residual_block_size=stack_options.residual_block_size,
-            residual_rms_norm_epsilon=stack_options.residual_rms_norm_epsilon,
-            selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
-            model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
-        ),
+        residual_config=residual_config,
         dropout_probability=stack_options.dropout_probability,
         layer_norm_position=LayerNormPositionOptions.DISABLED,
         normalization=NormalizationOptions.RMS_NORM,

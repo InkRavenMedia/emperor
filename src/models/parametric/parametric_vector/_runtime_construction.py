@@ -68,9 +68,13 @@ def _probability(
     *,
     include_one: bool,
 ) -> None:
-    upper_bound_is_valid = value <= 1.0 if include_one else value < 1.0
+    if include_one:
+        upper_bound_is_valid = value <= 1.0
+        interval = "[0.0, 1.0]"
+    else:
+        upper_bound_is_valid = value < 1.0
+        interval = "[0.0, 1.0)"
     if not math.isfinite(value) or value < 0.0 or not upper_bound_is_valid:
-        interval = "[0.0, 1.0]" if include_one else "[0.0, 1.0)"
         raise ValueError(
             f"{_PACKAGE_NAME}: {key!r} must be in {interval}; got {value!r}"
         )
