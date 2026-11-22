@@ -94,30 +94,33 @@ def build_sequence_expansion_config(
     config = options.sequence_expansion_config
     if config is not None and not isinstance(config, SequenceExpansionConfig):
         raise TypeError("sequence_expansion_config must be SequenceExpansionConfig.")
-    config = deepcopy(config) if config is not None else SequenceExpansionConfig()
+    if config is None:
+        config = SequenceExpansionConfig()
+    else:
+        config = deepcopy(config)
     max_new_tokens = options.sequence_expansion_max_new_tokens
-    model_config = options.sequence_expansion_model_config
-    if model_config is None:
-        model_config = config.model_config
-    else:
-        model_config = deepcopy(model_config)
-    position_config = options.sequence_expansion_positional_embedding_config
-    if position_config is None:
-        position_config = config.positional_embedding_config
-    else:
-        position_config = deepcopy(position_config)
+    model_config = config.model_config
+    model_override = options.sequence_expansion_model_config
+    if model_override is not None:
+        model_config = deepcopy(model_override)
+    position_config = config.positional_embedding_config
+    position_override = options.sequence_expansion_positional_embedding_config
+    if position_override is not None:
+        position_config = deepcopy(position_override)
+    expansion_model_config = resolve_sequence_expansion_model(
+        model_config, options, embedding_dim
+    )
+    positional_embedding_config = resolve_sequence_expansion_positions(
+        position_config, options
+    )
+    if max_new_tokens is None:
+        max_new_tokens = config.max_new_tokens
     resolved = replace(
         config,
         embedding_dim=embedding_dim,
-        max_new_tokens=config.max_new_tokens
-        if max_new_tokens is None
-        else max_new_tokens,
-        model_config=resolve_sequence_expansion_model(
-            model_config, options, embedding_dim
-        ),
-        positional_embedding_config=resolve_sequence_expansion_positions(
-            position_config, options
-        ),
+        max_new_tokens=max_new_tokens,
+        model_config=expansion_model_config,
+        positional_embedding_config=positional_embedding_config,
     )
     SequenceExpansion.VALIDATOR.validate_config(resolved)
     return resolved
@@ -177,6 +180,8 @@ def _expansion_schedule(config: ConfigBase) -> tuple[int, list[ConfigBase]]:
         config, (TransformerEncoderBlockLayerConfig, TransformerDecoderBlockLayerConfig)
     ):
         expansion = config.sequence_expansion_config
-        growth = 0 if expansion is None else expansion.max_new_tokens
+        growth = 0
+        if expansion is not None:
+            growth = expansion.max_new_tokens
         return growth, [config.layer_model_config]
     return 0, []
