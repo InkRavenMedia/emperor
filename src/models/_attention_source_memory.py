@@ -120,7 +120,9 @@ def _copy_memory_config(
         raise TypeError(
             "source_memory_config must be an AttentionSourceMemoryConfig instance."
         )
-    return deepcopy(config) if config is not None else AttentionSourceMemoryConfig()
+    if config is None:
+        return AttentionSourceMemoryConfig()
+    return deepcopy(config)
 
 
 def _resolve_grouping_config(
@@ -138,7 +140,9 @@ def _resolve_grouping_config(
             )
         if grouping_config is None or type(grouping_config) is not grouping_method:
             grouping_config = grouping_method()
-    return SumGroupingConfig() if grouping_config is None else grouping_config
+    if grouping_config is None:
+        return SumGroupingConfig()
+    return grouping_config
 
 
 def _apply_grouping_overrides(
