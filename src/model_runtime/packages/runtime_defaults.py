@@ -117,9 +117,15 @@ class RuntimeDefaultsSpec:
     def ordered_search_items(self) -> tuple[tuple[str, tuple[Any, ...]], ...]:
         """Return declared search axes in stable source order."""
 
+        def order(key: str) -> tuple[int, ...]:
+            entry = self.search_metadata.get(key, {})
+            if "line" in entry:
+                return (int(entry["line"]),)
+            return tuple(entry.get("sortKey", [10**9]))
+
         ordered_keys = sorted(
             self.search_values,
-            key=lambda key: int(self.search_metadata.get(key, {}).get("line", 10**9)),
+            key=order,
         )
         return tuple((key, self.search_values[key]) for key in ordered_keys)
 

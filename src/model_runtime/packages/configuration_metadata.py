@@ -2,30 +2,84 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import inspect
 import re
-from collections.abc import Sequence
+import sys
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
-from typing import Any, cast
+from typing import Annotated, Any, cast, get_args, get_origin
+
+from model_runtime.packages.annotations import (
+    Section,
+    resolved_annotations,
+    snapshot_section_path,
+)
 
 _RuntimeDefaultsField = tuple[str, int, tuple[int, ...]]
 _RuntimeDefaultsFieldInput = tuple[str, int, Sequence[int]]
 
 
-def _snapshot_section_path(path: object) -> tuple[str, ...]:
-    if isinstance(path, (str, bytes)) or not isinstance(path, Sequence):
-        raise ValueError("Runtime Defaults metadata section path must be a sequence.")
-    snapshot = tuple(cast(Sequence[object], path))
-    if any(
-        not isinstance(item, str) or not item or item != item.strip()
-        for item in snapshot
-    ):
-        raise ValueError(
-            "Runtime Defaults metadata section path items must be non-empty "
-            "trimmed strings."
-        )
-    return cast(tuple[str, ...], snapshot)
+def _field_section(key: str, hint: Any) -> Section | None:
+    if get_origin(hint) is not Annotated:
+        return None
+    sections = [marker for marker in get_args(hint)[1:] if isinstance(marker, Section)]
+    if len(sections) > 1:
+        raise ValueError(f"Multiple inspection sections declared for {key!r}.")
+    return next(iter(sections), None)
+
+
+def declares_sections(config: ModuleType) -> bool:
+    annotations = inspect.get_annotations(config)
+    if any(_field_section(key, hint) for key, hint in annotations.items()):
+        return True
+    if not any(isinstance(hint, str) for hint in annotations.values()):
+        return False
+    try:
+        annotations = inspect.get_annotations(config, eval_str=True)
+    except (NameError, AttributeError, TypeError):
+        # Older configurations only need source scanning and may have type-only imports.
+        return False
+    return any(_field_section(key, hint) for key, hint in annotations.items())
+
+
+def annotated_configuration_metadata(
+    config: ModuleType, *, source_lines: Mapping[str, int] | None = None
+) -> dict[str, dict[str, Any]]:
+    metadata: dict[str, dict[str, Any]] = {}
+    for key, annotation in resolved_annotations(config).items():
+        section = _field_section(key, annotation)
+        if section is None:
+            continue
+        entry: dict[str, Any] = {
+            "section": section.path[-1],
+            "sectionPath": list(section.path),
+            "sortKey": [len(metadata)],
+        }
+        if source_lines is not None and key in source_lines:
+            line = source_lines[key]
+            entry.update(line=line, sortKey=[line])
+        metadata[key] = entry
+    _add_field_aliases(config, metadata)
+    for key in metadata:
+        if key not in vars(config):
+            raise ValueError(f"Missing default value for annotated field {key!r}.")
+    return metadata
+
+
+def search_axis_metadata(source: ModuleType) -> dict[str, dict[str, Any]]:
+    annotations = resolved_annotations(source)
+    metadata: dict[str, dict[str, Any]] = {}
+    for key in dict.fromkeys((*annotations, *vars(source))):
+        if not key.startswith("SEARCH_SPACE_"):
+            continue
+        entry: dict[str, Any] = {"sortKey": [len(metadata)]}
+        section = _field_section(key, annotations.get(key))
+        if section is not None:
+            entry.update(section=section.path[-1], sectionPath=list(section.path))
+        metadata[key] = entry
+    return metadata
 
 
 def _snapshot_metadata_field(field: object) -> _RuntimeDefaultsField:
@@ -82,7 +136,7 @@ class RuntimeDefaultsSection:
         snapshot = _snapshot_metadata_fields(fields)
         if not snapshot:
             raise ValueError("Runtime Defaults metadata sections require fields.")
-        object.__setattr__(self, "path", _snapshot_section_path(path))
+        object.__setattr__(self, "path", snapshot_section_path(path))
         object.__setattr__(self, "fields", snapshot)
 
 
@@ -221,12 +275,19 @@ def _config_module_alias_imports(
     return module_names
 
 
-def _module_path(module_name: str) -> Path | None:
-    spec = importlib.util.find_spec(module_name)
-    origin = getattr(spec, "origin", None) if spec is not None else None
-    if not origin or origin in {"built-in", "frozen"}:
-        return None
-    return Path(origin)
+def _module_source(module_name: str, module: ModuleType | None) -> str:
+    spec = (
+        module.__spec__ if module is not None else importlib.util.find_spec(module_name)
+    )
+    origin = getattr(module, "__file__", None) or getattr(spec, "origin", None)
+    if origin:
+        path = Path(origin)
+        if path.suffix in {".py", ".pyw"}:
+            try:
+                return path.read_text(encoding="utf-8")
+            except OSError:
+                pass
+    return ""
 
 
 def configuration_field_metadata(
@@ -238,7 +299,14 @@ def configuration_field_metadata(
         config_module.__name__,
         include_search_space=include_search_space,
         visited=set(),
+        module=config_module,
     )
+    return _add_field_aliases(config_module, metadata)
+
+
+def _add_field_aliases(
+    config_module: ModuleType, metadata: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, Any]]:
     aliases = getattr(config_module, "_CONFIG_FIELD_METADATA_ALIASES", {})
     if not isinstance(aliases, dict):
         return metadata
@@ -388,26 +456,38 @@ def _configuration_field_metadata_for_module(
     *,
     include_search_space: bool,
     visited: set[str],
+    module: ModuleType | None = None,
 ) -> dict[str, dict[str, Any]]:
     if module_name in visited:
         return {}
     visited.add(module_name)
 
-    config_path = _module_path(module_name)
-    if config_path is None:
-        return {}
+    if module is None:
+        module = sys.modules.get(module_name)
+    source = _module_source(module_name, module)
     try:
-        source = config_path.read_text(encoding="utf-8")
         tree = ast.parse(source)
-    except (OSError, SyntaxError):
+    except SyntaxError:
         return {}
-    return _ModuleMetadataParser(
+    typed = {}
+    if module is not None and declares_sections(module):
+        source_lines = {
+            key: node.lineno
+            for node in tree.body
+            if (key := _assignment_key(node)) is not None
+        }
+        typed = annotated_configuration_metadata(module, source_lines=source_lines)
+        if not include_search_space:
+            return typed
+    metadata = _ModuleMetadataParser(
         module_name,
         include_search_space,
         visited,
         source,
         tree,
     ).parse()
+    metadata.update(typed)
+    return metadata
 
 
-__all__ = ["RuntimeDefaultsSection", "configuration_field_metadata"]
+__all__ = ["RuntimeDefaultsSection", "Section", "configuration_field_metadata"]

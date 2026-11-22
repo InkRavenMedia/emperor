@@ -7,7 +7,7 @@ from dataclasses import FrozenInstanceError
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import ModuleType
-from typing import Any, cast
+from typing import Annotated, Any, cast
 from unittest.mock import patch
 
 from model_runtime.inspection import (
@@ -250,7 +250,43 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
                     source_search,
                 )
 
-    def test_declarations_are_authoritative_and_all_or_none(self) -> None:
+    def test_annotated_owner_places_generated_bert_controls_in_catalog_order(
+        self,
+    ) -> None:
+        from model_runtime.packages.configuration_metadata import (
+            Section,
+            annotated_configuration_metadata,
+        )
+        from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
+        from models.bert.linear import config as bert
+
+        section = Section(("Feed-Forward Stack Options",))
+        config = ModuleType("test_annotated_bert")
+        config.FF_NUM_LAYERS = bert.FF_NUM_LAYERS
+        config.SOFT_MOE_CONFIG = bert.SOFT_MOE_CONFIG
+        config.FF_BIAS_FLAG = bert.FF_BIAS_FLAG
+        config.__annotations__ = {
+            "FF_NUM_LAYERS": Annotated[int, section],
+            "SOFT_MOE_CONFIG": Annotated[bert.SoftMoEConfig | None, section],
+            "FF_BIAS_FLAG": Annotated[bool, section],
+        }
+        declare_soft_moe_runtime_defaults(vars(config))
+        actual = annotated_configuration_metadata(config)
+        package = model_package("bert/linear")
+        assert package is not None
+        reference = package.runtime_defaults_spec.configuration_metadata
+        keys = [
+            "FF_NUM_LAYERS",
+            "SOFT_MOE_CONFIG",
+            *config._CONFIG_FIELD_METADATA_ALIASES,
+            "FF_BIAS_FLAG",
+        ]
+        self.assertEqual(sorted(actual, key=lambda key: actual[key]["sortKey"]), keys)
+        self.assertEqual(sorted(keys, key=lambda key: reference[key]["sortKey"]), keys)
+        for key in keys:
+            self.assertEqual(actual[key]["sectionPath"], reference[key]["sectionPath"])
+
+    def test_explicit_declarations_are_authoritative(self) -> None:
         from model_runtime.packages import RuntimeDefaultsSection
 
         base = _linears_linear()
@@ -265,19 +301,17 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             monitors_for_model,
             search,
         )
-        with self.assertRaisesRegex(
-            TypeError,
-            "search_metadata_sections",
-        ):
-            ModelMetadata(
-                *common,
-                configuration_metadata_sections=(
-                    RuntimeDefaultsSection(
-                        ("General",),
-                        (("VALUE", 1, (1,)),),
-                    ),
-                ),
-            )
+        mixed = ModelMetadata(
+            *common,
+            configuration_metadata_sections=(
+                RuntimeDefaultsSection(("General",), (("VALUE", 1, (1,)),)),
+            ),
+        )
+        package = ModelPackage(base.identity, _MetadataAdapter(base, mixed))
+        self.assertEqual(
+            package.runtime_defaults_spec.ordered_search_items(),
+            (("SEARCH_SPACE_VALUE", (1,)),),
+        )
 
         metadata = ModelMetadata(
             *common,
@@ -297,6 +331,23 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         with self.assertRaises(InspectionError) as caught:
             configuration_schema(package)
         self.assertIsInstance(caught.exception.__cause__, ValueError)
+
+    def test_inferred_search_axis_requires_a_list_of_values(self) -> None:
+        from model_runtime.packages import RuntimeDefaultsSection
+
+        config = RuntimeDefaultsSection(("General",), (("VALUE", 1, (1,)),))
+        for members in (
+            {"SEARCH_SPACE_VALUE": 31},
+            {"__annotations__": {"SEARCH_SPACE_VALUE": list[int]}},
+        ):
+            with self.subTest(members=members):
+                package = _package_with_declarations(
+                    (config,), None, search_members=members
+                )
+                with self.assertRaisesRegex(
+                    RuntimeDefaultsError, "without values: SEARCH_SPACE_VALUE"
+                ):
+                    _ = package.runtime_defaults_spec
 
     def test_declaration_inputs_and_projections_are_defensive(self) -> None:
         from model_runtime.packages import RuntimeDefaultsSection
@@ -475,7 +526,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             ("VALUE", "PRESENTATION_ONLY"),
         )
 
-    def test_public_constructor_requires_both_metadata_declarations(self) -> None:
+    def test_public_constructor_supports_optional_metadata_declarations(self) -> None:
         from model_runtime.packages import RuntimeDefaultsSection
         from model_runtime.packages.configuration_metadata import (
             RuntimeDefaultsSection as OwnerRuntimeDefaultsSection,
@@ -501,7 +552,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             )
         for name in tuple(parameters)[5:]:
             self.assertIs(parameters[name].kind, inspect.Parameter.KEYWORD_ONLY)
-            self.assertIs(parameters[name].default, inspect.Parameter.empty)
+            self.assertIsNone(parameters[name].default)
 
     def test_authoring_generator_bootstraps_a_missing_declaration(self) -> None:
         from tools import generate_model_package_inspection_metadata as generator
