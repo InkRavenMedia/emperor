@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from ._runtime_construction import ParametricVectorConstructionOptions
 
 
+from models.parametric.parametric_vector import SETTINGS_VALIDATION
+
 _ROLE_OPTION_KEYS = frozenset(
     {
         "stack_options",
@@ -50,6 +52,10 @@ class ParametricStackOptions:
     last_layer_bias_option: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT
     apply_output_postprocessing_flag: bool = True
     bias_flag: bool = True
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("stack_hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
 
 
 @dataclass(frozen=True)

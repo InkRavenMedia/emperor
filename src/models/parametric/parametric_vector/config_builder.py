@@ -21,15 +21,23 @@ class ParametricVectorConfigBuilder:
     """Build a vector ModelConfig from one resolved package Parameter Object."""
 
     def __init__(self, *, runtime: RuntimeOptions = DEFAULT_RUNTIME) -> None:
+        self.runtime = runtime
+
+    @property
+    def runtime(self) -> RuntimeOptions:
+        return self._runtime
+
+    @runtime.setter
+    def runtime(self, runtime: RuntimeOptions) -> None:
         if type(runtime) is not RuntimeOptions:
             raise TypeError(
                 "models.parametric.parametric_vector "
                 "ParametricVectorConfigBuilder runtime must be RuntimeOptions"
             )
-        self.runtime = runtime
         self._options: ParametricVectorConstructionOptions = (
             runtime.construction_options()
         )
+        self._runtime = runtime
 
     def build(self) -> ModelConfig:
         options = self._options
@@ -49,17 +57,18 @@ class ParametricVectorConfigBuilder:
         output_model_config = build_linear_layer_config(
             activation=ActivationOptions.DISABLED,
         )
+        experiment_config = ExperimentConfig(
+            input_model_config=input_model_config,
+            model_config=model_config,
+            output_model_config=output_model_config,
+        )
         return ModelConfig(
             batch_size=options.batch_size,
             input_dim=options.input_dim,
             learning_rate=options.learning_rate,
             hidden_dim=options.hidden_dim,
             output_dim=options.output_dim,
-            experiment_config=ExperimentConfig(
-                input_model_config=input_model_config,
-                model_config=model_config,
-                output_model_config=output_model_config,
-            ),
+            experiment_config=experiment_config,
         )
 
 
