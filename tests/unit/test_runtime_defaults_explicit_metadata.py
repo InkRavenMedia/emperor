@@ -15,6 +15,7 @@ from model_runtime.inspection import (
     configuration_schema,
     search_space_schema,
 )
+from model_runtime.monitoring_catalog import monitors_for_model
 from model_runtime.packages import (
     ModelMetadata,
     ModelPackage,
@@ -24,7 +25,6 @@ from model_runtime.packages import (
 from model_runtime.runs import PlanningBudget, RunRequest, SearchSpec, plan_runs
 from models.catalog import discover_model_packages, model_package
 from models.linears.linear import dataset_options as linears_linear_datasets
-from models.linears.linear import monitor_options as linears_linear_monitors
 
 
 class _MetadataAdapter:
@@ -108,7 +108,7 @@ def _source_less_package() -> ModelPackage:
         base.identity,
         config,
         linears_linear_datasets,
-        linears_linear_monitors,
+        monitors_for_model,
         search,
         configuration_metadata_sections=(
             RuntimeDefaultsSection(
@@ -146,7 +146,7 @@ def _package_with_declarations(
         base.identity,
         config,
         linears_linear_datasets,
-        linears_linear_monitors,
+        monitors_for_model,
         search,
         configuration_metadata_sections=configuration_sections,
         search_metadata_sections=search_sections,
@@ -262,7 +262,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             base.identity,
             config,
             linears_linear_datasets,
-            linears_linear_monitors,
+            monitors_for_model,
             search,
         )
         with self.assertRaisesRegex(
@@ -327,7 +327,7 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
             base.identity,
             config,
             linears_linear_datasets,
-            linears_linear_monitors,
+            monitors_for_model,
             search,
             configuration_metadata_sections=config_section,
             search_metadata_sections=search_section,
