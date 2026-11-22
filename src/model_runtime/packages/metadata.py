@@ -15,7 +15,11 @@ from model_runtime.packages.configuration import (
     iter_supported_config_keys,
     normalize_key,
 )
-from model_runtime.packages.configuration_metadata import RuntimeDefaultsSection
+from model_runtime.packages.configuration_metadata import (
+    RuntimeDefaultsSection,
+    annotated_configuration_metadata,
+    search_axis_metadata,
+)
 from model_runtime.packages.identity import ModelIdentity
 from model_runtime.packages.runtime_defaults import (
     RuntimeDefaultsError,
@@ -216,17 +220,22 @@ def _declared_metadata_keys(
 
 def _compile_declared_metadata(
     source: ModuleType,
-    sections: Sequence[object],
+    sections: Sequence[object] | None,
     required_keys: Sequence[str],
     *,
     require_section_path: bool,
     exact_keys: bool,
 ) -> dict[str, dict[str, Any]]:
-    metadata = _declared_metadata_keys(
-        source,
-        sections,
-        require_section_path=require_section_path,
-    )
+    if sections is not None:
+        metadata = _declared_metadata_keys(
+            source,
+            sections,
+            require_section_path=require_section_path,
+        )
+    elif require_section_path:
+        metadata = annotated_configuration_metadata(source)
+    else:
+        metadata = search_axis_metadata(source)
     declared = set(metadata)
     required = set(required_keys)
     missing = sorted(required - declared)
@@ -301,10 +310,12 @@ class ModelMetadata:
     _dataset_options_source: ModuleType = field(repr=False)
     _monitor_options_source: _MonitorOptionsSource = field(repr=False)
     _search_space_source: ModuleType = field(repr=False)
-    _configuration_metadata_sections: tuple[RuntimeDefaultsSection, ...] = field(
+    _configuration_metadata_sections: tuple[RuntimeDefaultsSection, ...] | None = field(
         repr=False
     )
-    _search_metadata_sections: tuple[RuntimeDefaultsSection, ...] = field(repr=False)
+    _search_metadata_sections: tuple[RuntimeDefaultsSection, ...] | None = field(
+        repr=False
+    )
     _dataset_options_by_task: Mapping[ExperimentTask, tuple[type, ...]] = field(
         init=False,
         repr=False,
@@ -330,8 +341,8 @@ class ModelMetadata:
         monitor_options_source: _MonitorOptionsSource,
         search_space: ModuleType,
         *,
-        configuration_metadata_sections: Sequence[RuntimeDefaultsSection],
-        search_metadata_sections: Sequence[RuntimeDefaultsSection],
+        configuration_metadata_sections: Sequence[RuntimeDefaultsSection] | None = None,
+        search_metadata_sections: Sequence[RuntimeDefaultsSection] | None = None,
     ) -> None:
         object.__setattr__(self, "identity", identity)
         object.__setattr__(self, "_runtime_defaults_source", runtime_defaults)
@@ -341,12 +352,16 @@ class ModelMetadata:
         object.__setattr__(
             self,
             "_configuration_metadata_sections",
-            tuple(configuration_metadata_sections),
+            None
+            if configuration_metadata_sections is None
+            else tuple(configuration_metadata_sections),
         )
         object.__setattr__(
             self,
             "_search_metadata_sections",
-            tuple(search_metadata_sections),
+            None
+            if search_metadata_sections is None
+            else tuple(search_metadata_sections),
         )
         self.__post_init__()
 
