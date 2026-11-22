@@ -7,30 +7,30 @@ from types import ModuleType
 from typing import Any
 
 import models.vit.expert_linear_adaptive.runtime_options as expert_options
-from models.vit.expert_linear_adaptive import _config_defaults as config_defaults
-from models.vit.expert_linear_adaptive._flat_updates import (
+from models._flat_updates import (
     pop_updates as _pop_updates,
 )
+from models.vit.expert_linear_adaptive import _config_defaults as config_defaults
 
-_SUBMODULE_STACK_FIELD_MAP = {
-    "hidden_dim": "hidden_dim",
-    "num_layers": "num_layers",
-    "last_layer_bias_option": "last_layer_bias_option",
-    "apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
-    "activation": "activation",
-    "layer_norm_position": "layer_norm_position",
-    "normalization": "normalization",
-    "residual_connection_option": "residual_connection_option",
-    "residual_block_size": "residual_block_size",
-    "residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
-    "residual_model_flag": "residual_model_flag",
-    "dropout_probability": "dropout_probability",
-    "bias_flag": "bias_flag",
-}
-_CONTROLLER_STACK_FIELD_MAP = {
-    "independent_flag": "independent_flag",
-    **_SUBMODULE_STACK_FIELD_MAP,
-}
+SUBMODULE_STACK_FIELDS = (
+    "hidden_dim",
+    "num_layers",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "activation",
+    "layer_norm_position",
+    "normalization",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "bias_flag",
+)
+_CONTROLLER_STACK_FIELDS = (
+    "independent_flag",
+    *SUBMODULE_STACK_FIELDS,
+)
 
 
 def _submodule_stack_options_from_kwargs(
@@ -44,12 +44,11 @@ def _submodule_stack_options_from_kwargs(
     )
     updates = _pop_updates(
         kwargs,
-        {
-            f"submodule_stack_{flat_field}": dataclass_field
-            for flat_field, dataclass_field in _SUBMODULE_STACK_FIELD_MAP.items()
-        },
+        {f"submodule_stack_{field}": field for field in SUBMODULE_STACK_FIELDS},
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _role_stack_options_from_kwargs(
@@ -63,14 +62,13 @@ def _role_stack_options_from_kwargs(
     default_overrides: dict[str, Any] | None = None,
 ) -> expert_options.ExpertsSubmoduleStackOptions:
     options = provided or replace(defaults, **default_overrides or {})
-    mapping = {
-        f"{prefix}_{flat_field}": dataclass_field
-        for flat_field, dataclass_field in _SUBMODULE_STACK_FIELD_MAP.items()
-    }
+    mapping = {f"{prefix}_{field}": field for field in SUBMODULE_STACK_FIELDS}
     if extra_mapping:
         mapping.update(extra_mapping)
     updates = _pop_updates(kwargs, mapping)
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _mixture_options_from_kwargs(
@@ -93,7 +91,9 @@ def _mixture_options_from_kwargs(
             "routing_initialization_mode": "routing_initialization_mode",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _sampler_options_from_kwargs(
@@ -117,7 +117,9 @@ def _sampler_options_from_kwargs(
             "sampler_mutual_information_loss_weight": "mutual_information_loss_weight",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _router_options_from_kwargs(
@@ -128,7 +130,9 @@ def _router_options_from_kwargs(
 ) -> expert_options.ExpertsRouterOptions:
     options = provided or config_defaults.experts_router_options(config_module)
     updates = _pop_updates(kwargs, {"router_noisy_topk_flag": "noisy_topk_flag"})
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _controller_stack_source_from_kwargs(
@@ -139,12 +143,11 @@ def _controller_stack_source_from_kwargs(
 ) -> expert_options.ExpertsSubmoduleStackSource:
     updates = _pop_updates(
         kwargs,
-        {
-            f"{prefix}_{flat_field}": dataclass_field
-            for flat_field, dataclass_field in _CONTROLLER_STACK_FIELD_MAP.items()
-        },
+        {f"{prefix}_{field}": field for field in _CONTROLLER_STACK_FIELDS},
     )
-    return replace(provided, **updates) if updates else provided
+    if updates:
+        provided = replace(provided, **updates)
+    return provided
 
 
 def _layer_controller_options_from_kwargs(

@@ -2,20 +2,16 @@ from dataclasses import dataclass, field
 
 import models.vit.linear_adaptive.config as config
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     GroupingConfig,
 )
 from emperor.layers import (
     ActivationOptions,
-    LastLayerBiasOptions,
-    LayerConfig,
-    LayerNormPositionOptions,
-    LayerStackConfig,
-    NormalizationOptions,
-    ResidualConfig,
 )
-from emperor.linears import LinearLayerConfig
+from models._adaptive_attention_backend import (
+    AdaptiveBackendStackFactory,
+    AttentionAugmentationFactory,
+)
 from models.vit.linear_adaptive import _config_defaults as config_defaults
 from models.vit.linear_adaptive._adaptive_hidden_model_config_factory import (
     HiddenModelConfigDependencies,
@@ -33,8 +29,6 @@ from models.vit.linear_adaptive.runtime_options import (
     TransformerEncoderOptions,
 )
 
-from ._residual import ResidualStackOptions, build_residual_config
-
 
 @dataclass(frozen=True)
 class LinearLayerConfigDependencies:
@@ -42,132 +36,20 @@ class LinearLayerConfigDependencies:
     adaptive_augmentation_config: AdaptiveParameterAugmentationConfig | None = None
 
 
-class LinearLayerConfigFactory:
+class LinearLayerConfigFactory(AdaptiveBackendStackFactory):
+    layer_template_type = AdaptiveLinearLayerTemplateConfig
+
     def __init__(self, dependencies: LinearLayerConfigDependencies) -> None:
-        self.encoder_options = (
-            config_defaults.vit_encoder_options(config)
-            if dependencies.encoder_options is None
-            else dependencies.encoder_options
-        )
+        encoder_options = dependencies.encoder_options
+        if encoder_options is None:
+            encoder_options = config_defaults.vit_encoder_options(config)
+        self.encoder_options = encoder_options
         self.hidden_dim = self.encoder_options.hidden_dim
         self.adaptive_augmentation_config = dependencies.adaptive_augmentation_config
 
-    def build_backend_linear_layer_config(
-        self,
-        *,
-        bias_flag: bool,
-    ) -> LinearLayerConfig | AdaptiveLinearLayerConfig:
-        if self.adaptive_augmentation_config is None:
-            return self.build_plain_linear_layer_config(bias_flag=bias_flag)
-        return AdaptiveLinearLayerTemplateConfig(
-            bias_flag=bias_flag,
-            adaptive_augmentation_config=self.adaptive_augmentation_config,
-        )
-
-    def build_plain_linear_layer_config(
-        self,
-        *,
-        bias_flag: bool,
-    ) -> LinearLayerConfig:
-        return LinearLayerConfig(bias_flag=bias_flag)
-
-    def build_backend_linear_stack_config(
-        self,
-        *,
-        num_layers: int,
-        bias_flag: bool,
-        layer_norm_position: LayerNormPositionOptions,
-        normalization: NormalizationOptions = NormalizationOptions.RMS_NORM,
-        dropout_probability: float,
-        input_dim: int | None = None,
-        output_dim: int | None = None,
-        apply_output_postprocessing_flag: bool = True,
-    ) -> LayerStackConfig:
-        return self.build_linear_stack_config(
-            layer_model_config=self.build_backend_linear_layer_config(
-                bias_flag=bias_flag,
-            ),
-            num_layers=num_layers,
-            layer_norm_position=layer_norm_position,
-            normalization=normalization,
-            dropout_probability=dropout_probability,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            apply_output_postprocessing_flag=apply_output_postprocessing_flag,
-        )
-
-    def build_plain_linear_stack_config(
-        self,
-        *,
-        num_layers: int,
-        bias_flag: bool,
-        layer_norm_position: LayerNormPositionOptions,
-        normalization: NormalizationOptions = NormalizationOptions.RMS_NORM,
-        dropout_probability: float,
-        input_dim: int | None = None,
-        output_dim: int | None = None,
-        apply_output_postprocessing_flag: bool = True,
-    ) -> LayerStackConfig:
-        return self.build_linear_stack_config(
-            layer_model_config=self.build_plain_linear_layer_config(
-                bias_flag=bias_flag,
-            ),
-            num_layers=num_layers,
-            layer_norm_position=layer_norm_position,
-            normalization=normalization,
-            dropout_probability=dropout_probability,
-            input_dim=input_dim,
-            output_dim=output_dim,
-            apply_output_postprocessing_flag=apply_output_postprocessing_flag,
-        )
-
-    def build_linear_stack_config(
-        self,
-        *,
-        layer_model_config,
-        num_layers: int,
-        layer_norm_position: LayerNormPositionOptions,
-        normalization: NormalizationOptions = NormalizationOptions.RMS_NORM,
-        dropout_probability: float,
-        input_dim: int | None = None,
-        hidden_dim: int | None = None,
-        output_dim: int | None = None,
-        activation: ActivationOptions | None = None,
-        residual_connection_option: type[ResidualConfig] | None = None,
-        residual_model_flag: bool = False,
-        residual_block_size: int | None = None,
-        residual_rms_norm_epsilon: float | None = None,
-        residual_stack_options: ResidualStackOptions | None = None,
-        last_layer_bias_option: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT,
-        apply_output_postprocessing_flag: bool = True,
-    ) -> LayerStackConfig:
-        layer_config = LayerConfig(
-            activation=(
-                self.encoder_options.activation if activation is None else activation
-            ),
-            layer_norm_position=layer_norm_position,
-            normalization=normalization,
-            residual_config=build_residual_config(
-                residual_connection_option,
-                residual_model_flag,
-                residual_stack_options,
-                residual_block_size=residual_block_size,
-                residual_rms_norm_epsilon=residual_rms_norm_epsilon,
-            ),
-            dropout_probability=dropout_probability,
-            gate_config=None,
-            halting_config=None,
-            layer_model_config=layer_model_config,
-        )
-        return LayerStackConfig(
-            input_dim=input_dim,
-            hidden_dim=self.hidden_dim if hidden_dim is None else hidden_dim,
-            output_dim=output_dim,
-            num_layers=num_layers,
-            last_layer_bias_option=last_layer_bias_option,
-            apply_output_postprocessing_flag=apply_output_postprocessing_flag,
-            layer_config=layer_config,
-        )
+    @property
+    def _default_activation(self) -> ActivationOptions:
+        return self.encoder_options.activation
 
 
 @dataclass(frozen=True)
@@ -182,60 +64,13 @@ class AdaptiveAugmentationDependencies:
     hidden_adaptive_mask_options: HiddenAdaptiveMaskOptions | None
 
 
-class AdaptiveAugmentationConfigFactory:
-    def __init__(self, dependencies: AdaptiveAugmentationDependencies) -> None:
-        self.dependencies = dependencies
-        config_module = config
-        self.adaptive_generator_stack_options = (
-            dependencies.adaptive_generator_stack_options
-            if dependencies.adaptive_generator_stack_options is not None
-            else config_defaults.adaptive_generator_stack_options(config_module)
-        )
-        self.hidden_adaptive_weight_options = (
-            dependencies.hidden_adaptive_weight_options
-            if dependencies.hidden_adaptive_weight_options is not None
-            else config_defaults.hidden_adaptive_weight_options(config_module)
-        )
-        self.grouping_config = dependencies.grouping_config
-        self.hidden_adaptive_bias_options = (
-            dependencies.hidden_adaptive_bias_options
-            if dependencies.hidden_adaptive_bias_options is not None
-            else config_defaults.hidden_adaptive_bias_options(config_module)
-        )
-        self.hidden_adaptive_diagonal_options = (
-            dependencies.hidden_adaptive_diagonal_options
-            if dependencies.hidden_adaptive_diagonal_options is not None
-            else config_defaults.hidden_adaptive_diagonal_options(config_module)
-        )
-        self.hidden_adaptive_mask_options = (
-            dependencies.hidden_adaptive_mask_options
-            if dependencies.hidden_adaptive_mask_options is not None
-            else config_defaults.hidden_adaptive_mask_options(config_module)
-        )
+class AdaptiveAugmentationConfigFactory(
+    AttentionAugmentationFactory[
+        AdaptiveGeneratorStackOptions, HiddenModelConfigDependencies
+    ]
+):
+    hidden_options_type = HiddenModelConfigDependencies
+    hidden_factory_type = HiddenModelConfigFactory
 
-    def build_adaptive_augmentation_config(
-        self,
-    ) -> AdaptiveParameterAugmentationConfig:
-        dependencies = self.dependencies
-        factory = HiddenModelConfigFactory(
-            HiddenModelConfigDependencies(
-                hidden_dim=dependencies.hidden_dim,
-                stack_options=None,
-                submodule_stack_options=None,
-                layer_controller_options=None,
-                dynamic_memory_options=None,
-                recurrent_controller_options=None,
-                grouping_config=self.grouping_config,
-                hidden_adaptive_weight_options=(self.hidden_adaptive_weight_options),
-                hidden_adaptive_bias_options=(self.hidden_adaptive_bias_options),
-                hidden_adaptive_diagonal_options=(
-                    self.hidden_adaptive_diagonal_options
-                ),
-                hidden_adaptive_mask_options=self.hidden_adaptive_mask_options,
-                adaptive_generator_stack_options=(
-                    self.adaptive_generator_stack_options
-                ),
-                output_dim=dependencies.output_dim,
-            )
-        )
-        return factory.adaptive_augmentation_config
+    def __init__(self, dependencies: AdaptiveAugmentationDependencies) -> None:
+        super().__init__(dependencies, config, config_defaults)

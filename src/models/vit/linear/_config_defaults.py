@@ -3,6 +3,7 @@ from types import ModuleType
 
 from models import _attention_source_memory as _source_memory
 from models import _sequence_expansion
+from models._stack_fields import ControllerStackFields, StackScope
 from models.vit.linear.runtime_options import (
     DynamicMemoryOptions,
     LayerControllerOptions,
@@ -181,101 +182,14 @@ def _main_controller_stack_source(
     stack_role: _ControllerStackRole,
 ) -> SubmoduleStackSource:
     if stack_role is _ControllerStackRole.GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.GATE_STACK_HIDDEN_DIM,
-            num_layers=config.GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.GATE_STACK_ACTIVATION,
-            layer_norm_position=config.GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.GATE_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.GATE.read(config, SubmoduleStackSource)
     if stack_role is _ControllerStackRole.HALTING:
-        return SubmoduleStackSource(
-            independent_flag=config.HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.HALTING_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.HALTING_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.HALTING.read(config, SubmoduleStackSource)
     if stack_role is _ControllerStackRole.MEMORY:
-        return SubmoduleStackSource(
-            independent_flag=config.MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=config.MEMORY_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.MEMORY_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.MEMORY.read(config, SubmoduleStackSource)
     if stack_role is _ControllerStackRole.RECURRENT_GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=(config.RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION),
-            apply_output_postprocessing_flag=(
-                config.RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.RECURRENT_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.RECURRENT_GATE_STACK_BIAS_FLAG,
-        )
-    return SubmoduleStackSource(
-        independent_flag=config.RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.RECURRENT_HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.RECURRENT_HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=(config.RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION),
-        apply_output_postprocessing_flag=(
-            config.RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config.RECURRENT_HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.RECURRENT_HALTING_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config.RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config.RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.RECURRENT_HALTING_STACK_BIAS_FLAG,
-    )
+        return ControllerStackFields.RECURRENT_GATE.read(config, SubmoduleStackSource)
+    return ControllerStackFields.RECURRENT_HALTING.read(config, SubmoduleStackSource)
 
 
 def _attention_controller_stack_source(
@@ -283,112 +197,23 @@ def _attention_controller_stack_source(
     stack_role: _ControllerStackRole,
 ) -> SubmoduleStackSource:
     if stack_role is _ControllerStackRole.GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.ATTN_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ATTN_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.ATTN_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ATTN_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.ATTN_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.ATTN_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.ATTN_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.ATTN_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.ATTN_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ATTN_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ATTN_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ATTN_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ATTN_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ATTN_GATE_STACK_BIAS_FLAG,
+        return ControllerStackFields.GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
         )
     if stack_role is _ControllerStackRole.HALTING:
-        return SubmoduleStackSource(
-            independent_flag=config.ATTN_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ATTN_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.ATTN_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ATTN_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.ATTN_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.ATTN_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.ATTN_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.ATTN_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ATTN_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ATTN_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ATTN_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ATTN_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ATTN_HALTING_STACK_BIAS_FLAG,
+        return ControllerStackFields.HALTING.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
         )
     if stack_role is _ControllerStackRole.MEMORY:
-        return SubmoduleStackSource(
-            independent_flag=config.ATTN_MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ATTN_MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.ATTN_MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ATTN_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.ATTN_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.ATTN_MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.ATTN_MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.ATTN_MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.ATTN_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ATTN_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ATTN_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ATTN_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ATTN_MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ATTN_MEMORY_STACK_BIAS_FLAG,
+        return ControllerStackFields.MEMORY.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
         )
     if stack_role is _ControllerStackRole.RECURRENT_GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.ATTN_RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ATTN_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.ATTN_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config.ATTN_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.ATTN_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.ATTN_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.ATTN_RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.ATTN_RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.ATTN_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ATTN_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ATTN_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ATTN_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=(config.ATTN_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY),
-            bias_flag=config.ATTN_RECURRENT_GATE_STACK_BIAS_FLAG,
+        return ControllerStackFields.RECURRENT_GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
         )
-    return SubmoduleStackSource(
-        independent_flag=config.ATTN_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.ATTN_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.ATTN_RECURRENT_HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=(
-            config.ATTN_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-        ),
-        apply_output_postprocessing_flag=(
-            config.ATTN_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config.ATTN_RECURRENT_HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.ATTN_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.ATTN_RECURRENT_HALTING_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.ATTN_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG,
+    return ControllerStackFields.RECURRENT_HALTING.read(
+        config, SubmoduleStackSource, scope=StackScope.ATTENTION
     )
 
 
@@ -397,112 +222,23 @@ def _feed_forward_controller_stack_source(
     stack_role: _ControllerStackRole,
 ) -> SubmoduleStackSource:
     if stack_role is _ControllerStackRole.GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.FF_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.FF_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.FF_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.FF_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.FF_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.FF_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.FF_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.FF_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.FF_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.FF_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.FF_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.FF_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.FF_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.FF_GATE_STACK_BIAS_FLAG,
+        return ControllerStackFields.GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
         )
     if stack_role is _ControllerStackRole.HALTING:
-        return SubmoduleStackSource(
-            independent_flag=config.FF_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.FF_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.FF_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.FF_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.FF_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.FF_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.FF_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.FF_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.FF_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.FF_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.FF_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.FF_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.FF_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.FF_HALTING_STACK_BIAS_FLAG,
+        return ControllerStackFields.HALTING.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
         )
     if stack_role is _ControllerStackRole.MEMORY:
-        return SubmoduleStackSource(
-            independent_flag=config.FF_MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.FF_MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.FF_MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.FF_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config.FF_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.FF_MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.FF_MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.FF_MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.FF_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.FF_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.FF_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.FF_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.FF_MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.FF_MEMORY_STACK_BIAS_FLAG,
+        return ControllerStackFields.MEMORY.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
         )
     if stack_role is _ControllerStackRole.RECURRENT_GATE:
-        return SubmoduleStackSource(
-            independent_flag=config.FF_RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.FF_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.FF_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config.FF_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.FF_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config.FF_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.FF_RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.FF_RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config.FF_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.FF_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.FF_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.FF_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=(config.FF_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY),
-            bias_flag=config.FF_RECURRENT_GATE_STACK_BIAS_FLAG,
+        return ControllerStackFields.RECURRENT_GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
         )
-    return SubmoduleStackSource(
-        independent_flag=config.FF_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.FF_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.FF_RECURRENT_HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=(
-            config.FF_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-        ),
-        apply_output_postprocessing_flag=(
-            config.FF_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config.FF_RECURRENT_HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.FF_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.FF_RECURRENT_HALTING_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config.FF_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config.FF_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.FF_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.FF_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.FF_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.FF_RECURRENT_HALTING_STACK_BIAS_FLAG,
+    return ControllerStackFields.RECURRENT_HALTING.read(
+        config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
     )
 
 

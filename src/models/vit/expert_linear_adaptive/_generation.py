@@ -2,19 +2,31 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from emperor.augmentations.adaptive_parameters import LowRankFactorSourceOptions
+from emperor.augmentations.adaptive_parameters import (
+    DynamicWeightConfig,
+    LowRankFactorSourceOptions,
+)
 from emperor.layers import (
     ActivationOptions,
     LastLayerBiasOptions,
     LayerNormPositionOptions,
+    LayerStackConfig,
     NormalizationOptions,
     ResidualConfig,
 )
-from emperor.sampler import RouterConfig, SamplerConfig
+from emperor.sampler import SamplerConfig
+from models import _attention_settings
+from models._adaptive_generation_options import GenerationSettingsReader
+from models._adaptive_generation_options import generation_keys as generation_keys
+from models._adaptive_generator_stack import (
+    build_mixture_generation,
+    build_weight_generation,
+)
 
 if TYPE_CHECKING:
     from models.vit.expert_linear_adaptive._adaptive_generator_stack_config_factory import (
@@ -39,6 +51,10 @@ class AdaptiveGeneratorStackSource:
     apply_output_postprocessing_flag: bool | None
     bias_flag: bool | None
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_stack_source(validation, self)
+
 
 @dataclass(frozen=True)
 class WeightGenerationOptions:
@@ -61,205 +77,58 @@ class BiasGenerationOptions:
     mixture_router_generator_stack: AdaptiveGeneratorStackSource | None = None
 
 
-_GENERATION_PREFIXES = (
-    "weight_input_factor_",
-    "weight_output_factor_",
-    "weight_coefficient_",
-    "weight_mixture_",
-    "bias_mixture_",
-)
-_STACK_FIELDS = (
-    "independent_flag",
-    "hidden_dim",
-    "layer_norm_position",
-    "normalization",
-    "num_layers",
-    "activation",
-    "residual_connection_option",
-    "residual_block_size",
-    "residual_rms_norm_epsilon",
-    "residual_model_flag",
-    "dropout_probability",
-    "last_layer_bias_option",
-    "apply_output_postprocessing_flag",
-    "bias_flag",
-)
+@dataclass(frozen=True, slots=True)
+class MixtureGenerationConfig:
+    num_experts: int | None = None
+    top_k: int | None = None
+    sampler_config: SamplerConfig | None = None
 
 
-def generation_keys(config_module: ModuleType) -> set[str]:
-    return {
-        name.lower()
-        for name in vars(config_module)
-        if name.isupper() and any(part in name.lower() for part in _GENERATION_PREFIXES)
-    }
+@dataclass(frozen=True, slots=True)
+class WeightGenerationConfig:
+    input_factor_source: LowRankFactorSourceOptions | None = None
+    output_factor_source: LowRankFactorSourceOptions | None = None
+    input_factor_model_config: LayerStackConfig | None = None
+    output_factor_model_config: LayerStackConfig | None = None
+    coefficient_model_config: LayerStackConfig | None = None
+    mixture: MixtureGenerationConfig = field(default_factory=MixtureGenerationConfig)
 
 
-def _generation_value(values, config_module, prefix, name):
-    key = prefix + name
-    if key in values:
-        return values[key]
-    if prefix in ("attn_", "ff_") and name in values:
-        return values[name]
-    return getattr(config_module, key.upper(), None)
-
-
-def _stack_source(values, config_module, prefix, name):
-    return AdaptiveGeneratorStackSource(
-        **{
-            field: _generation_value(values, config_module, prefix, name + "_" + field)
-            for field in _STACK_FIELDS
-        }
-    )
-
-
-def weight_generation_from_fields(values, config_module, prefix=""):
-    scalar_fields = (
-        "input_factor_source",
-        "output_factor_source",
-        "mixture_num_experts",
-        "mixture_top_k",
-        "mixture_normalize_probabilities_flag",
-    )
-    stack_fields = (
-        "input_factor_generator_stack",
-        "output_factor_generator_stack",
-        "coefficient_generator_stack",
-        "mixture_router_generator_stack",
-    )
-    return WeightGenerationOptions(
-        **{
-            name: _generation_value(values, config_module, prefix, "weight_" + name)
-            for name in scalar_fields
-        },
-        **{
-            name: _stack_source(values, config_module, prefix, "weight_" + name)
-            for name in stack_fields
-        },
-    )
-
-
-def bias_generation_from_fields(values, config_module, prefix=""):
-    scalar_fields = (
-        "mixture_num_experts",
-        "mixture_top_k",
-        "mixture_normalize_probabilities_flag",
-    )
-    return BiasGenerationOptions(
-        **{
-            name: _generation_value(values, config_module, prefix, "bias_" + name)
-            for name in scalar_fields
-        },
-        mixture_router_generator_stack=_stack_source(
-            values, config_module, prefix, "bias_mixture_router_generator_stack"
-        ),
-    )
+class _GenerationSettings(
+    GenerationSettingsReader[WeightGenerationOptions, BiasGenerationOptions]
+):
+    stack_source_type = AdaptiveGeneratorStackSource
+    weight_options_type = WeightGenerationOptions
+    bias_options_type = BiasGenerationOptions
 
 
 def apply_generation_options(
-    options: dict[str, Any], values, config_module
+    options: dict[str, Any], values: Mapping[str, Any], config_module: ModuleType
 ) -> dict[str, Any]:
-    result = dict(options)
-    for role, prefix in (
-        ("hidden_adaptive", ""),
-        ("attention_hidden_adaptive", "attn_"),
-        ("feed_forward_hidden_adaptive", "ff_"),
-        ("router_adaptive", "router_"),
-    ):
-        weight_key = role + "_weight_options"
-        bias_key = role + "_bias_options"
-        if result.get(weight_key) is not None:
-            result[weight_key] = replace(
-                result[weight_key],
-                generation=weight_generation_from_fields(values, config_module, prefix),
-            )
-        if result.get(bias_key) is not None:
-            result[bias_key] = replace(
-                result[bias_key],
-                generation=bias_generation_from_fields(values, config_module, prefix),
-            )
-    for role, prefix in (
-        ("input_boundary_options", "input_layer_"),
-        ("output_boundary_options", "output_layer_"),
-    ):
-        if result.get(role) is not None:
-            result[role] = replace(
-                result[role],
-                weight_generation=weight_generation_from_fields(
-                    values, config_module, prefix
-                ),
-                bias_generation=bias_generation_from_fields(
-                    values, config_module, prefix
-                ),
-            )
-    return result
+    return _GenerationSettings.apply(options, values, config_module)
 
 
-def _generator_config(source, factory):
-    if source is None:
-        return None
-    return factory.build_config_from_source(source)
-
-
-def weight_generation_fields(
+def build_weight_generation_config(
     options: WeightGenerationOptions,
     factory: AdaptiveGeneratorStackConfigFactory,
+    weight_option: type[DynamicWeightConfig],
     weight_source: AdaptiveGeneratorStackSource | None = None,
-) -> dict:
-    factor_factory = factory
-    if weight_source is not None and weight_source.independent_flag:
-        updates = {
-            name: getattr(weight_source, name)
-            for name in _STACK_FIELDS
-            if name != "independent_flag" and getattr(weight_source, name) is not None
-        }
-        factor_defaults = replace(factory.shared_options, **updates)
-        factor_factory = type(factory)(factor_defaults)
-    return {
-        "input_factor_source": options.input_factor_source,
-        "output_factor_source": options.output_factor_source,
-        "input_factor_model_config": _generator_config(
-            options.input_factor_generator_stack, factor_factory
-        ),
-        "output_factor_model_config": _generator_config(
-            options.output_factor_generator_stack, factor_factory
-        ),
-        "coefficient_model_config": _generator_config(
-            options.coefficient_generator_stack, factor_factory
-        ),
-        **mixture_generation_fields(options, factory),
-    }
+) -> WeightGenerationConfig:
+    return build_weight_generation(
+        options,
+        factory,
+        weight_option,
+        weight_source,
+        weight_type=WeightGenerationConfig,
+        mixture_type=MixtureGenerationConfig,
+        default=WeightGenerationConfig,
+    )
 
 
-def mixture_generation_fields(
+def build_mixture_generation_config(
     options: WeightGenerationOptions | BiasGenerationOptions,
     factory: AdaptiveGeneratorStackConfigFactory,
-) -> dict:
-    router_model_config = _generator_config(
-        options.mixture_router_generator_stack, factory
+) -> MixtureGenerationConfig:
+    return build_mixture_generation(
+        options, factory.build_config_from_source, MixtureGenerationConfig
     )
-    return {
-        "num_experts": options.mixture_num_experts,
-        "top_k": options.mixture_top_k,
-        "sampler_config": SamplerConfig(
-            num_experts=options.mixture_num_experts,
-            top_k=options.mixture_top_k,
-            threshold=0.0,
-            filter_above_threshold=False,
-            num_topk_samples=0,
-            noisy_topk_flag=False,
-            coefficient_of_variation_loss_weight=0.0,
-            switch_loss_weight=0.0,
-            zero_centred_loss_weight=0.0,
-            mutual_information_loss_weight=0.0,
-            normalize_probabilities_flag=(
-                options.mixture_normalize_probabilities_flag
-                if options.mixture_normalize_probabilities_flag is not None
-                else (options.mixture_top_k or 0) > 1
-            ),
-            router_config=RouterConfig(
-                num_experts=options.mixture_num_experts,
-                noisy_topk_flag=False,
-                model_config=router_model_config,
-            ),
-        ),
-    }

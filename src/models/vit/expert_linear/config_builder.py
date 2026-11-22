@@ -1,11 +1,12 @@
 from typing import TYPE_CHECKING
 
 import models.vit.expert_linear.config as config
-from models import _sequence_expansion
-from models.vit.expert_linear._boundary_config_factory import (
-    BoundaryConfigDependencies,
-    BoundaryConfigFactory,
-)
+from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from emperor.linears import LinearLayerConfig
+from models import _attention_settings, _sequence_expansion
+from models._model_config import sequence_model_config
+from models._positional_embedding import build_position_config
+from models.vit.expert_linear._config_defaults import vit_positional_embedding_options
 from models.vit.expert_linear._core_config_factory import (
     CoreConfigDependencies,
     CoreConfigFactory,
@@ -21,10 +22,6 @@ from models.vit.expert_linear._linear_layer_config_factory import (
 from models.vit.expert_linear._patch_config_factory import (
     PatchConfigDependencies,
     PatchConfigFactory,
-)
-from models.vit.expert_linear._positional_embedding_config_factory import (
-    PositionalEmbeddingConfigDependencies,
-    PositionalEmbeddingConfigFactory,
 )
 from models.vit.expert_linear.experiment_config import ExperimentConfig
 from models.vit.expert_linear.runtime_defaults import DEFAULT_RUNTIME
@@ -153,68 +150,62 @@ class _VitExpertLinearConfigBuilderImplementation:
         self.sequence_length = self.__patch_config_factory().sequence_length
 
     def build(self) -> "ModelConfig":
-        from emperor.config import ModelConfig
-
-        return ModelConfig(
-            learning_rate=self.learning_rate,
-            batch_size=self.batch_size,
-            input_dim=self.input_dim,
-            hidden_dim=self.hidden_dim,
-            output_dim=self.output_dim,
-            sequence_length=self.sequence_length,
-            experiment_config=ExperimentConfig(
-                patch_config=self.__patch_config(),
-                positional_embedding_config=self.__positional_embedding_config(),
-                encoder_config=self.__encoder_config(),
-                output_config=self.__output_config(),
-                encoder_output_normalization=(
-                    self.encoder_options.output_normalization
-                    if self.encoder_options is not None
-                    else config.ENCODER_OUTPUT_NORMALIZATION
-                ),
-            ),
+        patch_config = self.__patch_config()
+        positional_embedding_config = self.__positional_embedding_config()
+        encoder_config = self.__encoder_config()
+        output_config = self.__output_config()
+        encoder_output_normalization = config.ENCODER_OUTPUT_NORMALIZATION
+        if self.encoder_options is not None:
+            encoder_output_normalization = self.encoder_options.output_normalization
+        experiment_config = ExperimentConfig(
+            patch_config=patch_config,
+            positional_embedding_config=positional_embedding_config,
+            encoder_config=encoder_config,
+            output_config=output_config,
+            encoder_output_normalization=encoder_output_normalization,
         )
+        return sequence_model_config(self, experiment_config)
 
     def __patch_config(self):
         return self.__patch_config_factory().build_patch_config()
 
     def __patch_config_factory(self) -> PatchConfigFactory:
-        return PatchConfigFactory(self.__patch_config_dependencies())
+        patch_config_dependencies = self.__patch_config_dependencies()
+        return PatchConfigFactory(patch_config_dependencies)
 
     def __patch_config_dependencies(self) -> PatchConfigDependencies:
+        linear_layer_config_factory = self.__linear_layer_config_factory()
         return PatchConfigDependencies(
             hidden_dim=self.hidden_dim,
             patch_options=self.patch_options,
             encoder_options=self.encoder_options,
-            linear_layer_config_factory=self.__linear_layer_config_factory(),
+            linear_layer_config_factory=linear_layer_config_factory,
         )
 
-    def __positional_embedding_config(self):
-        positional_embedding_config_dependencies = (
-            self.__positional_embedding_config_dependencies()
-        )
-        positional_embedding_config_factory = PositionalEmbeddingConfigFactory(
-            positional_embedding_config_dependencies
-        )
-        return positional_embedding_config_factory.build_positional_embedding_config()
-
-    def __positional_embedding_config_dependencies(
-        self,
-    ) -> PositionalEmbeddingConfigDependencies:
-        return PositionalEmbeddingConfigDependencies(
-            hidden_dim=self.hidden_dim,
-            sequence_length=self.sequence_length,
-            positional_embedding_options=self.positional_embedding_options,
+    def __positional_embedding_config(self) -> AbsolutePositionalEmbeddingConfig:
+        options = self.positional_embedding_options
+        if options is None:
+            options = vit_positional_embedding_options(config)
+        return build_position_config(
+            options.option,
+            num_embeddings=self.sequence_length - 1,
+            embedding_dim=self.hidden_dim,
+            padding_idx=options.padding_idx,
+            auto_expand_flag=options.auto_expand_flag,
+            class_token_flag=True,
         )
 
     def __encoder_config(self):
         core_config_dependencies = self.__core_config_dependencies()
         core_config_factory = CoreConfigFactory(core_config_dependencies)
+        encoder_config = core_config_factory.build_encoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            core_config_factory.build_encoder_config(), self.sequence_length
+            encoder_config, self.sequence_length
         )
 
     def __core_config_dependencies(self) -> CoreConfigDependencies:
+        linear_layer_config_factory = self.__linear_layer_config_factory()
+        expert_config_factory = self.__expert_config_factory()
         return CoreConfigDependencies(
             batch_size=self.batch_size,
             sequence_length=self.sequence_length,
@@ -246,20 +237,18 @@ class _VitExpertLinearConfigBuilderImplementation:
             layer_controller_options=self.encoder_layer_controller_options,
             dynamic_memory_options=self.encoder_dynamic_memory_options,
             recurrent_controller_options=self.encoder_recurrent_controller_options,
-            linear_layer_config_factory=self.__linear_layer_config_factory(),
-            expert_config_factory=self.__expert_config_factory(),
+            linear_layer_config_factory=linear_layer_config_factory,
+            expert_config_factory=expert_config_factory,
         )
 
-    def __output_config(self):
-        boundary_config_dependencies = self.__boundary_config_dependencies()
-        boundary_config_factory = BoundaryConfigFactory(boundary_config_dependencies)
-        return boundary_config_factory.build_output_config()
-
-    def __boundary_config_dependencies(self) -> BoundaryConfigDependencies:
-        return BoundaryConfigDependencies(
-            hidden_dim=self.hidden_dim,
+    def __output_config(self) -> LinearLayerConfig:
+        bias_flag = config.OUTPUT_BIAS_FLAG
+        if self.output_options is not None:
+            bias_flag = self.output_options.bias_flag
+        return LinearLayerConfig(
+            input_dim=self.hidden_dim,
             output_dim=self.output_dim,
-            output_options=self.output_options,
+            bias_flag=bias_flag,
         )
 
     def __linear_layer_config_factory(self) -> LinearLayerConfigFactory:
@@ -299,11 +288,17 @@ class _VitExpertLinearConfigBuilderImplementation:
         )
 
 
-class VitExpertLinearConfigBuilder(_VitExpertLinearConfigBuilderImplementation):
+class VitExpertLinearConfigBuilder(
+    _attention_settings.RuntimeBuilder[RuntimeOptions],
+    _VitExpertLinearConfigBuilderImplementation,
+):
     def __init__(self, *, runtime: RuntimeOptions = DEFAULT_RUNTIME) -> None:
+        self._configure_runtime(runtime)
+
+    def _configure_runtime(self, runtime: RuntimeOptions) -> None:
         if type(runtime) is not RuntimeOptions:
             raise TypeError(
                 "models.vit.expert_linear VitExpertLinearConfigBuilder runtime must be RuntimeOptions"
             )
-        self.runtime = runtime
+        self._runtime = runtime
         super().__init__(**runtime._as_construction_kwargs())

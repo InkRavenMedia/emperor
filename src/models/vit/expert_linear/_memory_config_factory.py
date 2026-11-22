@@ -1,54 +1,13 @@
-from emperor.memory import AttentionDynamicMemoryConfig, DynamicMemoryConfig
+from models import _stack_controllers
 from models.vit.expert_linear.runtime_options import (
-    DynamicMemoryOptions,
-    MainLayerStackOptions,
     SubmoduleStackOptions,
-    resolve_controller_stack_options,
+    SubmoduleStackSource,
 )
 
-from ._controller_stack_config import build_controller_stack_config
+from ._controller_stack_config import controller_stacks
 
 
-class MemoryConfigFactory:
-    def __init__(
-        self,
-        *,
-        hidden_dim: int,
-        stack_options: MainLayerStackOptions,
-        dynamic_memory_options: DynamicMemoryOptions,
-        submodule_stack_options: SubmoduleStackOptions,
-    ) -> None:
-        self.hidden_dim = hidden_dim
-        self.stack_options = stack_options
-        self.dynamic_memory_options = dynamic_memory_options
-        self.submodule_stack_options = submodule_stack_options
-
-    def build_memory_config(self) -> DynamicMemoryConfig | None:
-        if not self.dynamic_memory_options.memory_flag:
-            return None
-        memory_stack_source = self.dynamic_memory_options.memory_stack_source
-        submodule_stack_defaults = self.submodule_stack_options
-        resolved_memory_stack_options = resolve_controller_stack_options(
-            memory_stack_source,
-            submodule_stack_defaults,
-        )
-        model_config = build_controller_stack_config(
-            resolved_memory_stack_options,
-        )
-        memory_config = self.dynamic_memory_options.memory_option(
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-            memory_position_option=self.dynamic_memory_options.memory_position_option,
-            test_time_training_learning_rate=(
-                self.dynamic_memory_options.memory_test_time_training_learning_rate
-            ),
-            test_time_training_num_inner_steps=(
-                self.dynamic_memory_options.memory_test_time_training_num_inner_steps
-            ),
-            model_config=model_config,
-        )
-        if isinstance(memory_config, AttentionDynamicMemoryConfig):
-            memory_config.num_memory_slots = (
-                self.dynamic_memory_options.memory_num_memory_slots
-            )
-        return memory_config
+class MemoryConfigFactory(
+    _stack_controllers.MemoryConfigFactory[SubmoduleStackSource, SubmoduleStackOptions]
+):
+    stacks = controller_stacks()

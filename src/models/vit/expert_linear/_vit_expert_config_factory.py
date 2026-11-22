@@ -1,13 +1,6 @@
 from dataclasses import dataclass
 
-import torch
-
-from emperor.attention import (
-    MixtureOfAttentionHeadsConfig,
-)
-from emperor.experts import MixtureOfExpertsConfig, MixtureOfExpertsModelConfig
-from emperor.layers import LastLayerBiasOptions, LayerStackConfig, RecurrentLayerConfig
-from emperor.transformer._soft_moe_config import build_soft_moe_attention_experts
+from models._attention_experts import RoutedAttentionExpertBuilder
 from models.vit.expert_linear._expert_control_config_factory import (
     ControlConfigDependencies as ExpertLinearControlConfigDependencies,
 )
@@ -23,7 +16,6 @@ from models.vit.expert_linear.runtime_options import (
     ExpertsSamplerOptions,
     ExpertsStackOptions,
     ExpertsSubmoduleStackOptions,
-    SubmoduleStackOptions,
     TransformerAttentionOptions,
     TransformerEncoderOptions,
     TransformerFeedForwardOptions,
@@ -47,155 +39,17 @@ class VitExpertConfigDependencies:
     expert_attention_use_kv_expert_models_flag: bool
 
 
-class VitExpertConfigFactory:
-    def __init__(self, dependencies: VitExpertConfigDependencies) -> None:
-        self.dependencies = dependencies
+class VitExpertConfigFactory(
+    RoutedAttentionExpertBuilder[
+        VitExpertConfigDependencies,
+        ExpertsStackOptions,
+        ExpertLinearControlConfigDependencies,
+    ]
+):
+    _stack = staticmethod(ExpertsStackOptions)
+    _control_inputs = staticmethod(ExpertLinearControlConfigDependencies)
+    _control = staticmethod(ExpertLinearControlConfigFactory)
 
-    def build_feed_forward_base_stack_config(
-        self,
-        feed_forward_stack_options: SubmoduleStackOptions,
-    ) -> MixtureOfExpertsModelConfig:
-        return self._build_expert_model_config(
-            feed_forward_stack_options,
-            use_feed_forward_stack_options=True,
-        )
-
-    def build_attention_config(
-        self,
-        *,
-        batch_size: int,
-        hidden_dim: int,
-        sequence_length: int,
-        projection_model_config: LayerStackConfig | RecurrentLayerConfig,
-    ) -> MixtureOfAttentionHeadsConfig:
-        dependencies = self.dependencies
-        encoder_options = dependencies.encoder_options
-        attention_options = dependencies.attention_options
-        return MixtureOfAttentionHeadsConfig(
-            batch_size=batch_size,
-            num_heads=attention_options.num_heads,
-            embedding_dim=hidden_dim,
-            query_key_projection_dim=hidden_dim,
-            value_projection_dim=hidden_dim,
-            target_sequence_length=sequence_length,
-            source_sequence_length=sequence_length,
-            target_dtype=torch.float32,
-            dropout_probability=encoder_options.dropout_probability,
-            zero_attention_flag=False,
-            causal_attention_mask_flag=False,
-            add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
-            average_attention_weights_flag=False,
-            return_attention_weights_flag=False,
-            batch_first_flag=True,
-            projection_model_config=projection_model_config,
-            experts_config=build_soft_moe_attention_experts(
-                self._build_attention_experts_config(),
-                attention_options.attention_soft_moe_config,
-            ),
-            use_kv_expert_models_flag=(
-                dependencies.expert_attention_use_kv_expert_models_flag
-            ),
-        )
-
-    def _build_attention_experts_config(self) -> MixtureOfExpertsConfig:
-        model_config = self._build_expert_model_config(
-            None,
-            use_feed_forward_stack_options=False,
-        )
-        return model_config.stack_config.layer_config.layer_model_config
-
-    def _build_expert_model_config(
-        self,
-        feed_forward_stack_options: SubmoduleStackOptions | None,
-        *,
-        use_feed_forward_stack_options: bool,
-    ) -> MixtureOfExpertsModelConfig:
-        if use_feed_forward_stack_options:
-            if feed_forward_stack_options is None:
-                raise ValueError("feed_forward_stack_options is required.")
-            stack_options = self._feed_forward_experts_stack_options(
-                feed_forward_stack_options
-            )
-        else:
-            stack_options = self._attention_experts_stack_options()
-        model_config = self._build_control_config(stack_options).build()
-        if isinstance(model_config, MixtureOfExpertsModelConfig):
-            return model_config
-        return model_config.block_config
-
-    def _feed_forward_experts_stack_options(
-        self,
-        feed_forward_stack_options: SubmoduleStackOptions,
-    ) -> ExpertsStackOptions:
-        return ExpertsStackOptions(
-            hidden_dim=feed_forward_stack_options.hidden_dim,
-            bias_flag=feed_forward_stack_options.bias_flag,
-            layer_norm_position=feed_forward_stack_options.layer_norm_position,
-            normalization=feed_forward_stack_options.normalization,
-            num_layers=feed_forward_stack_options.num_layers,
-            activation=feed_forward_stack_options.activation,
-            residual_connection_option=(
-                feed_forward_stack_options.residual_connection_option
-            ),
-            residual_block_size=feed_forward_stack_options.residual_block_size,
-            residual_rms_norm_epsilon=feed_forward_stack_options.residual_rms_norm_epsilon,
-            residual_model_flag=feed_forward_stack_options.residual_model_flag,
-            residual_stack_options=feed_forward_stack_options.residual_stack_options,
-            dropout_probability=feed_forward_stack_options.dropout_probability,
-            last_layer_bias_option=feed_forward_stack_options.last_layer_bias_option,
-            apply_output_postprocessing_flag=(
-                feed_forward_stack_options.apply_output_postprocessing_flag
-            ),
-        )
-
-    def _attention_experts_stack_options(self) -> ExpertsStackOptions:
-        dependencies = self.dependencies
-        return ExpertsStackOptions(
-            hidden_dim=dependencies.hidden_dim,
-            bias_flag=dependencies.feed_forward_options.bias_flag,
-            layer_norm_position=dependencies.encoder_options.layer_norm_position,
-            normalization=dependencies.encoder_options.normalization,
-            num_layers=dependencies.feed_forward_options.num_layers,
-            activation=dependencies.encoder_options.activation,
-            residual_connection_option=None,
-            residual_block_size=None,
-            residual_rms_norm_epsilon=None,
-            residual_model_flag=False,
-            residual_stack_options=(
-                dependencies.expert_stack_options.residual_stack_options
-            ),
-            dropout_probability=dependencies.encoder_options.dropout_probability,
-            last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-            apply_output_postprocessing_flag=True,
-        )
-
-    def _build_control_config(
-        self,
-        stack_options: ExpertsStackOptions,
-    ) -> ExpertLinearControlConfigFactory:
-        dependencies = self.dependencies
-        return ExpertLinearControlConfigFactory(
-            ExpertLinearControlConfigDependencies(
-                stack_options=stack_options,
-                submodule_stack_options=None,
-                mixture_options=dependencies.mixture_options,
-                expert_stack_options=dependencies.expert_stack_options,
-                sampler_options=dependencies.sampler_options,
-                router_options=dependencies.router_options,
-                router_stack_options=dependencies.router_stack_options,
-                layer_controller_options=None,
-                dynamic_memory_options=None,
-                recurrent_controller_options=None,
-                expert_layer_controller_options=(
-                    dependencies.expert_layer_controller_options
-                ),
-                expert_dynamic_memory_options=(
-                    dependencies.expert_dynamic_memory_options
-                ),
-                expert_recurrent_controller_options=(
-                    dependencies.expert_recurrent_controller_options
-                ),
-                hidden_dim=dependencies.hidden_dim,
-                output_dim=dependencies.hidden_dim,
-            )
-        )
+    @property
+    def _block_options(self) -> TransformerEncoderOptions:
+        return self.dependencies.encoder_options

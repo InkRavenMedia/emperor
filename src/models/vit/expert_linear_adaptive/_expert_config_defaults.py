@@ -10,6 +10,7 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
+from models._stack_fields import ControllerStackFields, StackScope
 from models.vit.expert_linear_adaptive.runtime_options import (
     ExpertsDynamicMemoryOptions,
     ExpertsLayerControllerOptions,
@@ -131,88 +132,17 @@ def main_controller_stack_defaults(
     stack_role: ControllerStackRole,
 ) -> MainControllerStackDefaults:
     if stack_role is ControllerStackRole.GATE:
-        return MainControllerStackDefaults(
-            independent_flag=config.GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.GATE_STACK_HIDDEN_DIM,
-            num_layers=config.GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.GATE_STACK_ACTIVATION,
-            layer_norm_position=config.GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.GATE_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.GATE.read(config, MainControllerStackDefaults)
     if stack_role is ControllerStackRole.HALTING:
-        return MainControllerStackDefaults(
-            independent_flag=config.HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.HALTING_STACK_NORMALIZATION,
-            residual_connection_option=config.HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.HALTING_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.HALTING.read(config, MainControllerStackDefaults)
     if stack_role is ControllerStackRole.MEMORY:
-        return MainControllerStackDefaults(
-            independent_flag=config.MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=config.MEMORY_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.MEMORY_STACK_BIAS_FLAG,
-        )
+        return ControllerStackFields.MEMORY.read(config, MainControllerStackDefaults)
     if stack_role is ControllerStackRole.RECURRENT_GATE:
-        return MainControllerStackDefaults(
-            independent_flag=config.RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.RECURRENT_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.RECURRENT_GATE_STACK_BIAS_FLAG,
+        return ControllerStackFields.RECURRENT_GATE.read(
+            config, MainControllerStackDefaults
         )
-    return MainControllerStackDefaults(
-        independent_flag=config.RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config.RECURRENT_HALTING_STACK_HIDDEN_DIM,
-        num_layers=config.RECURRENT_HALTING_STACK_NUM_LAYERS,
-        last_layer_bias_option=config.RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=config.RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config.RECURRENT_HALTING_STACK_ACTIVATION,
-        layer_norm_position=config.RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-        normalization=config.RECURRENT_HALTING_STACK_NORMALIZATION,
-        residual_connection_option=config.RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-        residual_block_size=config.RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config.RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config.RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config.RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config.RECURRENT_HALTING_STACK_BIAS_FLAG,
+    return ControllerStackFields.RECURRENT_HALTING.read(
+        config, MainControllerStackDefaults
     )
 
 
@@ -244,192 +174,62 @@ _STACK_SOURCE_FACTORIES: Mapping[
         (
             ExpertControlRole.EXPERT,
             ControllerStackRole.GATE,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.EXPERT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.EXPERT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.EXPERT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.EXPERT_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.EXPERT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.EXPERT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.EXPERT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.EXPERT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.EXPERT_GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.EXPERT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.EXPERT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.EXPERT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.EXPERT_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.EXPERT_GATE_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.GATE.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.EXPERT
         ),
         (
             ExpertControlRole.EXPERT,
             ControllerStackRole.HALTING,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.EXPERT_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.EXPERT_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.EXPERT_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.EXPERT_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.EXPERT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.EXPERT_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.EXPERT_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.EXPERT_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=config.EXPERT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.EXPERT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.EXPERT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.EXPERT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.EXPERT_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.EXPERT_HALTING_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.HALTING.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.EXPERT
         ),
         (
             ExpertControlRole.EXPERT,
             ControllerStackRole.MEMORY,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.EXPERT_MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.EXPERT_MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.EXPERT_MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.EXPERT_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.EXPERT_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.EXPERT_MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.EXPERT_MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.EXPERT_MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=config.EXPERT_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.EXPERT_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.EXPERT_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.EXPERT_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.EXPERT_MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.EXPERT_MEMORY_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.MEMORY.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.EXPERT
         ),
         (
             ExpertControlRole.EXPERT,
             ControllerStackRole.RECURRENT_GATE,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.EXPERT_RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.EXPERT_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.EXPERT_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.EXPERT_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.EXPERT_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.EXPERT_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.EXPERT_RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.EXPERT_RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.EXPERT_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.EXPERT_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.EXPERT_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.EXPERT_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.EXPERT_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.EXPERT_RECURRENT_GATE_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.RECURRENT_GATE.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.EXPERT
         ),
         (
             ExpertControlRole.EXPERT,
             ControllerStackRole.RECURRENT_HALTING,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.EXPERT_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.EXPERT_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.EXPERT_RECURRENT_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.EXPERT_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.EXPERT_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.EXPERT_RECURRENT_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.EXPERT_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.EXPERT_RECURRENT_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=config.EXPERT_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.EXPERT_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.EXPERT_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.EXPERT_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.EXPERT_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.EXPERT_RECURRENT_HALTING_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.RECURRENT_HALTING.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.EXPERT
         ),
         (
             ExpertControlRole.ROUTER,
             ControllerStackRole.GATE,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.ROUTER_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.ROUTER_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ROUTER_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.ROUTER_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.ROUTER_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.ROUTER_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.ROUTER_GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.ROUTER_GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.ROUTER_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ROUTER_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ROUTER_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ROUTER_GATE_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.GATE.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.ROUTER
         ),
         (
             ExpertControlRole.ROUTER,
             ControllerStackRole.HALTING,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.ROUTER_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.ROUTER_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ROUTER_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.ROUTER_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.ROUTER_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.ROUTER_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.ROUTER_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=config.ROUTER_HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.ROUTER_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ROUTER_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ROUTER_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ROUTER_HALTING_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.HALTING.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.ROUTER
         ),
         (
             ExpertControlRole.ROUTER,
             ControllerStackRole.MEMORY,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.ROUTER_MEMORY_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_MEMORY_STACK_HIDDEN_DIM,
-            num_layers=config.ROUTER_MEMORY_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ROUTER_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.ROUTER_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.ROUTER_MEMORY_STACK_ACTIVATION,
-            layer_norm_position=config.ROUTER_MEMORY_STACK_LAYER_NORM_POSITION,
-            normalization=config.ROUTER_MEMORY_STACK_NORMALIZATION,
-            residual_connection_option=config.ROUTER_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.ROUTER_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ROUTER_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ROUTER_MEMORY_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ROUTER_MEMORY_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.MEMORY.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.ROUTER
         ),
         (
             ExpertControlRole.ROUTER,
             ControllerStackRole.RECURRENT_GATE,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.ROUTER_RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config.ROUTER_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ROUTER_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.ROUTER_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.ROUTER_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=config.ROUTER_RECURRENT_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config.ROUTER_RECURRENT_GATE_STACK_NORMALIZATION,
-            residual_connection_option=config.ROUTER_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.ROUTER_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ROUTER_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ROUTER_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ROUTER_RECURRENT_GATE_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.RECURRENT_GATE.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.ROUTER
         ),
         (
             ExpertControlRole.ROUTER,
             ControllerStackRole.RECURRENT_HALTING,
-        ): lambda config: ExpertsSubmoduleStackSource(
-            independent_flag=config.ROUTER_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config.ROUTER_RECURRENT_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=config.ROUTER_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=config.ROUTER_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            activation=config.ROUTER_RECURRENT_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config.ROUTER_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config.ROUTER_RECURRENT_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=config.ROUTER_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION,
-            residual_block_size=config.ROUTER_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.ROUTER_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.ROUTER_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config.ROUTER_RECURRENT_HALTING_STACK_BIAS_FLAG,
+        ): lambda config: ControllerStackFields.RECURRENT_HALTING.read(
+            config, ExpertsSubmoduleStackSource, scope=StackScope.ROUTER
         ),
     }
 )

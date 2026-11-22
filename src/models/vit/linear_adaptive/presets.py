@@ -1,5 +1,7 @@
 # ruff: noqa: E501
 
+from typing import Unpack
+
 import models.vit.linear_adaptive.config as config
 from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
@@ -40,6 +42,7 @@ from model_runtime.packages import (
 from model_runtime.runs import ExperimentBase
 from models.vit.linear_adaptive.config_builder import VitLinearAdaptiveConfigBuilder
 from models.vit.linear_adaptive.runtime_defaults import runtime_from_flat
+from models.vit.linear_adaptive.runtime_options import PresetValues
 
 
 def default_patch_size_for_dataset(dataset: type) -> int:
@@ -138,729 +141,591 @@ _ADAPTIVE_OPTION_FLAGS = {
 }
 
 
-def _with_adaptive_option_flags(overrides: dict[str, object]) -> dict[str, object]:
-    option_flags = {
-        flag: True
-        for option, flag in _ADAPTIVE_OPTION_FLAGS.items()
-        if option in overrides and overrides[option] is not None
-    }
-    return {**option_flags, **overrides}
-
-
-_FULL_STACK_OVERRIDES = _with_adaptive_option_flags(
-    {
-        "weight_option": DualModelDynamicWeightConfig,
-        "bias_option": AdditiveDynamicBiasConfig,
-        "diagonal_option": CombinedDynamicDiagonalConfig,
-        "row_mask_option": WeightInformedScoreAxisMaskConfig,
-    }
+_FULL_STACK_VALUES = PresetValues(
+    weight_option=DualModelDynamicWeightConfig,
+    bias_option=AdditiveDynamicBiasConfig,
+    diagonal_option=CombinedDynamicDiagonalConfig,
+    row_mask_option=WeightInformedScoreAxisMaskConfig,
 )
 
 
+def _define_preset(
+    *,
+    description: str,
+    base: PresetValues | None = None,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    if base is not None:
+        values = {**base, **values}
+    enabled_flags = {
+        flag: True
+        for option, flag in _ADAPTIVE_OPTION_FLAGS.items()
+        if values.get(option) is not None
+    }
+    return PresetDefinition(
+        preset_values={**enabled_flags, **values},
+        description=description,
+    )
+
+
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values=_with_adaptive_option_flags({}),
-        description="Default config: a Vision Transformer classifier with adaptive "
-        "linear patch embeddings, a trainable class token, learned image positions, "
-        "and a pre-norm bidirectional encoder.",
-    ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
+    ExperimentPreset.BASELINE: _define_preset(
+        description=(
+            "Default config: a Vision Transformer classifier with adaptive "
+            "linear patch embeddings, a trainable class token, learned image positions, "
+            "and a pre-norm bidirectional encoder."
         ),
-        description="Default config with layer normalization after each encoder "
-        "sub-block.",
     ),
-    ExperimentPreset.SINUSOIDAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "positional_embedding_option": ImageSinusoidalPositionalEmbeddingConfig,
-            }
+    ExperimentPreset.POST_NORM: _define_preset(
+        description=(
+            "Default config with layer normalization after each encoder sub-block."
         ),
+        layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.SINUSOIDAL: _define_preset(
         description="Default config with fixed sinusoidal image positional embeddings.",
+        positional_embedding_option=ImageSinusoidalPositionalEmbeddingConfig,
     ),
-    ExperimentPreset.ATTENTION_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "attn_bias_flag": True,
-                "attn_add_key_value_bias_flag": True,
-            }
+    ExperimentPreset.ATTENTION_BIAS: _define_preset(
+        description=(
+            "Default config with attention projection bias and key/value bias enabled."
         ),
-        description="Default config with attention projection bias and key/value bias "
-        "enabled.",
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
     ),
-    ExperimentPreset.GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_gate_flag": True,
-            }
-        ),
+    ExperimentPreset.GATING: _define_preset(
         description="Default config with per-layer gating enabled on encoder blocks.",
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_halting_flag": True,
-            }
+    ExperimentPreset.HALTING: _define_preset(
+        description=(
+            "Default config with encoder stack halting enabled, so examples can "
+            "stop early as they move through the encoder."
         ),
-        description="Default config with encoder stack halting enabled, so examples can "
-        "stop early as they move through the encoder.",
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "memory_flag": True,
-            }
-        ),
+    ExperimentPreset.MEMORY: _define_preset(
         description="Default config with shared encoder stack memory enabled.",
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with both per-layer gating and encoder stack "
-        "halting enabled.",
-    ),
-    ExperimentPreset.GATING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_gate_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with both per-layer gating and shared encoder stack "
-        "memory enabled.",
-    ),
-    ExperimentPreset.HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_halting_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with both encoder stack halting and shared memory "
-        "enabled.",
-    ),
-    ExperimentPreset.GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with per-layer gating, encoder stack halting, and "
-        "shared memory enabled.",
-    ),
-    ExperimentPreset.RESIDUAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-            }
-        ),
-        description="Default config with residual skip connections enabled between "
-        "same-width encoder stack layers.",
-    ),
-    ExperimentPreset.RESIDUAL_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
-        ),
-        description="Default config with residual skip connections and post-layer "
-        "normalization enabled.",
-    ),
-    ExperimentPreset.RESIDUAL_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "stack_gate_flag": True,
-            }
-        ),
-        description="Default config with residual skip connections and per-layer gating "
-        "enabled.",
-    ),
-    ExperimentPreset.RESIDUAL_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with residual skip connections and encoder stack "
-        "halting enabled.",
-    ),
-    ExperimentPreset.RESIDUAL_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with residual skip connections and shared encoder "
-        "stack memory enabled.",
-    ),
-    ExperimentPreset.SINGLE_MODEL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-            }
-        ),
-        description="Default config with VIT-compatible dynamic weights for the "
-        "single-model preset family on eligible encoder attention and feed-forward "
-        "linear stacks.",
-    ),
-    ExperimentPreset.DUAL_MODEL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-            }
-        ),
-        description="Default config with dual-model dynamic weights on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.LOW_RANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-            }
-        ),
-        description="Default config with adaptive low-rank dynamic weights on eligible "
-        "encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.HYPERNETWORK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": HypernetworkDynamicWeightConfig,
-            }
-        ),
-        description="Default config with hypernetwork dynamic weights on eligible "
-        "encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-            }
-        ),
-        description="Default config with layered weighted-bank dynamic weights on "
-        "eligible encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.SOFT_WEIGHTED_BANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": SoftWeightedBankDynamicWeightConfig,
-            }
-        ),
-        description="Default config with soft weighted-bank dynamic weights on eligible "
-        "encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.AFFINE_TRANSFORM_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": AffineTransformDynamicBiasConfig,
-            }
-        ),
-        description="Default config with affine-transform dynamic bias on eligible "
-        "encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.ADDITIVE_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": AdditiveDynamicBiasConfig,
-            }
-        ),
-        description="Default config with additive dynamic bias on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.GENERATOR_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": GeneratorDynamicBiasConfig,
-            }
-        ),
-        description="Default config with generator-based dynamic bias on eligible "
-        "encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.MULTIPLICATIVE_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": MultiplicativeDynamicBiasConfig,
-            }
-        ),
-        description="Default config with multiplicative dynamic bias on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.SIGMOID_GATED_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": SigmoidGatedDynamicBiasConfig,
-            }
-        ),
-        description="Default config with sigmoid-gated dynamic bias on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.TANH_GATED_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": TanhGatedDynamicBiasConfig,
-            }
-        ),
-        description="Default config with tanh-gated dynamic bias on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.WEIGHTED_BANK_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": WeightedBankDynamicBiasConfig,
-            }
-        ),
-        description="Default config with weighted-bank dynamic bias on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with standard dynamic diagonal on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.ANTI_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": AntiDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with anti dynamic diagonal on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with combined dynamic diagonal on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.DIAGONAL_AXIS_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": DiagonalAxisMaskConfig,
-            }
-        ),
-        description="Default config with diagonal-axis row masking on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.OUTER_PRODUCT_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": OuterProductMaskConfig,
-            }
-        ),
-        description="Default config with outer-product row masking on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.PER_AXIS_SCORE_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": PerAxisScoreMaskConfig,
-            }
-        ),
-        description="Default config with per-axis score row masking on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.TOP_SLICE_AXIS_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": TopSliceAxisMaskConfig,
-            }
-        ),
-        description="Default config with top-slice axis row masking on eligible encoder "
-        "attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.WEIGHT_INFORMED_SCORE_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": WeightInformedScoreAxisMaskConfig,
-            }
-        ),
-        description="Default config with weight-informed score axis row masking on "
-        "eligible encoder attention and feed-forward linear stacks.",
-    ),
-    ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with VIT-compatible dynamic weights, additive bias, "
-        "and combined dynamic diagonal for the single-model preset family on eligible "
-        "encoder linear stacks.",
-    ),
-    ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with dual-model dynamic weights, additive bias, and "
-        "combined dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with layered weighted-bank dynamic weights, additive "
-        "bias, and combined dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with low-rank dynamic weights, additive bias, and "
-        "combined dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with VIT-compatible dynamic weights, additive bias, "
-        "and standard dynamic diagonal for the single-model preset family on eligible "
-        "encoder linear stacks.",
-    ),
-    ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with dual-model dynamic weights, additive bias, and "
-        "standard dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with layered weighted-bank dynamic weights, additive "
-        "bias, and standard dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-                "bias_option": AdditiveDynamicBiasConfig,
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
-        description="Default config with low-rank dynamic weights, additive bias, and "
-        "standard dynamic diagonal on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.DECAY_EXPONENTIAL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "weight_decay_schedule": WeightDecayScheduleOptions.EXPONENTIAL,
-                "weight_decay_rate": 1e-3,
-                "weight_decay_warmup_batches": 500,
-            }
-        ),
-        description="Default config with dual-model dynamic weights decaying "
-        "exponentially toward static encoder linear layers.",
-    ),
-    ExperimentPreset.NORM_L2_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "weight_normalization_option": WeightNormalizationOptions.L2_SCALE,
-            }
-        ),
-        description="Default config with dual-model dynamic weights and L2-scale weight "
-        "normalization on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.DEEP_GENERATOR: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "generator_depth": 8,
-            }
-        ),
-        description="Default config with dual-model dynamic weights produced by a "
-        "depth-8 generator network.",
-    ),
-    ExperimentPreset.FULL_STACK: PresetDefinition(
-        preset_values=_FULL_STACK_OVERRIDES,
-        description="Default config with dual-model dynamic weights, additive bias, "
-        "combined dynamic diagonal, and weight-informed row masking on eligible "
-        "encoder linear stacks.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights and per-layer "
-        "encoder gating enabled.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights and encoder stack "
-        "halting enabled.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights, per-layer encoder "
-        "gating, and encoder stack halting enabled.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights and shared encoder "
-        "stack memory enabled.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_GATING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights, per-layer encoder "
-        "gating, and shared encoder stack memory enabled.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_halting_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with dual-model dynamic weights, encoder stack "
-        "halting, and shared memory enabled.",
-    ),
-    ExperimentPreset.FULL_STACK_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_gate_flag": True,
-            }
-        ),
-        description="Default config with full adaptive parameter controls and per-layer "
-        "encoder gating enabled.",
-    ),
-    ExperimentPreset.FULL_STACK_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with full adaptive parameter controls and encoder "
-        "stack halting enabled.",
-    ),
-    ExperimentPreset.FULL_STACK_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "memory_flag": True,
-            }
-        ),
-        description="Default config with full adaptive parameter controls and shared "
-        "encoder stack memory enabled.",
-    ),
-    ExperimentPreset.FULL_STACK_GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-            }
-        ),
-        description="Default config with full adaptive parameter controls, per-layer "
-        "encoder gating, and encoder stack halting enabled.",
-    ),
-    ExperimentPreset.FULL_STACK_RECURRENT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "recurrent_flag": True,
-            }
-        ),
-        description="Default config with full adaptive parameter controls wrapped in "
-        "fixed-step encoder recurrence.",
-    ),
-    ExperimentPreset.BANK_WEIGHT_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                "row_mask_option": WeightInformedScoreAxisMaskConfig,
-            }
-        ),
-        description="Default config with layered weighted-bank dynamic weights and "
-        "weight-informed row masking on eligible encoder linear stacks.",
-    ),
-    ExperimentPreset.LOW_RANK_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
-        ),
-        description="Default config with low-rank dynamic weights and post-layer "
-        "normalization enabled.",
-    ),
-    ExperimentPreset.RECURRENT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-            }
-        ),
-        description="Default config wrapped in fixed-step recurrence, reusing the "
-        "encoder stack for each recurrent step.",
-    ),
-    ExperimentPreset.RECURRENT_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_gate_flag": True,
-            }
-        ),
-        description="Default recurrent config with step-level gating enabled after each "
-        "recurrent encoder update.",
-    ),
-    ExperimentPreset.RECURRENT_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_halting_flag": True,
-            }
-        ),
-        description="Default recurrent config with recurrent halting enabled, allowing "
-        "early stopping before the max step count.",
-    ),
-    ExperimentPreset.RECURRENT_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default recurrent config whose reused encoder stack has shared "
-        "memory enabled.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_gate_flag": True,
-                "recurrent_stack_halting_flag": True,
-            }
-        ),
-        description="Default recurrent config with both step-level gating and recurrent "
-        "halting enabled.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_gate_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default recurrent config with step-level gating and shared memory "
-        "in the reused encoder stack.",
-    ),
-    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_halting_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default recurrent config with recurrent halting and shared memory "
-        "in the reused encoder stack.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "recurrent_stack_gate_flag": True,
-                "recurrent_stack_halting_flag": True,
-                "memory_flag": True,
-            }
-        ),
-        description="Default recurrent config with step-level gating, recurrent halting, "
-        "and shared memory in the reused encoder stack.",
-    ),
-    ExperimentPreset.RECURRENT_RESIDUAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-            }
-        ),
-        description="Default recurrent config using a residual encoder stack at each "
-        "recurrent step.",
-    ),
-    ExperimentPreset.RECURRENT_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
-        ),
-        description="Default recurrent config using a post-normalized encoder stack at "
-        "each recurrent step.",
+    ExperimentPreset.GATING_HALTING: _define_preset(
+        description=(
+            "Default config with both per-layer gating and encoder stack "
+            "halting enabled."
+        ),
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.GATING_MEMORY: _define_preset(
+        description=(
+            "Default config with both per-layer gating and shared encoder stack "
+            "memory enabled."
+        ),
+        stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.HALTING_MEMORY: _define_preset(
+        description=(
+            "Default config with both encoder stack halting and shared memory enabled."
+        ),
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default config with per-layer gating, encoder stack halting, and "
+            "shared memory enabled."
+        ),
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL: _define_preset(
+        description=(
+            "Default config with residual skip connections enabled between "
+            "same-width encoder stack layers."
+        ),
+        stack_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RESIDUAL_POST_NORM: _define_preset(
+        description=(
+            "Default config with residual skip connections and post-layer "
+            "normalization enabled."
+        ),
+        stack_residual_connection_option=AdditiveResidualConfig,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.RESIDUAL_GATING: _define_preset(
+        description=(
+            "Default config with residual skip connections and per-layer gating "
+            "enabled."
+        ),
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL_HALTING: _define_preset(
+        description=(
+            "Default config with residual skip connections and encoder stack "
+            "halting enabled."
+        ),
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL_MEMORY: _define_preset(
+        description=(
+            "Default config with residual skip connections and shared encoder "
+            "stack memory enabled."
+        ),
+        stack_residual_connection_option=AdditiveResidualConfig,
+        memory_flag=True,
+    ),
+    ExperimentPreset.SINGLE_MODEL_WEIGHT: _define_preset(
+        description=(
+            "Default config with VIT-compatible dynamic weights for the "
+            "single-model preset family on eligible encoder attention and feed-forward "
+            "linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+    ),
+    ExperimentPreset.DUAL_MODEL_WEIGHT: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+    ),
+    ExperimentPreset.LOW_RANK_WEIGHT: _define_preset(
+        description=(
+            "Default config with adaptive low-rank dynamic weights on eligible "
+            "encoder attention and feed-forward linear stacks."
+        ),
+        weight_option=LowRankDynamicWeightConfig,
+    ),
+    ExperimentPreset.HYPERNETWORK_WEIGHT: _define_preset(
+        description=(
+            "Default config with hypernetwork dynamic weights on eligible "
+            "encoder attention and feed-forward linear stacks."
+        ),
+        weight_option=HypernetworkDynamicWeightConfig,
+    ),
+    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT: _define_preset(
+        description=(
+            "Default config with layered weighted-bank dynamic weights on "
+            "eligible encoder attention and feed-forward linear stacks."
+        ),
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
+    ),
+    ExperimentPreset.SOFT_WEIGHTED_BANK_WEIGHT: _define_preset(
+        description=(
+            "Default config with soft weighted-bank dynamic weights on eligible "
+            "encoder attention and feed-forward linear stacks."
+        ),
+        weight_option=SoftWeightedBankDynamicWeightConfig,
+    ),
+    ExperimentPreset.AFFINE_TRANSFORM_BIAS: _define_preset(
+        description=(
+            "Default config with affine-transform dynamic bias on eligible "
+            "encoder attention and feed-forward linear stacks."
+        ),
+        bias_option=AffineTransformDynamicBiasConfig,
+    ),
+    ExperimentPreset.ADDITIVE_BIAS: _define_preset(
+        description=(
+            "Default config with additive dynamic bias on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        bias_option=AdditiveDynamicBiasConfig,
+    ),
+    ExperimentPreset.GENERATOR_BIAS: _define_preset(
+        description=(
+            "Default config with generator-based dynamic bias on eligible "
+            "encoder attention and feed-forward linear stacks."
+        ),
+        bias_option=GeneratorDynamicBiasConfig,
+    ),
+    ExperimentPreset.MULTIPLICATIVE_BIAS: _define_preset(
+        description=(
+            "Default config with multiplicative dynamic bias on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        bias_option=MultiplicativeDynamicBiasConfig,
+    ),
+    ExperimentPreset.SIGMOID_GATED_BIAS: _define_preset(
+        description=(
+            "Default config with sigmoid-gated dynamic bias on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        bias_option=SigmoidGatedDynamicBiasConfig,
+    ),
+    ExperimentPreset.TANH_GATED_BIAS: _define_preset(
+        description=(
+            "Default config with tanh-gated dynamic bias on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        bias_option=TanhGatedDynamicBiasConfig,
+    ),
+    ExperimentPreset.WEIGHTED_BANK_BIAS: _define_preset(
+        description=(
+            "Default config with weighted-bank dynamic bias on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        bias_option=WeightedBankDynamicBiasConfig,
+    ),
+    ExperimentPreset.STANDARD_DIAGONAL: _define_preset(
+        description=(
+            "Default config with standard dynamic diagonal on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        diagonal_option=StandardDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.ANTI_DIAGONAL: _define_preset(
+        description=(
+            "Default config with anti dynamic diagonal on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        diagonal_option=AntiDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.COMBINED_DIAGONAL: _define_preset(
+        description=(
+            "Default config with combined dynamic diagonal on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        diagonal_option=CombinedDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.DIAGONAL_AXIS_MASK: _define_preset(
+        description=(
+            "Default config with diagonal-axis row masking on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        row_mask_option=DiagonalAxisMaskConfig,
+    ),
+    ExperimentPreset.OUTER_PRODUCT_MASK: _define_preset(
+        description=(
+            "Default config with outer-product row masking on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        row_mask_option=OuterProductMaskConfig,
+    ),
+    ExperimentPreset.PER_AXIS_SCORE_MASK: _define_preset(
+        description=(
+            "Default config with per-axis score row masking on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        row_mask_option=PerAxisScoreMaskConfig,
+    ),
+    ExperimentPreset.TOP_SLICE_AXIS_MASK: _define_preset(
+        description=(
+            "Default config with top-slice axis row masking on eligible encoder "
+            "attention and feed-forward linear stacks."
+        ),
+        row_mask_option=TopSliceAxisMaskConfig,
+    ),
+    ExperimentPreset.WEIGHT_INFORMED_SCORE_MASK: _define_preset(
+        description=(
+            "Default config with weight-informed score axis row masking on "
+            "eligible encoder attention and feed-forward linear stacks."
+        ),
+        row_mask_option=WeightInformedScoreAxisMaskConfig,
+    ),
+    ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: _define_preset(
+        description=(
+            "Default config with VIT-compatible dynamic weights, additive bias, "
+            "and combined dynamic diagonal for the single-model preset family on eligible "
+            "encoder linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, additive bias, and "
+            "combined dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: _define_preset(
+        description=(
+            "Default config with layered weighted-bank dynamic weights, additive "
+            "bias, and combined dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: _define_preset(
+        description=(
+            "Default config with low-rank dynamic weights, additive bias, and "
+            "combined dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=LowRankDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=CombinedDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: _define_preset(
+        description=(
+            "Default config with VIT-compatible dynamic weights, additive bias, "
+            "and standard dynamic diagonal for the single-model preset family on eligible "
+            "encoder linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=StandardDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, additive bias, and "
+            "standard dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=StandardDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: _define_preset(
+        description=(
+            "Default config with layered weighted-bank dynamic weights, additive "
+            "bias, and standard dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=StandardDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: _define_preset(
+        description=(
+            "Default config with low-rank dynamic weights, additive bias, and "
+            "standard dynamic diagonal on eligible encoder linear stacks."
+        ),
+        weight_option=LowRankDynamicWeightConfig,
+        bias_option=AdditiveDynamicBiasConfig,
+        diagonal_option=StandardDynamicDiagonalConfig,
+    ),
+    ExperimentPreset.DECAY_EXPONENTIAL_WEIGHT: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights decaying "
+            "exponentially toward static encoder linear layers."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        weight_decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
+        weight_decay_rate=0.001,
+        weight_decay_warmup_batches=500,
+    ),
+    ExperimentPreset.NORM_L2_WEIGHT: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights and L2-scale weight "
+            "normalization on eligible encoder linear stacks."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        weight_normalization_option=WeightNormalizationOptions.L2_SCALE,
+    ),
+    ExperimentPreset.DEEP_GENERATOR: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights produced by a "
+            "depth-8 generator network."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        generator_depth=8,
+    ),
+    ExperimentPreset.FULL_STACK: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, additive bias, "
+            "combined dynamic diagonal, and weight-informed row masking on eligible "
+            "encoder linear stacks."
+        ),
+        base=_FULL_STACK_VALUES,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_GATING: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights and per-layer "
+            "encoder gating enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_HALTING: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights and encoder stack "
+            "halting enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_GATING_HALTING: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, per-layer encoder "
+            "gating, and encoder stack halting enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_MEMORY: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights and shared encoder "
+            "stack memory enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        memory_flag=True,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_GATING_MEMORY: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, per-layer encoder "
+            "gating, and shared encoder stack memory enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.DUAL_WEIGHT_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default config with dual-model dynamic weights, encoder stack "
+            "halting, and shared memory enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_GATING: _define_preset(
+        description=(
+            "Default config with full adaptive parameter controls and per-layer "
+            "encoder gating enabled."
+        ),
+        base=_FULL_STACK_VALUES,
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_HALTING: _define_preset(
+        description=(
+            "Default config with full adaptive parameter controls and encoder "
+            "stack halting enabled."
+        ),
+        base=_FULL_STACK_VALUES,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_MEMORY: _define_preset(
+        description=(
+            "Default config with full adaptive parameter controls and shared "
+            "encoder stack memory enabled."
+        ),
+        base=_FULL_STACK_VALUES,
+        memory_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_GATING_HALTING: _define_preset(
+        description=(
+            "Default config with full adaptive parameter controls, per-layer "
+            "encoder gating, and encoder stack halting enabled."
+        ),
+        base=_FULL_STACK_VALUES,
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_RECURRENT: _define_preset(
+        description=(
+            "Default config with full adaptive parameter controls wrapped in "
+            "fixed-step encoder recurrence."
+        ),
+        base=_FULL_STACK_VALUES,
+        recurrent_flag=True,
+    ),
+    ExperimentPreset.BANK_WEIGHT_MASK: _define_preset(
+        description=(
+            "Default config with layered weighted-bank dynamic weights and "
+            "weight-informed row masking on eligible encoder linear stacks."
+        ),
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
+        row_mask_option=WeightInformedScoreAxisMaskConfig,
+    ),
+    ExperimentPreset.LOW_RANK_POST_NORM: _define_preset(
+        description=(
+            "Default config with low-rank dynamic weights and post-layer "
+            "normalization enabled."
+        ),
+        weight_option=LowRankDynamicWeightConfig,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.RECURRENT: _define_preset(
+        description=(
+            "Default config wrapped in fixed-step recurrence, reusing the "
+            "encoder stack for each recurrent step."
+        ),
+        recurrent_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating enabled after each "
+            "recurrent encoder update."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING: _define_preset(
+        description=(
+            "Default recurrent config with recurrent halting enabled, allowing "
+            "early stopping before the max step count."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config whose reused encoder stack has shared "
+            "memory enabled."
+        ),
+        recurrent_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING: _define_preset(
+        description=(
+            "Default recurrent config with both step-level gating and recurrent "
+            "halting enabled."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating and shared memory "
+            "in the reused encoder stack."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with recurrent halting and shared memory "
+            "in the reused encoder stack."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating, recurrent halting, "
+            "and shared memory in the reused encoder stack."
+        ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_RESIDUAL: _define_preset(
+        description=(
+            "Default recurrent config using a residual encoder stack at each "
+            "recurrent step."
+        ),
+        recurrent_flag=True,
+        stack_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RECURRENT_POST_NORM: _define_preset(
+        description=(
+            "Default recurrent config using a post-normalized encoder stack at "
+            "each recurrent step."
+        ),
+        recurrent_flag=True,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
 }
 

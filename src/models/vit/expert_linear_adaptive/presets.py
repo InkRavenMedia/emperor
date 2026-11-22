@@ -1,3 +1,5 @@
+from typing import Unpack
+
 import models.vit.expert_linear_adaptive.config as config
 from emperor.config import BaseOptions
 from emperor.embedding.absolute import (
@@ -13,6 +15,7 @@ from models.vit.expert_linear_adaptive.config_builder import (
     VitExpertLinearAdaptiveConfigBuilder,
 )
 from models.vit.expert_linear_adaptive.runtime_defaults import runtime_from_flat
+from models.vit.expert_linear_adaptive.runtime_options import PresetValues
 
 
 def default_patch_size_for_dataset(dataset: type) -> int:
@@ -37,9 +40,16 @@ class ExperimentPreset(BaseOptions):
     LOW_RANK_EXPERT_WEIGHT = 6
 
 
+def _define_preset(
+    *,
+    description: str,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    return PresetDefinition(preset_values=values, description=description)
+
+
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values={},
+    ExperimentPreset.BASELINE: _define_preset(
         description=(
             "Default config: a Vision Transformer classifier with adaptive expert "
             "linear patch embeddings, a trainable class token, learned image "
@@ -47,49 +57,33 @@ _PRESET_DEFINITIONS = {
             "bidirectional encoder."
         ),
     ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values={
-            "layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
-        description=(
-            "Default config with layer normalization after each encoder sub-block."
-        ),
+    ExperimentPreset.POST_NORM: _define_preset(
+        description="Default config with layer normalization after each encoder sub-block.",
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.SINUSOIDAL: PresetDefinition(
-        preset_values={
-            "positional_embedding_option": ImageSinusoidalPositionalEmbeddingConfig,
-        },
-        description=(
-            "Default config with fixed sinusoidal image positional embeddings."
-        ),
+    ExperimentPreset.SINUSOIDAL: _define_preset(
+        description="Default config with fixed sinusoidal image positional embeddings.",
+        positional_embedding_option=ImageSinusoidalPositionalEmbeddingConfig,
     ),
-    ExperimentPreset.ATTENTION_BIAS: PresetDefinition(
-        preset_values={
-            "attn_bias_flag": True,
-            "attn_add_key_value_bias_flag": True,
-        },
-        description=(
-            "Default config with attention projection bias and key/value bias enabled."
-        ),
+    ExperimentPreset.ATTENTION_BIAS: _define_preset(
+        description="Default config with attention projection bias and key/value bias enabled.",
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
     ),
-    ExperimentPreset.TOP1_SWITCH_AUX: PresetDefinition(
-        preset_values={
-            "top_k": 1,
-            "sampler_normalize_probabilities_flag": False,
-            "sampler_switch_loss_weight": 0.1,
-        },
-        description=(
-            "Default config with top-1 expert routing and switch auxiliary loss."
-        ),
+    ExperimentPreset.TOP1_SWITCH_AUX: _define_preset(
+        description="Default config with top-1 expert routing and switch auxiliary loss.",
+        top_k=1,
+        sampler_normalize_probabilities_flag=False,
+        sampler_switch_loss_weight=0.1,
     ),
 }
-_PRESET_DEFINITIONS[ExperimentPreset.LOW_RANK_EXPERT_WEIGHT] = PresetDefinition(
-    preset_values={
-        "weight_option_flag": True,
-        "weight_option": config.LowRankDynamicWeightConfig,
-    },
-    description="Default config with adaptive low-rank dynamic weights inside expert "
-    "feed-forward internals.",
+_PRESET_DEFINITIONS[ExperimentPreset.LOW_RANK_EXPERT_WEIGHT] = _define_preset(
+    description=(
+        "Default config with adaptive low-rank dynamic weights inside expert "
+        "feed-forward internals."
+    ),
+    weight_option_flag=True,
+    weight_option=config.LowRankDynamicWeightConfig,
 )
 
 

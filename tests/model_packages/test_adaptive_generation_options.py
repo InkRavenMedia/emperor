@@ -29,6 +29,8 @@ from emperor.augmentations.adaptive_parameters import (
     SingleModelDynamicWeightConfig,
     SoftWeightedBankDynamicWeightConfig,
     SumGroupingConfig,
+    TopSliceAxisMaskConfig,
+    WeightDecayScheduleOptions,
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -64,6 +66,80 @@ def _augmentations(value):
     elif isinstance(value, (list, tuple)):
         for item in value:
             yield from _augmentations(item)
+
+
+def test_callable_generation_records_keep_their_selected_mixture():
+    from models.bert.linear_adaptive import (
+        _adaptive_parameter_config_factory as parameters,
+    )
+    from models.bert.linear_adaptive._generation import (
+        MixtureGenerationConfig,
+        WeightGenerationConfig,
+    )
+
+    class CallableWeight(WeightGenerationConfig):
+        def __call__(self):
+            raise AssertionError("an existing weight generation record was invoked")
+
+    class CallableMixture(MixtureGenerationConfig):
+        def __call__(self):
+            raise AssertionError("an existing bias generation record was invoked")
+
+    mixture = CallableMixture(num_experts=3, top_k=2)
+    weight = parameters.build_weight_config(
+        MatrixWeightsMixtureConfig,
+        generation=CallableWeight(mixture=mixture),
+        generator_depth=1,
+        decay_schedule=WeightDecayScheduleOptions.DISABLED,
+        decay_rate=0.0,
+        decay_warmup_batches=0,
+        normalization_option=WeightNormalizationOptions.DISABLED,
+        normalization_position_option=WeightNormalizationPositionOptions.DISABLED,
+        bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
+    )
+    bias = parameters.build_bias_config(
+        MatrixBiasMixtureConfig,
+        generation=mixture,
+        decay_schedule=WeightDecayScheduleOptions.DISABLED,
+        decay_rate=0.0,
+        decay_warmup_batches=0,
+        bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
+    )
+    assert (weight.num_experts, weight.top_k) == (3, 2)
+    assert (bias.num_experts, bias.top_k) == (3, 2)
+
+
+@pytest.mark.parametrize(
+    ("package_name", "expected_width"),
+    [
+        ("linears/linear_adaptive", None),
+        ("transformer/linear_adaptive", 0.75),
+        ("transformer/expert_linear_adaptive", 0.75),
+    ],
+)
+def test_custom_mask_preserves_package_constructor_defaults(
+    package_name, expected_width
+):
+    class CustomMask(TopSliceAxisMaskConfig):
+        pass
+
+    configuration = model_package(package_name).build_configuration(
+        config_overrides=dict(
+            mask_option_flag=True,
+            row_mask_option=CustomMask,
+            mask_floor=0.25,
+            mask_transition_width=0.75,
+        )
+    )
+    masks = [
+        augmentation.mask_config
+        for augmentation in _augmentations(configuration)
+        if isinstance(augmentation.mask_config, CustomMask)
+    ]
+    assert masks
+    for mask in masks:
+        assert mask.mask_floor == 0.25
+        assert mask.mask_transition_width == expected_width
 
 
 @pytest.mark.parametrize("package_name", PACKAGES)
