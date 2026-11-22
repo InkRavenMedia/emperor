@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from models.vit._encoder_builder import EncoderControls
 from models.vit.expert_linear.runtime_options import (
     DynamicMemoryOptions,
     LayerControllerOptions,
@@ -10,7 +11,15 @@ from models.vit.expert_linear.runtime_options import (
 
 
 @dataclass(frozen=True)
-class VitControlFactoryDependencies:
+class VitControlFactoryDependencies(
+    EncoderControls[
+        SubmoduleStackOptions,
+        MainLayerStackOptions,
+        LayerControllerOptions,
+        DynamicMemoryOptions,
+        RecurrentControllerOptions,
+    ]
+):
     hidden_dim: int
     encoder_stack_options: MainLayerStackOptions
     encoder_submodule_stack_options: SubmoduleStackOptions | None
