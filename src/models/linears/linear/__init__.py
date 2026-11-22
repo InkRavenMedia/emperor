@@ -11,10 +11,6 @@ _IDENTITY = ModelIdentity("linears", "linear")
 class _ModelPackageAdapter:
     def load_metadata(self) -> ModelMetadata:
         from . import config, dataset_options, monitor_options, search_space
-        from ._inspection_metadata import (
-            CONFIGURATION_METADATA_SECTIONS,
-            SEARCH_METADATA_SECTIONS,
-        )
 
         return ModelMetadata(
             identity=_IDENTITY,
@@ -22,8 +18,6 @@ class _ModelPackageAdapter:
             dataset_options=dataset_options,
             monitor_options_source=monitor_options,
             search_space=search_space,
-            configuration_metadata_sections=CONFIGURATION_METADATA_SECTIONS,
-            search_metadata_sections=SEARCH_METADATA_SECTIONS,
         )
 
     def load_runtime_options_type(self) -> type:

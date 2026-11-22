@@ -241,13 +241,36 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
                 ):
                     spec = package.runtime_defaults_spec
 
+                def ordered_sections(entries, order):
+                    return [(key, entries[key].get("sectionPath", [])) for key in order]
+
                 self.assertEqual(
-                    _plain_metadata(spec.configuration_metadata),
-                    source_configuration,
+                    ordered_sections(
+                        spec.configuration_metadata,
+                        sorted(
+                            spec.configuration_metadata,
+                            key=lambda key: spec.configuration_metadata[key]["sortKey"],
+                        ),
+                    ),
+                    ordered_sections(
+                        source_configuration,
+                        sorted(
+                            source_configuration,
+                            key=lambda key: source_configuration[key]["sortKey"],
+                        ),
+                    ),
                 )
                 self.assertEqual(
-                    _plain_metadata(spec.search_metadata),
-                    source_search,
+                    ordered_sections(
+                        spec.search_metadata,
+                        [key for key, _ in spec.ordered_search_items()],
+                    ),
+                    ordered_sections(
+                        source_search,
+                        sorted(
+                            source_search, key=lambda key: source_search[key]["line"]
+                        ),
+                    ),
                 )
 
     def test_annotated_owner_places_generated_bert_controls_in_catalog_order(
@@ -285,6 +308,42 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         self.assertEqual(sorted(keys, key=lambda key: reference[key]["sortKey"]), keys)
         for key in keys:
             self.assertEqual(actual[key]["sectionPath"], reference[key]["sectionPath"])
+
+    def test_annotated_linear_fields_keep_source_locations_in_authoring_only(
+        self,
+    ) -> None:
+        from models.linears.linear import config
+
+        runtime = _linears_linear().runtime_defaults_spec.configuration_metadata
+        with patch.object(
+            Path, "read_text", side_effect=AssertionError("unexpected source read")
+        ):
+            fresh = ModelPackage(_linears_linear().identity, _linears_linear()._adapter)
+            self.assertEqual(
+                fresh.runtime_defaults_spec.configuration_metadata["BATCH_SIZE"],
+                runtime["BATCH_SIZE"],
+            )
+        self.assertNotIn("line", runtime["BATCH_SIZE"])
+        source = configuration_field_metadata(config)
+        source_lines = Path(config.__file__).read_text().splitlines()
+        self.assertTrue(
+            source_lines[source["BATCH_SIZE"]["line"] - 1].startswith("BATCH_SIZE:")
+        )
+
+    def test_legacy_import_keeps_the_annotated_fields_section_and_order(self) -> None:
+        config = ModuleType("legacy_import_fixture")
+        with TemporaryDirectory() as directory:
+            path = Path(directory, "config.py")
+            path.write_text(
+                "from models.linears.linear.config import BATCH_SIZE\n"
+                "# Custom\nWIDTH: int = 10\n",
+                encoding="utf-8",
+            )
+            config.__file__ = str(path)
+            metadata = configuration_field_metadata(config)
+        self.assertEqual(metadata["BATCH_SIZE"]["sectionPath"], ["Global"])
+        self.assertEqual(metadata["WIDTH"]["sectionPath"], ["Custom"])
+        self.assertLess(metadata["BATCH_SIZE"]["sortKey"], metadata["WIDTH"]["sortKey"])
 
     def test_explicit_declarations_are_authoritative(self) -> None:
         from model_runtime.packages import RuntimeDefaultsSection
