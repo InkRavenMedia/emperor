@@ -29,11 +29,21 @@ class MaskedWordModel(BertPretrainingExperiment):
 
     def __init__(self, config: ModelConfig):
         experiment = config.experiment_config
+        if experiment is None:
+            raise ValueError("experiment_config is required to build the model")
         if not isinstance(experiment, MaskedWordExperimentConfig):
             raise TypeError(
                 "MaskedWordModel requires a Mixer MaskedWordExperimentConfig"
             )
         super().__init__(config)
+        for field in (
+            "embedding_config",
+            "masked_word_decoder_config",
+            "positional_embedding_config",
+            "encoder_config",
+        ):
+            if getattr(experiment, field) is None:
+                raise ValueError(f"experiment_config.{field} is required")
         self.experiment_config = experiment
         embedding = experiment.embedding_config
         decoder = experiment.masked_word_decoder_config
@@ -57,12 +67,15 @@ class MaskedWordModel(BertPretrainingExperiment):
         stack = getattr(
             experiment.encoder_config, "block_config", experiment.encoder_config
         )
+        normalization_position = LayerNormPositionOptions.DISABLED
+        if (
+            stack.layer_config.layer_model_config.layer_norm_position
+            == LayerNormPositionOptions.BEFORE
+        ):
+            normalization_position = LayerNormPositionOptions.BEFORE
         self.encoder_layer_norm = self._normalization(
             experiment.encoder_output_normalization,
-            LayerNormPositionOptions.BEFORE
-            if stack.layer_config.layer_model_config.layer_norm_position
-            == LayerNormPositionOptions.BEFORE
-            else LayerNormPositionOptions.DISABLED,
+            normalization_position,
         )
         self.word_decoder = decoder.build()
         self.word_decoder.byte_embedding = self.token_embedding.byte_embedding
@@ -83,14 +96,13 @@ class MaskedWordModel(BertPretrainingExperiment):
     def _normalization(
         self, normalization: NormalizationOptions, position: LayerNormPositionOptions
     ) -> LayerNormalizationDelegate:
-        return LayerNormalizationDelegate(
-            LayerConfig(
-                input_dim=self.cfg.hidden_dim,
-                output_dim=self.cfg.hidden_dim,
-                layer_norm_position=position,
-                normalization=normalization,
-            )
+        layer_config = LayerConfig(
+            input_dim=self.cfg.hidden_dim,
+            output_dim=self.cfg.hidden_dim,
+            layer_norm_position=position,
+            normalization=normalization,
         )
+        return LayerNormalizationDelegate(layer_config)
 
     def forward(self, batch: BertMaskedWordBatch):
         return self._masked_word_outputs(batch)[:3]
@@ -101,6 +113,7 @@ class MaskedWordModel(BertPretrainingExperiment):
         embedding = self.token_embedding(batch.input_words, batch.attention_mask)
         positions = batch.attention_mask.long()
         hidden = embedding.hidden + self.positional_embedding(positions)
+        position_loss = LayerState.module_loss(self.positional_embedding)
         hidden = hidden + self.token_type_embedding(batch.token_type_ids)
         hidden = self.embedding_dropout(
             self.embedding_layer_norm.before_model(LayerState(hidden=hidden)).hidden
@@ -123,8 +136,10 @@ class MaskedWordModel(BertPretrainingExperiment):
                 conditioning.new_zeros(()),
             )
         )
-        encoder_loss = state.loss if state.loss is not None else hidden.new_zeros(())
-        auxiliary_loss = embedding.loss + encoder_loss + predictions.loss
+        auxiliary_loss = embedding.loss + predictions.loss
+        for stage_loss in (position_loss, state.loss):
+            if stage_loss is not None:
+                auxiliary_loss = auxiliary_loss + stage_loss
         nsp_logits = self.nsp_head(
             self.pooler_activation(self.pooler(sequence_output[:, 0]))
         )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
@@ -40,6 +41,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _learned_grouping, _projection_model, _sequence_expansion
+from models.mlp_mixer.expert_linear_adaptive import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
@@ -1143,5 +1145,34 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     expert_recurrent_halting_stack_bias_flag: bool | None
     weight_normalization_learnable_scale_flag: bool = False
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        if self.hierarchical_masked_word_flag:
+            SETTINGS_VALIDATION.positive_integer(
+                "sequence_length", self.sequence_length
+            )
+        SETTINGS_VALIDATION.flat_stack_controls(self)
+        for flag, option in (
+            ("weight_option_flag", "weight_option"),
+            ("bias_option_flag", "bias_option"),
+            ("diagonal_option_flag", "diagonal_option"),
+            ("mask_option_flag", "row_mask_option"),
+        ):
+            if getattr(self, flag) and getattr(self, option) is None:
+                raise ValueError(f"{option} must be set when {flag} is True")
+
 
 __all__ = ["RuntimeOptions"]
+
+
+class PresetValues(TypedDict, total=False):
+    diagonal_option_flag: bool
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    sampler_normalize_probabilities_flag: bool
+    sampler_switch_loss_weight: float
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    top_k: int
