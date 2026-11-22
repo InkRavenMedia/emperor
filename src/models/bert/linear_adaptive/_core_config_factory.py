@@ -123,7 +123,9 @@ class CoreConfigFactory:
         )
 
     def build_encoder_config(self):
-        return BertCoreConfigFactory(self.__core_dependencies()).build_encoder_config()
+        core_dependencies = self.__core_dependencies()
+        encoder_config = BertCoreConfigFactory(core_dependencies).build_encoder_config()
+        return encoder_config
 
     def __attention_projection_stack_options(self) -> SubmoduleStackOptions:
         defaults = config_defaults.linears_submodule_stack_options(

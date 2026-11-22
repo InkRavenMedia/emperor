@@ -4,10 +4,10 @@ from dataclasses import replace
 from types import ModuleType
 from typing import Any
 
-from models.bert.linear_adaptive import _config_defaults as config_defaults
-from models.bert.linear_adaptive._flat_updates import (
+from models._flat_updates import (
     pop_updates as _pop_updates,
 )
+from models.bert.linear_adaptive import _config_defaults as config_defaults
 from models.bert.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.bert.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
@@ -17,22 +17,22 @@ from models.bert.linear_adaptive.runtime_options import (
     HiddenAdaptiveWeightOptions,
 )
 
-_ADAPTIVE_GENERATOR_SOURCE_FIELD_MAP = {
-    "independent_flag": "independent_flag",
-    "hidden_dim": "hidden_dim",
-    "layer_norm_position": "layer_norm_position",
-    "normalization": "normalization",
-    "num_layers": "num_layers",
-    "activation": "activation",
-    "residual_connection_option": "residual_connection_option",
-    "residual_block_size": "residual_block_size",
-    "residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
-    "residual_model_flag": "residual_model_flag",
-    "dropout_probability": "dropout_probability",
-    "last_layer_bias_option": "last_layer_bias_option",
-    "apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
-    "bias_flag": "bias_flag",
-}
+_ADAPTIVE_GENERATOR_SOURCE_FIELDS = (
+    "independent_flag",
+    "hidden_dim",
+    "layer_norm_position",
+    "normalization",
+    "num_layers",
+    "activation",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "bias_flag",
+)
 _HIDDEN_ADAPTIVE_WEIGHT_FIELD_MAP = {
     "generator_depth": "generator_depth",
     "weight_option_flag": "option_flag",
@@ -107,7 +107,9 @@ def _adaptive_generator_stack_options_from_kwargs(
             "adaptive_generator_stack_bias_flag": "bias_flag",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _adaptive_generator_stack_source_from_kwargs(
@@ -118,12 +120,11 @@ def _adaptive_generator_stack_source_from_kwargs(
 ) -> AdaptiveGeneratorStackSource:
     updates = _pop_updates(
         kwargs,
-        {
-            f"{prefix}_{flat_field}": dataclass_field
-            for flat_field, dataclass_field in _ADAPTIVE_GENERATOR_SOURCE_FIELD_MAP.items()
-        },
+        {f"{prefix}_{field}": field for field in _ADAPTIVE_GENERATOR_SOURCE_FIELDS},
     )
-    return replace(source, **updates) if updates else source
+    if updates:
+        source = replace(source, **updates)
+    return source
 
 
 def _hidden_adaptive_weight_options_from_kwargs(

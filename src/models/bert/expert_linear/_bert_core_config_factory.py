@@ -1,13 +1,11 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-import torch
-
 from emperor.attention import (
     MixtureOfAttentionHeadsConfig,
     SelfAttentionConfig,
-    SelfAttentionProjectionStrategy,
 )
+from emperor.config import ConfigBase
 from emperor.experts import MixtureOfExpertsModelConfig
 from emperor.layers import (
     ActivationOptions,
@@ -24,9 +22,8 @@ from emperor.transformer import (
     TransformerEncoderBlockLayerConfig,
     TransformerEncoderLayerConfig,
 )
-from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models import _sequence_expansion, _transformer_stack
 from models.bert.expert_linear._control_factory_dependencies import (
     BertControlFactoryDependencies,
 )
@@ -146,7 +143,8 @@ class BertCoreConfigFactory:
         self.expert_config_factory = dependencies.expert_config_factory
 
     def build_encoder_config(self):
-        return self._build_encoder_config()
+        encoder_config = self._build_encoder_config()
+        return encoder_config
 
     def _build_encoder_config(self):
         options = self.encoder_options
@@ -155,25 +153,28 @@ class BertCoreConfigFactory:
         gate_factory = BertGateConfigFactory(dependencies).build_encoder_factory()
         halting_factory = BertHaltingConfigFactory(dependencies).build_encoder_factory()
         memory_factory = BertMemoryConfigFactory(dependencies).build_encoder_factory()
-        halting_config = (
-            halting_factory.build_halting_config()
-            if halting_factory is not None
-            else None
-        )
+        halting_config = None
+        if halting_factory is not None:
+            halting_config = halting_factory.build_halting_config()
         stack_residual_connection_option = self._stack_residual_connection_option()
         stack_residual_model_flag = self._stack_residual_model_flag()
         stack_residual_block_size = self._stack_residual_block_size()
         stack_residual_rms_norm_epsilon = self._stack_residual_rms_norm_epsilon()
+        residual_stack_options = None
+        if self.encoder_stack_options is not None:
+            residual_stack_options = self.encoder_stack_options.residual_stack_options
         residual_config = build_residual_config(
             stack_residual_connection_option,
             stack_residual_model_flag,
-            (
-                self.encoder_stack_options.residual_stack_options
-                if self.encoder_stack_options is not None
-                else None
-            ),
+            (residual_stack_options),
             residual_block_size=stack_residual_block_size,
             residual_rms_norm_epsilon=stack_residual_rms_norm_epsilon,
+        )
+        gate_config = None
+        if gate_factory is not None:
+            gate_config = gate_factory.build_gate_config()
+        sequence_expansion_config = _sequence_expansion.build_sequence_expansion_config(
+            self.encoder_options, self.hidden_dim
         )
         layer_config = TransformerEncoderBlockLayerConfig(
             activation=ActivationOptions.DISABLED,
@@ -181,29 +182,29 @@ class BertCoreConfigFactory:
             normalization=NormalizationOptions.RMS_NORM,
             residual_config=residual_config,
             dropout_probability=0.0,
-            gate_config=(
-                gate_factory.build_gate_config() if gate_factory is not None else None
-            ),
+            gate_config=(gate_config),
             halting_config=None,
             layer_model_config=layer_model_config,
-            sequence_expansion_config=_sequence_expansion.build_sequence_expansion_config(
-                self.encoder_options, self.hidden_dim
-            ),
+            sequence_expansion_config=sequence_expansion_config,
         )
+        last_layer_bias_option = self._stack_last_layer_bias_option()
+        apply_output_postprocessing_flag = (
+            self._stack_apply_output_postprocessing_flag()
+        )
+        shared_gate_config = self._shared_gate_config()
+        shared_memory_config = None
+        if memory_factory is not None:
+            shared_memory_config = memory_factory.build_memory_config()
         stack_config = LayerStackConfig(
             input_dim=self.hidden_dim,
             hidden_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
             num_layers=options.num_layers,
-            last_layer_bias_option=self._stack_last_layer_bias_option(),
-            apply_output_postprocessing_flag=self._stack_apply_output_postprocessing_flag(),
-            shared_gate_config=self._shared_gate_config(),
+            last_layer_bias_option=last_layer_bias_option,
+            apply_output_postprocessing_flag=apply_output_postprocessing_flag,
+            shared_gate_config=shared_gate_config,
             shared_halting_config=halting_config,
-            shared_memory_config=(
-                memory_factory.build_memory_config()
-                if memory_factory is not None
-                else None
-            ),
+            shared_memory_config=(shared_memory_config),
             layer_config=layer_config,
         )
         recurrent_factory = BertRecurrentConfigFactory(
@@ -211,22 +212,24 @@ class BertCoreConfigFactory:
         ).build_encoder_factory()
         if recurrent_factory is None:
             return stack_config
-        return recurrent_factory.build_config(
+        encoder_config = recurrent_factory.build_config(
             stack_config,
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
         )
+        return encoder_config
 
     def _build_encoder_layer_config(self) -> TransformerEncoderLayerConfig:
         options = self.encoder_options
         attention_config = self._build_attention_config()
         feed_forward_config = self._build_feed_forward_config()
+        residual_config = AdditiveResidualConfig()
         return TransformerEncoderLayerConfig(
             embedding_dim=self.hidden_dim,
             layer_norm_position=options.layer_norm_position,
             normalization=options.normalization,
             dropout_probability=options.dropout_probability,
-            residual_config=AdditiveResidualConfig(),
+            residual_config=residual_config,
             attention_config=attention_config,
             feed_forward_config=feed_forward_config,
         )
@@ -251,78 +254,51 @@ class BertCoreConfigFactory:
                     _source_memory.build_source_memory_config(attention_options)
                 )
                 return attention_config
-        return SelfAttentionConfig(
+        source_memory_config = _source_memory.build_source_memory_config(
+            attention_options
+        )
+        return _transformer_stack.separate_self_attention(
             batch_size=self.batch_size,
             num_heads=attention_options.num_heads,
-            embedding_dim=self.hidden_dim,
-            query_key_projection_dim=self.hidden_dim,
-            value_projection_dim=self.hidden_dim,
-            target_sequence_length=self.sequence_length,
-            source_sequence_length=self.sequence_length,
-            target_dtype=torch.float32,
+            hidden_dim=self.hidden_dim,
+            sequence_length=self.sequence_length,
             dropout_probability=encoder_options.dropout_probability,
-            zero_attention_flag=False,
             causal_attention_mask_flag=encoder_options.causal_attention_mask_flag,
             add_key_value_bias_flag=attention_options.add_key_value_bias_flag,
             source_memory_flag=source_memory_flag,
-            source_memory_config=_source_memory.build_source_memory_config(
-                attention_options
-            ),
-            average_attention_weights_flag=False,
-            return_attention_weights_flag=False,
-            batch_first_flag=True,
+            source_memory_config=source_memory_config,
             projection_model_config=projection_model_config,
-            projection_strategy=SelfAttentionProjectionStrategy.SEPARATE,
         )
 
     def _build_feed_forward_config(self) -> FeedForwardConfig:
         stack_config = self._build_feed_forward_stack_config()
-        configured_stack = build_soft_moe_stack(
+        return _transformer_stack.feed_forward_config(
             stack_config, self.feed_forward_options.soft_moe_config, self.hidden_dim
-        )
-        return FeedForwardConfig(
-            input_dim=self.hidden_dim,
-            output_dim=self.hidden_dim,
-            stack_config=configured_stack,
         )
 
     def _build_attention_projection_stack_config(self):
         stack_config = self._build_attention_projection_base_stack_config()
         self._apply_attention_projection_controls(stack_config)
+        control_factory_dependencies = self._control_factory_dependencies()
         recurrent_factory = BertRecurrentConfigFactory(
-            self._control_factory_dependencies()
+            control_factory_dependencies
         ).build_attention_projection_factory()
         if recurrent_factory is None:
             return stack_config
-        return recurrent_factory.build_config(
+        attention_projection_stack_config = recurrent_factory.build_config(
             stack_config,
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
         )
+        return attention_projection_stack_config
 
     def _build_attention_projection_base_stack_config(self) -> LayerStackConfig:
         options = self._effective_attention_projection_stack_options()
         factory = self.attention_projection_linear_layer_config_factory
-        return factory.build_linear_stack_config(
-            layer_model_config=(
-                factory.build_backend_linear_layer_config(
-                    bias_flag=options.bias_flag,
-                )
-            ),
-            hidden_dim=options.hidden_dim,
-            num_layers=options.num_layers,
-            activation=options.activation,
-            residual_connection_option=options.residual_connection_option,
-            residual_block_size=options.residual_block_size,
-            residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-            residual_model_flag=options.residual_model_flag,
-            residual_stack_options=options.residual_stack_options,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            dropout_probability=options.dropout_probability,
-            last_layer_bias_option=options.last_layer_bias_option,
-            apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
+        attention_projection_base_stack_config = factory.build_submodule_stack_config(
+            options
         )
+        return attention_projection_base_stack_config
 
     def _apply_attention_projection_controls(
         self,
@@ -339,73 +315,41 @@ class BertCoreConfigFactory:
             dependencies
         ).build_attention_projection_factory()
         controller_options = self.attention_projection_layer_controller_options
-        if (
-            gate_factory is not None
-            and controller_options is not None
-            and controller_options.stack_gate_flag
-        ):
-            stack_config.layer_config.gate_config = gate_factory.build_gate_config()
-        if (
-            halting_factory is not None
-            and controller_options is not None
-            and controller_options.stack_halting_flag
-        ):
-            stack_config.layer_config.halting_config = (
-                halting_factory.build_halting_config()
-            )
-        if (
-            controller_options is not None
-            and controller_options.shared_gate_config is not None
-        ):
-            stack_config.shared_gate_config = controller_options.shared_gate_config
-        if (
-            memory_factory is not None
-            and self.attention_projection_dynamic_memory_options is not None
-            and self.attention_projection_dynamic_memory_options.memory_flag
-        ):
-            stack_config.shared_memory_config = memory_factory.build_memory_config()
+        _transformer_stack.apply_enabled_controls(
+            stack_config,
+            controller_options,
+            self.attention_projection_dynamic_memory_options,
+            gate_factory,
+            halting_factory,
+            memory_factory,
+        )
 
     def _build_feed_forward_stack_config(self):
         stack_config = self._build_feed_forward_base_stack_config()
         self._apply_feed_forward_controls(stack_config)
+        control_factory_dependencies = self._control_factory_dependencies()
         recurrent_factory = BertRecurrentConfigFactory(
-            self._control_factory_dependencies()
+            control_factory_dependencies
         ).build_feed_forward_factory()
         if recurrent_factory is None:
             return stack_config
-        return recurrent_factory.build_config(
+        feed_forward_stack_config = recurrent_factory.build_config(
             stack_config,
             input_dim=self.hidden_dim,
             output_dim=self.hidden_dim,
         )
+        return feed_forward_stack_config
 
     def _build_feed_forward_base_stack_config(self):
         options = self._effective_feed_forward_stack_options()
         if self.expert_config_factory is not None:
-            return self.expert_config_factory.build_feed_forward_base_stack_config(
-                options
+            feed_forward_base_stack_config = (
+                self.expert_config_factory.build_feed_forward_base_stack_config(options)
             )
+            return feed_forward_base_stack_config
         factory = self.feed_forward_linear_layer_config_factory
-        return factory.build_linear_stack_config(
-            layer_model_config=(
-                factory.build_backend_linear_layer_config(
-                    bias_flag=options.bias_flag,
-                )
-            ),
-            hidden_dim=options.hidden_dim,
-            num_layers=options.num_layers,
-            activation=options.activation,
-            residual_connection_option=options.residual_connection_option,
-            residual_block_size=options.residual_block_size,
-            residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-            residual_model_flag=options.residual_model_flag,
-            residual_stack_options=options.residual_stack_options,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            dropout_probability=options.dropout_probability,
-            last_layer_bias_option=options.last_layer_bias_option,
-            apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-        )
+        feed_forward_base_stack_config = factory.build_submodule_stack_config(options)
+        return feed_forward_base_stack_config
 
     def _apply_feed_forward_controls(self, stack_config) -> None:
         target_stack = self._feed_forward_control_target_stack(stack_config)
@@ -418,41 +362,19 @@ class BertCoreConfigFactory:
             dependencies
         ).build_feed_forward_factory()
         controller_options = self.feed_forward_layer_controller_options
-        if (
-            gate_factory is not None
-            and controller_options is not None
-            and controller_options.stack_gate_flag
-        ):
-            target_stack.layer_config.gate_config = gate_factory.build_gate_config()
-        if (
-            halting_factory is not None
-            and controller_options is not None
-            and controller_options.stack_halting_flag
-        ):
-            target_stack.layer_config.halting_config = (
-                halting_factory.build_halting_config()
-            )
-        if (
-            controller_options is not None
-            and controller_options.shared_gate_config is not None
-        ):
-            target_stack.shared_gate_config = controller_options.shared_gate_config
-        if (
-            memory_factory is not None
-            and self.feed_forward_dynamic_memory_options is not None
-            and self.feed_forward_dynamic_memory_options.memory_flag
-        ):
-            target_stack.shared_memory_config = memory_factory.build_memory_config()
-
-    def _feed_forward_control_target_stack(self, stack_config) -> LayerStackConfig:
-        if isinstance(stack_config, LayerStackConfig):
-            return stack_config
-        if isinstance(stack_config, MixtureOfExpertsModelConfig):
-            return stack_config.stack_config
-        raise TypeError(
-            "Feed-forward controls require a LayerStackConfig or "
-            f"MixtureOfExpertsModelConfig, got {type(stack_config).__name__}."
+        _transformer_stack.apply_enabled_controls(
+            target_stack,
+            controller_options,
+            self.feed_forward_dynamic_memory_options,
+            gate_factory,
+            halting_factory,
+            memory_factory,
         )
+
+    def _feed_forward_control_target_stack(
+        self, stack_config: ConfigBase
+    ) -> LayerStackConfig:
+        return _transformer_stack.feed_forward_control_stack(stack_config)
 
     def _stack_residual_connection_option(self) -> type[ResidualConfig]:
         return self.encoder_stack_options.residual_connection_option
