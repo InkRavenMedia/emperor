@@ -1,45 +1,8 @@
-"""Package-owned scalar grouping resolution."""
+from models._adaptive_grouping import (
+    apply_declared_grouping_options as apply_grouping_options,
+)
+from models._adaptive_grouping import (
+    grouping_keys,
+)
 
-from dataclasses import replace
-
-from models import _learned_grouping
-
-
-def grouping_keys(config_module):
-    return {
-        prefix + field
-        for prefix in ("", "attn_", "ff_", "router_")
-        for field in _learned_grouping.GROUPING_FIELDS
-        if hasattr(config_module, (prefix + field).upper())
-    }
-
-
-def apply_grouping_options(options, values, config_module):
-    result = dict(options)
-    for role, prefix in (
-        ("", ""),
-        ("attention_", "attn_"),
-        ("feed_forward_", "ff_"),
-        ("router_", "router_"),
-    ):
-        weight_key = role + "hidden_adaptive_weight_options"
-        if role == "router_":
-            weight_key = "router_adaptive_weight_options"
-        if weight_key in result or (
-            prefix and hasattr(config_module, prefix.upper() + "GROUPING_SCOPE")
-        ):
-            result[role + "grouping_config"] = (
-                _learned_grouping.grouping_from_overrides(values, config_module, prefix)
-            )
-    for role, prefix in (
-        ("input_boundary_options", "input_layer_"),
-        ("output_boundary_options", "output_layer_"),
-    ):
-        if result.get(role) is not None:
-            result[role] = replace(
-                result[role],
-                grouping_config=_learned_grouping.grouping_from_overrides(
-                    values, config_module, prefix
-                ),
-            )
-    return result
+__all__ = ["apply_grouping_options", "grouping_keys"]

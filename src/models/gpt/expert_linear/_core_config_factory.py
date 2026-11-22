@@ -58,26 +58,22 @@ class CoreConfigDependencies:
 class CoreConfigFactory:
     def __init__(self, dependencies: CoreConfigDependencies) -> None:
         self.dependencies = dependencies
-        self.decoder_options = (
-            gpt_decoder_options(config)
-            if dependencies.decoder_options is None
-            else dependencies.decoder_options
-        )
-        self.attention_options = (
-            gpt_attention_options(config)
-            if dependencies.attention_options is None
-            else dependencies.attention_options
-        )
-        self.feed_forward_options = (
-            gpt_feed_forward_options(config)
-            if dependencies.feed_forward_options is None
-            else dependencies.feed_forward_options
-        )
-        self.stack_options = (
-            main_layer_stack_options(config)
-            if dependencies.stack_options is None
-            else dependencies.stack_options
-        )
+        decoder_options = dependencies.decoder_options
+        if decoder_options is None:
+            decoder_options = gpt_decoder_options(config)
+        self.decoder_options = decoder_options
+        attention_options = dependencies.attention_options
+        if attention_options is None:
+            attention_options = gpt_attention_options(config)
+        self.attention_options = attention_options
+        feed_forward_options = dependencies.feed_forward_options
+        if feed_forward_options is None:
+            feed_forward_options = gpt_feed_forward_options(config)
+        self.feed_forward_options = feed_forward_options
+        stack_options = dependencies.stack_options
+        if stack_options is None:
+            stack_options = main_layer_stack_options(config)
+        self.stack_options = stack_options
         self.attention_projection_stack_options = (
             dependencies.attention_projection_stack_options
             or attention_projection_stack_options(
@@ -96,8 +92,10 @@ class CoreConfigFactory:
         )
 
     def build_decoder_config(self):
-        core_factory = GptCoreConfigFactory(self.__core_dependencies())
-        return core_factory.build_decoder_config()
+        core_dependencies = self.__core_dependencies()
+        core_factory = GptCoreConfigFactory(core_dependencies)
+        decoder_config = core_factory.build_decoder_config()
+        return decoder_config
 
     def __core_dependencies(self) -> _CoreDependencies:
         dependencies = self.dependencies

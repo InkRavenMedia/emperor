@@ -44,51 +44,47 @@ class ExpertConfigFactory:
     def __init__(self, dependencies: ExpertConfigDependencies) -> None:
         self.dependencies = dependencies
         config_module = config
-        self.decoder_options = (
-            dependencies.decoder_options
-            if dependencies.decoder_options is not None
-            else config_defaults.gpt_decoder_options(config_module)
+        self.decoder_options = config_defaults.resolve_options(
+            dependencies.decoder_options,
+            config_defaults.gpt_decoder_options,
+            config_module,
         )
-        self.attention_options = (
-            dependencies.attention_options
-            if dependencies.attention_options is not None
-            else config_defaults.gpt_attention_options(config_module)
+        self.attention_options = config_defaults.resolve_options(
+            dependencies.attention_options,
+            config_defaults.gpt_attention_options,
+            config_module,
         )
-        self.feed_forward_options = (
-            dependencies.feed_forward_options
-            if dependencies.feed_forward_options is not None
-            else config_defaults.gpt_feed_forward_options(config_module)
+        self.feed_forward_options = config_defaults.resolve_options(
+            dependencies.feed_forward_options,
+            config_defaults.gpt_feed_forward_options,
+            config_module,
         )
-        self.mixture_options = (
-            dependencies.mixture_options
-            if dependencies.mixture_options is not None
-            else config_defaults.experts_mixture_options(config_module)
+        self.mixture_options = config_defaults.resolve_options(
+            dependencies.mixture_options,
+            config_defaults.experts_mixture_options,
+            config_module,
         )
-        self.expert_stack_options = (
-            dependencies.expert_stack_options
-            if dependencies.expert_stack_options is not None
-            else config_defaults.experts_submodule_stack_options(
-                config_module,
-                "expert",
-            )
+        self.expert_stack_options = config_defaults.resolve_options(
+            dependencies.expert_stack_options,
+            config_defaults.experts_submodule_stack_options,
+            config_module,
+            "expert",
         )
-        self.sampler_options = (
-            dependencies.sampler_options
-            if dependencies.sampler_options is not None
-            else config_defaults.experts_sampler_options(config_module)
+        self.sampler_options = config_defaults.resolve_options(
+            dependencies.sampler_options,
+            config_defaults.experts_sampler_options,
+            config_module,
         )
-        self.router_options = (
-            dependencies.router_options
-            if dependencies.router_options is not None
-            else config_defaults.experts_router_options(config_module)
+        self.router_options = config_defaults.resolve_options(
+            dependencies.router_options,
+            config_defaults.experts_router_options,
+            config_module,
         )
-        self.router_stack_options = (
-            dependencies.router_stack_options
-            if dependencies.router_stack_options is not None
-            else config_defaults.experts_submodule_stack_options(
-                config_module,
-                "router",
-            )
+        self.router_stack_options = config_defaults.resolve_options(
+            dependencies.router_stack_options,
+            config_defaults.experts_submodule_stack_options,
+            config_module,
+            "router",
         )
         self.expert_layer_controller_options = (
             config_defaults.expert_layer_controller_options(
@@ -113,9 +109,12 @@ class ExpertConfigFactory:
         self,
         feed_forward_stack_options: SubmoduleStackOptions,
     ):
-        return self.__expert_config_factory().build_feed_forward_base_stack_config(
-            feed_forward_stack_options
+        feed_forward_base_stack_config = (
+            self.__expert_config_factory().build_feed_forward_base_stack_config(
+                feed_forward_stack_options
+            )
         )
+        return feed_forward_base_stack_config
 
     def build_attention_config(
         self,
@@ -125,33 +124,33 @@ class ExpertConfigFactory:
         sequence_length: int,
         projection_model_config,
     ):
-        return self.__expert_config_factory().build_attention_config(
+        attention_config = self.__expert_config_factory().build_attention_config(
             batch_size=batch_size,
             hidden_dim=hidden_dim,
             sequence_length=sequence_length,
             projection_model_config=projection_model_config,
         )
+        return attention_config
 
     def __expert_config_factory(self) -> GptExpertConfigFactory:
         dependencies = self.dependencies
-        return GptExpertConfigFactory(
-            _ExpertDependencies(
-                hidden_dim=dependencies.hidden_dim,
-                decoder_options=self.decoder_options,
-                attention_options=self.attention_options,
-                feed_forward_options=self.feed_forward_options,
-                mixture_options=self.mixture_options,
-                expert_stack_options=self.expert_stack_options,
-                sampler_options=self.sampler_options,
-                router_options=self.router_options,
-                router_stack_options=self.router_stack_options,
-                expert_layer_controller_options=(self.expert_layer_controller_options),
-                expert_dynamic_memory_options=self.expert_dynamic_memory_options,
-                expert_recurrent_controller_options=(
-                    self.expert_recurrent_controller_options
-                ),
-                expert_attention_use_kv_expert_models_flag=(
-                    dependencies.expert_attention_use_kv_expert_models_flag
-                ),
-            )
+        expert_dependencies = _ExpertDependencies(
+            hidden_dim=dependencies.hidden_dim,
+            decoder_options=self.decoder_options,
+            attention_options=self.attention_options,
+            feed_forward_options=self.feed_forward_options,
+            mixture_options=self.mixture_options,
+            expert_stack_options=self.expert_stack_options,
+            sampler_options=self.sampler_options,
+            router_options=self.router_options,
+            router_stack_options=self.router_stack_options,
+            expert_layer_controller_options=(self.expert_layer_controller_options),
+            expert_dynamic_memory_options=self.expert_dynamic_memory_options,
+            expert_recurrent_controller_options=(
+                self.expert_recurrent_controller_options
+            ),
+            expert_attention_use_kv_expert_models_flag=(
+                dependencies.expert_attention_use_kv_expert_models_flag
+            ),
         )
+        return GptExpertConfigFactory(expert_dependencies)

@@ -1166,14 +1166,12 @@ class TestGptLinearModel(unittest.TestCase):
 
     def test_boundary_dimension_and_dropout_validation_matrix(self):
         defaults = self._default_runtime()
+        with self.assertRaisesRegex(ValueError, "hidden_dim"):
+            _build_typed_config(
+                decoder_options=replace(defaults.decoder_options, hidden_dim=0)
+            )
         cases = {
             "input_dim": {"input_dim": 0},
-            "hidden_dim": {
-                "decoder_options": replace(
-                    defaults.decoder_options,
-                    hidden_dim=0,
-                )
-            },
             "output_dim": {
                 "output_dim": 0,
                 "lm_head_options": GptLmHeadOptions(

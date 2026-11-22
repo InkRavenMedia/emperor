@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from types import ModuleType
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from emperor.layers import (
     ActivationOptions,
@@ -11,9 +11,17 @@ from emperor.layers import (
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from models import _attention_source_memory as _source_memory
 from models import _sequence_expansion
+from models._adaptive_grouping import (
+    apply_declared_grouping_options,
+    grouping_keys,
+)
+from models._flat_updates import (
+    pop_updates as _pop_updates,
+)
+from models._residual_stack import residual_source_from_overrides
+from models._stack_fields import ControllerStackFields, StackScope
 from models.gpt.expert_linear_adaptive._expert_adapter_support import (
-    _SUBMODULE_STACK_FIELD_MAP,
-    _controller_stack_source,
+    SUBMODULE_STACK_FIELDS,
     _controller_stack_source_from_kwargs,
     _recurrent_gate_stack_source,
     _recurrent_halting_stack_source,
@@ -60,16 +68,9 @@ from models.gpt.expert_linear_adaptive._expert_adapter_support import (
 from models.gpt.expert_linear_adaptive._expert_adapter_support import (
     _sampler_options_from_kwargs as _expert_adapter_sampler_options_from_kwargs,
 )
-from models.gpt.expert_linear_adaptive._flat_updates import (
-    pop_updates as _pop_updates,
-)
 from models.gpt.expert_linear_adaptive._generation import (
     apply_generation_options,
     generation_keys,
-)
-from models.gpt.expert_linear_adaptive._grouping import (
-    apply_grouping_options,
-    grouping_keys,
 )
 from models.gpt.expert_linear_adaptive._linear_adapter_support import (
     _adaptive_generator_stack_options_from_kwargs,
@@ -430,7 +431,9 @@ def expert_linear_adaptive_builder_kwargs_from_flat(
     builder_kwargs = apply_generation_options(
         builder_kwargs, generation_values, config_module
     )
-    return apply_grouping_options(builder_kwargs, generation_values, config_module)
+    return apply_declared_grouping_options(
+        builder_kwargs, generation_values, config_module
+    )
 
 
 def _attach_residual_stack_options(
@@ -440,63 +443,8 @@ def _attach_residual_stack_options(
 ) -> None:
     defaults = builder_kwargs["submodule_stack_options"]
     residual_stack_options = resolve_residual_stack_options(
-        ResidualStackSource(
-            coefficient_activation=flat_kwargs.get(
-                "residual_coefficient_activation",
-                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
-            ),
-            independent_flag=flat_kwargs.get(
-                "residual_stack_independent_flag",
-                config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,
-            ),
-            hidden_dim=flat_kwargs.get(
-                "residual_stack_hidden_dim", config_module.RESIDUAL_STACK_HIDDEN_DIM
-            ),
-            layer_norm_position=flat_kwargs.get(
-                "residual_stack_layer_norm_position",
-                config_module.RESIDUAL_STACK_LAYER_NORM_POSITION,
-            ),
-            normalization=flat_kwargs.get(
-                "residual_stack_normalization",
-                config_module.RESIDUAL_STACK_NORMALIZATION,
-            ),
-            num_layers=flat_kwargs.get(
-                "residual_stack_num_layers", config_module.RESIDUAL_STACK_NUM_LAYERS
-            ),
-            activation=flat_kwargs.get(
-                "residual_stack_activation", config_module.RESIDUAL_STACK_ACTIVATION
-            ),
-            residual_connection_option=flat_kwargs.get(
-                "residual_stack_residual_connection_option",
-                config_module.RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION,
-            ),
-            residual_block_size=flat_kwargs.get(
-                "residual_stack_residual_block_size",
-                config_module.RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE,
-            ),
-            residual_rms_norm_epsilon=flat_kwargs.get(
-                "residual_stack_residual_rms_norm_epsilon",
-                config_module.RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            ),
-            residual_model_flag=flat_kwargs.get(
-                "residual_stack_residual_model_flag",
-                config_module.RESIDUAL_STACK_RESIDUAL_MODEL_FLAG,
-            ),
-            dropout_probability=flat_kwargs.get(
-                "residual_stack_dropout_probability",
-                config_module.RESIDUAL_STACK_DROPOUT_PROBABILITY,
-            ),
-            last_layer_bias_option=flat_kwargs.get(
-                "residual_stack_last_layer_bias_option",
-                config_module.RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION,
-            ),
-            apply_output_postprocessing_flag=flat_kwargs.get(
-                "residual_stack_apply_output_postprocessing_flag",
-                config_module.RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            ),
-            bias_flag=flat_kwargs.get(
-                "residual_stack_bias_flag", config_module.RESIDUAL_STACK_BIAS_FLAG
-            ),
+        residual_source_from_overrides(
+            config_module, flat_kwargs.get, ResidualStackSource
         ),
         defaults,
     )
@@ -587,7 +535,9 @@ def _decoder_options_from_kwargs(
             "decoder_output_normalization": "output_normalization",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _embedding_options_from_kwargs(
@@ -645,7 +595,9 @@ def _embedding_options_from_kwargs(
             "hierarchical_embedding_encoder_num_layers": "hierarchical_encoder_num_layers",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _lm_head_options_from_kwargs(
@@ -665,7 +617,9 @@ def _lm_head_options_from_kwargs(
             "lm_head_bias_flag": "bias_flag",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _positional_embedding_options_from_kwargs(
@@ -687,7 +641,9 @@ def _positional_embedding_options_from_kwargs(
             "positional_embedding_auto_expand_flag": "auto_expand_flag",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _attention_options_from_kwargs(
@@ -717,7 +673,9 @@ def _attention_options_from_kwargs(
             **{f"attn_{name}": name for name in _source_memory.SOURCE_MEMORY_FIELDS},
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _feed_forward_options_from_kwargs(
@@ -739,7 +697,9 @@ def _feed_forward_options_from_kwargs(
             "soft_moe_config": "soft_moe_config",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _submodule_stack_options_from_kwargs(
@@ -765,12 +725,11 @@ def _submodule_stack_options_from_kwargs(
     )
     updates = _pop_updates(
         kwargs,
-        {
-            f"submodule_stack_{flat_field}": dataclass_field
-            for flat_field, dataclass_field in _SUBMODULE_STACK_FIELD_MAP.items()
-        },
+        {f"submodule_stack_{field}": field for field in SUBMODULE_STACK_FIELDS},
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _attention_projection_stack_options_from_kwargs(
@@ -808,7 +767,9 @@ def _attention_projection_stack_options_from_kwargs(
             "attn_stack_dropout_probability": "dropout_probability",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _feed_forward_stack_options_from_kwargs(
@@ -843,7 +804,9 @@ def _feed_forward_stack_options_from_kwargs(
             "ff_stack_dropout_probability": "dropout_probability",
         },
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 def _linear_role_layer_controller_options_from_kwargs(
@@ -1048,16 +1011,16 @@ def _default_attention_projection_stack_options(
     hidden_dim: int | None = None,
     activation: ActivationOptions | None = None,
 ) -> ExpertsSubmoduleStackOptions:
+    if hidden_dim is None:
+        hidden_dim = cast(int, config_module.ATTN_STACK_HIDDEN_DIM)
+    if activation is None:
+        activation = cast(ActivationOptions, config_module.ATTN_STACK_ACTIVATION)
     return ExpertsSubmoduleStackOptions(
-        hidden_dim=config_module.ATTN_STACK_HIDDEN_DIM
-        if hidden_dim is None
-        else hidden_dim,
+        hidden_dim=hidden_dim,
         num_layers=attention_options.num_layers,
         last_layer_bias_option=config_module.ATTN_STACK_LAST_LAYER_BIAS_OPTION,
         apply_output_postprocessing_flag=config_module.ATTN_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-        activation=config_module.ATTN_STACK_ACTIVATION
-        if activation is None
-        else activation,
+        activation=activation,
         layer_norm_position=config_module.ATTN_STACK_LAYER_NORM_POSITION,
         normalization=config_module.ATTN_STACK_NORMALIZATION,
         residual_connection_option=config_module.ATTN_STACK_RESIDUAL_CONNECTION_OPTION,
@@ -1075,10 +1038,10 @@ def _default_feed_forward_stack_options(
     *,
     hidden_dim: int | None = None,
 ) -> ExpertsSubmoduleStackOptions:
+    if hidden_dim is None:
+        hidden_dim = cast(int, config_module.FF_STACK_HIDDEN_DIM)
     return ExpertsSubmoduleStackOptions(
-        hidden_dim=config_module.FF_STACK_HIDDEN_DIM
-        if hidden_dim is None
-        else hidden_dim,
+        hidden_dim=hidden_dim,
         num_layers=feed_forward_options.num_layers,
         last_layer_bias_option=config_module.FF_STACK_LAST_LAYER_BIAS_OPTION,
         apply_output_postprocessing_flag=config_module.FF_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
@@ -1098,47 +1061,11 @@ def _attention_projection_layer_stack_sources(
     config_module: ModuleType,
 ) -> _LayerStackSources:
     return _LayerStackSources(
-        gate=_controller_stack_source(
-            independent_flag=config_module.ATTN_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config_module.ATTN_GATE_STACK_HIDDEN_DIM,
-            num_layers=config_module.ATTN_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config_module.ATTN_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config_module.ATTN_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.ATTN_GATE_STACK_ACTIVATION,
-            layer_norm_position=config_module.ATTN_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config_module.ATTN_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config_module.ATTN_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.ATTN_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.ATTN_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config_module.ATTN_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config_module.ATTN_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config_module.ATTN_GATE_STACK_BIAS_FLAG,
+        gate=ControllerStackFields.GATE.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.ATTENTION
         ),
-        halting=_controller_stack_source(
-            independent_flag=config_module.ATTN_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config_module.ATTN_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config_module.ATTN_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.ATTN_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.ATTN_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config_module.ATTN_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config_module.ATTN_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config_module.ATTN_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.ATTN_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.ATTN_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config_module.ATTN_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=(config_module.ATTN_HALTING_STACK_DROPOUT_PROBABILITY),
-            bias_flag=config_module.ATTN_HALTING_STACK_BIAS_FLAG,
+        halting=ControllerStackFields.HALTING.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.ATTENTION
         ),
     )
 
@@ -1147,47 +1074,11 @@ def _feed_forward_layer_stack_sources(
     config_module: ModuleType,
 ) -> _LayerStackSources:
     return _LayerStackSources(
-        gate=_controller_stack_source(
-            independent_flag=config_module.FF_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config_module.FF_GATE_STACK_HIDDEN_DIM,
-            num_layers=config_module.FF_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=config_module.FF_GATE_STACK_LAST_LAYER_BIAS_OPTION,
-            apply_output_postprocessing_flag=(
-                config_module.FF_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.FF_GATE_STACK_ACTIVATION,
-            layer_norm_position=config_module.FF_GATE_STACK_LAYER_NORM_POSITION,
-            normalization=config_module.FF_GATE_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config_module.FF_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.FF_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.FF_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config_module.FF_GATE_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config_module.FF_GATE_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config_module.FF_GATE_STACK_BIAS_FLAG,
+        gate=ControllerStackFields.GATE.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.FEED_FORWARD
         ),
-        halting=_controller_stack_source(
-            independent_flag=config_module.FF_HALTING_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config_module.FF_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config_module.FF_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.FF_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.FF_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.FF_HALTING_STACK_ACTIVATION,
-            layer_norm_position=config_module.FF_HALTING_STACK_LAYER_NORM_POSITION,
-            normalization=config_module.FF_HALTING_STACK_NORMALIZATION,
-            residual_connection_option=(
-                config_module.FF_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.FF_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.FF_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config_module.FF_HALTING_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config_module.FF_HALTING_STACK_DROPOUT_PROBABILITY,
-            bias_flag=config_module.FF_HALTING_STACK_BIAS_FLAG,
+        halting=ControllerStackFields.HALTING.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.FEED_FORWARD
         ),
     )
 
@@ -1232,50 +1123,16 @@ def _default_linear_role_layer_controller_options(
 def _attention_projection_memory_stack_source(
     config_module: ModuleType,
 ) -> ExpertsSubmoduleStackSource:
-    return _controller_stack_source(
-        independent_flag=config_module.ATTN_MEMORY_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config_module.ATTN_MEMORY_STACK_HIDDEN_DIM,
-        num_layers=config_module.ATTN_MEMORY_STACK_NUM_LAYERS,
-        last_layer_bias_option=config_module.ATTN_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=(
-            config_module.ATTN_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config_module.ATTN_MEMORY_STACK_ACTIVATION,
-        layer_norm_position=config_module.ATTN_MEMORY_STACK_LAYER_NORM_POSITION,
-        normalization=config_module.ATTN_MEMORY_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config_module.ATTN_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config_module.ATTN_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config_module.ATTN_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config_module.ATTN_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config_module.ATTN_MEMORY_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config_module.ATTN_MEMORY_STACK_BIAS_FLAG,
+    return ControllerStackFields.MEMORY.read(
+        config_module, ExpertsSubmoduleStackSource, scope=StackScope.ATTENTION
     )
 
 
 def _feed_forward_memory_stack_source(
     config_module: ModuleType,
 ) -> ExpertsSubmoduleStackSource:
-    return _controller_stack_source(
-        independent_flag=config_module.FF_MEMORY_STACK_INDEPENDENT_FLAG,
-        hidden_dim=config_module.FF_MEMORY_STACK_HIDDEN_DIM,
-        num_layers=config_module.FF_MEMORY_STACK_NUM_LAYERS,
-        last_layer_bias_option=config_module.FF_MEMORY_STACK_LAST_LAYER_BIAS_OPTION,
-        apply_output_postprocessing_flag=(
-            config_module.FF_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-        ),
-        activation=config_module.FF_MEMORY_STACK_ACTIVATION,
-        layer_norm_position=config_module.FF_MEMORY_STACK_LAYER_NORM_POSITION,
-        normalization=config_module.FF_MEMORY_STACK_NORMALIZATION,
-        residual_connection_option=(
-            config_module.FF_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION
-        ),
-        residual_block_size=config_module.FF_MEMORY_STACK_RESIDUAL_BLOCK_SIZE,
-        residual_rms_norm_epsilon=config_module.FF_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON,
-        residual_model_flag=config_module.FF_MEMORY_STACK_RESIDUAL_MODEL_FLAG,
-        dropout_probability=config_module.FF_MEMORY_STACK_DROPOUT_PROBABILITY,
-        bias_flag=config_module.FF_MEMORY_STACK_BIAS_FLAG,
+    return ControllerStackFields.MEMORY.read(
+        config_module, ExpertsSubmoduleStackSource, scope=StackScope.FEED_FORWARD
     )
 
 
@@ -1315,63 +1172,11 @@ def _attention_projection_recurrent_stack_sources(
     config_module: ModuleType,
 ) -> _RecurrentStackSources:
     return _RecurrentStackSources(
-        gate=_controller_stack_source(
-            independent_flag=(config_module.ATTN_RECURRENT_GATE_STACK_INDEPENDENT_FLAG),
-            hidden_dim=config_module.ATTN_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config_module.ATTN_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.ATTN_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.ATTN_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.ATTN_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=(
-                config_module.ATTN_RECURRENT_GATE_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config_module.ATTN_RECURRENT_GATE_STACK_NORMALIZATION),
-            residual_connection_option=(
-                config_module.ATTN_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.ATTN_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.ATTN_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config_module.ATTN_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config_module.ATTN_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY
-            ),
-            bias_flag=config_module.ATTN_RECURRENT_GATE_STACK_BIAS_FLAG,
+        gate=ControllerStackFields.RECURRENT_GATE.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.ATTENTION
         ),
-        halting=_controller_stack_source(
-            independent_flag=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG
-            ),
-            hidden_dim=config_module.ATTN_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config_module.ATTN_RECURRENT_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.ATTN_RECURRENT_HALTING_STACK_ACTIVATION,
-            layer_norm_position=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config_module.ATTN_RECURRENT_HALTING_STACK_NORMALIZATION),
-            residual_connection_option=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config_module.ATTN_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY
-            ),
-            bias_flag=config_module.ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG,
+        halting=ControllerStackFields.RECURRENT_HALTING.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.ATTENTION
         ),
     )
 
@@ -1380,63 +1185,11 @@ def _feed_forward_recurrent_stack_sources(
     config_module: ModuleType,
 ) -> _RecurrentStackSources:
     return _RecurrentStackSources(
-        gate=_controller_stack_source(
-            independent_flag=config_module.FF_RECURRENT_GATE_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config_module.FF_RECURRENT_GATE_STACK_HIDDEN_DIM,
-            num_layers=config_module.FF_RECURRENT_GATE_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.FF_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.FF_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.FF_RECURRENT_GATE_STACK_ACTIVATION,
-            layer_norm_position=(
-                config_module.FF_RECURRENT_GATE_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config_module.FF_RECURRENT_GATE_STACK_NORMALIZATION),
-            residual_connection_option=(
-                config_module.FF_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.FF_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.FF_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config_module.FF_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config_module.FF_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY
-            ),
-            bias_flag=config_module.FF_RECURRENT_GATE_STACK_BIAS_FLAG,
+        gate=ControllerStackFields.RECURRENT_GATE.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.FEED_FORWARD
         ),
-        halting=_controller_stack_source(
-            independent_flag=(
-                config_module.FF_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG
-            ),
-            hidden_dim=config_module.FF_RECURRENT_HALTING_STACK_HIDDEN_DIM,
-            num_layers=config_module.FF_RECURRENT_HALTING_STACK_NUM_LAYERS,
-            last_layer_bias_option=(
-                config_module.FF_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config_module.FF_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            activation=config_module.FF_RECURRENT_HALTING_STACK_ACTIVATION,
-            layer_norm_position=(
-                config_module.FF_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config_module.FF_RECURRENT_HALTING_STACK_NORMALIZATION),
-            residual_connection_option=(
-                config_module.FF_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config_module.FF_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config_module.FF_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config_module.FF_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config_module.FF_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY
-            ),
-            bias_flag=config_module.FF_RECURRENT_HALTING_STACK_BIAS_FLAG,
+        halting=ControllerStackFields.RECURRENT_HALTING.read(
+            config_module, ExpertsSubmoduleStackSource, scope=StackScope.FEED_FORWARD
         ),
     )
 
