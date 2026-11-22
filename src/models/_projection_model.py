@@ -61,12 +61,13 @@ def projection_layer_config(model: ConfigBase) -> LayerConfig:
 def projection_stack_config(
     model: ConfigBase, *, num_layers: int, hidden_dim: int
 ) -> LayerStackConfig:
+    layer_config = projection_layer_config(model)
     return LayerStackConfig(
         num_layers=num_layers,
         hidden_dim=hidden_dim,
         apply_output_postprocessing_flag=False,
         last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-        layer_config=projection_layer_config(model),
+        layer_config=layer_config,
     )
 
 
@@ -79,27 +80,36 @@ def resolve_projection_model(
     stack_hidden_dim: int | None = None,
     recurrent_max_steps: int | None = None,
 ) -> ConfigBase | None:
+    projection_bias = True
+    if bias_flag is not None:
+        projection_bias = bias_flag
     if option is ProjectionModelOptions.LINEAR_STACK:
+        linear_config = LinearLayerConfig(bias_flag=projection_bias)
+        if stack_num_layers is None:
+            stack_num_layers = 2
+        if stack_hidden_dim is None:
+            stack_hidden_dim = 32
         return projection_stack_config(
-            LinearLayerConfig(bias_flag=True if bias_flag is None else bias_flag),
-            num_layers=2 if stack_num_layers is None else stack_num_layers,
-            hidden_dim=32 if stack_hidden_dim is None else stack_hidden_dim,
+            linear_config,
+            num_layers=stack_num_layers,
+            hidden_dim=stack_hidden_dim,
         )
     if option is ProjectionModelOptions.RECURRENT_LINEAR:
-        steps = 2 if recurrent_max_steps is None else recurrent_max_steps
+        if recurrent_max_steps is None:
+            recurrent_max_steps = 2
+        linear_config = LinearLayerConfig(bias_flag=projection_bias)
+        block_config = projection_layer_config(linear_config)
         return RecurrentLayerConfig(
-            max_steps=steps,
-            initial_iterations=steps,
+            max_steps=recurrent_max_steps,
+            initial_iterations=recurrent_max_steps,
             iteration_increment=1,
             forward_calls_before_iteration_increment=1,
             recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
             recurrent_normalization=NormalizationOptions.LAYER_NORM,
-            block_config=projection_layer_config(
-                LinearLayerConfig(bias_flag=True if bias_flag is None else bias_flag)
-            ),
+            block_config=block_config,
         )
     if option is ProjectionModelOptions.LINEAR:
-        return LinearLayerConfig(bias_flag=True if bias_flag is None else bias_flag)
+        return LinearLayerConfig(bias_flag=projection_bias)
     if option is not None:
         raise ValueError("Unsupported projection model option.")
     if bias_flag is None:
