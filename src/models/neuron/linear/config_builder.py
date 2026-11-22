@@ -5,13 +5,20 @@ from models.neuron.linear.runtime_options import RuntimeOptions
 
 class NeuronLinearConfigBuilder(NeuronConfigBuilder):
     def __init__(self, *, runtime: RuntimeOptions = DEFAULT_RUNTIME) -> None:
+        self.runtime = runtime
+
+    @property
+    def runtime(self) -> RuntimeOptions:
+        return self._runtime
+
+    @runtime.setter
+    def runtime(self, runtime: RuntimeOptions) -> None:
         if type(runtime) is not RuntimeOptions:
             raise TypeError(
                 "models.neuron.linear NeuronLinearConfigBuilder runtime must be "
                 "RuntimeOptions"
             )
-        self.runtime = runtime
-        super().__init__(runtime=runtime)
+        self._runtime = runtime
 
 
 __all__ = ["NeuronLinearConfigBuilder"]

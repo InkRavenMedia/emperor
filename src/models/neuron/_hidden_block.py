@@ -1,0 +1,60 @@
+from dataclasses import dataclass, fields
+from typing import cast
+
+from torch import Tensor
+
+from emperor.config import ConfigBase, optional_field
+from emperor.layers import Layer, LayerState
+from emperor.nn import Module
+
+
+@dataclass
+class HiddenBlockConfig(ConfigBase):
+    input_dim: int | None = optional_field(
+        "Input feature dimension for the package-local hidden block Adapter."
+    )
+    output_dim: int | None = optional_field(
+        "Output feature dimension for the package-local hidden block Adapter."
+    )
+    model_config: ConfigBase | None = optional_field(
+        "Package-local hidden block config wrapped by the neuron nucleus."
+    )
+
+    def _registry_owner(self) -> type:
+        return HiddenBlockAdapter
+
+
+class HiddenBlockAdapter(Module):
+    def __init__(
+        self,
+        cfg: HiddenBlockConfig,
+        overrides: HiddenBlockConfig | None = None,
+    ) -> None:
+        super().__init__()
+        self.cfg = cast(HiddenBlockConfig, self._override_config(cfg, overrides))
+        self.input_dim = self.cfg.input_dim
+        self.output_dim = self.cfg.output_dim
+        if self.cfg.model_config is None:
+            raise ValueError("hidden block model_config is required")
+        self.model_config: ConfigBase = self.cfg.model_config
+        dimension_overrides = self._dimension_overrides()
+        self.model = self.model_config.build(overrides=dimension_overrides)
+
+    def _dimension_overrides(self) -> ConfigBase | None:
+        model_config = self.model_config
+        declared_fields = {field.name for field in fields(model_config)}
+        overrides = {}
+        if "input_dim" in declared_fields:
+            overrides["input_dim"] = self.input_dim
+        if "output_dim" in declared_fields:
+            overrides["output_dim"] = self.output_dim
+        if not overrides:
+            return None
+        return type(model_config)(**overrides)
+
+    def forward(self, input: Tensor) -> Tensor:
+        state = Layer.run_model_from_hidden(self.model, input)
+        return state.tensor_output(self)
+
+    def forward_state(self, input: Tensor) -> LayerState:
+        return LayerState.run_tensor_module(self, input)

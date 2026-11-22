@@ -15,6 +15,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.neuron.linear._hidden import SETTINGS_VALIDATION
 from models.neuron.linear._residual import ResidualStackOptions
 
 
@@ -38,6 +39,9 @@ class MainStackOptions:
         default=None, kw_only=True
     )
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class ControllerStackOptions:
@@ -60,6 +64,10 @@ class ControllerStackOptions:
         default=None, kw_only=True
     )
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("stack_hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class GateOptions:
@@ -68,6 +76,9 @@ class GateOptions:
     activation: ActivationOptions | None
     stack: ControllerStackOptions
     shared_config: GateConfig | None = None
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.gate(self.enabled, self.option)
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +89,10 @@ class HaltingOptions:
     hidden_state_mode: HaltingHiddenStateModeOptions
     stack: ControllerStackOptions
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.halting_threshold("halting_threshold", self.threshold)
+        SETTINGS_VALIDATION.dropout("halting_dropout", self.dropout_probability)
+
 
 @dataclass(frozen=True, slots=True)
 class MemoryOptions:
@@ -87,6 +102,18 @@ class MemoryOptions:
     test_time_training_learning_rate: float | None
     test_time_training_num_inner_steps: int | None
     stack: ControllerStackOptions
+
+    def __post_init__(self) -> None:
+        if self.test_time_training_learning_rate is not None:
+            SETTINGS_VALIDATION.positive_float(
+                "memory_test_time_training_learning_rate",
+                self.test_time_training_learning_rate,
+            )
+        if self.test_time_training_num_inner_steps is not None:
+            SETTINGS_VALIDATION.positive_integer(
+                "memory_test_time_training_num_inner_steps",
+                self.test_time_training_num_inner_steps,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,6 +133,9 @@ class RecurrenceOptions:
     gate: GateOptions
     halting: HaltingOptions
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("recurrent_max_steps", self.max_steps)
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions:
@@ -121,3 +151,7 @@ class RuntimeOptions:
     recurrence: RecurrenceOptions
     halting_option: type[HaltingConfig] = StickBreakingConfig
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.shared_gate(self.gate.enabled, self.gate.shared_config)

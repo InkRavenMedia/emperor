@@ -1,41 +1,42 @@
+from typing import ClassVar
+
 from emperor.halting import HaltingConfig
 from emperor.layers import (
     GateConfig,
-    LayerConfig,
     LayerStackConfig,
     RecurrentLayerConfig,
 )
-from emperor.linears import LinearLayerConfig
 from emperor.memory import DynamicMemoryConfig
+from models import _controller_stack
+from models._recurrent_block import RecurrentSchedule, build_recurrent_block
 from models.neuron.linear._hidden.runtime_options import (
-    ControllerStackOptions,
     GateOptions,
     HaltingOptions,
+    MemoryOptions,
     RuntimeOptions,
 )
-from models.neuron.linear._residual import build_residual_config
-
-_STICK_BREAKING_GATE_OUTPUT_DIM = 2
 
 
 class ControlConfigFactory:
+    __STICK_BREAKING_GATE_OUTPUT_DIM: ClassVar[int] = 2
+
     def __init__(self, runtime: RuntimeOptions) -> None:
         self.runtime = runtime
 
     def build_gate_config(self) -> GateConfig | None:
-        return self._gate_config(self.runtime.gate)
+        gate_config = self.__gate_config(recurrent=False)
+        return gate_config
 
     def build_halting_config(self) -> HaltingConfig | None:
-        return self._halting_config(
-            self.runtime.halting,
-            self.runtime.halting_option,
-        )
+        halting_config = self.__halting_config(recurrent=False)
+        return halting_config
 
     def build_memory_config(self) -> DynamicMemoryConfig | None:
         options = self.runtime.memory
         if not options.enabled:
             return None
-        return options.implementation(
+        memory_model_config = self.__controller_stack(options)
+        memory_config = options.implementation(
             input_dim=self.runtime.hidden_dim,
             output_dim=self.runtime.hidden_dim,
             memory_position_option=options.position,
@@ -43,8 +44,9 @@ class ControlConfigFactory:
             test_time_training_num_inner_steps=(
                 options.test_time_training_num_inner_steps
             ),
-            model_config=self._controller_stack(options.stack),
+            model_config=memory_model_config,
         )
+        return memory_config
 
     def wrap_recurrent(
         self,
@@ -53,82 +55,61 @@ class ControlConfigFactory:
         options = self.runtime.recurrence
         if not options.enabled:
             return block_config
-        return RecurrentLayerConfig(
-            max_steps=options.max_steps,
-            gradient_transition_count=options.gradient_transition_count,
-            no_gradient_transition_count=options.no_gradient_transition_count,
-            initial_iterations=options.initial_iterations,
-            iteration_increment=options.iteration_increment,
-            forward_calls_before_iteration_increment=options.forward_calls_before_iteration_increment,
+        recurrent_gate_config = self.__gate_config(recurrent=True)
+        recurrent_halting_config = self.__halting_config(recurrent=True)
+        schedule = RecurrentSchedule.from_options(options)
+        return build_recurrent_block(
+            schedule,
+            block_config,
             smooth_iteration_growth_flag=options.smooth_iteration_growth_flag,
-            recurrent_layer_norm_position=options.layer_norm_position,
-            recurrent_normalization=options.normalization,
-            block_config=block_config,
-            gate_config=self._gate_config(options.gate),
-            residual_config=None,
-            halting_config=self._halting_config(
-                options.halting,
-                self.runtime.recurrent_halting_option,
-            ),
+            layer_norm_position=options.layer_norm_position,
+            normalization=options.normalization,
+            gate_config=recurrent_gate_config,
+            halting_config=recurrent_halting_config,
         )
 
-    def _gate_config(self, options: GateOptions) -> GateConfig | None:
+    def __gate_config(self, *, recurrent: bool) -> GateConfig | None:
+        options = self.runtime.gate
+        if recurrent:
+            options = self.runtime.recurrence.gate
         if not options.enabled:
             return None
+        gate_model_config = self.__controller_stack(options)
         return GateConfig(
-            model_config=self._controller_stack(options.stack),
+            model_config=gate_model_config,
             option=options.option,
             activation=options.activation,
         )
 
-    def _halting_config(
-        self,
-        options: HaltingOptions,
-        option: type[HaltingConfig],
-    ) -> HaltingConfig | None:
+    def __halting_config(self, *, recurrent: bool) -> HaltingConfig | None:
+        options = self.runtime.halting
+        option = self.runtime.halting_option
+        if recurrent:
+            options = self.runtime.recurrence.halting
+            option = self.runtime.recurrent_halting_option
         if not options.enabled:
             return None
+        halting_gate_config = self.__controller_stack(options, halting_gate=True)
         return option(
             threshold=options.threshold,
             min_steps=1,
             ponder_cost_weight=1.0,
             dropout_probability=options.dropout_probability,
             hidden_state_mode=options.hidden_state_mode,
-            halting_gate_config=self._controller_stack(
-                options.stack,
-                output_dim=_STICK_BREAKING_GATE_OUTPUT_DIM,
-            ),
+            halting_gate_config=halting_gate_config,
         )
 
-    def _controller_stack(
+    def __controller_stack(
         self,
-        options: ControllerStackOptions,
+        options: GateOptions | HaltingOptions | MemoryOptions,
         *,
-        output_dim: int | None = None,
+        halting_gate: bool = False,
     ) -> LayerStackConfig:
-        return LayerStackConfig(
-            hidden_dim=options.hidden_dim,
-            output_dim=output_dim,
-            num_layers=options.num_layers,
-            last_layer_bias_option=options.last_layer_bias_option,
-            apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-            layer_config=LayerConfig(
-                activation=options.activation,
-                layer_norm_position=options.layer_norm_position,
-                normalization=options.normalization,
-                residual_config=build_residual_config(
-                    options.residual_connection_option,
-                    options.residual_model_flag,
-                    options.residual_stack_options,
-                    residual_block_size=options.residual_block_size,
-                    residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-                ),
-                dropout_probability=options.dropout_probability,
-                halting_config=None,
-                gate_config=None,
-                memory_config=None,
-                layer_model_config=LinearLayerConfig(
-                    bias_flag=options.bias_flag,
-                ),
-            ),
+        stack = options.stack
+        output_dim = None
+        if halting_gate:
+            output_dim = self.__STICK_BREAKING_GATE_OUTPUT_DIM
+
+        return _controller_stack.build_controller_stack_config(
+            stack, output_dim=output_dim
         )

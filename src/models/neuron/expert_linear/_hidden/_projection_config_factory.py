@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from emperor.layers import (
     ActivationOptions,
     LayerConfig,
@@ -10,16 +8,12 @@ from emperor.linears import LinearLayerConfig
 from models.neuron.expert_linear._hidden.runtime_options import ExpertsStackOptions
 
 
-@dataclass(frozen=True, slots=True)
-class ProjectionConfigDependencies:
-    stack_options: ExpertsStackOptions
-
-
 class ProjectionConfigFactory:
-    def __init__(self, dependencies: ProjectionConfigDependencies) -> None:
-        self.stack_options = dependencies.stack_options
+    def __init__(self, stack_options: ExpertsStackOptions) -> None:
+        self.stack_options = stack_options
 
     def build_input_model_config(self) -> LayerConfig:
+        linear_layer_config = LinearLayerConfig(bias_flag=True)
         return LayerConfig(
             activation=self.stack_options.activation,
             layer_norm_position=self.stack_options.layer_norm_position,
@@ -29,10 +23,11 @@ class ProjectionConfigFactory:
             gate_config=None,
             halting_config=None,
             memory_config=None,
-            layer_model_config=LinearLayerConfig(bias_flag=True),
+            layer_model_config=linear_layer_config,
         )
 
     def build_output_model_config(self) -> LayerConfig:
+        linear_layer_config = LinearLayerConfig(bias_flag=True)
         return LayerConfig(
             activation=ActivationOptions.DISABLED,
             layer_norm_position=LayerNormPositionOptions.DISABLED,
@@ -42,5 +37,5 @@ class ProjectionConfigFactory:
             gate_config=None,
             halting_config=None,
             memory_config=None,
-            layer_model_config=LinearLayerConfig(bias_flag=True),
+            layer_model_config=linear_layer_config,
         )
