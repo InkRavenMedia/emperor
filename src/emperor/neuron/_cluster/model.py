@@ -379,6 +379,8 @@ class NeuronCluster(Module):
             return_trace,
             forward_context,
         )
+        if forward_context.processing_loss is not None:
+            auxiliary_loss = auxiliary_loss + forward_context.processing_loss
         routed_output = routed_output.reshape(
             *input.shape[:-1],
             routed_output.shape[-1],
