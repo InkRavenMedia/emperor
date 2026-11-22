@@ -1,0 +1,497 @@
+from enum import Enum, auto
+from types import ModuleType
+
+from models import _attention_source_memory as _source_memory
+from models import _sequence_expansion
+from models._component_defaults import resolve_options as resolve_options
+from models._stack_fields import ControllerStackFields, StackScope
+from models.vit.expert_linear_adaptive_cluster.runtime_options import (
+    DynamicMemoryOptions,
+    LayerControllerOptions,
+    MainLayerStackOptions,
+    RecurrentControllerOptions,
+    SubmoduleStackOptions,
+    SubmoduleStackSource,
+    TransformerAttentionOptions,
+    TransformerEncoderOptions,
+    TransformerFeedForwardOptions,
+    TransformerPositionalEmbeddingOptions,
+    VitOutputOptions,
+    VitPatchOptions,
+)
+
+from ._adaptive_config_defaults import AdaptiveParameter as AdaptiveParameter
+from ._adaptive_config_defaults import AdaptiveRole as AdaptiveRole
+from ._adaptive_config_defaults import (
+    adaptive_generator_stack_options as adaptive_generator_stack_options,
+)
+from ._adaptive_config_defaults import (
+    adaptive_generator_stack_source as adaptive_generator_stack_source,
+)
+from ._adaptive_config_defaults import (
+    hidden_adaptive_bias_options as hidden_adaptive_bias_options,
+)
+from ._adaptive_config_defaults import (
+    hidden_adaptive_diagonal_options as hidden_adaptive_diagonal_options,
+)
+from ._adaptive_config_defaults import (
+    hidden_adaptive_mask_options as hidden_adaptive_mask_options,
+)
+from ._adaptive_config_defaults import (
+    hidden_adaptive_weight_options as hidden_adaptive_weight_options,
+)
+from ._expert_config_defaults import ControllerStackRole as _ControllerStackRole
+from ._expert_config_defaults import ExpertControlRole as ExpertControlRole
+from ._expert_config_defaults import ExpertStackRole as ExpertStackRole
+from ._expert_config_defaults import (
+    experts_dynamic_memory_options as experts_dynamic_memory_options,
+)
+from ._expert_config_defaults import (
+    experts_layer_controller_options as experts_layer_controller_options,
+)
+from ._expert_config_defaults import experts_mixture_options as experts_mixture_options
+from ._expert_config_defaults import (
+    experts_recurrent_controller_options as experts_recurrent_controller_options,
+)
+from ._expert_config_defaults import experts_router_options as experts_router_options
+from ._expert_config_defaults import experts_sampler_options as experts_sampler_options
+from ._expert_config_defaults import (
+    experts_submodule_stack_options as experts_submodule_stack_options,
+)
+from ._expert_config_defaults import main_controller_stack_defaults
+
+
+class LinearRole(Enum):
+    MAIN = auto()
+    ATTENTION = auto()
+    FEED_FORWARD = auto()
+
+
+def vit_patch_options(config: ModuleType) -> VitPatchOptions:
+    return VitPatchOptions(
+        patch_size=config.IMAGE_PATCH_SIZE,
+        input_channels=config.INPUT_CHANNELS,
+        image_height=config.IMAGE_HEIGHT,
+        dropout_probability=config.PATCH_DROPOUT_PROBABILITY,
+        bias_flag=config.PATCH_BIAS_FLAG,
+    )
+
+
+def vit_positional_embedding_options(
+    config: ModuleType,
+) -> TransformerPositionalEmbeddingOptions:
+    return TransformerPositionalEmbeddingOptions(
+        option=config.POSITIONAL_EMBEDDING_OPTION,
+        padding_idx=config.POSITIONAL_EMBEDDING_PADDING_IDX,
+        auto_expand_flag=config.POSITIONAL_EMBEDDING_AUTO_EXPAND_FLAG,
+    )
+
+
+def vit_encoder_options(config: ModuleType) -> TransformerEncoderOptions:
+    return TransformerEncoderOptions(
+        hidden_dim=config.HIDDEN_DIM,
+        num_layers=config.STACK_NUM_LAYERS,
+        activation=config.STACK_ACTIVATION,
+        dropout_probability=config.STACK_DROPOUT_PROBABILITY,
+        layer_norm_position=config.LAYER_NORM_POSITION,
+        normalization=config.NORMALIZATION,
+        causal_attention_mask_flag=False,
+        output_normalization=config.ENCODER_OUTPUT_NORMALIZATION,
+        **_sequence_expansion.sequence_expansion_defaults(config),
+    )
+
+
+def vit_attention_options(config: ModuleType) -> TransformerAttentionOptions:
+    return TransformerAttentionOptions(
+        attention_soft_moe_config=config.ATTENTION_SOFT_MOE_CONFIG,
+        num_heads=config.ATTN_NUM_HEADS,
+        num_layers=config.ATTN_NUM_LAYERS,
+        bias_flag=config.ATTN_BIAS_FLAG,
+        add_key_value_bias_flag=config.ATTN_ADD_KEY_VALUE_BIAS_FLAG,
+        source_memory_flag=config.ATTN_SOURCE_MEMORY_FLAG,
+        **_source_memory.source_memory_defaults(config),
+    )
+
+
+def vit_feed_forward_options(config: ModuleType) -> TransformerFeedForwardOptions:
+    return TransformerFeedForwardOptions(
+        soft_moe_config=config.SOFT_MOE_CONFIG,
+        num_layers=config.FF_NUM_LAYERS,
+        bias_flag=config.FF_BIAS_FLAG,
+    )
+
+
+def vit_output_options(config: ModuleType) -> VitOutputOptions:
+    return VitOutputOptions(bias_flag=config.OUTPUT_BIAS_FLAG)
+
+
+def main_layer_stack_options(config: ModuleType) -> MainLayerStackOptions:
+    return MainLayerStackOptions(
+        bias_flag=config.STACK_BIAS_FLAG,
+        layer_norm_position=config.LAYER_NORM_POSITION,
+        normalization=config.NORMALIZATION,
+        num_layers=config.STACK_NUM_LAYERS,
+        activation=config.STACK_ACTIVATION,
+        residual_connection_option=config.STACK_RESIDUAL_CONNECTION_OPTION,
+        residual_block_size=config.STACK_RESIDUAL_BLOCK_SIZE,
+        residual_rms_norm_epsilon=config.STACK_RESIDUAL_RMS_NORM_EPSILON,
+        residual_model_flag=config.STACK_RESIDUAL_MODEL_FLAG,
+        dropout_probability=config.STACK_DROPOUT_PROBABILITY,
+        last_layer_bias_option=config.STACK_LAST_LAYER_BIAS_OPTION,
+        apply_output_postprocessing_flag=config.STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
+    )
+
+
+def linears_submodule_stack_options(
+    config: ModuleType,
+    role: LinearRole,
+) -> SubmoduleStackOptions:
+    if role is LinearRole.MAIN:
+        return SubmoduleStackOptions(
+            hidden_dim=config.SUBMODULE_STACK_HIDDEN_DIM,
+            num_layers=config.SUBMODULE_STACK_NUM_LAYERS,
+            last_layer_bias_option=config.SUBMODULE_STACK_LAST_LAYER_BIAS_OPTION,
+            apply_output_postprocessing_flag=(
+                config.SUBMODULE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
+            ),
+            activation=config.SUBMODULE_STACK_ACTIVATION,
+            layer_norm_position=config.SUBMODULE_STACK_LAYER_NORM_POSITION,
+            normalization=config.SUBMODULE_STACK_NORMALIZATION,
+            residual_connection_option=(
+                config.SUBMODULE_STACK_RESIDUAL_CONNECTION_OPTION
+            ),
+            residual_block_size=config.SUBMODULE_STACK_RESIDUAL_BLOCK_SIZE,
+            residual_rms_norm_epsilon=config.SUBMODULE_STACK_RESIDUAL_RMS_NORM_EPSILON,
+            residual_model_flag=config.SUBMODULE_STACK_RESIDUAL_MODEL_FLAG,
+            dropout_probability=config.SUBMODULE_STACK_DROPOUT_PROBABILITY,
+            bias_flag=config.SUBMODULE_STACK_BIAS_FLAG,
+        )
+    if role is LinearRole.ATTENTION:
+        return SubmoduleStackOptions(
+            hidden_dim=config.ATTN_STACK_HIDDEN_DIM,
+            num_layers=config.ATTN_NUM_LAYERS,
+            last_layer_bias_option=config.ATTN_STACK_LAST_LAYER_BIAS_OPTION,
+            apply_output_postprocessing_flag=config.ATTN_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
+            activation=config.ATTN_STACK_ACTIVATION,
+            layer_norm_position=config.ATTN_STACK_LAYER_NORM_POSITION,
+            normalization=config.ATTN_STACK_NORMALIZATION,
+            residual_connection_option=config.ATTN_STACK_RESIDUAL_CONNECTION_OPTION,
+            residual_block_size=config.ATTN_STACK_RESIDUAL_BLOCK_SIZE,
+            residual_rms_norm_epsilon=config.ATTN_STACK_RESIDUAL_RMS_NORM_EPSILON,
+            residual_model_flag=config.ATTN_STACK_RESIDUAL_MODEL_FLAG,
+            dropout_probability=config.ATTN_STACK_DROPOUT_PROBABILITY,
+            bias_flag=config.ATTN_BIAS_FLAG,
+        )
+    return SubmoduleStackOptions(
+        hidden_dim=config.FF_STACK_HIDDEN_DIM,
+        num_layers=config.FF_NUM_LAYERS,
+        last_layer_bias_option=config.FF_STACK_LAST_LAYER_BIAS_OPTION,
+        apply_output_postprocessing_flag=config.FF_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
+        activation=config.FF_STACK_ACTIVATION,
+        layer_norm_position=config.FF_STACK_LAYER_NORM_POSITION,
+        normalization=config.FF_STACK_NORMALIZATION,
+        residual_connection_option=config.FF_STACK_RESIDUAL_CONNECTION_OPTION,
+        residual_block_size=config.FF_STACK_RESIDUAL_BLOCK_SIZE,
+        residual_rms_norm_epsilon=config.FF_STACK_RESIDUAL_RMS_NORM_EPSILON,
+        residual_model_flag=config.FF_STACK_RESIDUAL_MODEL_FLAG,
+        dropout_probability=config.FF_STACK_DROPOUT_PROBABILITY,
+        bias_flag=config.FF_BIAS_FLAG,
+    )
+
+
+def _controller_stack_source(
+    config: ModuleType,
+    role: LinearRole,
+    stack_role: _ControllerStackRole,
+) -> SubmoduleStackSource:
+    if role is LinearRole.MAIN:
+        return _main_controller_stack_source(config, stack_role)
+    if role is LinearRole.ATTENTION:
+        return _attention_controller_stack_source(config, stack_role)
+    return _feed_forward_controller_stack_source(config, stack_role)
+
+
+def _main_controller_stack_source(
+    config: ModuleType,
+    stack_role: _ControllerStackRole,
+) -> SubmoduleStackSource:
+    defaults = main_controller_stack_defaults(config, stack_role)
+    return SubmoduleStackSource(
+        independent_flag=defaults.independent_flag,
+        hidden_dim=defaults.hidden_dim,
+        num_layers=defaults.num_layers,
+        last_layer_bias_option=defaults.last_layer_bias_option,
+        apply_output_postprocessing_flag=defaults.apply_output_postprocessing_flag,
+        activation=defaults.activation,
+        layer_norm_position=defaults.layer_norm_position,
+        normalization=defaults.normalization,
+        residual_connection_option=defaults.residual_connection_option,
+        residual_block_size=defaults.residual_block_size,
+        residual_rms_norm_epsilon=defaults.residual_rms_norm_epsilon,
+        residual_model_flag=defaults.residual_model_flag,
+        dropout_probability=defaults.dropout_probability,
+        bias_flag=defaults.bias_flag,
+    )
+
+
+def _attention_controller_stack_source(
+    config: ModuleType,
+    stack_role: _ControllerStackRole,
+) -> SubmoduleStackSource:
+    if stack_role is _ControllerStackRole.GATE:
+        return ControllerStackFields.GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
+        )
+    if stack_role is _ControllerStackRole.HALTING:
+        return ControllerStackFields.HALTING.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
+        )
+    if stack_role is _ControllerStackRole.MEMORY:
+        return ControllerStackFields.MEMORY.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
+        )
+    if stack_role is _ControllerStackRole.RECURRENT_GATE:
+        return ControllerStackFields.RECURRENT_GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.ATTENTION
+        )
+    return ControllerStackFields.RECURRENT_HALTING.read(
+        config, SubmoduleStackSource, scope=StackScope.ATTENTION
+    )
+
+
+def _feed_forward_controller_stack_source(
+    config: ModuleType,
+    stack_role: _ControllerStackRole,
+) -> SubmoduleStackSource:
+    if stack_role is _ControllerStackRole.GATE:
+        return ControllerStackFields.GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
+        )
+    if stack_role is _ControllerStackRole.HALTING:
+        return ControllerStackFields.HALTING.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
+        )
+    if stack_role is _ControllerStackRole.MEMORY:
+        return ControllerStackFields.MEMORY.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
+        )
+    if stack_role is _ControllerStackRole.RECURRENT_GATE:
+        return ControllerStackFields.RECURRENT_GATE.read(
+            config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
+        )
+    return ControllerStackFields.RECURRENT_HALTING.read(
+        config, SubmoduleStackSource, scope=StackScope.FEED_FORWARD
+    )
+
+
+def linears_layer_controller_options(
+    config: ModuleType,
+    role: LinearRole,
+) -> LayerControllerOptions:
+    if role is LinearRole.MAIN:
+        return LayerControllerOptions(
+            stack_gate_flag=config.STACK_GATE_FLAG,
+            gate_option=config.GATE_OPTION,
+            gate_activation=config.GATE_ACTIVATION,
+            gate_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.GATE
+            ),
+            stack_halting_flag=config.STACK_HALTING_FLAG,
+            halting_option=config.HALTING_OPTION,
+            halting_threshold=config.HALTING_THRESHOLD,
+            halting_dropout=config.HALTING_DROPOUT,
+            halting_hidden_state_mode=config.HALTING_HIDDEN_STATE_MODE,
+            halting_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.HALTING
+            ),
+        )
+    if role is LinearRole.ATTENTION:
+        return LayerControllerOptions(
+            stack_gate_flag=config.ATTN_STACK_GATE_FLAG,
+            gate_option=config.ATTN_GATE_OPTION,
+            gate_activation=config.ATTN_GATE_ACTIVATION,
+            gate_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.GATE
+            ),
+            stack_halting_flag=config.ATTN_STACK_HALTING_FLAG,
+            halting_option=config.ATTN_HALTING_OPTION,
+            halting_threshold=config.ATTN_HALTING_THRESHOLD,
+            halting_dropout=config.ATTN_HALTING_DROPOUT,
+            halting_hidden_state_mode=config.ATTN_HALTING_HIDDEN_STATE_MODE,
+            halting_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.HALTING
+            ),
+        )
+    return LayerControllerOptions(
+        stack_gate_flag=config.FF_STACK_GATE_FLAG,
+        gate_option=config.FF_GATE_OPTION,
+        gate_activation=config.FF_GATE_ACTIVATION,
+        gate_stack_source=_controller_stack_source(
+            config, role, _ControllerStackRole.GATE
+        ),
+        stack_halting_flag=config.FF_STACK_HALTING_FLAG,
+        halting_option=config.FF_HALTING_OPTION,
+        halting_threshold=config.FF_HALTING_THRESHOLD,
+        halting_dropout=config.FF_HALTING_DROPOUT,
+        halting_hidden_state_mode=config.FF_HALTING_HIDDEN_STATE_MODE,
+        halting_stack_source=_controller_stack_source(
+            config, role, _ControllerStackRole.HALTING
+        ),
+    )
+
+
+def linears_dynamic_memory_options(
+    config: ModuleType,
+    role: LinearRole,
+) -> DynamicMemoryOptions:
+    if role is LinearRole.MAIN:
+        return DynamicMemoryOptions(
+            memory_flag=config.MEMORY_FLAG,
+            memory_option=config.MEMORY_OPTION,
+            memory_position_option=config.MEMORY_POSITION_OPTION,
+            memory_test_time_training_learning_rate=(
+                config.MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+            ),
+            memory_num_memory_slots=config.MEMORY_NUM_MEMORY_SLOTS,
+            memory_test_time_training_num_inner_steps=(
+                config.MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
+            ),
+            memory_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.MEMORY
+            ),
+        )
+    if role is LinearRole.ATTENTION:
+        return DynamicMemoryOptions(
+            memory_flag=config.ATTN_MEMORY_FLAG,
+            memory_option=config.ATTN_MEMORY_OPTION,
+            memory_position_option=config.ATTN_MEMORY_POSITION_OPTION,
+            memory_test_time_training_learning_rate=(
+                config.ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+            ),
+            memory_num_memory_slots=config.ATTN_MEMORY_NUM_MEMORY_SLOTS,
+            memory_test_time_training_num_inner_steps=(
+                config.ATTN_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
+            ),
+            memory_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.MEMORY
+            ),
+        )
+    return DynamicMemoryOptions(
+        memory_flag=config.FF_MEMORY_FLAG,
+        memory_option=config.FF_MEMORY_OPTION,
+        memory_position_option=config.FF_MEMORY_POSITION_OPTION,
+        memory_test_time_training_learning_rate=(
+            config.FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE
+        ),
+        memory_num_memory_slots=config.FF_MEMORY_NUM_MEMORY_SLOTS,
+        memory_test_time_training_num_inner_steps=(
+            config.FF_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS
+        ),
+        memory_stack_source=_controller_stack_source(
+            config, role, _ControllerStackRole.MEMORY
+        ),
+    )
+
+
+def linears_recurrent_controller_options(
+    config: ModuleType,
+    role: LinearRole,
+) -> RecurrentControllerOptions:
+    if role is LinearRole.MAIN:
+        return RecurrentControllerOptions(
+            recurrent_flag=config.RECURRENT_FLAG,
+            recurrent_max_steps=config.RECURRENT_MAX_STEPS,
+            recurrent_min_steps=config.RECURRENT_MIN_STEPS,
+            recurrent_ponder_cost_weight=config.RECURRENT_PONDER_COST_WEIGHT,
+            recurrent_residual_connection_option=config.RECURRENT_RESIDUAL_CONNECTION_OPTION,
+            recurrent_residual_model_flag=config.RECURRENT_RESIDUAL_MODEL_FLAG,
+            recurrent_residual_block_size=config.RECURRENT_RESIDUAL_BLOCK_SIZE,
+            recurrent_residual_rms_norm_epsilon=config.RECURRENT_RESIDUAL_RMS_NORM_EPSILON,
+            recurrent_initial_iterations=config.RECURRENT_INITIAL_ITERATIONS,
+            recurrent_gradient_transition_count=(
+                config.RECURRENT_GRADIENT_TRANSITION_COUNT
+            ),
+            recurrent_no_gradient_transition_count=(
+                config.RECURRENT_NO_GRADIENT_TRANSITION_COUNT
+            ),
+            recurrent_iteration_increment=config.RECURRENT_ITERATION_INCREMENT,
+            recurrent_forward_calls_before_iteration_increment=(
+                config.RECURRENT_FORWARD_CALLS_BEFORE_ITERATION_INCREMENT
+            ),
+            recurrent_smooth_iteration_growth_flag=(
+                config.RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG
+            ),
+            recurrent_layer_norm_position=config.RECURRENT_LAYER_NORM_POSITION,
+            recurrent_normalization=config.RECURRENT_NORMALIZATION,
+            recurrent_stack_gate_flag=config.RECURRENT_STACK_GATE_FLAG,
+            recurrent_gate_option=config.RECURRENT_GATE_OPTION,
+            recurrent_gate_activation=config.RECURRENT_GATE_ACTIVATION,
+            recurrent_gate_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.RECURRENT_GATE
+            ),
+            recurrent_stack_halting_flag=config.RECURRENT_STACK_HALTING_FLAG,
+            recurrent_halting_option=config.RECURRENT_HALTING_OPTION,
+            recurrent_halting_threshold=config.RECURRENT_HALTING_THRESHOLD,
+            recurrent_halting_dropout=config.RECURRENT_HALTING_DROPOUT,
+            recurrent_halting_hidden_state_mode=(
+                config.RECURRENT_HALTING_HIDDEN_STATE_MODE
+            ),
+            recurrent_halting_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.RECURRENT_HALTING
+            ),
+        )
+    if role is LinearRole.ATTENTION:
+        return RecurrentControllerOptions(
+            recurrent_flag=config.ATTN_RECURRENT_FLAG,
+            recurrent_max_steps=config.ATTN_RECURRENT_MAX_STEPS,
+            recurrent_initial_iterations=2,
+            recurrent_gradient_transition_count=None,
+            recurrent_no_gradient_transition_count=None,
+            recurrent_iteration_increment=1,
+            recurrent_forward_calls_before_iteration_increment=1,
+            recurrent_layer_norm_position=config.ATTN_RECURRENT_LAYER_NORM_POSITION,
+            recurrent_normalization=config.ATTN_RECURRENT_NORMALIZATION,
+            recurrent_stack_gate_flag=config.ATTN_RECURRENT_STACK_GATE_FLAG,
+            recurrent_gate_option=config.ATTN_RECURRENT_GATE_OPTION,
+            recurrent_gate_activation=config.ATTN_RECURRENT_GATE_ACTIVATION,
+            recurrent_gate_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.RECURRENT_GATE
+            ),
+            recurrent_stack_halting_flag=config.ATTN_RECURRENT_STACK_HALTING_FLAG,
+            recurrent_halting_option=config.ATTN_RECURRENT_HALTING_OPTION,
+            recurrent_halting_threshold=config.ATTN_RECURRENT_HALTING_THRESHOLD,
+            recurrent_halting_dropout=config.ATTN_RECURRENT_HALTING_DROPOUT,
+            recurrent_halting_hidden_state_mode=(
+                config.ATTN_RECURRENT_HALTING_HIDDEN_STATE_MODE
+            ),
+            recurrent_halting_stack_source=_controller_stack_source(
+                config, role, _ControllerStackRole.RECURRENT_HALTING
+            ),
+        )
+    return RecurrentControllerOptions(
+        recurrent_flag=config.FF_RECURRENT_FLAG,
+        recurrent_max_steps=config.FF_RECURRENT_MAX_STEPS,
+        recurrent_initial_iterations=2,
+        recurrent_gradient_transition_count=None,
+        recurrent_no_gradient_transition_count=None,
+        recurrent_iteration_increment=1,
+        recurrent_forward_calls_before_iteration_increment=1,
+        recurrent_layer_norm_position=config.FF_RECURRENT_LAYER_NORM_POSITION,
+        recurrent_normalization=config.FF_RECURRENT_NORMALIZATION,
+        recurrent_stack_gate_flag=config.FF_RECURRENT_STACK_GATE_FLAG,
+        recurrent_gate_option=config.FF_RECURRENT_GATE_OPTION,
+        recurrent_gate_activation=config.FF_RECURRENT_GATE_ACTIVATION,
+        recurrent_gate_stack_source=_controller_stack_source(
+            config, role, _ControllerStackRole.RECURRENT_GATE
+        ),
+        recurrent_stack_halting_flag=config.FF_RECURRENT_STACK_HALTING_FLAG,
+        recurrent_halting_option=config.FF_RECURRENT_HALTING_OPTION,
+        recurrent_halting_threshold=config.FF_RECURRENT_HALTING_THRESHOLD,
+        recurrent_halting_dropout=config.FF_RECURRENT_HALTING_DROPOUT,
+        recurrent_halting_hidden_state_mode=(
+            config.FF_RECURRENT_HALTING_HIDDEN_STATE_MODE
+        ),
+        recurrent_halting_stack_source=_controller_stack_source(
+            config, role, _ControllerStackRole.RECURRENT_HALTING
+        ),
+    )

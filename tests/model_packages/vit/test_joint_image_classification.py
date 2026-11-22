@@ -17,7 +17,13 @@ from tests.support.dataset_metadata import offline_dataset_metadata
 
 TASK = "joint-image-classification"
 SOURCES = ("mnist", "fashion-mnist", "cifar10", "cifar100")
-VARIANTS = ("linear", "linear_adaptive", "expert_linear", "expert_linear_adaptive")
+VARIANTS = (
+    "linear",
+    "linear_adaptive",
+    "expert_linear",
+    "expert_linear_adaptive",
+    "expert_linear_adaptive_cluster",
+)
 SMALL_MODEL = {"image_patch_size": 16, "stack_num_layers": 1}
 
 
