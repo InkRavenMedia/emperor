@@ -42,6 +42,7 @@ class _NeuronClusterForwardContext:
     """Own transient collaboration state for one cluster forward."""
 
     called_neuron_names: set[str] = field(default_factory=set)
+    processing_loss: Tensor | None = None
 
 
 class RouteStateDelegate:
