@@ -16,6 +16,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from model_runtime.packages.settings_validation import BuildSettingsValidation
 from models._stack_fields import ControllerStackFields
 
 _PACKAGE_NAME = "models.neuron.linear._hidden"
@@ -148,7 +149,7 @@ class RuntimeOverrideReader:
         value = self._take(key, default)
         if value is None:
             return None
-        if not ResidualConfig.is_concrete_implementation(value):
+        if not BuildSettingsValidation.is_selectable_residual(value):
             self._raise_type_error(key, value, "concrete type[ResidualConfig]")
         return value
 
