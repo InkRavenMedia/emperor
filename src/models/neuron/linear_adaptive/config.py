@@ -1,3 +1,5 @@
+from typing import Annotated
+
 # ruff: noqa: E402, F401, E501
 from emperor.layers import (
     AdditiveResidualConfig,
@@ -7,45 +9,51 @@ from emperor.layers import (
     WeightedBlendResidualConfig,
     WeightedResidualConfig,
 )
-from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.configuration_metadata import Section
 from model_runtime.packages.metric_direction import MetricDirection
+from model_runtime.packages.runtime_values import (
+    RuntimeValueConstraints,
+    positive_runtime_fields,
+)
 
-# Trainer
-TRAINER_ACCELERATOR: str = "cpu"
-TRAINER_DEVICES: int = 1
-TRAINER_GRADIENT_CLIP_VAL: float = 1.0
-TRAINER_GRADIENT_CLIP_ALGORITHM: str = "norm"
-TRAINER_ACCUMULATE_GRAD_BATCHES: int = 1
-TRAINER_PRECISION: str = "32-true"
-TRAINER_DETERMINISTIC: bool = False
-TRAINER_BENCHMARK: bool = True
-TRAINER_MAX_STEPS: int = -1
-TRAINER_MAX_TIME: str | None = None
-TRAINER_VAL_CHECK_INTERVAL: float = 1.0
-TRAINER_LIMIT_TRAIN_BATCHES: float = 1.0
-TRAINER_LIMIT_VAL_BATCHES: float = 1.0
-TRAINER_OVERFIT_BATCHES: int | float = 0.0
-TRAINER_NUM_SANITY_VAL_STEPS: int = 2
-TRAINER_LOG_EVERY_N_STEPS: int = 50
-TRAINER_ENABLE_PROGRESS_BAR: bool = False
-TRAINER_ENABLE_CHECKPOINTING: bool = False
-TRAINER_ENABLE_MODEL_SUMMARY: bool = False
-TRAINER_PROFILER: str | None = None
-MONITOR_LOG_EVERY_N_STEPS: int = 100
+_trainer = Section(("Trainer",))
+TRAINER_ACCELERATOR: Annotated[str, _trainer] = "cpu"
+TRAINER_DEVICES: Annotated[int, _trainer] = 1
+TRAINER_GRADIENT_CLIP_VAL: Annotated[float, _trainer] = 1.0
+TRAINER_GRADIENT_CLIP_ALGORITHM: Annotated[str, _trainer] = "norm"
+TRAINER_ACCUMULATE_GRAD_BATCHES: Annotated[int, _trainer] = 1
+TRAINER_PRECISION: Annotated[str, _trainer] = "32-true"
+TRAINER_DETERMINISTIC: Annotated[bool, _trainer] = False
+TRAINER_BENCHMARK: Annotated[bool, _trainer] = True
+TRAINER_MAX_STEPS: Annotated[int, _trainer] = -1
+TRAINER_MAX_TIME: Annotated[str | None, _trainer] = None
+TRAINER_VAL_CHECK_INTERVAL: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_TRAIN_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_VAL_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_OVERFIT_BATCHES: Annotated[int | float, _trainer] = 0.0
+TRAINER_NUM_SANITY_VAL_STEPS: Annotated[int, _trainer] = 2
+TRAINER_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 50
+TRAINER_ENABLE_PROGRESS_BAR: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_CHECKPOINTING: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_MODEL_SUMMARY: Annotated[bool, _trainer] = False
+TRAINER_PROFILER: Annotated[str | None, _trainer] = None
+MONITOR_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 100
 
-# Run
-DATA_NUM_WORKERS: int = 4
-RUN_TEST_AFTER_FIT: bool = True
-SEED: int | None = None
+_run = Section(("Run",))
+DATA_NUM_WORKERS: Annotated[int, _run] = 4
+RUN_TEST_AFTER_FIT: Annotated[bool, _run] = True
+SEED: Annotated[int | None, _run] = None
 
-# Callback
-CALLBACK_EARLY_STOPPING_PATIENCE: int = 0
-CALLBACK_EARLY_STOPPING_METRIC: str = "validation/accuracy"
-CALLBACK_EARLY_STOPPING_MODE: MetricDirection | None = None  # Optional min/max direction for the monitored metric.
-CALLBACK_EARLY_STOPPING_MIN_DELTA: float = 0.0
-CALLBACK_EARLY_STOPPING_STRICT: bool = True
-CALLBACK_EARLY_STOPPING_CHECK_FINITE: bool = True
-CALLBACK_CHECKPOINT_FLAG: bool = False
+_callback = Section(("Callback",))
+CALLBACK_EARLY_STOPPING_PATIENCE: Annotated[int, _callback] = 0
+CALLBACK_EARLY_STOPPING_METRIC: Annotated[str, _callback] = "validation/accuracy"
+CALLBACK_EARLY_STOPPING_MODE: Annotated[MetricDirection | None, _callback] = (
+    None  # Optional min/max direction for the monitored metric.
+)
+CALLBACK_EARLY_STOPPING_MIN_DELTA: Annotated[float, _callback] = 0.0
+CALLBACK_EARLY_STOPPING_STRICT: Annotated[bool, _callback] = True
+CALLBACK_EARLY_STOPPING_CHECK_FINITE: Annotated[bool, _callback] = True
+CALLBACK_CHECKPOINT_FLAG: Annotated[bool, _callback] = False
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
     AdaptiveParameterInputOrderOptions,
@@ -113,1001 +121,1628 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 
-# Global
-BATCH_SIZE: int = 128
-NUM_EPOCHS: int = 10
-INPUT_DIM: int = 28**2
-HIDDEN_DIM: int = 32
-RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
-OUTPUT_DIM: int = 10
-LEARNING_RATE: float = 1e-3
+_general = Section(("Global",))
+BATCH_SIZE: Annotated[int, _general] = 128
+NUM_EPOCHS: Annotated[int, _general] = 10
+INPUT_DIM: Annotated[int, _general] = 28**2
+HIDDEN_DIM: Annotated[int, _general] = 32
+RUNTIME_VALUE_CONSTRAINTS: Annotated[RuntimeValueConstraints, _general] = (
+    positive_runtime_fields("HIDDEN_DIM")
+)
+OUTPUT_DIM: Annotated[int, _general] = 10
+LEARNING_RATE: Annotated[float, _general] = 1e-3
 
-#########################################################################
-# Layer Stack Options
+_layer_stack = Section(("Layer Stack Options",))
 # - hidden_dim comes from the global HIDDEN_DIM field above.
-LAYER_NORM_POSITION: LayerNormPositionOptions = LayerNormPositionOptions.BEFORE
-NORMALIZATION: NormalizationOptions = NormalizationOptions.RMS_NORM
-STACK_NUM_LAYERS: int = 5
-STACK_ACTIVATION: ActivationOptions = ActivationOptions.GELU
-STACK_DROPOUT_PROBABILITY: float = 0.0
-STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT
-STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = True
-STACK_BIAS_FLAG: bool = True
-
-#########################################################################
-# Layer Stack Submodule Options
-SUBMODULE_STACK_HIDDEN_DIM: int = HIDDEN_DIM
-SUBMODULE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = LAYER_NORM_POSITION
-SUBMODULE_STACK_NORMALIZATION: NormalizationOptions = NORMALIZATION
-SUBMODULE_STACK_NUM_LAYERS: int = 2
-SUBMODULE_STACK_ACTIVATION: ActivationOptions = ActivationOptions.GELU
-SUBMODULE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-SUBMODULE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-SUBMODULE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-SUBMODULE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-SUBMODULE_STACK_DROPOUT_PROBABILITY: float = 0.0
-SUBMODULE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = (
+LAYER_NORM_POSITION: Annotated[LayerNormPositionOptions, _layer_stack] = (
+    LayerNormPositionOptions.BEFORE
+)
+NORMALIZATION: Annotated[NormalizationOptions, _layer_stack] = (
+    NormalizationOptions.RMS_NORM
+)
+STACK_NUM_LAYERS: Annotated[int, _layer_stack] = 5
+STACK_ACTIVATION: Annotated[ActivationOptions, _layer_stack] = ActivationOptions.GELU
+STACK_DROPOUT_PROBABILITY: Annotated[float, _layer_stack] = 0.0
+STACK_LAST_LAYER_BIAS_OPTION: Annotated[LastLayerBiasOptions, _layer_stack] = (
     LastLayerBiasOptions.DEFAULT
 )
-SUBMODULE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-SUBMODULE_STACK_BIAS_FLAG: bool = STACK_BIAS_FLAG
+STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool, _layer_stack] = True
+STACK_BIAS_FLAG: Annotated[bool, _layer_stack] = True
 
-#########################################################################
-# Adaptive Generator Stack Options
-ADAPTIVE_GENERATOR_STACK_HIDDEN_DIM: int = HIDDEN_DIM
-ADAPTIVE_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LAYER_NORM_POSITION
+_submodule_stack = Section(("Layer Stack Submodule Options",))
+SUBMODULE_STACK_HIDDEN_DIM: Annotated[int, _submodule_stack] = HIDDEN_DIM
+SUBMODULE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _submodule_stack
+] = LAYER_NORM_POSITION
+SUBMODULE_STACK_NORMALIZATION: Annotated[NormalizationOptions, _submodule_stack] = (
+    NORMALIZATION
 )
-ADAPTIVE_GENERATOR_STACK_NORMALIZATION: NormalizationOptions = NORMALIZATION
-ADAPTIVE_GENERATOR_STACK_NUM_LAYERS: int = 2
-ADAPTIVE_GENERATOR_STACK_ACTIVATION: ActivationOptions = ActivationOptions.GELU
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ADAPTIVE_GENERATOR_STACK_DROPOUT_PROBABILITY: float = 0.0
-ADAPTIVE_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = (
-    LastLayerBiasOptions.DEFAULT
+SUBMODULE_STACK_NUM_LAYERS: Annotated[int, _submodule_stack] = 2
+SUBMODULE_STACK_ACTIVATION: Annotated[ActivationOptions, _submodule_stack] = (
+    ActivationOptions.GELU
 )
-ADAPTIVE_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-ADAPTIVE_GENERATOR_STACK_BIAS_FLAG: bool = STACK_BIAS_FLAG
+SUBMODULE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _submodule_stack
+] = None
+SUBMODULE_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _submodule_stack] = False
+SUBMODULE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _submodule_stack] = None
+SUBMODULE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _submodule_stack] = (
+    None
+)
+SUBMODULE_STACK_DROPOUT_PROBABILITY: Annotated[float, _submodule_stack] = 0.0
+SUBMODULE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _submodule_stack
+] = LastLayerBiasOptions.DEFAULT
+SUBMODULE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool, _submodule_stack] = (
+    False
+)
+SUBMODULE_STACK_BIAS_FLAG: Annotated[bool, _submodule_stack] = STACK_BIAS_FLAG
 
-#########################################################################
-# Residual Options
+_adaptive_generator_stack = Section(("Adaptive Generator Stack Options",))
+ADAPTIVE_GENERATOR_STACK_HIDDEN_DIM: Annotated[int, _adaptive_generator_stack] = (
+    HIDDEN_DIM
+)
+ADAPTIVE_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _adaptive_generator_stack
+] = LAYER_NORM_POSITION
+ADAPTIVE_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions, _adaptive_generator_stack
+] = NORMALIZATION
+ADAPTIVE_GENERATOR_STACK_NUM_LAYERS: Annotated[int, _adaptive_generator_stack] = 2
+ADAPTIVE_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions, _adaptive_generator_stack
+] = ActivationOptions.GELU
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _adaptive_generator_stack
+] = None
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _adaptive_generator_stack
+] = False
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _adaptive_generator_stack
+] = None
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _adaptive_generator_stack
+] = None
+ADAPTIVE_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float, _adaptive_generator_stack
+] = 0.0
+ADAPTIVE_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _adaptive_generator_stack
+] = LastLayerBiasOptions.DEFAULT
+ADAPTIVE_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool, _adaptive_generator_stack
+] = False
+ADAPTIVE_GENERATOR_STACK_BIAS_FLAG: Annotated[bool, _adaptive_generator_stack] = (
+    STACK_BIAS_FLAG
+)
+
+_residual = Section(("Residual Options",))
 # - False uses the residual variant's learned query or coefficient parameters.
 # - True uses the residual stack for input-dependent queries or coefficients.
 # - For every attention residual selector, supply its RESIDUAL_BLOCK_SIZE and
 #   RESIDUAL_RMS_NORM_EPSILON explicitly (suggested: 1 for full attention, 1e-6).
-STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-STACK_RESIDUAL_MODEL_FLAG: bool = False
-STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
+STACK_RESIDUAL_CONNECTION_OPTION: Annotated[type[ResidualConfig] | None, _residual] = (
+    None
+)
+STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual] = False
+STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual] = None
+STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual] = None
 # - Applies to scalar and model-generated weighted residual coefficients.
 #   SIGMOID is recommended; DISABLED leaves the raw coefficient unchanged.
-RESIDUAL_COEFFICIENT_ACTIVATION: ActivationOptions = ActivationOptions.SIGMOID
+RESIDUAL_COEFFICIENT_ACTIVATION: Annotated[ActivationOptions, _residual] = (
+    ActivationOptions.SIGMOID
+)
 
-## Residual Stack Options
+_residual_stack = _residual.child("Residual Stack Options")
 # - If False, residual stack options inherit layer stack submodule options.
-RESIDUAL_STACK_INDEPENDENT_FLAG: bool = False
-RESIDUAL_STACK_HIDDEN_DIM: int | None = None
-RESIDUAL_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-RESIDUAL_STACK_NORMALIZATION: NormalizationOptions | None = None
-RESIDUAL_STACK_NUM_LAYERS: int | None = None
-RESIDUAL_STACK_ACTIVATION: ActivationOptions | None = None
-RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: bool = False
-RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-RESIDUAL_STACK_DROPOUT_PROBABILITY: float | None = None
-RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-RESIDUAL_STACK_BIAS_FLAG: bool | None = None
+RESIDUAL_STACK_INDEPENDENT_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_HIDDEN_DIM: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NUM_LAYERS: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_ACTIVATION: Annotated[ActivationOptions | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _residual_stack
+] = None
+RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual_stack] = (
+    None
+)
+RESIDUAL_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _residual_stack] = None
+RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _residual_stack
+] = None
+RESIDUAL_STACK_BIAS_FLAG: Annotated[bool | None, _residual_stack] = None
 
 
-#########################################################################
-# Gate Options
+_gate = Section(("Gate Options",))
 # If `STACK_GATE_FLAG` is False, the gate-specific parameters below are ignored.
-STACK_GATE_FLAG: bool = False
-GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-## Gate Stack Options
+STACK_GATE_FLAG: Annotated[bool, _gate] = False
+GATE_OPTION: Annotated[LayerGateOptions | None, _gate] = LayerGateOptions.MULTIPLIER
+GATE_ACTIVATION: Annotated[ActivationOptions | None, _gate] = ActivationOptions.SIGMOID
+_gate_stack = _gate.child("Gate Stack Options")
 # If False, gate model stack options inherit the layer stack submodule options.
-GATE_STACK_INDEPENDENT_FLAG: bool = False
-GATE_STACK_HIDDEN_DIM: int | None = None
-GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-GATE_STACK_NUM_LAYERS: int | None = None
-GATE_STACK_ACTIVATION: ActivationOptions | None = ActivationOptions.TANH
-GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = True
-GATE_STACK_BIAS_FLAG: bool | None = True
+GATE_STACK_INDEPENDENT_FLAG: Annotated[bool, _gate_stack] = False
+GATE_STACK_HIDDEN_DIM: Annotated[int | None, _gate_stack] = None
+GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _gate_stack
+] = None
+GATE_STACK_NORMALIZATION: Annotated[NormalizationOptions | None, _gate_stack] = None
+GATE_STACK_NUM_LAYERS: Annotated[int | None, _gate_stack] = None
+GATE_STACK_ACTIVATION: Annotated[ActivationOptions | None, _gate_stack] = (
+    ActivationOptions.TANH
+)
+GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _gate_stack
+] = None
+GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _gate_stack] = False
+GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _gate_stack] = None
+GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _gate_stack] = None
+GATE_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _gate_stack] = None
+GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _gate_stack
+] = None
+GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool | None, _gate_stack] = True
+GATE_STACK_BIAS_FLAG: Annotated[bool | None, _gate_stack] = True
 
-#########################################################################
-# Halting Options
+_halting = Section(("Halting Options",))
 # If `STACK_HALTING_FLAG` is False, the halting-specific parameters below are ignored.
-STACK_HALTING_FLAG: bool = False
-HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-HALTING_THRESHOLD: float = 0.999
-HALTING_DROPOUT: float = 0.0
-HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
+STACK_HALTING_FLAG: Annotated[bool, _halting] = False
+HALTING_OPTION: Annotated[type[HaltingConfig], _halting] = StickBreakingConfig
+HALTING_THRESHOLD: Annotated[float, _halting] = 0.999
+HALTING_DROPOUT: Annotated[float, _halting] = 0.0
+HALTING_HIDDEN_STATE_MODE: Annotated[HaltingHiddenStateModeOptions, _halting] = (
     HaltingHiddenStateModeOptions.RAW
 )
-## Halting Stack Options
+_halting_stack = _halting.child("Halting Stack Options")
 # If False, halting model stack options inherit the layer stack submodule options.
-HALTING_STACK_INDEPENDENT_FLAG: bool = False
-HALTING_STACK_HIDDEN_DIM: int | None = None
-HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = (
-    LayerNormPositionOptions.DISABLED
+HALTING_STACK_INDEPENDENT_FLAG: Annotated[bool, _halting_stack] = False
+HALTING_STACK_HIDDEN_DIM: Annotated[int | None, _halting_stack] = None
+HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _halting_stack
+] = LayerNormPositionOptions.DISABLED
+HALTING_STACK_NORMALIZATION: Annotated[NormalizationOptions | None, _halting_stack] = (
+    None
 )
-HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-HALTING_STACK_NUM_LAYERS: int | None = None
-HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = (
-    LastLayerBiasOptions.DISABLED
-)
-HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-HALTING_STACK_BIAS_FLAG: bool | None = None
+HALTING_STACK_NUM_LAYERS: Annotated[int | None, _halting_stack] = None
+HALTING_STACK_ACTIVATION: Annotated[ActivationOptions | None, _halting_stack] = None
+HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _halting_stack
+] = None
+HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _halting_stack] = False
+HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _halting_stack] = None
+HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _halting_stack] = None
+HALTING_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _halting_stack] = None
+HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _halting_stack
+] = LastLayerBiasOptions.DISABLED
+HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _halting_stack
+] = None
+HALTING_STACK_BIAS_FLAG: Annotated[bool | None, _halting_stack] = None
 
-#########################################################################
-# Memory Options
+_memory = Section(("Memory Options",))
 # If `MEMORY_FLAG` is False, the memory-specific parameters below are ignored.
-MEMORY_FLAG: bool = False
-MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
-MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
-MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
-MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
-## Memory Stack Options
+MEMORY_FLAG: Annotated[bool, _memory] = False
+MEMORY_OPTION: Annotated[type[DynamicMemoryConfig], _memory] = (
+    GatedResidualDynamicMemoryConfig
+)
+MEMORY_POSITION_OPTION: Annotated[MemoryPositionOptions, _memory] = (
+    MemoryPositionOptions.AFTER_AFFINE
+)
+MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: Annotated[float | None, _memory] = None
+MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: Annotated[int | None, _memory] = None
+_memory_stack = _memory.child("Memory Stack Options")
 # If False, memory model stack options inherit the layer stack submodule options.
-MEMORY_STACK_INDEPENDENT_FLAG: bool = False
-MEMORY_STACK_HIDDEN_DIM: int | None = None
-MEMORY_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-MEMORY_STACK_NORMALIZATION: NormalizationOptions | None = None
-MEMORY_STACK_NUM_LAYERS: int | None = None
-MEMORY_STACK_ACTIVATION: ActivationOptions | None = None
-MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-MEMORY_STACK_RESIDUAL_MODEL_FLAG: bool = False
-MEMORY_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-MEMORY_STACK_DROPOUT_PROBABILITY: float | None = None
-MEMORY_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-MEMORY_STACK_BIAS_FLAG: bool | None = None
+MEMORY_STACK_INDEPENDENT_FLAG: Annotated[bool, _memory_stack] = False
+MEMORY_STACK_HIDDEN_DIM: Annotated[int | None, _memory_stack] = None
+MEMORY_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _memory_stack
+] = None
+MEMORY_STACK_NORMALIZATION: Annotated[NormalizationOptions | None, _memory_stack] = None
+MEMORY_STACK_NUM_LAYERS: Annotated[int | None, _memory_stack] = None
+MEMORY_STACK_ACTIVATION: Annotated[ActivationOptions | None, _memory_stack] = None
+MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _memory_stack
+] = None
+MEMORY_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _memory_stack] = False
+MEMORY_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _memory_stack] = None
+MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _memory_stack] = None
+MEMORY_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _memory_stack] = None
+MEMORY_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _memory_stack
+] = None
+MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool | None, _memory_stack] = (
+    None
+)
+MEMORY_STACK_BIAS_FLAG: Annotated[bool | None, _memory_stack] = None
 
-#########################################################################
-# Recurrent Layer Options
+_recurrent_layer = Section(("Recurrent Layer Options",))
 # If `RECURRENT_FLAG` is False, the recurrent-specific parameters below are ignored.
-RECURRENT_FLAG: bool = False
-RECURRENT_MAX_STEPS: int = 4
-RECURRENT_INITIAL_ITERATIONS: int = 2
-RECURRENT_GRADIENT_TRANSITION_COUNT: int | None = None
-RECURRENT_NO_GRADIENT_TRANSITION_COUNT: int | None = None
-RECURRENT_ITERATION_INCREMENT: int = 1
-RECURRENT_FORWARD_CALLS_BEFORE_ITERATION_INCREMENT: int = 1
-RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG: bool = False
-RECURRENT_LAYER_NORM_POSITION: LayerNormPositionOptions = (
+RECURRENT_FLAG: Annotated[bool, _recurrent_layer] = False
+RECURRENT_MAX_STEPS: Annotated[int, _recurrent_layer] = 4
+RECURRENT_INITIAL_ITERATIONS: Annotated[int, _recurrent_layer] = 2
+RECURRENT_GRADIENT_TRANSITION_COUNT: Annotated[int | None, _recurrent_layer] = None
+RECURRENT_NO_GRADIENT_TRANSITION_COUNT: Annotated[int | None, _recurrent_layer] = None
+RECURRENT_ITERATION_INCREMENT: Annotated[int, _recurrent_layer] = 1
+RECURRENT_FORWARD_CALLS_BEFORE_ITERATION_INCREMENT: Annotated[int, _recurrent_layer] = 1
+RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG: Annotated[bool, _recurrent_layer] = False
+RECURRENT_LAYER_NORM_POSITION: Annotated[LayerNormPositionOptions, _recurrent_layer] = (
     LayerNormPositionOptions.DISABLED
 )
-RECURRENT_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
+RECURRENT_NORMALIZATION: Annotated[NormalizationOptions, _recurrent_layer] = (
+    NormalizationOptions.LAYER_NORM
+)
 
-#########################################################################
-## Recurrent Gate Options
-RECURRENT_STACK_GATE_FLAG: bool = False
-RECURRENT_GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-RECURRENT_GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-### Recurrent Gate Stack Options
+_recurrent_gate = _recurrent_layer.child("Recurrent Gate Options")
+RECURRENT_STACK_GATE_FLAG: Annotated[bool, _recurrent_gate] = False
+RECURRENT_GATE_OPTION: Annotated[LayerGateOptions | None, _recurrent_gate] = (
+    LayerGateOptions.MULTIPLIER
+)
+RECURRENT_GATE_ACTIVATION: Annotated[ActivationOptions | None, _recurrent_gate] = (
+    ActivationOptions.SIGMOID
+)
+_recurrent_gate_stack = _recurrent_gate.child("Recurrent Gate Stack Options")
 # If False, recurrent gate stack options inherit gate/submodule stack options.
-RECURRENT_GATE_STACK_INDEPENDENT_FLAG: bool = False
-RECURRENT_GATE_STACK_HIDDEN_DIM: int | None = None
-RECURRENT_GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-RECURRENT_GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-RECURRENT_GATE_STACK_NUM_LAYERS: int | None = None
-RECURRENT_GATE_STACK_ACTIVATION: ActivationOptions | None = None
-RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-RECURRENT_GATE_STACK_BIAS_FLAG: bool | None = None
+RECURRENT_GATE_STACK_INDEPENDENT_FLAG: Annotated[bool, _recurrent_gate_stack] = False
+RECURRENT_GATE_STACK_HIDDEN_DIM: Annotated[int | None, _recurrent_gate_stack] = None
+RECURRENT_GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_NUM_LAYERS: Annotated[int | None, _recurrent_gate_stack] = None
+RECURRENT_GATE_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _recurrent_gate_stack] = False
+RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _recurrent_gate_stack
+] = None
+RECURRENT_GATE_STACK_BIAS_FLAG: Annotated[bool | None, _recurrent_gate_stack] = None
 
-#########################################################################
-## Recurrent Halting Options
-RECURRENT_STACK_HALTING_FLAG: bool = False
-RECURRENT_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-RECURRENT_HALTING_THRESHOLD: float = HALTING_THRESHOLD
-RECURRENT_HALTING_DROPOUT: float = HALTING_DROPOUT
-RECURRENT_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HALTING_HIDDEN_STATE_MODE
+_recurrent_halting = _recurrent_layer.child("Recurrent Halting Options")
+RECURRENT_STACK_HALTING_FLAG: Annotated[bool, _recurrent_halting] = False
+RECURRENT_HALTING_OPTION: Annotated[type[HaltingConfig], _recurrent_halting] = (
+    StickBreakingConfig
 )
-### Recurrent Halting Stack Options
+RECURRENT_HALTING_THRESHOLD: Annotated[float, _recurrent_halting] = HALTING_THRESHOLD
+RECURRENT_HALTING_DROPOUT: Annotated[float, _recurrent_halting] = HALTING_DROPOUT
+RECURRENT_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _recurrent_halting
+] = HALTING_HIDDEN_STATE_MODE
+_recurrent_halting_stack = _recurrent_halting.child("Recurrent Halting Stack Options")
 # If False, recurrent halting stack options inherit halting/submodule stack options.
-RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: bool = False
-RECURRENT_HALTING_STACK_HIDDEN_DIM: int | None = None
-RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-RECURRENT_HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-RECURRENT_HALTING_STACK_NUM_LAYERS: int | None = None
-RECURRENT_HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
+RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: Annotated[bool, _recurrent_halting_stack] = (
+    False
+)
+RECURRENT_HALTING_STACK_HIDDEN_DIM: Annotated[int | None, _recurrent_halting_stack] = (
+    None
+)
+RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_NUM_LAYERS: Annotated[int | None, _recurrent_halting_stack] = (
+    None
+)
+RECURRENT_HALTING_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _recurrent_halting_stack
+] = False
+RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _recurrent_halting_stack
+] = None
+RECURRENT_HALTING_STACK_BIAS_FLAG: Annotated[bool | None, _recurrent_halting_stack] = (
+    None
+)
 
-#########################################################################
-# Weight Generator Options
+_weight_generator = Section(("Weight Generator Options",))
 # If `WEIGHT_OPTION_FLAG` is False, the weight-specific parameters below are ignored.
-WEIGHT_OPTION_FLAG: bool = False
-WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-GENERATOR_DEPTH: int = 3
-WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
-WEIGHT_DECAY_RATE: float = 0.0
-WEIGHT_DECAY_WARMUP_BATCHES: int = 0
-WEIGHT_NORMALIZATION_OPTION: WeightNormalizationOptions = (
-    WeightNormalizationOptions.DISABLED
+WEIGHT_OPTION_FLAG: Annotated[bool, _weight_generator] = False
+WEIGHT_OPTION: Annotated[type[DynamicWeightConfig] | None, _weight_generator] = None
+GENERATOR_DEPTH: Annotated[int, _weight_generator] = 3
+WEIGHT_DECAY_SCHEDULE: Annotated[WeightDecayScheduleOptions, _weight_generator] = (
+    WeightDecayScheduleOptions.DISABLED
 )
-WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: bool = False
-WEIGHT_NORMALIZATION_POSITION_OPTION: WeightNormalizationPositionOptions = (
-    WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
-)
-WEIGHT_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    BankExpansionFactorOptions.FACTOR_OF_THREE
-)
-## Weight Generator Stack Options
+WEIGHT_DECAY_RATE: Annotated[float, _weight_generator] = 0.0
+WEIGHT_DECAY_WARMUP_BATCHES: Annotated[int, _weight_generator] = 0
+WEIGHT_NORMALIZATION_OPTION: Annotated[
+    WeightNormalizationOptions, _weight_generator
+] = WeightNormalizationOptions.DISABLED
+WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: Annotated[bool, _weight_generator] = False
+WEIGHT_NORMALIZATION_POSITION_OPTION: Annotated[
+    WeightNormalizationPositionOptions, _weight_generator
+] = WeightNormalizationPositionOptions.BEFORE_OUTER_PRODUCT
+WEIGHT_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _weight_generator
+] = BankExpansionFactorOptions.FACTOR_OF_THREE
+_weight_generator_stack = _weight_generator.child("Weight Generator Stack Options")
 # If False, weight generator stack options inherit ADAPTIVE_GENERATOR_STACK_*.
-WEIGHT_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-WEIGHT_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-WEIGHT_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-WEIGHT_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-WEIGHT_GENERATOR_STACK_NUM_LAYERS: int | None = None
-WEIGHT_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-WEIGHT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-WEIGHT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-WEIGHT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-WEIGHT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-WEIGHT_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-WEIGHT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-WEIGHT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-WEIGHT_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+WEIGHT_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[bool, _weight_generator_stack] = (
+    False
+)
+WEIGHT_GENERATOR_STACK_HIDDEN_DIM: Annotated[int | None, _weight_generator_stack] = None
+WEIGHT_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_NUM_LAYERS: Annotated[int | None, _weight_generator_stack] = None
+WEIGHT_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _weight_generator_stack] = (
+    False
+)
+WEIGHT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _weight_generator_stack
+] = None
+WEIGHT_GENERATOR_STACK_BIAS_FLAG: Annotated[bool | None, _weight_generator_stack] = None
 
 
-#########################################################################
-# Bias Generator Options
+_bias_generator = Section(("Bias Generator Options",))
 # If `BIAS_OPTION_FLAG` is False, the bias-specific parameters below are ignored.
-BIAS_OPTION_FLAG: bool = False
-BIAS_OPTION: type[DynamicBiasConfig] | None = None
-BIAS_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
-BIAS_DECAY_RATE: float = 0.0
-BIAS_DECAY_WARMUP_BATCHES: int = 0
-BIAS_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
+BIAS_OPTION_FLAG: Annotated[bool, _bias_generator] = False
+BIAS_OPTION: Annotated[type[DynamicBiasConfig] | None, _bias_generator] = None
+BIAS_DECAY_SCHEDULE: Annotated[WeightDecayScheduleOptions, _bias_generator] = (
+    WeightDecayScheduleOptions.DISABLED
+)
+BIAS_DECAY_RATE: Annotated[float, _bias_generator] = 0.0
+BIAS_DECAY_WARMUP_BATCHES: Annotated[int, _bias_generator] = 0
+BIAS_BANK_EXPANSION_FACTOR: Annotated[BankExpansionFactorOptions, _bias_generator] = (
     BankExpansionFactorOptions.FACTOR_OF_TWO
 )
-## Bias Generator Stack Options
+_bias_generator_stack = _bias_generator.child("Bias Generator Stack Options")
 # If False, bias generator stack options inherit ADAPTIVE_GENERATOR_STACK_*.
-BIAS_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-BIAS_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-BIAS_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-BIAS_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-BIAS_GENERATOR_STACK_NUM_LAYERS: int | None = None
-BIAS_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-BIAS_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-BIAS_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-BIAS_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-BIAS_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-BIAS_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-BIAS_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-BIAS_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-BIAS_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+BIAS_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[bool, _bias_generator_stack] = False
+BIAS_GENERATOR_STACK_HIDDEN_DIM: Annotated[int | None, _bias_generator_stack] = None
+BIAS_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_NUM_LAYERS: Annotated[int | None, _bias_generator_stack] = None
+BIAS_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _bias_generator_stack] = False
+BIAS_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _bias_generator_stack
+] = None
+BIAS_GENERATOR_STACK_BIAS_FLAG: Annotated[bool | None, _bias_generator_stack] = None
 
-#########################################################################
-# Diagonal Generator Options
+_diagonal_generator = Section(("Diagonal Generator Options",))
 # If `DIAGONAL_OPTION_FLAG` is False, the diagonal-specific parameters below are
 # ignored.
-DIAGONAL_OPTION_FLAG: bool = False
-DIAGONAL_OPTION: type[DynamicDiagonalConfig] | None = None
-## Diagonal Generator Stack Options
+DIAGONAL_OPTION_FLAG: Annotated[bool, _diagonal_generator] = False
+DIAGONAL_OPTION: Annotated[type[DynamicDiagonalConfig] | None, _diagonal_generator] = (
+    None
+)
+_diagonal_generator_stack = _diagonal_generator.child(
+    "Diagonal Generator Stack Options"
+)
 # If False, diagonal generator stack options inherit ADAPTIVE_GENERATOR_STACK_*.
-DIAGONAL_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-DIAGONAL_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-DIAGONAL_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-DIAGONAL_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-DIAGONAL_GENERATOR_STACK_NUM_LAYERS: int | None = None
-DIAGONAL_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-DIAGONAL_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-DIAGONAL_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-DIAGONAL_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-DIAGONAL_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-DIAGONAL_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-DIAGONAL_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-DIAGONAL_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-DIAGONAL_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+DIAGONAL_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _diagonal_generator_stack
+] = False
+DIAGONAL_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _diagonal_generator_stack
+] = False
+DIAGONAL_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _diagonal_generator_stack
+] = None
+DIAGONAL_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _diagonal_generator_stack
+] = None
 
-#########################################################################
-# Mask Options
+_mask = Section(("Mask Options",))
 # If `MASK_OPTION_FLAG` is False, the mask-specific parameters below are ignored.
-MASK_OPTION_FLAG: bool = False
-ROW_MASK_OPTION: type[AxisMaskConfig] | None = None
-MASK_THRESHOLD: float = 0.5
-MASK_FLOOR: float = 0.0
-MASK_TRANSITION_WIDTH: float = 0.1
-MASK_SURROGATE_SCALE: float = 10.0
-MASK_DIMENSION_OPTION: MaskDimensionOptions = MaskDimensionOptions.COLUMN
-## Mask Stack Options
+MASK_OPTION_FLAG: Annotated[bool, _mask] = False
+ROW_MASK_OPTION: Annotated[type[AxisMaskConfig] | None, _mask] = None
+MASK_THRESHOLD: Annotated[float, _mask] = 0.5
+MASK_FLOOR: Annotated[float, _mask] = 0.0
+MASK_TRANSITION_WIDTH: Annotated[float, _mask] = 0.1
+MASK_SURROGATE_SCALE: Annotated[float, _mask] = 10.0
+MASK_DIMENSION_OPTION: Annotated[MaskDimensionOptions, _mask] = (
+    MaskDimensionOptions.COLUMN
+)
+_mask_stack = _mask.child("Mask Stack Options")
 # If False, mask generator stack options inherit ADAPTIVE_GENERATOR_STACK_*.
-MASK_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-MASK_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-MASK_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-MASK_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-MASK_GENERATOR_STACK_NUM_LAYERS: int | None = None
-MASK_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-MASK_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-MASK_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-MASK_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-MASK_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-MASK_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-MASK_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-MASK_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-MASK_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+MASK_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[bool, _mask_stack] = False
+MASK_GENERATOR_STACK_HIDDEN_DIM: Annotated[int | None, _mask_stack] = None
+MASK_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _mask_stack
+] = None
+MASK_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _mask_stack
+] = None
+MASK_GENERATOR_STACK_NUM_LAYERS: Annotated[int | None, _mask_stack] = None
+MASK_GENERATOR_STACK_ACTIVATION: Annotated[ActivationOptions | None, _mask_stack] = None
+MASK_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _mask_stack
+] = None
+MASK_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _mask_stack] = False
+MASK_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _mask_stack] = None
+MASK_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _mask_stack] = (
+    None
+)
+MASK_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _mask_stack] = None
+MASK_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _mask_stack
+] = None
+MASK_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _mask_stack
+] = None
+MASK_GENERATOR_STACK_BIAS_FLAG: Annotated[bool | None, _mask_stack] = None
 
 
-#########################################################################
-# Input Boundary Model Options
+_input_boundary_model = Section(("Input Boundary Model Options",))
 # Input boundary dynamic weight options.
-INPUT_LAYER_WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-INPUT_LAYER_GENERATOR_DEPTH: int = GENERATOR_DEPTH
-INPUT_LAYER_WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WEIGHT_DECAY_SCHEDULE
-INPUT_LAYER_WEIGHT_DECAY_RATE: float = WEIGHT_DECAY_RATE
-INPUT_LAYER_WEIGHT_DECAY_WARMUP_BATCHES: int = WEIGHT_DECAY_WARMUP_BATCHES
-INPUT_LAYER_WEIGHT_NORMALIZATION_OPTION: WeightNormalizationOptions = (
-    WEIGHT_NORMALIZATION_OPTION
+INPUT_LAYER_WEIGHT_OPTION: Annotated[
+    type[DynamicWeightConfig] | None, _input_boundary_model
+] = None
+INPUT_LAYER_GENERATOR_DEPTH: Annotated[int, _input_boundary_model] = GENERATOR_DEPTH
+INPUT_LAYER_WEIGHT_DECAY_SCHEDULE: Annotated[
+    WeightDecayScheduleOptions, _input_boundary_model
+] = WEIGHT_DECAY_SCHEDULE
+INPUT_LAYER_WEIGHT_DECAY_RATE: Annotated[float, _input_boundary_model] = (
+    WEIGHT_DECAY_RATE
 )
-INPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: bool = (
-    WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+INPUT_LAYER_WEIGHT_DECAY_WARMUP_BATCHES: Annotated[int, _input_boundary_model] = (
+    WEIGHT_DECAY_WARMUP_BATCHES
 )
-INPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION: WeightNormalizationPositionOptions = (
-    WEIGHT_NORMALIZATION_POSITION_OPTION
-)
-INPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    WEIGHT_BANK_EXPANSION_FACTOR
-)
+INPUT_LAYER_WEIGHT_NORMALIZATION_OPTION: Annotated[
+    WeightNormalizationOptions, _input_boundary_model
+] = WEIGHT_NORMALIZATION_OPTION
+INPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: Annotated[
+    bool, _input_boundary_model
+] = WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+INPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION: Annotated[
+    WeightNormalizationPositionOptions, _input_boundary_model
+] = WEIGHT_NORMALIZATION_POSITION_OPTION
+INPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _input_boundary_model
+] = WEIGHT_BANK_EXPANSION_FACTOR
 # Input boundary dynamic bias options.
-INPUT_LAYER_BIAS_OPTION: type[DynamicBiasConfig] | None = None
-INPUT_LAYER_BIAS_DECAY_SCHEDULE: WeightDecayScheduleOptions = BIAS_DECAY_SCHEDULE
-INPUT_LAYER_BIAS_DECAY_RATE: float = BIAS_DECAY_RATE
-INPUT_LAYER_BIAS_DECAY_WARMUP_BATCHES: int = BIAS_DECAY_WARMUP_BATCHES
-INPUT_LAYER_BIAS_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    BIAS_BANK_EXPANSION_FACTOR
+INPUT_LAYER_BIAS_OPTION: Annotated[
+    type[DynamicBiasConfig] | None, _input_boundary_model
+] = None
+INPUT_LAYER_BIAS_DECAY_SCHEDULE: Annotated[
+    WeightDecayScheduleOptions, _input_boundary_model
+] = BIAS_DECAY_SCHEDULE
+INPUT_LAYER_BIAS_DECAY_RATE: Annotated[float, _input_boundary_model] = BIAS_DECAY_RATE
+INPUT_LAYER_BIAS_DECAY_WARMUP_BATCHES: Annotated[int, _input_boundary_model] = (
+    BIAS_DECAY_WARMUP_BATCHES
 )
+INPUT_LAYER_BIAS_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _input_boundary_model
+] = BIAS_BANK_EXPANSION_FACTOR
 # Input boundary dynamic diagonal options.
-INPUT_LAYER_DIAGONAL_OPTION: type[DynamicDiagonalConfig] | None = None
+INPUT_LAYER_DIAGONAL_OPTION: Annotated[
+    type[DynamicDiagonalConfig] | None, _input_boundary_model
+] = None
 # Input boundary dynamic mask options.
-INPUT_LAYER_ROW_MASK_OPTION: type[AxisMaskConfig] | None = None
-INPUT_LAYER_MASK_THRESHOLD: float = MASK_THRESHOLD
-INPUT_LAYER_MASK_FLOOR: float = MASK_FLOOR
-INPUT_LAYER_MASK_TRANSITION_WIDTH: float = MASK_TRANSITION_WIDTH
-INPUT_LAYER_MASK_SURROGATE_SCALE: float = MASK_SURROGATE_SCALE
-INPUT_LAYER_MASK_DIMENSION_OPTION: MaskDimensionOptions = MASK_DIMENSION_OPTION
+INPUT_LAYER_ROW_MASK_OPTION: Annotated[
+    type[AxisMaskConfig] | None, _input_boundary_model
+] = None
+INPUT_LAYER_MASK_THRESHOLD: Annotated[float, _input_boundary_model] = MASK_THRESHOLD
+INPUT_LAYER_MASK_FLOOR: Annotated[float, _input_boundary_model] = MASK_FLOOR
+INPUT_LAYER_MASK_TRANSITION_WIDTH: Annotated[float, _input_boundary_model] = (
+    MASK_TRANSITION_WIDTH
+)
+INPUT_LAYER_MASK_SURROGATE_SCALE: Annotated[float, _input_boundary_model] = (
+    MASK_SURROGATE_SCALE
+)
+INPUT_LAYER_MASK_DIMENSION_OPTION: Annotated[
+    MaskDimensionOptions, _input_boundary_model
+] = MASK_DIMENSION_OPTION
 
-#########################################################################
-# Output Boundary Model Options
+_output_boundary_model = Section(("Output Boundary Model Options",))
 # Output boundary dynamic weight options.
-OUTPUT_LAYER_WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-OUTPUT_LAYER_GENERATOR_DEPTH: int = GENERATOR_DEPTH
-OUTPUT_LAYER_WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WEIGHT_DECAY_SCHEDULE
-OUTPUT_LAYER_WEIGHT_DECAY_RATE: float = WEIGHT_DECAY_RATE
-OUTPUT_LAYER_WEIGHT_DECAY_WARMUP_BATCHES: int = WEIGHT_DECAY_WARMUP_BATCHES
-OUTPUT_LAYER_WEIGHT_NORMALIZATION_OPTION: WeightNormalizationOptions = (
-    WEIGHT_NORMALIZATION_OPTION
+OUTPUT_LAYER_WEIGHT_OPTION: Annotated[
+    type[DynamicWeightConfig] | None, _output_boundary_model
+] = None
+OUTPUT_LAYER_GENERATOR_DEPTH: Annotated[int, _output_boundary_model] = GENERATOR_DEPTH
+OUTPUT_LAYER_WEIGHT_DECAY_SCHEDULE: Annotated[
+    WeightDecayScheduleOptions, _output_boundary_model
+] = WEIGHT_DECAY_SCHEDULE
+OUTPUT_LAYER_WEIGHT_DECAY_RATE: Annotated[float, _output_boundary_model] = (
+    WEIGHT_DECAY_RATE
 )
-OUTPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: bool = (
-    WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+OUTPUT_LAYER_WEIGHT_DECAY_WARMUP_BATCHES: Annotated[int, _output_boundary_model] = (
+    WEIGHT_DECAY_WARMUP_BATCHES
 )
-OUTPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION: WeightNormalizationPositionOptions = WEIGHT_NORMALIZATION_POSITION_OPTION
-OUTPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    WEIGHT_BANK_EXPANSION_FACTOR
-)
+OUTPUT_LAYER_WEIGHT_NORMALIZATION_OPTION: Annotated[
+    WeightNormalizationOptions, _output_boundary_model
+] = WEIGHT_NORMALIZATION_OPTION
+OUTPUT_LAYER_WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: Annotated[
+    bool, _output_boundary_model
+] = WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG
+OUTPUT_LAYER_WEIGHT_NORMALIZATION_POSITION_OPTION: Annotated[
+    WeightNormalizationPositionOptions, _output_boundary_model
+] = WEIGHT_NORMALIZATION_POSITION_OPTION
+OUTPUT_LAYER_WEIGHT_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _output_boundary_model
+] = WEIGHT_BANK_EXPANSION_FACTOR
 # Output boundary dynamic bias options.
-OUTPUT_LAYER_BIAS_OPTION: type[DynamicBiasConfig] | None = None
-OUTPUT_LAYER_BIAS_DECAY_SCHEDULE: WeightDecayScheduleOptions = BIAS_DECAY_SCHEDULE
-OUTPUT_LAYER_BIAS_DECAY_RATE: float = BIAS_DECAY_RATE
-OUTPUT_LAYER_BIAS_DECAY_WARMUP_BATCHES: int = BIAS_DECAY_WARMUP_BATCHES
-OUTPUT_LAYER_BIAS_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    BIAS_BANK_EXPANSION_FACTOR
+OUTPUT_LAYER_BIAS_OPTION: Annotated[
+    type[DynamicBiasConfig] | None, _output_boundary_model
+] = None
+OUTPUT_LAYER_BIAS_DECAY_SCHEDULE: Annotated[
+    WeightDecayScheduleOptions, _output_boundary_model
+] = BIAS_DECAY_SCHEDULE
+OUTPUT_LAYER_BIAS_DECAY_RATE: Annotated[float, _output_boundary_model] = BIAS_DECAY_RATE
+OUTPUT_LAYER_BIAS_DECAY_WARMUP_BATCHES: Annotated[int, _output_boundary_model] = (
+    BIAS_DECAY_WARMUP_BATCHES
 )
+OUTPUT_LAYER_BIAS_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _output_boundary_model
+] = BIAS_BANK_EXPANSION_FACTOR
 # Output boundary dynamic diagonal options.
-OUTPUT_LAYER_DIAGONAL_OPTION: type[DynamicDiagonalConfig] | None = None
+OUTPUT_LAYER_DIAGONAL_OPTION: Annotated[
+    type[DynamicDiagonalConfig] | None, _output_boundary_model
+] = None
 # Output boundary dynamic mask options.
-OUTPUT_LAYER_ROW_MASK_OPTION: type[AxisMaskConfig] | None = None
-OUTPUT_LAYER_MASK_THRESHOLD: float = MASK_THRESHOLD
-OUTPUT_LAYER_MASK_FLOOR: float = MASK_FLOOR
-OUTPUT_LAYER_MASK_TRANSITION_WIDTH: float = MASK_TRANSITION_WIDTH
-OUTPUT_LAYER_MASK_SURROGATE_SCALE: float = MASK_SURROGATE_SCALE
-OUTPUT_LAYER_MASK_DIMENSION_OPTION: MaskDimensionOptions = MASK_DIMENSION_OPTION
+OUTPUT_LAYER_ROW_MASK_OPTION: Annotated[
+    type[AxisMaskConfig] | None, _output_boundary_model
+] = None
+OUTPUT_LAYER_MASK_THRESHOLD: Annotated[float, _output_boundary_model] = MASK_THRESHOLD
+OUTPUT_LAYER_MASK_FLOOR: Annotated[float, _output_boundary_model] = MASK_FLOOR
+OUTPUT_LAYER_MASK_TRANSITION_WIDTH: Annotated[float, _output_boundary_model] = (
+    MASK_TRANSITION_WIDTH
+)
+OUTPUT_LAYER_MASK_SURROGATE_SCALE: Annotated[float, _output_boundary_model] = (
+    MASK_SURROGATE_SCALE
+)
+OUTPUT_LAYER_MASK_DIMENSION_OPTION: Annotated[
+    MaskDimensionOptions, _output_boundary_model
+] = MASK_DIMENSION_OPTION
 
-#########################################################################
-# Neuron Wrapper Options
+_neuron_wrapper = Section(("Neuron Wrapper Options",))
 from emperor.neuron import (
     NeuronClusterOptimizerSyncCallback,
     TerminalRangeOptions,
     TerminalRoutingTreeDepthOptions,
 )
 
-CALLBACK_NEURON_CLUSTER_OPTIMIZER_SYNC = NeuronClusterOptimizerSyncCallback()
+CALLBACK_NEURON_CLUSTER_OPTIMIZER_SYNC: Annotated[
+    NeuronClusterOptimizerSyncCallback, _neuron_wrapper
+] = NeuronClusterOptimizerSyncCallback()
 
 
-## Cluster Geometry Options
-CLUSTER_X_AXIS_TOTAL_NEURONS: int = 10
-CLUSTER_Y_AXIS_TOTAL_NEURONS: int = 10
-CLUSTER_Z_AXIS_TOTAL_NEURONS: int = 1
-CLUSTER_INITIAL_X_AXIS_TOTAL_NEURONS: int = 3
-CLUSTER_INITIAL_Y_AXIS_TOTAL_NEURONS: int = 3
-CLUSTER_INITIAL_Z_AXIS_TOTAL_NEURONS: int = 1
-CLUSTER_MAX_STEPS: int = 4
-CLUSTER_BEAM_WIDTH: int | None = None
-CLUSTER_GROWTH_THRESHOLD: int | None = 250
-CLUSTER_GROWTH_COOLDOWN_STEPS: int | None = None
-CLUSTER_MAX_TOTAL_GROWTHS: int | None = None
-CLUSTER_GROWTH_WARMUP_STEPS: int | None = None
-CLUSTER_PRUNING_THRESHOLD: int | None = None
-CLUSTER_ESCAPE_DRIVEN_GROWTH_FLAG: bool = False
-CLUSTER_MITOSIS_INITIALIZATION_FLAG: bool = False
+_cluster_geometry = _neuron_wrapper.child("Cluster Geometry Options")
+CLUSTER_X_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 10
+CLUSTER_Y_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 10
+CLUSTER_Z_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 1
+CLUSTER_INITIAL_X_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 3
+CLUSTER_INITIAL_Y_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 3
+CLUSTER_INITIAL_Z_AXIS_TOTAL_NEURONS: Annotated[int, _cluster_geometry] = 1
+CLUSTER_MAX_STEPS: Annotated[int, _cluster_geometry] = 4
+CLUSTER_BEAM_WIDTH: Annotated[int | None, _cluster_geometry] = None
+CLUSTER_GROWTH_THRESHOLD: Annotated[int | None, _cluster_geometry] = 250
+CLUSTER_GROWTH_COOLDOWN_STEPS: Annotated[int | None, _cluster_geometry] = None
+CLUSTER_MAX_TOTAL_GROWTHS: Annotated[int | None, _cluster_geometry] = None
+CLUSTER_GROWTH_WARMUP_STEPS: Annotated[int | None, _cluster_geometry] = None
+CLUSTER_PRUNING_THRESHOLD: Annotated[int | None, _cluster_geometry] = None
+CLUSTER_ESCAPE_DRIVEN_GROWTH_FLAG: Annotated[bool, _cluster_geometry] = False
+CLUSTER_MITOSIS_INITIALIZATION_FLAG: Annotated[bool, _cluster_geometry] = False
 
-## Cluster Terminal Options
-CLUSTER_TERMINAL_XY_AXIS_RANGE: TerminalRangeOptions = TerminalRangeOptions.ONE
-CLUSTER_TERMINAL_Z_AXIS_RANGE: TerminalRangeOptions = TerminalRangeOptions.ONE
-CLUSTER_TERMINAL_TOP_K: int = 1
-CLUSTER_TERMINAL_ROUTING_TREE_DEPTH: TerminalRoutingTreeDepthOptions | None = None
-CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_1_BRANCH_COUNT: int | None = None
-CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_1_TOP_K: int | None = None
-CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_2_BRANCH_COUNT: int | None = None
-CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_2_TOP_K: int | None = None
+_cluster_terminal = _neuron_wrapper.child("Cluster Terminal Options")
+CLUSTER_TERMINAL_XY_AXIS_RANGE: Annotated[TerminalRangeOptions, _cluster_terminal] = (
+    TerminalRangeOptions.ONE
+)
+CLUSTER_TERMINAL_Z_AXIS_RANGE: Annotated[TerminalRangeOptions, _cluster_terminal] = (
+    TerminalRangeOptions.ONE
+)
+CLUSTER_TERMINAL_TOP_K: Annotated[int, _cluster_terminal] = 1
+CLUSTER_TERMINAL_ROUTING_TREE_DEPTH: Annotated[
+    TerminalRoutingTreeDepthOptions | None, _cluster_terminal
+] = None
+CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_1_BRANCH_COUNT: Annotated[
+    int | None, _cluster_terminal
+] = None
+CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_1_TOP_K: Annotated[
+    int | None, _cluster_terminal
+] = None
+CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_2_BRANCH_COUNT: Annotated[
+    int | None, _cluster_terminal
+] = None
+CLUSTER_TERMINAL_ROUTING_TREE_LEVEL_2_TOP_K: Annotated[
+    int | None, _cluster_terminal
+] = None
 
-### Cluster Terminal Router Options
-CLUSTER_TERMINAL_ROUTER_NUM_LAYERS: int = 1
-CLUSTER_TERMINAL_ROUTER_HIDDEN_DIM: int = HIDDEN_DIM
-CLUSTER_TERMINAL_ROUTER_ACTIVATION: ActivationOptions = ActivationOptions.DISABLED
-CLUSTER_TERMINAL_ROUTER_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
+_cluster_terminal_router = _cluster_terminal.child("Cluster Terminal Router Options")
+CLUSTER_TERMINAL_ROUTER_NUM_LAYERS: Annotated[int, _cluster_terminal_router] = 1
+CLUSTER_TERMINAL_ROUTER_HIDDEN_DIM: Annotated[int, _cluster_terminal_router] = (
+    HIDDEN_DIM
 )
-CLUSTER_TERMINAL_ROUTER_NORMALIZATION: NormalizationOptions = (
-    NormalizationOptions.RMS_NORM
-)
-CLUSTER_TERMINAL_ROUTER_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-CLUSTER_TERMINAL_ROUTER_RESIDUAL_MODEL_FLAG: bool = False
-CLUSTER_TERMINAL_ROUTER_RESIDUAL_BLOCK_SIZE: int | None = None
-CLUSTER_TERMINAL_ROUTER_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-CLUSTER_TERMINAL_ROUTER_DROPOUT_PROBABILITY: float = 0.0
-CLUSTER_TERMINAL_ROUTER_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = (
-    LastLayerBiasOptions.DEFAULT
-)
-CLUSTER_TERMINAL_ROUTER_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-CLUSTER_TERMINAL_ROUTER_BIAS_FLAG: bool = True
+CLUSTER_TERMINAL_ROUTER_ACTIVATION: Annotated[
+    ActivationOptions, _cluster_terminal_router
+] = ActivationOptions.DISABLED
+CLUSTER_TERMINAL_ROUTER_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _cluster_terminal_router
+] = LayerNormPositionOptions.DISABLED
+CLUSTER_TERMINAL_ROUTER_NORMALIZATION: Annotated[
+    NormalizationOptions, _cluster_terminal_router
+] = NormalizationOptions.RMS_NORM
+CLUSTER_TERMINAL_ROUTER_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _cluster_terminal_router
+] = None
+CLUSTER_TERMINAL_ROUTER_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _cluster_terminal_router
+] = False
+CLUSTER_TERMINAL_ROUTER_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _cluster_terminal_router
+] = None
+CLUSTER_TERMINAL_ROUTER_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _cluster_terminal_router
+] = None
+CLUSTER_TERMINAL_ROUTER_DROPOUT_PROBABILITY: Annotated[
+    float, _cluster_terminal_router
+] = 0.0
+CLUSTER_TERMINAL_ROUTER_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _cluster_terminal_router
+] = LastLayerBiasOptions.DEFAULT
+CLUSTER_TERMINAL_ROUTER_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool, _cluster_terminal_router
+] = False
+CLUSTER_TERMINAL_ROUTER_BIAS_FLAG: Annotated[bool, _cluster_terminal_router] = True
 
-### Cluster Terminal Sampler Options
-CLUSTER_TERMINAL_SAMPLER_THRESHOLD: float = 0.0
-CLUSTER_TERMINAL_SAMPLER_FILTER_ABOVE_THRESHOLD: bool = False
-CLUSTER_TERMINAL_SAMPLER_NUM_TOPK_SAMPLES: int = 0
-CLUSTER_TERMINAL_SAMPLER_NORMALIZE_PROBABILITIES_FLAG: bool = False
-CLUSTER_TERMINAL_SAMPLER_NOISY_TOPK_FLAG: bool = False
-CLUSTER_TERMINAL_SAMPLER_COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: float = 0.0
-CLUSTER_TERMINAL_SAMPLER_SWITCH_LOSS_WEIGHT: float = 0.0
-CLUSTER_TERMINAL_SAMPLER_ZERO_CENTRED_LOSS_WEIGHT: float = 0.0
-CLUSTER_TERMINAL_SAMPLER_MUTUAL_INFORMATION_LOSS_WEIGHT: float = 0.0
+_cluster_terminal_sampler = _cluster_terminal.child("Cluster Terminal Sampler Options")
+CLUSTER_TERMINAL_SAMPLER_THRESHOLD: Annotated[float, _cluster_terminal_sampler] = 0.0
+CLUSTER_TERMINAL_SAMPLER_FILTER_ABOVE_THRESHOLD: Annotated[
+    bool, _cluster_terminal_sampler
+] = False
+CLUSTER_TERMINAL_SAMPLER_NUM_TOPK_SAMPLES: Annotated[int, _cluster_terminal_sampler] = 0
+CLUSTER_TERMINAL_SAMPLER_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool, _cluster_terminal_sampler
+] = False
+CLUSTER_TERMINAL_SAMPLER_NOISY_TOPK_FLAG: Annotated[bool, _cluster_terminal_sampler] = (
+    False
+)
+CLUSTER_TERMINAL_SAMPLER_COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: Annotated[
+    float, _cluster_terminal_sampler
+] = 0.0
+CLUSTER_TERMINAL_SAMPLER_SWITCH_LOSS_WEIGHT: Annotated[
+    float, _cluster_terminal_sampler
+] = 0.0
+CLUSTER_TERMINAL_SAMPLER_ZERO_CENTRED_LOSS_WEIGHT: Annotated[
+    float, _cluster_terminal_sampler
+] = 0.0
+CLUSTER_TERMINAL_SAMPLER_MUTUAL_INFORMATION_LOSS_WEIGHT: Annotated[
+    float, _cluster_terminal_sampler
+] = 0.0
 
-## Cluster Halting Options
-CLUSTER_HALTING_FLAG: bool = True
-CLUSTER_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-CLUSTER_HALTING_THRESHOLD: float = 0.95
-CLUSTER_HALTING_DROPOUT: float = 0.0
-CLUSTER_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HaltingHiddenStateModeOptions.RAW
+_cluster_halting = _neuron_wrapper.child("Cluster Halting Options")
+CLUSTER_HALTING_FLAG: Annotated[bool, _cluster_halting] = True
+CLUSTER_HALTING_OPTION: Annotated[type[HaltingConfig], _cluster_halting] = (
+    StickBreakingConfig
 )
-CLUSTER_HALTING_STACK_HIDDEN_DIM: int = HIDDEN_DIM
-CLUSTER_HALTING_OUTPUT_DIM: int = 2
-CLUSTER_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
+CLUSTER_HALTING_THRESHOLD: Annotated[float, _cluster_halting] = 0.95
+CLUSTER_HALTING_DROPOUT: Annotated[float, _cluster_halting] = 0.0
+CLUSTER_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _cluster_halting
+] = HaltingHiddenStateModeOptions.RAW
+CLUSTER_HALTING_STACK_HIDDEN_DIM: Annotated[int, _cluster_halting] = HIDDEN_DIM
+CLUSTER_HALTING_OUTPUT_DIM: Annotated[int, _cluster_halting] = 2
+CLUSTER_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _cluster_halting
+] = LayerNormPositionOptions.DISABLED
+CLUSTER_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions, _cluster_halting
+] = NormalizationOptions.RMS_NORM
+CLUSTER_HALTING_STACK_NUM_LAYERS: Annotated[int, _cluster_halting] = 1
+CLUSTER_HALTING_STACK_ACTIVATION: Annotated[ActivationOptions, _cluster_halting] = (
+    ActivationOptions.DISABLED
 )
-CLUSTER_HALTING_STACK_NORMALIZATION: NormalizationOptions = (
-    NormalizationOptions.RMS_NORM
+CLUSTER_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _cluster_halting
+] = None
+CLUSTER_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _cluster_halting] = False
+CLUSTER_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _cluster_halting] = (
+    None
 )
-CLUSTER_HALTING_STACK_NUM_LAYERS: int = 1
-CLUSTER_HALTING_STACK_ACTIVATION: ActivationOptions = ActivationOptions.DISABLED
-CLUSTER_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-CLUSTER_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-CLUSTER_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-CLUSTER_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-CLUSTER_HALTING_STACK_DROPOUT_PROBABILITY: float = 0.0
-CLUSTER_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = (
-    LastLayerBiasOptions.DISABLED
-)
-CLUSTER_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-CLUSTER_HALTING_STACK_BIAS_FLAG: bool = True
+CLUSTER_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _cluster_halting
+] = None
+CLUSTER_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[float, _cluster_halting] = 0.0
+CLUSTER_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _cluster_halting
+] = LastLayerBiasOptions.DISABLED
+CLUSTER_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool, _cluster_halting
+] = False
+CLUSTER_HALTING_STACK_BIAS_FLAG: Annotated[bool, _cluster_halting] = True
 
 
 # ==============================================================================
-# Main Adaptive Generation
+_main_adaptive_generation = Section(("Main Adaptive Generation",))
 # ==============================================================================
-WEIGHT_INPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-WEIGHT_OUTPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-WEIGHT_MIXTURE_NUM_EXPERTS: int | None = None
-BIAS_MIXTURE_NUM_EXPERTS: int | None = None
-WEIGHT_MIXTURE_TOP_K: int | None = None
-BIAS_MIXTURE_TOP_K: int | None = None
-WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = (
-    None
-)
-WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: int | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: NormalizationOptions | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = (
-    None
-)
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+WEIGHT_INPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
+BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
+WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
+BIAS_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
+WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _main_adaptive_generation
+] = False
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
+BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _main_adaptive_generation
+] = None
 
-# Main Grouping
-GROUPING_SCOPE: AdaptiveParameterGroupingScopeOptions | None = None
-GROUP_COUNT: int | None = None
-CHUNK_SIZE: int | None = None
-GROUPING_SEQUENCE_LENGTH: int | None = None
-GROUPING_INPUT_ORDER: AdaptiveParameterInputOrderOptions | None = None
-GROUPING_METHOD: type[GroupingConfig] | None = None
-GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None = None
-GROUPING_MODEL_CONFIG: ConfigBase | None = None
-GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
-GROUPING_RMS_NORM_EPSILON: float | None = None
-
-
-# ==============================================================================
-# Input Layer Adaptive Generation
-# ==============================================================================
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: int | None = None
-INPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: int | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_TOP_K: int | None = None
-INPUT_LAYER_BIAS_MIXTURE_TOP_K: int | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-INPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = (
-    None
-)
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: int | None = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = (
-    None
-)
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = (
-    None
-)
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-
-# Input Layer Grouping
-INPUT_LAYER_GROUPING_SCOPE: AdaptiveParameterGroupingScopeOptions | None = None
-INPUT_LAYER_GROUP_COUNT: int | None = None
-INPUT_LAYER_CHUNK_SIZE: int | None = None
-INPUT_LAYER_GROUPING_SEQUENCE_LENGTH: int | None = None
-INPUT_LAYER_GROUPING_INPUT_ORDER: AdaptiveParameterInputOrderOptions | None = None
-INPUT_LAYER_GROUPING_METHOD: type[GroupingConfig] | None = None
-INPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None = None
-INPUT_LAYER_GROUPING_MODEL_CONFIG: ConfigBase | None = None
-INPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
-INPUT_LAYER_GROUPING_RMS_NORM_EPSILON: float | None = None
+_main_grouping = Section(("Main Grouping",))
+GROUPING_SCOPE: Annotated[
+    AdaptiveParameterGroupingScopeOptions | None, _main_grouping
+] = None
+GROUP_COUNT: Annotated[int | None, _main_grouping] = None
+CHUNK_SIZE: Annotated[int | None, _main_grouping] = None
+GROUPING_SEQUENCE_LENGTH: Annotated[int | None, _main_grouping] = None
+GROUPING_INPUT_ORDER: Annotated[
+    AdaptiveParameterInputOrderOptions | None, _main_grouping
+] = None
+GROUPING_METHOD: Annotated[type[GroupingConfig] | None, _main_grouping] = None
+GROUPING_SUMMARY_NORMALIZATION: Annotated[
+    SummaryNormalizationOptions | None, _main_grouping
+] = None
+GROUPING_MODEL_CONFIG: Annotated[ConfigBase | None, _main_grouping] = None
+GROUPING_ATTENTION_HIDDEN_DIM: Annotated[int | None, _main_grouping] = None
+GROUPING_RMS_NORM_EPSILON: Annotated[float | None, _main_grouping] = None
 
 
 # ==============================================================================
-# Output Layer Adaptive Generation
+_input_layer_adaptive_generation = Section(("Input Layer Adaptive Generation",))
 # ==============================================================================
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: int | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: int | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_TOP_K: int | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_TOP_K: int | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: int | None = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: int | None = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: ActivationOptions | None = (
-    None
-)
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: (
-    LayerNormPositionOptions | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: (
-    NormalizationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: int | None = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: (
-    ActivationOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: (
-    type[ResidualConfig] | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = (
-    None
-)
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: (
-    float | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: float | None = (
-    None
-)
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: (
-    LastLayerBiasOptions | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: (
-    bool | None
-) = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
-OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: bool | None = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_TOP_K: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_TOP_K: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _input_layer_adaptive_generation
+] = False
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
+INPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _input_layer_adaptive_generation
+] = None
 
-# Output Layer Grouping
-OUTPUT_LAYER_GROUPING_SCOPE: AdaptiveParameterGroupingScopeOptions | None = None
-OUTPUT_LAYER_GROUP_COUNT: int | None = None
-OUTPUT_LAYER_CHUNK_SIZE: int | None = None
-OUTPUT_LAYER_GROUPING_SEQUENCE_LENGTH: int | None = None
-OUTPUT_LAYER_GROUPING_INPUT_ORDER: AdaptiveParameterInputOrderOptions | None = None
-OUTPUT_LAYER_GROUPING_METHOD: type[GroupingConfig] | None = None
-OUTPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None = None
-OUTPUT_LAYER_GROUPING_MODEL_CONFIG: ConfigBase | None = None
-OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
-OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: float | None = None
+_input_layer_grouping = Section(("Input Layer Grouping",))
+INPUT_LAYER_GROUPING_SCOPE: Annotated[
+    AdaptiveParameterGroupingScopeOptions | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUP_COUNT: Annotated[int | None, _input_layer_grouping] = None
+INPUT_LAYER_CHUNK_SIZE: Annotated[int | None, _input_layer_grouping] = None
+INPUT_LAYER_GROUPING_SEQUENCE_LENGTH: Annotated[int | None, _input_layer_grouping] = (
+    None
+)
+INPUT_LAYER_GROUPING_INPUT_ORDER: Annotated[
+    AdaptiveParameterInputOrderOptions | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUPING_METHOD: Annotated[
+    type[GroupingConfig] | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: Annotated[
+    SummaryNormalizationOptions | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUPING_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: Annotated[
+    int | None, _input_layer_grouping
+] = None
+INPUT_LAYER_GROUPING_RMS_NORM_EPSILON: Annotated[
+    float | None, _input_layer_grouping
+] = None
+
+
+# ==============================================================================
+_output_layer_adaptive_generation = Section(("Output Layer Adaptive Generation",))
+# ==============================================================================
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_TOP_K: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_TOP_K: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_INPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_COEFFICIENT_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_NUM_LAYERS: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _output_layer_adaptive_generation
+] = False
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+OUTPUT_LAYER_BIAS_MIXTURE_ROUTER_GENERATOR_STACK_BIAS_FLAG: Annotated[
+    bool | None, _output_layer_adaptive_generation
+] = None
+
+_output_layer_grouping = Section(("Output Layer Grouping",))
+OUTPUT_LAYER_GROUPING_SCOPE: Annotated[
+    AdaptiveParameterGroupingScopeOptions | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUP_COUNT: Annotated[int | None, _output_layer_grouping] = None
+OUTPUT_LAYER_CHUNK_SIZE: Annotated[int | None, _output_layer_grouping] = None
+OUTPUT_LAYER_GROUPING_SEQUENCE_LENGTH: Annotated[int | None, _output_layer_grouping] = (
+    None
+)
+OUTPUT_LAYER_GROUPING_INPUT_ORDER: Annotated[
+    AdaptiveParameterInputOrderOptions | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUPING_METHOD: Annotated[
+    type[GroupingConfig] | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUPING_SUMMARY_NORMALIZATION: Annotated[
+    SummaryNormalizationOptions | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUPING_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUPING_ATTENTION_HIDDEN_DIM: Annotated[
+    int | None, _output_layer_grouping
+] = None
+OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: Annotated[
+    float | None, _output_layer_grouping
+] = None
 
 
 from models import _component_defaults
