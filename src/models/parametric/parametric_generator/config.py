@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from emperor.layers import (
     ActivationOptions,
     AdditiveResidualConfig,  # noqa: F401
@@ -10,119 +12,148 @@ from emperor.layers import (
     WeightedResidualConfig,  # noqa: F401
 )
 from emperor.parametric import ClipParameterOptions, GeneratorBiasMixtureConfig
-from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.configuration_metadata import Section
 from model_runtime.packages.metric_direction import MetricDirection
+from model_runtime.packages.runtime_values import (
+    RuntimeValueConstraints,
+    positive_runtime_fields,
+)
 
-# Trainer
-TRAINER_ACCELERATOR: str = "auto"
-TRAINER_DEVICES: str | int = "auto"
-TRAINER_GRADIENT_CLIP_VAL: float = 0.0
-TRAINER_GRADIENT_CLIP_ALGORITHM: str = "norm"
-TRAINER_ACCUMULATE_GRAD_BATCHES: int = 1
-TRAINER_PRECISION: str = "32-true"
-TRAINER_DETERMINISTIC: bool = False
-TRAINER_BENCHMARK: bool = True
-TRAINER_MAX_STEPS: int = -1
-TRAINER_MAX_TIME: str | None = None
-TRAINER_VAL_CHECK_INTERVAL: float = 1.0
-TRAINER_LIMIT_TRAIN_BATCHES: float = 1.0
-TRAINER_LIMIT_VAL_BATCHES: float = 1.0
-TRAINER_OVERFIT_BATCHES: int | float = 0.0
-TRAINER_NUM_SANITY_VAL_STEPS: int = 2
-TRAINER_LOG_EVERY_N_STEPS: int = 50
-TRAINER_ENABLE_PROGRESS_BAR: bool = False
-TRAINER_ENABLE_CHECKPOINTING: bool = False
-TRAINER_ENABLE_MODEL_SUMMARY: bool = False
-TRAINER_PROFILER: str | None = None
-MONITOR_LOG_EVERY_N_STEPS: int = 100
+_trainer = Section(("Trainer",))
+TRAINER_ACCELERATOR: Annotated[str, _trainer] = "auto"
+TRAINER_DEVICES: Annotated[str | int, _trainer] = "auto"
+TRAINER_GRADIENT_CLIP_VAL: Annotated[float, _trainer] = 0.0
+TRAINER_GRADIENT_CLIP_ALGORITHM: Annotated[str, _trainer] = "norm"
+TRAINER_ACCUMULATE_GRAD_BATCHES: Annotated[int, _trainer] = 1
+TRAINER_PRECISION: Annotated[str, _trainer] = "32-true"
+TRAINER_DETERMINISTIC: Annotated[bool, _trainer] = False
+TRAINER_BENCHMARK: Annotated[bool, _trainer] = True
+TRAINER_MAX_STEPS: Annotated[int, _trainer] = -1
+TRAINER_MAX_TIME: Annotated[str | None, _trainer] = None
+TRAINER_VAL_CHECK_INTERVAL: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_TRAIN_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_VAL_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_OVERFIT_BATCHES: Annotated[int | float, _trainer] = 0.0
+TRAINER_NUM_SANITY_VAL_STEPS: Annotated[int, _trainer] = 2
+TRAINER_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 50
+TRAINER_ENABLE_PROGRESS_BAR: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_CHECKPOINTING: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_MODEL_SUMMARY: Annotated[bool, _trainer] = False
+TRAINER_PROFILER: Annotated[str | None, _trainer] = None
+MONITOR_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 100
 
-# Run
-DATA_NUM_WORKERS: int = 4
-RUN_TEST_AFTER_FIT: bool = True
-SEED: int | None = None
+_run = Section(("Run",))
+DATA_NUM_WORKERS: Annotated[int, _run] = 4
+RUN_TEST_AFTER_FIT: Annotated[bool, _run] = True
+SEED: Annotated[int | None, _run] = None
 
-# Callback
-CALLBACK_EARLY_STOPPING_PATIENCE: int = 0
-CALLBACK_EARLY_STOPPING_METRIC: str = "validation/accuracy"
-CALLBACK_EARLY_STOPPING_MODE: MetricDirection | None = None  # Optional min/max direction for the monitored metric.
-CALLBACK_EARLY_STOPPING_MIN_DELTA: float = 0.0
-CALLBACK_EARLY_STOPPING_STRICT: bool = True
-CALLBACK_EARLY_STOPPING_CHECK_FINITE: bool = True
-CALLBACK_CHECKPOINT_FLAG: bool = False
+_callback = Section(("Callback",))
+CALLBACK_EARLY_STOPPING_PATIENCE: Annotated[int, _callback] = 0
+CALLBACK_EARLY_STOPPING_METRIC: Annotated[str, _callback] = "validation/accuracy"
+CALLBACK_EARLY_STOPPING_MODE: Annotated[MetricDirection | None, _callback] = (
+    None  # Optional min/max direction for the monitored metric.
+)
+CALLBACK_EARLY_STOPPING_MIN_DELTA: Annotated[float, _callback] = 0.0
+CALLBACK_EARLY_STOPPING_STRICT: Annotated[bool, _callback] = True
+CALLBACK_EARLY_STOPPING_CHECK_FINITE: Annotated[bool, _callback] = True
+CALLBACK_CHECKPOINT_FLAG: Annotated[bool, _callback] = False
 
-# Global
-BATCH_SIZE: int = 64
-LEARNING_RATE: float = 1e-3
-NUM_EPOCHS: int = 2
+_general = Section(("Global",))
+BATCH_SIZE: Annotated[int, _general] = 64
+LEARNING_RATE: Annotated[float, _general] = 1e-3
+NUM_EPOCHS: Annotated[int, _general] = 2
 
-# Model
-INPUT_DIM: int = 28**2
-HIDDEN_DIM: int = 32
-RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("HIDDEN_DIM")
-OUTPUT_DIM: int = 10
+_model = Section(("Model",))
+INPUT_DIM: Annotated[int, _model] = 28**2
+HIDDEN_DIM: Annotated[int, _model] = 32
+RUNTIME_VALUE_CONSTRAINTS: Annotated[RuntimeValueConstraints, _model] = (
+    positive_runtime_fields("HIDDEN_DIM")
+)
+OUTPUT_DIM: Annotated[int, _model] = 10
 
-# Layer Stack Options
+_layer_stack = Section(("Layer Stack Options",))
 # - hidden_dim comes from the global HIDDEN_DIM field above.
-STACK_NUM_LAYERS: int = 1
-STACK_ACTIVATION: ActivationOptions = ActivationOptions.GELU
-STACK_DROPOUT_PROBABILITY: float = 0.0
+STACK_NUM_LAYERS: Annotated[int, _layer_stack] = 1
+STACK_ACTIVATION: Annotated[ActivationOptions, _layer_stack] = ActivationOptions.GELU
+STACK_DROPOUT_PROBABILITY: Annotated[float, _layer_stack] = 0.0
 
-#########################################################################
-# Residual Options
+_residual = Section(("Residual Options",))
 # - False uses the residual variant's learned query or coefficient parameters.
 # - True uses the residual stack for input-dependent queries or coefficients.
 # - For every attention residual selector, supply its RESIDUAL_BLOCK_SIZE and
 #   RESIDUAL_RMS_NORM_EPSILON explicitly (suggested: 1 for full attention, 1e-6).
-STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-STACK_RESIDUAL_MODEL_FLAG: bool = False
-STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
+STACK_RESIDUAL_CONNECTION_OPTION: Annotated[type[ResidualConfig] | None, _residual] = (
+    None
+)
+STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual] = False
+STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual] = None
+STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual] = None
 # - Applies to scalar and model-generated weighted residual coefficients.
 #   SIGMOID is recommended; DISABLED leaves the raw coefficient unchanged.
-RESIDUAL_COEFFICIENT_ACTIVATION: ActivationOptions = ActivationOptions.SIGMOID
-
-## Residual Stack Options
-# - If False, residual stack options inherit layer stack options.
-RESIDUAL_STACK_INDEPENDENT_FLAG: bool = False
-RESIDUAL_STACK_HIDDEN_DIM: int | None = None
-RESIDUAL_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-RESIDUAL_STACK_NORMALIZATION: NormalizationOptions | None = None
-RESIDUAL_STACK_NUM_LAYERS: int | None = None
-RESIDUAL_STACK_ACTIVATION: ActivationOptions | None = None
-RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: bool = False
-RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-RESIDUAL_STACK_DROPOUT_PROBABILITY: float | None = None
-RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-RESIDUAL_STACK_BIAS_FLAG: bool | None = None
-
-# Parametric Generator Mixture Options
-ADAPTIVE_MIXTURE_TOP_K: int = 1
-ADAPTIVE_MIXTURE_NUM_EXPERTS: int = 2
-ADAPTIVE_MIXTURE_WEIGHTED_PARAMETERS_FLAG: bool = False
-ADAPTIVE_MIXTURE_CLIP_PARAMETER_OPTION: ClipParameterOptions = (
-    ClipParameterOptions.DISABLED
+RESIDUAL_COEFFICIENT_ACTIVATION: Annotated[ActivationOptions, _residual] = (
+    ActivationOptions.SIGMOID
 )
-ADAPTIVE_MIXTURE_CLIP_RANGE: float = 5.0
-ADAPTIVE_BIAS_OPTION: type[GeneratorBiasMixtureConfig] | None = None
 
-# Sampler Model Options
-SAMPLER_THRESHOLD: float = 0.0
-SAMPLER_FILTER_ABOVE_THRESHOLD: bool = False
-SAMPLER_NUM_TOPK_SAMPLES: int = 0
-SAMPLER_NORMALIZE_PROBABILITIES_FLAG: bool = False
-SAMPLER_NOISY_TOPK_FLAG: bool = False
-SAMPLER_COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: float = 0.0
-SAMPLER_SWITCH_LOSS_WEIGHT: float = 0.0
-SAMPLER_ZERO_CENTRED_LOSS_WEIGHT: float = 0.0
-SAMPLER_MUTUAL_INFORMATION_LOSS_WEIGHT: float = 0.0
+_residual_stack = _residual.child("Residual Stack Options")
+# - If False, residual stack options inherit layer stack options.
+RESIDUAL_STACK_INDEPENDENT_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_HIDDEN_DIM: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NUM_LAYERS: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_ACTIVATION: Annotated[ActivationOptions | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _residual_stack
+] = None
+RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual_stack] = (
+    None
+)
+RESIDUAL_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _residual_stack] = None
+RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _residual_stack
+] = None
+RESIDUAL_STACK_BIAS_FLAG: Annotated[bool | None, _residual_stack] = None
 
-# Generator Expert Stack Options
-GENERATOR_STACK_NUM_LAYERS: int = 2
-GENERATOR_STACK_HIDDEN_DIM: int = 32
-GENERATOR_STACK_ACTIVATION: ActivationOptions = ActivationOptions.GELU
-GENERATOR_STACK_DROPOUT_PROBABILITY: float = 0.0
+_parametric_generator_mixture = Section(("Parametric Generator Mixture Options",))
+ADAPTIVE_MIXTURE_TOP_K: Annotated[int, _parametric_generator_mixture] = 1
+ADAPTIVE_MIXTURE_NUM_EXPERTS: Annotated[int, _parametric_generator_mixture] = 2
+ADAPTIVE_MIXTURE_WEIGHTED_PARAMETERS_FLAG: Annotated[
+    bool, _parametric_generator_mixture
+] = False
+ADAPTIVE_MIXTURE_CLIP_PARAMETER_OPTION: Annotated[
+    ClipParameterOptions, _parametric_generator_mixture
+] = ClipParameterOptions.DISABLED
+ADAPTIVE_MIXTURE_CLIP_RANGE: Annotated[float, _parametric_generator_mixture] = 5.0
+ADAPTIVE_BIAS_OPTION: Annotated[
+    type[GeneratorBiasMixtureConfig] | None, _parametric_generator_mixture
+] = None
+
+_sampler_model = Section(("Sampler Model Options",))
+SAMPLER_THRESHOLD: Annotated[float, _sampler_model] = 0.0
+SAMPLER_FILTER_ABOVE_THRESHOLD: Annotated[bool, _sampler_model] = False
+SAMPLER_NUM_TOPK_SAMPLES: Annotated[int, _sampler_model] = 0
+SAMPLER_NORMALIZE_PROBABILITIES_FLAG: Annotated[bool, _sampler_model] = False
+SAMPLER_NOISY_TOPK_FLAG: Annotated[bool, _sampler_model] = False
+SAMPLER_COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
+SAMPLER_SWITCH_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
+SAMPLER_ZERO_CENTRED_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
+SAMPLER_MUTUAL_INFORMATION_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
+
+_generator_expert_stack = Section(("Generator Expert Stack Options",))
+GENERATOR_STACK_NUM_LAYERS: Annotated[int, _generator_expert_stack] = 2
+GENERATOR_STACK_HIDDEN_DIM: Annotated[int, _generator_expert_stack] = 32
+GENERATOR_STACK_ACTIVATION: Annotated[ActivationOptions, _generator_expert_stack] = (
+    ActivationOptions.GELU
+)
+GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[float, _generator_expert_stack] = 0.0
 
 # Hyperparameter search space
