@@ -378,53 +378,19 @@ if loaded:
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
-    def test_catalog_metadata_declarations_are_package_local_and_lazy(self):
-        for entry in MODEL_CATALOG.values():
-            package = _package_module(entry)
-            package_root = SOURCE_ROOT.joinpath(*package.split("."))
-            declaration_path = package_root / "_inspection_metadata.py"
-            init_path = package_root / "__init__.py"
-            tree = ast.parse(
-                init_path.read_text(encoding="utf-8"), init_path.as_posix()
-            )
-            adapter = next(
-                node
-                for node in tree.body
-                if isinstance(node, ast.ClassDef)
-                and node.name == "_ModelPackageAdapter"
-            )
-            load_metadata = next(
-                node
-                for node in adapter.body
-                if isinstance(node, ast.FunctionDef) and node.name == "load_metadata"
-            )
-            local_declaration_imports = [
-                node
-                for node in ast.walk(load_metadata)
-                if isinstance(node, ast.ImportFrom)
-                and node.level == 1
-                and node.module == "_inspection_metadata"
-            ]
-            top_level_declaration_imports = [
-                node
-                for node in tree.body
-                if isinstance(node, ast.ImportFrom)
-                and node.module == "_inspection_metadata"
-            ]
-            with self.subTest(package=package):
-                self.assertTrue(declaration_path.is_file())
-                self.assertEqual(len(local_declaration_imports), 1)
-                self.assertEqual(top_level_declaration_imports, [])
-
+    def test_catalog_discovers_packages_without_loading_configuration_or_search_axes(
+        self,
+    ):
         script = """
 import sys
 import models.catalog
 
 loaded = sorted(
-    name for name in sys.modules if name.endswith('._inspection_metadata')
+    name for name in sys.modules
+    if name.startswith('models.') and name.endswith(('.config', '.search_space'))
 )
 if loaded:
-    raise SystemExit(f'catalog eagerly imported metadata declarations: {loaded}')
+    raise SystemExit(f'catalog eagerly imported model settings: {loaded}')
 """
         result = subprocess.run(
             [sys.executable, "-c", script],
