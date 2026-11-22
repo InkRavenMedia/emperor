@@ -5,37 +5,33 @@ from emperor.layers import (
     NormalizationOptions,
 )
 from emperor.linears import LinearLayerConfig
-from models.linears.linear.runtime_options import RuntimeOptions
+from models.linears.linear.runtime_options import LinearBuildSettings
 
 
 class ProjectionConfigFactory:
-    def __init__(self, runtime: RuntimeOptions) -> None:
-        self.runtime = runtime
+    def __init__(self, build_settings: LinearBuildSettings) -> None:
+        self.build_settings = build_settings
 
     def build_input_model_config(self) -> LayerConfig:
-        return LayerConfig(
-            activation=self.runtime.stack.activation,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            normalization=NormalizationOptions.RMS_NORM,
-            residual_config=None,
-            dropout_probability=0.0,
-            gate_config=None,
-            halting_config=None,
-            layer_model_config=LinearLayerConfig(
-                bias_flag=True,
-            ),
+        input_model_config = self.__projection_layer(
+            self.build_settings.stack.activation
         )
+        return input_model_config
 
     def build_output_model_config(self) -> LayerConfig:
+        output_model_config = self.__projection_layer(ActivationOptions.DISABLED)
+        return output_model_config
+
+    @staticmethod
+    def __projection_layer(activation: ActivationOptions) -> LayerConfig:
+        linear_config = LinearLayerConfig(bias_flag=True)
         return LayerConfig(
-            activation=ActivationOptions.DISABLED,
+            activation=activation,
             layer_norm_position=LayerNormPositionOptions.DISABLED,
             normalization=NormalizationOptions.RMS_NORM,
             residual_config=None,
             dropout_probability=0.0,
             gate_config=None,
             halting_config=None,
-            layer_model_config=LinearLayerConfig(
-                bias_flag=True,
-            ),
+            layer_model_config=linear_config,
         )

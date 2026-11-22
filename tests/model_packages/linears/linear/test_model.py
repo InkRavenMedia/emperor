@@ -15,11 +15,15 @@ import torch
 
 import models.linears.linear.config as config
 import models.linears.linear.dataset_options as dataset_options
-import models.linears.linear.monitor_options as monitor_options
 import models.linears.linear.search_space as search_space
 from emperor.config import BaseOptions
 from emperor.datasets.image.classification import Cifar10, Cifar100, FashionMNIST, Mnist
 from emperor.experiments import ExperimentTask
+from emperor.halting import (
+    HaltingMonitorCallback,
+    SoftHaltingConfig,
+    StickBreakingConfig,
+)
 from emperor.layers import (
     ActivationOptions,
     AdditiveResidualConfig,
@@ -27,19 +31,23 @@ from emperor.layers import (
     GateConfig,
     LastLayerBiasOptions,
     LayerConfig,
+    LayerControllerMonitorCallback,
     LayerGateOptions,
     LayerNormPositionOptions,
     LayerStackConfig,
     RecurrentLayerConfig,
+    RecurrentLayerMonitorCallback,
     WeightedBlendResidualConfig,
     WeightedResidualConfig,
 )
-from emperor.linears import LinearLayerConfig
+from emperor.linears import LinearLayerConfig, LinearMonitorCallback
 from emperor.memory import (
     ElementWiseWeightedDynamicMemoryConfig,
+    MemoryMonitorCallback,
     MemoryPositionOptions,
     WeightedDynamicMemoryConfig,
 )
+from emperor.monitoring import MonitorSettings
 from model_runtime.packages import (
     PresetDefinition,
     config_key_to_model_param,
@@ -57,11 +65,17 @@ from models.linears.linear.presets import (
     Experiment,
     ExperimentPreset,
 )
-from models.linears.linear.runtime_defaults import DEFAULT_RUNTIME, runtime_from_flat
+from models.linears.linear.runtime_defaults import (
+    DEFAULT_BUILD_SETTINGS,
+    DEFAULT_RUNTIME,
+    build_settings_from_flat,
+    runtime_from_flat,
+)
 from models.linears.linear.runtime_options import (
     ControllerStackOptions,
     GateOptions,
     HaltingOptions,
+    LinearBuildSettings,
     MainStackOptions,
     MemoryOptions,
     RecurrenceOptions,
@@ -411,6 +425,10 @@ class TestLinearRuntimeDefaults(unittest.TestCase):
     def test_default_runtime_is_the_empty_flat_translation(self):
         self.assertEqual(DEFAULT_RUNTIME, runtime_from_flat({}))
 
+    def test_recurrent_max_steps_is_validated_before_halting_implementation(self):
+        with self.assertRaisesRegex(ValueError, "recurrent_max_steps"):
+            build_settings_from_flat({"halting_option": int, "recurrent_max_steps": 0})
+
     def test_runtime_option_types_are_frozen_and_slotted(self):
         option_types = (
             RuntimeOptions,
@@ -507,6 +525,40 @@ class TestLinearRuntimeDefaults(unittest.TestCase):
                 self.assertIn(key, message)
                 self.assertIn(actual_type, message)
                 self.assertIn(expected_type, message)
+
+    def test_training_options_remain_outside_the_model_settings(self):
+        with self.assertRaisesRegex(
+            ValueError, "unknown runtime override 'trainer_max_steps'"
+        ):
+            build_settings_from_flat({"hidden_dim": "invalid", "trainer_max_steps": 3})
+
+    def test_stack_validation_reports_the_first_error_for_each_scope(self):
+        cases = (
+            (
+                {"stack_num_layers": 0, "stack_bias_flag": 1},
+                ValueError,
+                "stack_num_layers",
+            ),
+            (
+                {
+                    "residual_stack_num_layers": 0,
+                    "residual_stack_activation": "invalid",
+                },
+                ValueError,
+                "residual_stack_num_layers",
+            ),
+            (
+                {"gate_stack_num_layers": 0, "gate_stack_activation": "invalid"},
+                TypeError,
+                "gate_stack_activation",
+            ),
+        )
+        for overrides, error, first_key in cases:
+            with (
+                self.subTest(overrides=overrides),
+                self.assertRaisesRegex(error, first_key),
+            ):
+                build_settings_from_flat(overrides)
 
     def test_positive_values_are_validated_before_construction(self):
         cases = (
@@ -608,6 +660,28 @@ class TestLinearRuntimeDefaults(unittest.TestCase):
         self.assertEqual(runtime.halting.stack.num_layers, 5)
         self.assertIs(runtime.memory.stack.activation, ActivationOptions.TANH)
 
+    def test_residual_stack_inheritance_preserves_explicit_zero_and_false(self):
+        overrides = {
+            "submodule_stack_bias_flag": True,
+            "submodule_stack_dropout_probability": 0.4,
+            "submodule_stack_residual_block_size": 8,
+            "submodule_stack_residual_rms_norm_epsilon": 1e-4,
+            "residual_stack_bias_flag": False,
+            "residual_stack_dropout_probability": 0.0,
+            "residual_stack_residual_block_size": 2,
+            "residual_stack_residual_rms_norm_epsilon": None,
+        }
+        for independent, bias, dropout in ((False, True, 0.4), (True, False, 0.0)):
+            with self.subTest(independent=independent):
+                settings = build_settings_from_flat(
+                    {**overrides, "residual_stack_independent_flag": independent}
+                )
+                stack = settings.residual_stack
+                self.assertIs(stack.bias_flag, bias)
+                self.assertEqual(stack.dropout_probability, dropout)
+                self.assertEqual(stack.residual_block_size, 2)
+                self.assertEqual(stack.residual_rms_norm_epsilon, 1e-4)
+
     def test_recurrent_stacks_inherit_resolved_controller_stacks(self):
         runtime = runtime_from_flat(
             {
@@ -653,15 +727,13 @@ class TestLinearRuntimeDefaults(unittest.TestCase):
 
 
 class TestLinearConstruction(unittest.TestCase):
-    def test_builder_exposes_only_keyword_runtime(self):
+    def test_builder_accepts_build_settings_by_keyword(self):
         signature = inspect.signature(LinearConfigBuilder)
 
-        self.assertEqual(list(signature.parameters), ["runtime"])
-        self.assertIs(
-            signature.parameters["runtime"].kind,
-            inspect.Parameter.KEYWORD_ONLY,
-        )
-        self.assertIs(signature.parameters["runtime"].default, DEFAULT_RUNTIME)
+        self.assertEqual(list(signature.parameters), ["build_settings", "runtime"])
+        for parameter in signature.parameters.values():
+            self.assertIs(parameter.kind, inspect.Parameter.KEYWORD_ONLY)
+            self.assertIs(parameter.default, DEFAULT_BUILD_SETTINGS)
 
         with self.assertRaises(TypeError):
             LinearConfigBuilder(DEFAULT_RUNTIME)
@@ -674,6 +746,26 @@ class TestLinearConstruction(unittest.TestCase):
                 with self.assertRaises(TypeError):
                     LinearConfigBuilder(**kwargs)
 
+    def test_build_settings_and_legacy_names_refer_to_the_same_settings(self):
+        self.assertIs(RuntimeOptions, LinearBuildSettings)
+        self.assertIs(DEFAULT_RUNTIME, DEFAULT_BUILD_SETTINGS)
+        self.assertIs(runtime_from_flat, build_settings_from_flat)
+
+        settings = build_settings_from_flat({"learning_rate": 0.004})
+        builder = LinearConfigBuilder(build_settings=settings)
+        self.assertIs(builder.runtime, settings)
+        self.assertIs(LinearConfigBuilder(runtime=settings).build_settings, settings)
+        self.assertEqual(builder.build().learning_rate, 0.004)
+
+        builder.runtime = DEFAULT_BUILD_SETTINGS
+        self.assertIs(builder.build_settings, DEFAULT_BUILD_SETTINGS)
+        builder.build_settings = settings
+        self.assertIs(builder.runtime, settings)
+
+        other_settings = replace(settings, learning_rate=0.002)
+        with self.assertRaisesRegex(TypeError, "either 'build_settings' or 'runtime'"):
+            LinearConfigBuilder(build_settings=settings, runtime=other_settings)
+
     def test_builder_rejects_foreign_runtime_objects(self):
         with self.assertRaises(TypeError) as raised:
             LinearConfigBuilder(runtime=ForeignRuntimeOptions(DEFAULT_RUNTIME))
@@ -682,6 +774,9 @@ class TestLinearConstruction(unittest.TestCase):
         self.assertIn("models.linears.linear", message)
         self.assertIn("RuntimeOptions", message)
         self.assertIn("ForeignRuntimeOptions", message)
+
+        with self.assertRaisesRegex(TypeError, "'build_settings'.*LinearBuildSettings"):
+            LinearConfigBuilder(build_settings=ForeignRuntimeOptions(DEFAULT_RUNTIME))
 
     def test_default_builder_constructs_expected_model_config(self):
         cfg = LinearConfigBuilder().build()
@@ -717,7 +812,7 @@ class TestLinearConstruction(unittest.TestCase):
 
         self.assertEqual(flat_runtime, typed_runtime)
         self.assertEqual(
-            LinearConfigBuilder(runtime=flat_runtime).build(),
+            LinearConfigBuilder(build_settings=flat_runtime).build(),
             LinearConfigBuilder(runtime=typed_runtime).build(),
         )
 
@@ -890,6 +985,34 @@ class TestLinearConstruction(unittest.TestCase):
         self.assertIsNotNone(recurrent.block_config.shared_memory_config)
         self.assertIsNone(recurrent.memory_config)
 
+    def test_typed_halting_choices_stay_with_their_own_thresholds(self):
+        settings = build_settings_from_flat(
+            {
+                "stack_halting_flag": True,
+                "halting_threshold": 0.7,
+                "recurrent_flag": True,
+                "recurrent_stack_halting_flag": True,
+                "recurrent_halting_threshold": 0.9,
+            }
+        )
+        for layer_type, loop_type in (
+            (StickBreakingConfig, SoftHaltingConfig),
+            (SoftHaltingConfig, StickBreakingConfig),
+        ):
+            with self.subTest(layer=layer_type, loop=loop_type):
+                selected = replace(
+                    settings,
+                    halting_option=layer_type,
+                    recurrent_halting_option=loop_type,
+                )
+                config = LinearConfigBuilder(build_settings=selected).build()
+                loop = config.experiment_config.model_config
+                layer = loop.block_config.layer_config
+                self.assertIs(type(layer.halting_config), layer_type)
+                self.assertEqual(layer.halting_config.threshold, 0.7)
+                self.assertIs(type(loop.halting_config), loop_type)
+                self.assertEqual(loop.halting_config.threshold, 0.9)
+
     def test_shared_gate_is_a_typed_runtime_customization(self):
         shared_gate = _shared_gate_config()
         runtime = replace(
@@ -906,13 +1029,8 @@ class TestLinearConstruction(unittest.TestCase):
         self.assertIs(stack.shared_gate_config, shared_gate)
         self.assertIsNone(stack.layer_config.gate_config)
 
-        invalid_runtime = replace(
-            runtime,
-            gate=replace(runtime.gate, enabled=True),
-        )
-        invalid_cfg = LinearConfigBuilder(runtime=invalid_runtime).build()
         with self.assertRaisesRegex(ValueError, "mutually exclusive"):
-            Model(invalid_cfg)
+            replace(runtime, gate=replace(runtime.gate, enabled=True))
 
     def test_factories_depend_only_on_package_runtime_not_flat_config(self):
         package_dir = Path(config.__file__).resolve().parent
@@ -931,7 +1049,10 @@ class TestLinearConstruction(unittest.TestCase):
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     imported_modules.add(node.module)
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                    controller_stack_implementations += node.name == "_controller_stack"
+                    controller_stack_implementations += node.name in {
+                        "_controller_stack",
+                        "__controller_stack",
+                    }
 
             self.assertNotIn("models.linears.linear.config", imported_modules)
             self.assertFalse(
@@ -1390,15 +1511,52 @@ class TestLinearPresetsAndMetadata(unittest.TestCase):
         )
 
     def test_monitor_metadata_remains_available(self):
+        monitor_options = model_package("linears/linear").monitor_options()
+        expected_callbacks = {
+            "linear": LinearMonitorCallback,
+            "recurrent-layer": RecurrentLayerMonitorCallback,
+            "layer-controller": LayerControllerMonitorCallback,
+            "halting": HaltingMonitorCallback,
+            "memory": MemoryMonitorCallback,
+        }
         self.assertEqual(
-            [option.name for option in monitor_options.MONITOR_OPTIONS],
-            ["linear", "recurrent-layer", "layer-controller", "halting", "memory"],
+            [option.name for option in monitor_options], list(expected_callbacks)
         )
-        for option in monitor_options.MONITOR_OPTIONS:
+        settings = MonitorSettings(log_every_n_steps=37)
+        for option in monitor_options:
             with self.subTest(option=option.name):
                 self.assertTrue(option.label)
                 self.assertTrue(option.kinds)
-                self.assertIsNotNone(option.build_callback())
+                callback = option.build_callback(settings)
+                self.assertIsInstance(callback, expected_callbacks[option.name])
+                self.assertEqual(callback.log_every_n_steps, 37)
+                self.assertIsNot(callback, option.build_callback(settings))
+
+    def test_checkpoint_uses_recurrent_width_if_direct_weights_are_not_matrices(self):
+        shapes = {
+            "main_model.layers.0.model.weight_params": (4,),
+            "main_model.block_model.layers.0.model.weight_params": (6, 6),
+            "main_model.step.block_model.layers.1.model.weight_params": (6, 6),
+        }
+        package = model_package("linears/linear")
+        self.assertEqual(
+            package.checkpoint_config_overrides(shapes),
+            {"hidden_dim": 6, "stack_num_layers": 1},
+        )
+
+    def test_checkpoint_omits_conflicting_width_and_gapped_layer_count(self):
+        shapes = {
+            "input_model.model.weight_params": (9, 4),
+            "output_model.model.weight_params": (5, 2),
+            "main_model.layers.0.model.weight_params": (4, 4),
+            "main_model.layers.2.model.weight_params": (4, 4),
+            "main_model.step.block_model.layers.0.model.weight_params": (5, 5),
+        }
+        package = model_package("linears/linear")
+        self.assertEqual(
+            package.checkpoint_config_overrides(shapes),
+            {"input_dim": 9, "output_dim": 2},
+        )
 
     def test_cli_exposes_only_canonical_runtime_override_flags(self):
         package = model_package("linears/linear")
