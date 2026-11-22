@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import ModuleType
-from typing import cast
+from typing import TypedDict, cast
 
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
@@ -37,14 +37,16 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models._stack_options import resolve_controller_options
 from models.gpt.linear_adaptive import _generation
 from models.gpt.linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
 )
 from models.gpt.linear_adaptive._residual import ResidualStackOptions
+from models.gpt.linear_adaptive._residual import inherit_if_unset as inherit_if_unset
 
 
 @dataclass(frozen=True)
@@ -63,6 +65,10 @@ class SubmoduleStackSource:
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
     dropout_probability: float | None
     bias_flag: bool | None
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_stack_source(validation, self)
 
 
 @dataclass(frozen=True)
@@ -86,60 +92,16 @@ class SubmoduleStackOptions:
     dropout_probability: float
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 def resolve_controller_stack_options(
     source: SubmoduleStackSource, defaults: SubmoduleStackOptions
 ) -> SubmoduleStackOptions:
-    if not source.independent_flag:
-        return defaults
-    hidden_dim = defaults.hidden_dim if source.hidden_dim is None else source.hidden_dim
-    num_layers = defaults.num_layers if source.num_layers is None else source.num_layers
-    last_layer_bias_option = (
-        defaults.last_layer_bias_option
-        if source.last_layer_bias_option is None
-        else source.last_layer_bias_option
-    )
-    apply_output_postprocessing_flag = (
-        defaults.apply_output_postprocessing_flag
-        if source.apply_output_postprocessing_flag is None
-        else source.apply_output_postprocessing_flag
-    )
-    activation = defaults.activation if source.activation is None else source.activation
-    layer_norm_position = (
-        defaults.layer_norm_position
-        if source.layer_norm_position is None
-        else source.layer_norm_position
-    )
-    normalization = (
-        defaults.normalization if source.normalization is None else source.normalization
-    )
-    residual_connection_option = (
-        defaults.residual_connection_option
-        if source.residual_connection_option is None
-        else source.residual_connection_option
-    )
-    dropout_probability = (
-        defaults.dropout_probability
-        if source.dropout_probability is None
-        else source.dropout_probability
-    )
-    bias_flag = defaults.bias_flag if source.bias_flag is None else source.bias_flag
-    return SubmoduleStackOptions(
-        hidden_dim=hidden_dim,
-        num_layers=num_layers,
-        last_layer_bias_option=last_layer_bias_option,
-        apply_output_postprocessing_flag=apply_output_postprocessing_flag,
-        activation=activation,
-        layer_norm_position=layer_norm_position,
-        normalization=normalization,
-        residual_connection_option=residual_connection_option,
-        residual_block_size=source.residual_block_size,
-        residual_rms_norm_epsilon=source.residual_rms_norm_epsilon,
-        residual_model_flag=(source.residual_model_flag),
-        residual_stack_options=defaults.residual_stack_options,
-        dropout_probability=dropout_probability,
-        bias_flag=bias_flag,
-    )
+    return resolve_controller_options(source, defaults, SubmoduleStackOptions)
 
 
 @dataclass(frozen=True)
@@ -156,6 +118,10 @@ class GptEmbeddingOptions:
         default=NormalizationOptions.LAYER_NORM, kw_only=True
     )
     dropout_probability: float
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.dropout("dropout_probability", self.dropout_probability)
 
 
 @dataclass(frozen=True)
@@ -184,6 +150,10 @@ class MainLayerStackOptions:
     last_layer_bias_option: LastLayerBiasOptions
     apply_output_postprocessing_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.stack(self)
+
 
 @dataclass(frozen=True)
 class LayerControllerOptions:
@@ -199,6 +169,10 @@ class LayerControllerOptions:
     shared_gate_config: GateConfig | None = None
     halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_controller(validation, self)
+
 
 @dataclass(frozen=True)
 class DynamicMemoryOptions:
@@ -209,6 +183,10 @@ class DynamicMemoryOptions:
     memory_num_memory_slots: int = field(default=4, kw_only=True)
     memory_test_time_training_num_inner_steps: int | None
     memory_stack_source: SubmoduleStackSource
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_memory(validation, self)
 
 
 @dataclass(frozen=True)
@@ -244,6 +222,11 @@ class RecurrentControllerOptions:
     recurrent_halting_stack_source: SubmoduleStackSource
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("recurrent_max_steps", self.recurrent_max_steps)
+        _attention_settings.validate_recurrent_controller(validation, self)
+
 
 @dataclass(frozen=True)
 class TransformerDecoderOptions(_sequence_expansion.SequenceExpansionOptions):
@@ -258,6 +241,12 @@ class TransformerDecoderOptions(_sequence_expansion.SequenceExpansionOptions):
     normalization: NormalizationOptions = field(
         default=NormalizationOptions.RMS_NORM, kw_only=True
     )
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.positive_integer("num_layers", self.num_layers)
+        validation.dropout("dropout_probability", self.dropout_probability)
 
 
 @dataclass(frozen=True)
@@ -275,12 +264,21 @@ class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     add_key_value_bias_flag: bool
     source_memory_flag: bool = False
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("num_layers", self.num_layers)
+        validation.positive_integer("num_heads", self.num_heads)
+
 
 @dataclass(frozen=True)
 class TransformerFeedForwardOptions:
     soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_layers: int
     bias_flag: bool
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("num_layers", self.num_layers)
 
 
 @dataclass(frozen=True)
@@ -304,6 +302,11 @@ class AdaptiveGeneratorStackOptions:
     apply_output_postprocessing_flag: bool
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True)
 class HiddenAdaptiveWeightOptions:
@@ -322,6 +325,18 @@ class HiddenAdaptiveWeightOptions:
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
     normalization_learnable_scale_flag: bool = False
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.option is None:
+            raise ValueError(
+                "weight_option must be set when weight_option_flag is True"
+            )
+        validation.positive_integer("generator_depth", self.generator_depth)
+        validation.nonnegative_float("decay_rate", self.decay_rate)
+        validation.nonnegative_integer(
+            "decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True)
 class HiddenAdaptiveBiasOptions:
@@ -336,12 +351,27 @@ class HiddenAdaptiveBiasOptions:
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.option is None:
+            raise ValueError("bias_option must be set when bias_option_flag is True")
+        validation.nonnegative_float("decay_rate", self.decay_rate)
+        validation.nonnegative_integer(
+            "decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True)
 class HiddenAdaptiveDiagonalOptions:
     option_flag: bool
     option: type[DynamicDiagonalConfig] | None
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
+
+    def __post_init__(self) -> None:
+        if self.option_flag and self.option is None:
+            raise ValueError(
+                "diagonal_option must be set when diagonal_option_flag is True"
+            )
 
 
 @dataclass(frozen=True)
@@ -354,6 +384,14 @@ class HiddenAdaptiveMaskOptions:
     mask_floor: float
     mask_transition_width: float
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.row_mask_option is None:
+            raise ValueError(
+                "row_mask_option must be set when mask_option_flag is True"
+            )
+        _attention_settings.validate_mask(validation, self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -406,6 +444,11 @@ class _ConstructionOptions:
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(ResolvedRuntimeOptions):
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        ResolvedRuntimeOptions.__post_init__(self)
+        _attention_settings.validate_dimensions(validation, self._values)
+
     def _construction_options(
         self,
         config_module: ModuleType,
@@ -569,3 +612,28 @@ class RuntimeOptions(ResolvedRuntimeOptions):
                 values.get("feed_forward_hidden_adaptive_mask_options"),
             ),
         )
+
+
+class PresetValues(TypedDict, total=False):
+    attn_add_key_value_bias_flag: bool
+    attn_bias_flag: bool
+    bias_option: type[DynamicBiasConfig] | None
+    diagonal_option: type[DynamicDiagonalConfig] | None
+    generator_depth: int
+    hierarchical_language_model_flag: bool
+    layer_norm_position: LayerNormPositionOptions
+    lm_head_weight_tying_flag: bool
+    memory_flag: bool
+    positional_embedding_option: type[AbsolutePositionalEmbeddingConfig]
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
+    row_mask_option: type[AxisMaskConfig] | None
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_residual_connection_option: type[ResidualConfig] | None
+    weight_decay_rate: float
+    weight_decay_schedule: WeightDecayScheduleOptions
+    weight_decay_warmup_batches: int
+    weight_normalization_option: WeightNormalizationOptions
+    weight_option: type[DynamicWeightConfig] | None

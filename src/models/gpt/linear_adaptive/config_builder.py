@@ -1,36 +1,48 @@
 from typing import TYPE_CHECKING
 
 import models.gpt.linear_adaptive.config as config
-from models import _sequence_expansion
+from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
+from models import _attention_settings, _sequence_expansion
+from models._model_config import sequence_model_config
+from models._positional_embedding import build_position_config
+from models.gpt._hierarchical_config import build_hierarchical_config
 from models.gpt.linear_adaptive._boundary_config_factory import (
     BoundaryConfigDependencies,
     BoundaryConfigFactory,
 )
+from models.gpt.linear_adaptive._config_defaults import gpt_positional_embedding_options
 from models.gpt.linear_adaptive._core_config_factory import (
     CoreConfigDependencies,
     CoreConfigFactory,
 )
-from models.gpt.linear_adaptive._hierarchical_config import build_hierarchical_config
 from models.gpt.linear_adaptive._linear_layer_config_factory import (
     AdaptiveAugmentationConfigFactory,
     AdaptiveAugmentationDependencies,
     LinearLayerConfigDependencies,
     LinearLayerConfigFactory,
 )
-from models.gpt.linear_adaptive._positional_embedding_config_factory import (
-    PositionalEmbeddingConfigDependencies,
-    PositionalEmbeddingConfigFactory,
-)
 from models.gpt.linear_adaptive.experiment_config import ExperimentConfig
 from models.gpt.linear_adaptive.runtime_defaults import DEFAULT_RUNTIME
 from models.gpt.linear_adaptive.runtime_options import RuntimeOptions
+
+from ._residual import inherit_if_unset
 
 if TYPE_CHECKING:
     from emperor.config import ModelConfig
 
 
-class _GptLinearAdaptiveConfigBuilderImplementation:
-    def __init__(self, runtime: RuntimeOptions) -> None:
+class GptLinearAdaptiveConfigBuilder(
+    _attention_settings.RuntimeBuilder[RuntimeOptions]
+):
+    def __init__(self, *, runtime: RuntimeOptions = DEFAULT_RUNTIME) -> None:
+        self._configure_runtime(runtime)
+
+    def _configure_runtime(self, runtime: RuntimeOptions) -> None:
+        if type(runtime) is not RuntimeOptions:
+            raise TypeError(
+                "models.gpt.linear_adaptive GptLinearAdaptiveConfigBuilder runtime must be RuntimeOptions"
+            )
+        self._runtime = runtime
         options = runtime._construction_options(config)
         self.batch_size = options.batch_size
         self.learning_rate = options.learning_rate
@@ -150,32 +162,37 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             adaptive_generator_stack_options=(
-                self.attention_adaptive_generator_stack_options
-                if self.attention_adaptive_generator_stack_options is not None
-                else self.adaptive_generator_stack_options
+                inherit_if_unset(
+                    self.attention_adaptive_generator_stack_options,
+                    self.adaptive_generator_stack_options,
+                )
             ),
-            grouping_config=self.attention_grouping_config
-            if self.attention_grouping_config is not None
-            else self.grouping_config,
+            grouping_config=inherit_if_unset(
+                self.attention_grouping_config, self.grouping_config
+            ),
             hidden_adaptive_weight_options=(
-                self.attention_hidden_adaptive_weight_options
-                if self.attention_hidden_adaptive_weight_options is not None
-                else self.hidden_adaptive_weight_options
+                inherit_if_unset(
+                    self.attention_hidden_adaptive_weight_options,
+                    self.hidden_adaptive_weight_options,
+                )
             ),
             hidden_adaptive_bias_options=(
-                self.attention_hidden_adaptive_bias_options
-                if self.attention_hidden_adaptive_bias_options is not None
-                else self.hidden_adaptive_bias_options
+                inherit_if_unset(
+                    self.attention_hidden_adaptive_bias_options,
+                    self.hidden_adaptive_bias_options,
+                )
             ),
             hidden_adaptive_diagonal_options=(
-                self.attention_hidden_adaptive_diagonal_options
-                if self.attention_hidden_adaptive_diagonal_options is not None
-                else self.hidden_adaptive_diagonal_options
+                inherit_if_unset(
+                    self.attention_hidden_adaptive_diagonal_options,
+                    self.hidden_adaptive_diagonal_options,
+                )
             ),
             hidden_adaptive_mask_options=(
-                self.attention_hidden_adaptive_mask_options
-                if self.attention_hidden_adaptive_mask_options is not None
-                else self.hidden_adaptive_mask_options
+                inherit_if_unset(
+                    self.attention_hidden_adaptive_mask_options,
+                    self.hidden_adaptive_mask_options,
+                )
             ),
         )
 
@@ -191,56 +208,54 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
             hidden_dim=self.hidden_dim,
             output_dim=self.output_dim,
             adaptive_generator_stack_options=(
-                self.feed_forward_adaptive_generator_stack_options
-                if self.feed_forward_adaptive_generator_stack_options is not None
-                else self.adaptive_generator_stack_options
+                inherit_if_unset(
+                    self.feed_forward_adaptive_generator_stack_options,
+                    self.adaptive_generator_stack_options,
+                )
             ),
-            grouping_config=self.feed_forward_grouping_config
-            if self.feed_forward_grouping_config is not None
-            else self.grouping_config,
+            grouping_config=inherit_if_unset(
+                self.feed_forward_grouping_config, self.grouping_config
+            ),
             hidden_adaptive_weight_options=(
-                self.feed_forward_hidden_adaptive_weight_options
-                if self.feed_forward_hidden_adaptive_weight_options is not None
-                else self.hidden_adaptive_weight_options
+                inherit_if_unset(
+                    self.feed_forward_hidden_adaptive_weight_options,
+                    self.hidden_adaptive_weight_options,
+                )
             ),
             hidden_adaptive_bias_options=(
-                self.feed_forward_hidden_adaptive_bias_options
-                if self.feed_forward_hidden_adaptive_bias_options is not None
-                else self.hidden_adaptive_bias_options
+                inherit_if_unset(
+                    self.feed_forward_hidden_adaptive_bias_options,
+                    self.hidden_adaptive_bias_options,
+                )
             ),
             hidden_adaptive_diagonal_options=(
-                self.feed_forward_hidden_adaptive_diagonal_options
-                if self.feed_forward_hidden_adaptive_diagonal_options is not None
-                else self.hidden_adaptive_diagonal_options
+                inherit_if_unset(
+                    self.feed_forward_hidden_adaptive_diagonal_options,
+                    self.hidden_adaptive_diagonal_options,
+                )
             ),
             hidden_adaptive_mask_options=(
-                self.feed_forward_hidden_adaptive_mask_options
-                if self.feed_forward_hidden_adaptive_mask_options is not None
-                else self.hidden_adaptive_mask_options
+                inherit_if_unset(
+                    self.feed_forward_hidden_adaptive_mask_options,
+                    self.hidden_adaptive_mask_options,
+                )
             ),
         )
 
     def build(self) -> "ModelConfig":
-        from emperor.config import ModelConfig
-
-        model_config = ModelConfig(
-            learning_rate=self.learning_rate,
-            batch_size=self.batch_size,
-            input_dim=self.input_dim,
-            hidden_dim=self.hidden_dim,
-            output_dim=self.output_dim,
-            sequence_length=self.sequence_length,
-            experiment_config=ExperimentConfig(
-                positional_embedding_config=self.__positional_embedding_config(),
-                boundary_config=self.__boundary_config(),
-                decoder_config=self.__decoder_config(),
-                decoder_output_normalization=(
-                    self.decoder_options.output_normalization
-                    if self.decoder_options is not None
-                    else config.DECODER_OUTPUT_NORMALIZATION
-                ),
-            ),
+        positional_embedding_config = self.__positional_embedding_config()
+        boundary_config = self.__boundary_config()
+        decoder_config = self.__decoder_config()
+        decoder_output_normalization = config.DECODER_OUTPUT_NORMALIZATION
+        if self.decoder_options is not None:
+            decoder_output_normalization = self.decoder_options.output_normalization
+        experiment_config = ExperimentConfig(
+            positional_embedding_config=positional_embedding_config,
+            boundary_config=boundary_config,
+            decoder_config=decoder_config,
+            decoder_output_normalization=decoder_output_normalization,
         )
+        model_config = sequence_model_config(self, experiment_config)
 
         options = model_config.experiment_config.boundary_config.embedding_options
         if options.hierarchical_language_model_flag:
@@ -252,22 +267,16 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
             )
         return model_config
 
-    def __positional_embedding_config(self):
-        positional_embedding_config_dependencies = (
-            self.__positional_embedding_config_dependencies()
-        )
-        positional_embedding_config_factory = PositionalEmbeddingConfigFactory(
-            positional_embedding_config_dependencies
-        )
-        return positional_embedding_config_factory.build_positional_embedding_config()
-
-    def __positional_embedding_config_dependencies(
-        self,
-    ) -> PositionalEmbeddingConfigDependencies:
-        return PositionalEmbeddingConfigDependencies(
-            hidden_dim=self.hidden_dim,
-            sequence_length=self.sequence_length,
-            positional_embedding_options=self.positional_embedding_options,
+    def __positional_embedding_config(self) -> AbsolutePositionalEmbeddingConfig:
+        options = self.positional_embedding_options
+        if options is None:
+            options = gpt_positional_embedding_options(config)
+        return build_position_config(
+            options.option,
+            num_embeddings=self.sequence_length,
+            embedding_dim=self.hidden_dim,
+            padding_idx=options.padding_idx,
+            auto_expand_flag=options.auto_expand_flag,
         )
 
     def __boundary_config(self):
@@ -288,11 +297,23 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
     def __decoder_config(self):
         core_config_dependencies = self.__core_config_dependencies()
         core_config_factory = CoreConfigFactory(core_config_dependencies)
+        decoder_config = core_config_factory.build_decoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            core_config_factory.build_decoder_config(), self.sequence_length
+            decoder_config, self.sequence_length
         )
 
     def __core_config_dependencies(self) -> CoreConfigDependencies:
+        linear_layer_config_factory = self.__plain_linear_layer_config_factory()
+        attention_projection_linear_layer_config_factory = (
+            self.__adaptive_linear_layer_config_factory(
+                self.attention_adaptive_augmentation_config
+            )
+        )
+        feed_forward_linear_layer_config_factory = (
+            self.__adaptive_linear_layer_config_factory(
+                self.feed_forward_adaptive_augmentation_config
+            )
+        )
         return CoreConfigDependencies(
             batch_size=self.batch_size,
             sequence_length=self.sequence_length,
@@ -326,16 +347,12 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
             layer_controller_options=self.decoder_layer_controller_options,
             dynamic_memory_options=self.decoder_dynamic_memory_options,
             recurrent_controller_options=self.decoder_recurrent_controller_options,
-            linear_layer_config_factory=self.__plain_linear_layer_config_factory(),
+            linear_layer_config_factory=linear_layer_config_factory,
             attention_projection_linear_layer_config_factory=(
-                self.__adaptive_linear_layer_config_factory(
-                    self.attention_adaptive_augmentation_config
-                )
+                attention_projection_linear_layer_config_factory
             ),
             feed_forward_linear_layer_config_factory=(
-                self.__adaptive_linear_layer_config_factory(
-                    self.feed_forward_adaptive_augmentation_config
-                )
+                feed_forward_linear_layer_config_factory
             ),
         )
 
@@ -357,13 +374,3 @@ class _GptLinearAdaptiveConfigBuilderImplementation:
             decoder_options=self.decoder_options,
             adaptive_augmentation_config=adaptive_augmentation_config,
         )
-
-
-class GptLinearAdaptiveConfigBuilder(_GptLinearAdaptiveConfigBuilderImplementation):
-    def __init__(self, *, runtime: RuntimeOptions = DEFAULT_RUNTIME) -> None:
-        if type(runtime) is not RuntimeOptions:
-            raise TypeError(
-                "models.gpt.linear_adaptive GptLinearAdaptiveConfigBuilder runtime must be RuntimeOptions"
-            )
-        self.runtime = runtime
-        super().__init__(runtime)

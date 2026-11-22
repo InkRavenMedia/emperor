@@ -656,14 +656,12 @@ class TestGptExpertLinearModel(unittest.TestCase):
 
     def test_invalid_dimensions_and_dropout_are_rejected(self):
         defaults = self._default_builder()
+        with self.assertRaisesRegex(ValueError, "hidden_dim"):
+            self._direct_config(
+                decoder_options=replace(defaults.decoder_options, hidden_dim=0)
+            )
         cases = {
             "input_dim": {"input_dim": 0},
-            "hidden_dim": {
-                "decoder_options": replace(
-                    defaults.decoder_options,
-                    hidden_dim=0,
-                )
-            },
             "output_dim": {
                 "output_dim": 0,
                 "lm_head_options": replace(

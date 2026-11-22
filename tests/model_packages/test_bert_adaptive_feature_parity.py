@@ -2,6 +2,7 @@
 
 import copy
 from importlib import import_module
+from typing import get_type_hints
 
 import pytest
 import torch
@@ -184,14 +185,16 @@ def gpt_configuration(variant, **overrides):
 def test_every_shared_gpt_adaptive_control_is_available_in_bert(variant):
     gpt_module = import_module("models.gpt." + variant + ".config")
     bert_module = import_module("models.bert." + variant + ".config")
+    gpt_types = get_type_hints(gpt_module)
+    bert_types = get_type_hints(bert_module)
     gpt_settings = {
         name
-        for name in gpt_module.__annotations__
+        for name in gpt_types
         if name.isupper() and not name.startswith(TASK_SPECIFIC_GPT_PREFIXES)
     }
-    assert gpt_settings <= set(bert_module.__annotations__)
+    assert gpt_settings <= bert_types.keys()
     for name in gpt_settings:
-        assert bert_module.__annotations__[name] == gpt_module.__annotations__[name]
+        assert bert_types[name] == gpt_types[name], name
 
 
 @pytest.mark.parametrize("variant", ADAPTIVE_VARIANTS)

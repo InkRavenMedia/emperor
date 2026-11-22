@@ -123,7 +123,9 @@ class CoreConfigFactory:
         )
 
     def build_decoder_config(self):
-        return GptCoreConfigFactory(self.__core_dependencies()).build_decoder_config()
+        core_dependencies = self.__core_dependencies()
+        decoder_config = GptCoreConfigFactory(core_dependencies).build_decoder_config()
+        return decoder_config
 
     def __attention_projection_stack_options(self) -> SubmoduleStackOptions:
         defaults = config_defaults.linears_submodule_stack_options(
