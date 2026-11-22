@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import torch
 import torch.nn as nn
@@ -89,13 +89,15 @@ class AttentionResidual(ResidualConnectionAbstract):
         residual_state: ResidualState | None = None,
     ) -> Tensor:
         self.VALIDATOR.validate_attention_forward_inputs(self, current, residual_state)
+        attention_state = cast(AttentionResidualState, residual_state)
+        source_padding = attention_state.next_source_padding
         query = self.__resolve_query(current)
         residual_sources = self.__append_and_stack_residual_sources(
-            residual_state, current
+            attention_state, current
         )
         normalized_source_keys = self.key_norm(residual_sources)
         depth_weights = self.__calculate_residual_depth_weights(
-            normalized_source_keys, query
+            normalized_source_keys, query, source_padding
         )
         mixed_residual_sources = self.__mix_depth_weighted_residual_sources(
             residual_sources, depth_weights
@@ -126,11 +128,17 @@ class AttentionResidual(ResidualConnectionAbstract):
         self,
         normalized_source_keys: Tensor,
         query: Tensor,
+        padding_mask: Tensor | None,
     ) -> Tensor:
         accumulator_query = query.to(dtype=normalized_source_keys.dtype)
         query_weighted_source_keys = normalized_source_keys * accumulator_query
         depth_attention_logits = torch.sum(query_weighted_source_keys, dim=-1)
-        return torch.softmax(depth_attention_logits, dim=0)
+        if padding_mask is None:
+            return torch.softmax(depth_attention_logits, dim=0)
+        logits = depth_attention_logits.masked_fill(
+            padding_mask, torch.finfo(depth_attention_logits.dtype).min
+        )
+        return torch.softmax(logits, dim=0).masked_fill(padding_mask, 0)
 
     @staticmethod
     def __mix_depth_weighted_residual_sources(

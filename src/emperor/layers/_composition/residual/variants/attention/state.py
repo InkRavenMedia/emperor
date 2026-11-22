@@ -24,6 +24,9 @@ class AttentionResidualState(ResidualState):
     )
     _partial_block: Tensor | None = field(default=None, init=False, repr=False)
     _partial_count: int = field(default=0, init=False, repr=False)
+    _next_source_padding: Tensor | None = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         self.VALIDATOR.validate_positive_integer(
@@ -38,6 +41,19 @@ class AttentionResidualState(ResidualState):
             partial_sources = (self._partial_block,)
         return (self.initial_source, *self._completed_blocks, *partial_sources)
 
+    @property
+    def next_source_padding(self) -> Tensor | None:
+        """Padding for the next depth read, including its current output."""
+        return getattr(self, "_next_source_padding", None)
+
+    @next_source_padding.setter
+    def next_source_padding(self, padding: Tensor | None) -> None:
+        if padding is not None:
+            # Include the initial source and the block receiving the next output.
+            depth = len(self._completed_blocks) + 2
+            self.VALIDATOR.validate_source_padding(padding, self.initial_source, depth)
+        self._next_source_padding = padding
+
     def append(self, raw_output: Tensor) -> None:
         updated_partial_block = raw_output
         if self._partial_block is not None:
@@ -48,6 +64,7 @@ class AttentionResidualState(ResidualState):
             self._completed_blocks.append(self._partial_block)
             self._partial_block = None
             self._partial_count = 0
+        self._next_source_padding = None
 
     def fork(self) -> AttentionResidualState:
         forked = AttentionResidualState(
@@ -57,4 +74,5 @@ class AttentionResidualState(ResidualState):
         forked._completed_blocks = list(self._completed_blocks)
         forked._partial_block = self._partial_block
         forked._partial_count = self._partial_count
+        forked._next_source_padding = self.next_source_padding
         return forked

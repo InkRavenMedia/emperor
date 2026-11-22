@@ -198,6 +198,23 @@ class AttentionResidualValidator(ResidualConnectionValidator):
         )
 
     @staticmethod
+    def validate_source_padding(
+        padding: object, source: Tensor, source_count: int
+    ) -> None:
+        if not isinstance(padding, Tensor) or padding.dtype != torch.bool:
+            raise TypeError("Residual source padding must be a boolean tensor.")
+        expected_shape = (source_count, *source.shape[:-1])
+        if padding.shape != expected_shape:
+            raise ValueError(
+                f"Residual source padding must have shape {expected_shape}, "
+                f"got {tuple(padding.shape)}."
+            )
+        if padding.device != source.device:
+            raise ValueError(
+                "Residual source padding must be on the same device as its sources."
+            )
+
+    @staticmethod
     def validate_attention_state(
         connection: AttentionResidual,
         state: object,
