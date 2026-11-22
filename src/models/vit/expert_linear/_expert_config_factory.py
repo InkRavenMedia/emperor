@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 
 import models.vit.expert_linear.config as config
-from emperor.attention import MixtureOfAttentionHeadsConfig
-from emperor.experts import MixtureOfExpertsModelConfig
-from emperor.layers import LayerStackConfig, RecurrentLayerConfig
+from models.vit._expert_defaults import ExpertDefaults
 from models.vit.expert_linear import _config_defaults as config_defaults
 from models.vit.expert_linear._vit_expert_config_factory import (
     VitExpertConfigDependencies as _ExpertDependencies,
@@ -41,119 +39,10 @@ class ExpertConfigDependencies:
     expert_attention_use_kv_expert_models_flag: bool
 
 
-class ExpertConfigFactory:
-    def __init__(self, dependencies: ExpertConfigDependencies) -> None:
-        self.dependencies = dependencies
-        config_module = config
-        self.encoder_options = (
-            dependencies.encoder_options
-            if dependencies.encoder_options is not None
-            else config_defaults.vit_encoder_options(config_module)
-        )
-        self.attention_options = (
-            dependencies.attention_options
-            if dependencies.attention_options is not None
-            else config_defaults.vit_attention_options(config_module)
-        )
-        self.feed_forward_options = (
-            dependencies.feed_forward_options
-            if dependencies.feed_forward_options is not None
-            else config_defaults.vit_feed_forward_options(config_module)
-        )
-        self.mixture_options = (
-            dependencies.mixture_options
-            if dependencies.mixture_options is not None
-            else config_defaults.experts_mixture_options(config_module)
-        )
-        self.expert_stack_options = (
-            dependencies.expert_stack_options
-            if dependencies.expert_stack_options is not None
-            else config_defaults.experts_submodule_stack_options(
-                config_module, config_defaults.ExpertStackRole.EXPERT
-            )
-        )
-        self.sampler_options = (
-            dependencies.sampler_options
-            if dependencies.sampler_options is not None
-            else config_defaults.experts_sampler_options(config_module)
-        )
-        self.router_options = (
-            dependencies.router_options
-            if dependencies.router_options is not None
-            else config_defaults.experts_router_options(config_module)
-        )
-        self.router_stack_options = (
-            dependencies.router_stack_options
-            if dependencies.router_stack_options is not None
-            else config_defaults.experts_submodule_stack_options(
-                config_module, config_defaults.ExpertStackRole.ROUTER
-            )
-        )
-        self.expert_layer_controller_options = (
-            dependencies.expert_layer_controller_options
-            if dependencies.expert_layer_controller_options is not None
-            else config_defaults.experts_layer_controller_options(
-                config_module, config_defaults.ExpertControlRole.EXPERT
-            )
-        )
-        self.expert_dynamic_memory_options = (
-            dependencies.expert_dynamic_memory_options
-            if dependencies.expert_dynamic_memory_options is not None
-            else config_defaults.experts_dynamic_memory_options(
-                config_module, config_defaults.ExpertControlRole.EXPERT
-            )
-        )
-        self.expert_recurrent_controller_options = (
-            dependencies.expert_recurrent_controller_options
-            if dependencies.expert_recurrent_controller_options is not None
-            else config_defaults.experts_recurrent_controller_options(
-                config_module, config_defaults.ExpertControlRole.EXPERT
-            )
-        )
-
-    def build_feed_forward_base_stack_config(
-        self,
-        feed_forward_stack_options: SubmoduleStackOptions,
-    ) -> MixtureOfExpertsModelConfig:
-        return self.__expert_config_factory().build_feed_forward_base_stack_config(
-            feed_forward_stack_options
-        )
-
-    def build_attention_config(
-        self,
-        *,
-        batch_size: int,
-        hidden_dim: int,
-        sequence_length: int,
-        projection_model_config: LayerStackConfig | RecurrentLayerConfig,
-    ) -> MixtureOfAttentionHeadsConfig:
-        return self.__expert_config_factory().build_attention_config(
-            batch_size=batch_size,
-            hidden_dim=hidden_dim,
-            sequence_length=sequence_length,
-            projection_model_config=projection_model_config,
-        )
-
-    def __expert_config_factory(self) -> VitExpertConfigFactory:
-        dependencies = self.dependencies
-        return VitExpertConfigFactory(
-            _ExpertDependencies(
-                hidden_dim=dependencies.hidden_dim,
-                encoder_options=self.encoder_options,
-                attention_options=self.attention_options,
-                feed_forward_options=self.feed_forward_options,
-                mixture_options=self.mixture_options,
-                expert_stack_options=self.expert_stack_options,
-                sampler_options=self.sampler_options,
-                router_options=self.router_options,
-                router_stack_options=self.router_stack_options,
-                expert_layer_controller_options=(self.expert_layer_controller_options),
-                expert_dynamic_memory_options=self.expert_dynamic_memory_options,
-                expert_recurrent_controller_options=(
-                    self.expert_recurrent_controller_options
-                ),
-                expert_attention_use_kv_expert_models_flag=(
-                    dependencies.expert_attention_use_kv_expert_models_flag
-                ),
-            )
-        )
+class ExpertConfigFactory(
+    ExpertDefaults[ExpertConfigDependencies, _ExpertDependencies, SubmoduleStackOptions]
+):
+    _config = config
+    _defaults = config_defaults
+    _resolved_inputs = staticmethod(_ExpertDependencies)
+    _builder = staticmethod(VitExpertConfigFactory)
