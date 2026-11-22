@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from emperor.attention import AttentionSourceMemoryConfig  # noqa: F401
 from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     AdaptiveLinearLayerConfig,  # noqa: F401
@@ -87,464 +89,895 @@ from emperor.memory import (
     WeightedDynamicMemoryConfig,  # noqa: F401
 )
 from emperor.transformer import SequenceExpansionConfig  # noqa: F401
-from model_runtime.packages.runtime_values import positive_runtime_fields
+from model_runtime.packages.annotations import (
+    inherit_alias_annotations,
+    without_inspection_section,
+)
+from model_runtime.packages.configuration_metadata import Section
+from model_runtime.packages.runtime_values import (
+    RuntimeValueConstraints,
+    positive_runtime_fields,
+)
 from models import _attention_source_memory, _component_defaults
 
-# Global
-BATCH_SIZE = 64
-LEARNING_RATE = 1.0
-VOCAB_SIZE = 8192
-MODEL_DIM = 128
-RUNTIME_VALUE_CONSTRAINTS = positive_runtime_fields("MODEL_DIM")
-SOURCE_SEQUENCE_LENGTH = 64
-TARGET_SEQUENCE_LENGTH = 64
-SEQUENCE_LENGTH = 64
-DROPOUT_PROBABILITY = 0.1
-POSITIONAL_EMBEDDING_OPTION: type[AbsolutePositionalEmbeddingConfig] = (
-    TextSinusoidalPositionalEmbeddingConfig
+_general = Section(("Global",))
+BATCH_SIZE: Annotated[int, _general] = 64
+LEARNING_RATE: Annotated[float, _general] = 1.0
+VOCAB_SIZE: Annotated[int, _general] = 8192
+MODEL_DIM: Annotated[int, _general] = 128
+RUNTIME_VALUE_CONSTRAINTS: Annotated[RuntimeValueConstraints, _general] = positive_runtime_fields("MODEL_DIM")
+SOURCE_SEQUENCE_LENGTH: Annotated[int, _general] = 64
+TARGET_SEQUENCE_LENGTH: Annotated[int, _general] = 64
+SEQUENCE_LENGTH: Annotated[int, _general] = 64
+DROPOUT_PROBABILITY: Annotated[float, _general] = 0.1
+POSITIONAL_EMBEDDING_OPTION: Annotated[
+    type[AbsolutePositionalEmbeddingConfig], _general
+] = TextSinusoidalPositionalEmbeddingConfig
+
+_attention = Section(("Attention Options",))
+ATTN_NUM_HEADS: Annotated[int, _attention] = 4
+ATTN_ADD_KEY_VALUE_BIAS_FLAG: Annotated[bool, _attention] = False
+ATTN_ZERO_ATTENTION_FLAG: Annotated[bool, _attention] = False
+
+_attention_source_memory_section = _attention.child("Attention Source Memory Options")
+ATTN_SOURCE_MEMORY_FLAG: Annotated[bool, _attention_source_memory_section] = False
+ATTN_SOURCE_MEMORY_CONFIG: Annotated[
+    _attention_source_memory.AttentionSourceMemoryConfig | None,
+    _attention_source_memory_section,
+] = None
+ATTN_SOURCE_MEMORY_MODEL_CONFIG: Annotated[
+    _attention_source_memory.ConfigBase | None, _attention_source_memory_section
+] = None
+ATTN_SOURCE_MEMORY_CHUNK_SIZE: Annotated[
+    int | None, _attention_source_memory_section
+] = None
+ATTN_SOURCE_MEMORY_GROUPING_METHOD: Annotated[
+    type[_attention_source_memory.GroupingConfig] | None,
+    _attention_source_memory_section,
+] = None
+ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: Annotated[
+    _attention_source_memory.ConfigBase | None, _attention_source_memory_section
+] = None
+ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: Annotated[
+    _attention_source_memory.SummaryNormalizationOptions | None,
+    _attention_source_memory_section,
+] = None
+ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_source_memory_section
+] = None
+
+_attention_projection_stack = _attention.child("Attention Projection Stack Options")
+ATTN_NUM_LAYERS: Annotated[int, _attention_projection_stack] = 1
+ATTN_BIAS_FLAG: Annotated[bool, _attention_projection_stack] = True
+ATTN_STACK_HIDDEN_DIM: Annotated[int, _attention_projection_stack] = MODEL_DIM
+ATTN_STACK_ACTIVATION: Annotated[ActivationOptions, _attention_projection_stack] = (
+    ActivationOptions.DISABLED
 )
-
-# Attention Options
-ATTN_NUM_HEADS: int = 4
-ATTN_ADD_KEY_VALUE_BIAS_FLAG: bool = False
-ATTN_ZERO_ATTENTION_FLAG: bool = False
-
-## Attention Source Memory Options
-ATTN_SOURCE_MEMORY_FLAG: bool = False
-ATTN_SOURCE_MEMORY_CONFIG: (
-    _attention_source_memory.AttentionSourceMemoryConfig | None
-) = None
-ATTN_SOURCE_MEMORY_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = None
-ATTN_SOURCE_MEMORY_CHUNK_SIZE: int | None = None
-ATTN_SOURCE_MEMORY_GROUPING_METHOD: (
-    type[_attention_source_memory.GroupingConfig] | None
-) = None
-ATTN_SOURCE_MEMORY_GROUPING_MODEL_CONFIG: _attention_source_memory.ConfigBase | None = (
+ATTN_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_stack
+] = None
+ATTN_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _attention_projection_stack] = False
+ATTN_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _attention_projection_stack] = (
     None
 )
-ATTN_SOURCE_MEMORY_SUMMARY_NORMALIZATION: (
-    _attention_source_memory.SummaryNormalizationOptions | None
-) = None
-ATTN_SOURCE_MEMORY_RMS_NORM_EPSILON: float | None = None
+ATTN_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_stack
+] = None
+ATTN_STACK_DROPOUT_PROBABILITY: Annotated[float, _attention_projection_stack] = 0.0
+ATTN_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _attention_projection_stack
+] = LayerNormPositionOptions.DISABLED
+ATTN_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions, _attention_projection_stack
+] = NormalizationOptions.RMS_NORM
+ATTN_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _attention_projection_stack
+] = LastLayerBiasOptions.DEFAULT
+ATTN_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool, _attention_projection_stack
+] = False
 
-## Attention Projection Stack Options
-ATTN_NUM_LAYERS: int = 1
-ATTN_BIAS_FLAG: bool = True
-ATTN_STACK_HIDDEN_DIM: int = MODEL_DIM
-ATTN_STACK_ACTIVATION: ActivationOptions = ActivationOptions.DISABLED
-ATTN_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ATTN_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_STACK_DROPOUT_PROBABILITY: float = 0.0
-ATTN_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
+_attention_projection_gate = _attention_projection_stack.child(
+    "Attention Projection Gate Options"
 )
-ATTN_STACK_NORMALIZATION: NormalizationOptions = NormalizationOptions.RMS_NORM
-ATTN_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT
-ATTN_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-
-### Attention Projection Gate Options
-ATTN_STACK_GATE_FLAG: bool = False
-ATTN_GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-ATTN_GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-
-#### Attention Projection Gate Stack Options
-ATTN_GATE_STACK_INDEPENDENT_FLAG: bool = False
-ATTN_GATE_STACK_HIDDEN_DIM: int | None = None
-ATTN_GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-ATTN_GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-ATTN_GATE_STACK_NUM_LAYERS: int | None = None
-ATTN_GATE_STACK_ACTIVATION: ActivationOptions | None = ActivationOptions.TANH
-ATTN_GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ATTN_GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-ATTN_GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-ATTN_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = True
-ATTN_GATE_STACK_BIAS_FLAG: bool | None = True
-
-### Attention Projection Halting Options
-ATTN_STACK_HALTING_FLAG: bool = False
-ATTN_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-ATTN_HALTING_THRESHOLD: float = 0.999
-ATTN_HALTING_DROPOUT: float = 0.0
-ATTN_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HaltingHiddenStateModeOptions.RAW
+ATTN_STACK_GATE_FLAG: Annotated[bool, _attention_projection_gate] = False
+ATTN_GATE_OPTION: Annotated[LayerGateOptions | None, _attention_projection_gate] = (
+    LayerGateOptions.MULTIPLIER
 )
+ATTN_GATE_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_gate
+] = ActivationOptions.SIGMOID
 
-#### Attention Projection Halting Stack Options
-ATTN_HALTING_STACK_INDEPENDENT_FLAG: bool = False
-ATTN_HALTING_STACK_HIDDEN_DIM: int | None = None
-ATTN_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = (
-    LayerNormPositionOptions.DISABLED
+_attention_projection_gate_stack = _attention_projection_gate.child(
+    "Attention Projection Gate Stack Options"
 )
-ATTN_HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-ATTN_HALTING_STACK_NUM_LAYERS: int | None = None
-ATTN_HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-ATTN_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ATTN_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-ATTN_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = (
-    LastLayerBiasOptions.DISABLED
+ATTN_GATE_STACK_INDEPENDENT_FLAG: Annotated[bool, _attention_projection_gate_stack] = (
+    False
 )
-ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-ATTN_HALTING_STACK_BIAS_FLAG: bool | None = None
-
-### Attention Projection Memory Options
-ATTN_MEMORY_FLAG: bool = False
-ATTN_MEMORY_NUM_MEMORY_SLOTS: int = 4
-ATTN_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
-ATTN_MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
-ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
-ATTN_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
-
-#### Attention Projection Memory Stack Options
-ATTN_MEMORY_STACK_INDEPENDENT_FLAG: bool = False
-ATTN_MEMORY_STACK_HIDDEN_DIM: int | None = None
-ATTN_MEMORY_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-ATTN_MEMORY_STACK_NORMALIZATION: NormalizationOptions | None = None
-ATTN_MEMORY_STACK_NUM_LAYERS: int | None = None
-ATTN_MEMORY_STACK_ACTIVATION: ActivationOptions | None = None
-ATTN_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ATTN_MEMORY_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_MEMORY_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_MEMORY_STACK_DROPOUT_PROBABILITY: float | None = None
-ATTN_MEMORY_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-ATTN_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-ATTN_MEMORY_STACK_BIAS_FLAG: bool | None = None
-
-### Attention Projection Recurrent Layer Options
-ATTN_RECURRENT_FLAG: bool = False
-ATTN_RECURRENT_MAX_STEPS: int = 2
-ATTN_RECURRENT_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
-)
-ATTN_RECURRENT_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
-
-#### Attention Projection Recurrent Gate Options
-ATTN_RECURRENT_STACK_GATE_FLAG: bool = False
-ATTN_RECURRENT_GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-ATTN_RECURRENT_GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-
-##### Attention Projection Recurrent Gate Stack Options
-ATTN_RECURRENT_GATE_STACK_INDEPENDENT_FLAG: bool = False
-ATTN_RECURRENT_GATE_STACK_HIDDEN_DIM: int | None = None
-ATTN_RECURRENT_GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-ATTN_RECURRENT_GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-ATTN_RECURRENT_GATE_STACK_NUM_LAYERS: int | None = None
-ATTN_RECURRENT_GATE_STACK_ACTIVATION: ActivationOptions | None = None
-ATTN_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ATTN_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-ATTN_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-ATTN_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-ATTN_RECURRENT_GATE_STACK_BIAS_FLAG: bool | None = None
-
-#### Attention Projection Recurrent Halting Options
-ATTN_RECURRENT_STACK_HALTING_FLAG: bool = False
-ATTN_RECURRENT_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-ATTN_RECURRENT_HALTING_THRESHOLD: float = 0.999
-ATTN_RECURRENT_HALTING_DROPOUT: float = 0.0
-ATTN_RECURRENT_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HaltingHiddenStateModeOptions.RAW
-)
-
-##### Attention Projection Recurrent Halting Stack Options
-ATTN_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: bool = False
-ATTN_RECURRENT_HALTING_STACK_HIDDEN_DIM: int | None = None
-ATTN_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-ATTN_RECURRENT_HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-ATTN_RECURRENT_HALTING_STACK_NUM_LAYERS: int | None = None
-ATTN_RECURRENT_HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-ATTN_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = (
+ATTN_GATE_STACK_HIDDEN_DIM: Annotated[int | None, _attention_projection_gate_stack] = (
     None
 )
-ATTN_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ATTN_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ATTN_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ATTN_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-ATTN_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-ATTN_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
+ATTN_GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_NUM_LAYERS: Annotated[int | None, _attention_projection_gate_stack] = (
+    None
+)
+ATTN_GATE_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_gate_stack
+] = ActivationOptions.TANH
+ATTN_GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _attention_projection_gate_stack
+] = False
+ATTN_GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _attention_projection_gate_stack
+] = None
+ATTN_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _attention_projection_gate_stack
+] = True
+ATTN_GATE_STACK_BIAS_FLAG: Annotated[bool | None, _attention_projection_gate_stack] = (
+    True
+)
+
+_attention_projection_halting = _attention_projection_stack.child(
+    "Attention Projection Halting Options"
+)
+ATTN_STACK_HALTING_FLAG: Annotated[bool, _attention_projection_halting] = False
+ATTN_HALTING_OPTION: Annotated[type[HaltingConfig], _attention_projection_halting] = (
+    StickBreakingConfig
+)
+ATTN_HALTING_THRESHOLD: Annotated[float, _attention_projection_halting] = 0.999
+ATTN_HALTING_DROPOUT: Annotated[float, _attention_projection_halting] = 0.0
+ATTN_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _attention_projection_halting
+] = HaltingHiddenStateModeOptions.RAW
+
+_attention_projection_halting_stack = _attention_projection_halting.child(
+    "Attention Projection Halting Stack Options"
+)
+ATTN_HALTING_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _attention_projection_halting_stack
+] = False
+ATTN_HALTING_STACK_HIDDEN_DIM: Annotated[
+    int | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _attention_projection_halting_stack
+] = LayerNormPositionOptions.DISABLED
+ATTN_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_NUM_LAYERS: Annotated[
+    int | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _attention_projection_halting_stack
+] = False
+ATTN_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _attention_projection_halting_stack
+] = LastLayerBiasOptions.DISABLED
+ATTN_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _attention_projection_halting_stack
+] = None
+ATTN_HALTING_STACK_BIAS_FLAG: Annotated[
+    bool | None, _attention_projection_halting_stack
+] = None
+
+_attention_projection_memory = _attention_projection_stack.child(
+    "Attention Projection Memory Options"
+)
+ATTN_MEMORY_FLAG: Annotated[bool, _attention_projection_memory] = False
+ATTN_MEMORY_NUM_MEMORY_SLOTS: Annotated[int, _attention_projection_memory] = 4
+ATTN_MEMORY_OPTION: Annotated[
+    type[DynamicMemoryConfig], _attention_projection_memory
+] = GatedResidualDynamicMemoryConfig
+ATTN_MEMORY_POSITION_OPTION: Annotated[
+    MemoryPositionOptions, _attention_projection_memory
+] = MemoryPositionOptions.AFTER_AFFINE
+ATTN_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: Annotated[
+    float | None, _attention_projection_memory
+] = None
+ATTN_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: Annotated[
+    int | None, _attention_projection_memory
+] = None
+
+_attention_projection_memory_stack = _attention_projection_memory.child(
+    "Attention Projection Memory Stack Options"
+)
+ATTN_MEMORY_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _attention_projection_memory_stack
+] = False
+ATTN_MEMORY_STACK_HIDDEN_DIM: Annotated[
+    int | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_NUM_LAYERS: Annotated[
+    int | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _attention_projection_memory_stack
+] = False
+ATTN_MEMORY_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _attention_projection_memory_stack
+] = None
+ATTN_MEMORY_STACK_BIAS_FLAG: Annotated[
+    bool | None, _attention_projection_memory_stack
+] = None
+
+_attention_projection_recurrent_layer = _attention_projection_stack.child(
+    "Attention Projection Recurrent Layer Options"
+)
+ATTN_RECURRENT_FLAG: Annotated[bool, _attention_projection_recurrent_layer] = False
+ATTN_RECURRENT_MAX_STEPS: Annotated[int, _attention_projection_recurrent_layer] = 2
+ATTN_RECURRENT_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _attention_projection_recurrent_layer
+] = LayerNormPositionOptions.DISABLED
+ATTN_RECURRENT_NORMALIZATION: Annotated[
+    NormalizationOptions, _attention_projection_recurrent_layer
+] = NormalizationOptions.LAYER_NORM
+
+_attention_projection_recurrent_gate = _attention_projection_recurrent_layer.child(
+    "Attention Projection Recurrent Gate Options"
+)
+ATTN_RECURRENT_STACK_GATE_FLAG: Annotated[
+    bool, _attention_projection_recurrent_gate
+] = False
+ATTN_RECURRENT_GATE_OPTION: Annotated[
+    LayerGateOptions | None, _attention_projection_recurrent_gate
+] = LayerGateOptions.MULTIPLIER
+ATTN_RECURRENT_GATE_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_recurrent_gate
+] = ActivationOptions.SIGMOID
+
+_attention_projection_recurrent_gate_stack = _attention_projection_recurrent_gate.child(
+    "Attention Projection Recurrent Gate Stack Options"
+)
+ATTN_RECURRENT_GATE_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _attention_projection_recurrent_gate_stack
+] = False
+ATTN_RECURRENT_GATE_STACK_HIDDEN_DIM: Annotated[
+    int | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_NUM_LAYERS: Annotated[
+    int | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _attention_projection_recurrent_gate_stack
+] = False
+ATTN_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _attention_projection_recurrent_gate_stack
+] = None
+ATTN_RECURRENT_GATE_STACK_BIAS_FLAG: Annotated[
+    bool | None, _attention_projection_recurrent_gate_stack
+] = None
+
+_attention_projection_recurrent_halting = _attention_projection_recurrent_layer.child(
+    "Attention Projection Recurrent Halting Options"
+)
+ATTN_RECURRENT_STACK_HALTING_FLAG: Annotated[
+    bool, _attention_projection_recurrent_halting
+] = False
+ATTN_RECURRENT_HALTING_OPTION: Annotated[
+    type[HaltingConfig], _attention_projection_recurrent_halting
+] = StickBreakingConfig
+ATTN_RECURRENT_HALTING_THRESHOLD: Annotated[
+    float, _attention_projection_recurrent_halting
+] = 0.999
+ATTN_RECURRENT_HALTING_DROPOUT: Annotated[
+    float, _attention_projection_recurrent_halting
+] = 0.0
+ATTN_RECURRENT_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _attention_projection_recurrent_halting
+] = HaltingHiddenStateModeOptions.RAW
+
+_attention_projection_recurrent_halting_stack = (
+    _attention_projection_recurrent_halting.child(
+        "Attention Projection Recurrent Halting Stack Options"
+    )
+)
+ATTN_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _attention_projection_recurrent_halting_stack
+] = False
+ATTN_RECURRENT_HALTING_STACK_HIDDEN_DIM: Annotated[
+    int | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_NUM_LAYERS: Annotated[
+    int | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _attention_projection_recurrent_halting_stack
+] = False
+ATTN_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _attention_projection_recurrent_halting_stack
+] = None
+ATTN_RECURRENT_HALTING_STACK_BIAS_FLAG: Annotated[
+    bool | None, _attention_projection_recurrent_halting_stack
+] = None
 
 
-# Feed-Forward Stack Options
-FF_NUM_LAYERS: int = 1
+_feed_forward_stack = Section(("Feed-Forward Stack Options",))
+FF_NUM_LAYERS: Annotated[int, _feed_forward_stack] = 1
 # Expert feed-forward leaves use bias when the selected FF path and EXPERT_BIAS_FLAG both enable it.
-FF_BIAS_FLAG: bool = True
-FF_STACK_HIDDEN_DIM: int = 512
-FF_STACK_ACTIVATION: ActivationOptions = ActivationOptions.RELU
-FF_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-FF_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_STACK_DROPOUT_PROBABILITY: float = DROPOUT_PROBABILITY
-FF_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
+FF_BIAS_FLAG: Annotated[bool, _feed_forward_stack] = True
+FF_STACK_HIDDEN_DIM: Annotated[int, _feed_forward_stack] = 512
+FF_STACK_ACTIVATION: Annotated[ActivationOptions, _feed_forward_stack] = (
+    ActivationOptions.RELU
 )
-FF_STACK_NORMALIZATION: NormalizationOptions = NormalizationOptions.RMS_NORM
-FF_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = LastLayerBiasOptions.DEFAULT
-FF_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-
-## Feed-Forward Gate Options
-FF_STACK_GATE_FLAG: bool = False
-FF_GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-FF_GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-
-### Feed-Forward Gate Stack Options
-FF_GATE_STACK_INDEPENDENT_FLAG: bool = False
-FF_GATE_STACK_HIDDEN_DIM: int | None = None
-FF_GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-FF_GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-FF_GATE_STACK_NUM_LAYERS: int | None = None
-FF_GATE_STACK_ACTIVATION: ActivationOptions | None = ActivationOptions.TANH
-FF_GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-FF_GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-FF_GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-FF_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = True
-FF_GATE_STACK_BIAS_FLAG: bool | None = True
-
-## Feed-Forward Halting Options
-FF_STACK_HALTING_FLAG: bool = False
-FF_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-FF_HALTING_THRESHOLD: float = 0.999
-FF_HALTING_DROPOUT: float = 0.0
-FF_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HaltingHiddenStateModeOptions.RAW
+FF_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_stack
+] = None
+FF_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _feed_forward_stack] = False
+FF_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _feed_forward_stack] = None
+FF_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _feed_forward_stack] = None
+FF_STACK_DROPOUT_PROBABILITY: Annotated[float, _feed_forward_stack] = (
+    DROPOUT_PROBABILITY
 )
-
-### Feed-Forward Halting Stack Options
-FF_HALTING_STACK_INDEPENDENT_FLAG: bool = False
-FF_HALTING_STACK_HIDDEN_DIM: int | None = None
-FF_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = (
-    LayerNormPositionOptions.DISABLED
-)
-FF_HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-FF_HALTING_STACK_NUM_LAYERS: int | None = None
-FF_HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-FF_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-FF_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-FF_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = (
-    LastLayerBiasOptions.DISABLED
-)
-FF_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-FF_HALTING_STACK_BIAS_FLAG: bool | None = None
-
-## Feed-Forward Memory Options
-FF_MEMORY_FLAG: bool = False
-FF_MEMORY_NUM_MEMORY_SLOTS: int = 4
-FF_MEMORY_OPTION: type[DynamicMemoryConfig] = GatedResidualDynamicMemoryConfig
-FF_MEMORY_POSITION_OPTION: MemoryPositionOptions = MemoryPositionOptions.AFTER_AFFINE
-FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: float | None = None
-FF_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: int | None = None
-
-### Feed-Forward Memory Stack Options
-FF_MEMORY_STACK_INDEPENDENT_FLAG: bool = False
-FF_MEMORY_STACK_HIDDEN_DIM: int | None = None
-FF_MEMORY_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-FF_MEMORY_STACK_NORMALIZATION: NormalizationOptions | None = None
-FF_MEMORY_STACK_NUM_LAYERS: int | None = None
-FF_MEMORY_STACK_ACTIVATION: ActivationOptions | None = None
-FF_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-FF_MEMORY_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_MEMORY_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_MEMORY_STACK_DROPOUT_PROBABILITY: float | None = None
-FF_MEMORY_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-FF_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-FF_MEMORY_STACK_BIAS_FLAG: bool | None = None
-
-## Feed-Forward Recurrent Layer Options
-FF_RECURRENT_FLAG: bool = False
-FF_RECURRENT_MAX_STEPS: int = 2
-FF_RECURRENT_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
-)
-FF_RECURRENT_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
-
-### Feed-Forward Recurrent Gate Options
-FF_RECURRENT_STACK_GATE_FLAG: bool = False
-FF_RECURRENT_GATE_OPTION: LayerGateOptions | None = LayerGateOptions.MULTIPLIER
-FF_RECURRENT_GATE_ACTIVATION: ActivationOptions | None = ActivationOptions.SIGMOID
-
-#### Feed-Forward Recurrent Gate Stack Options
-FF_RECURRENT_GATE_STACK_INDEPENDENT_FLAG: bool = False
-FF_RECURRENT_GATE_STACK_HIDDEN_DIM: int | None = None
-FF_RECURRENT_GATE_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-FF_RECURRENT_GATE_STACK_NORMALIZATION: NormalizationOptions | None = None
-FF_RECURRENT_GATE_STACK_NUM_LAYERS: int | None = None
-FF_RECURRENT_GATE_STACK_ACTIVATION: ActivationOptions | None = None
-FF_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-FF_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: float | None = None
-FF_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-FF_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-FF_RECURRENT_GATE_STACK_BIAS_FLAG: bool | None = None
-
-### Feed-Forward Recurrent Halting Options
-FF_RECURRENT_STACK_HALTING_FLAG: bool = False
-FF_RECURRENT_HALTING_OPTION: type[HaltingConfig] = StickBreakingConfig
-FF_RECURRENT_HALTING_THRESHOLD: float = 0.999
-FF_RECURRENT_HALTING_DROPOUT: float = 0.0
-FF_RECURRENT_HALTING_HIDDEN_STATE_MODE: HaltingHiddenStateModeOptions = (
-    HaltingHiddenStateModeOptions.RAW
-)
-
-#### Feed-Forward Recurrent Halting Stack Options
-FF_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: bool = False
-FF_RECURRENT_HALTING_STACK_HIDDEN_DIM: int | None = None
-FF_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-FF_RECURRENT_HALTING_STACK_NORMALIZATION: NormalizationOptions | None = None
-FF_RECURRENT_HALTING_STACK_NUM_LAYERS: int | None = None
-FF_RECURRENT_HALTING_STACK_ACTIVATION: ActivationOptions | None = None
-FF_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = (
-    None
-)
-FF_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: bool = False
-FF_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-FF_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-FF_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: float | None = None
-FF_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-FF_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-FF_RECURRENT_HALTING_STACK_BIAS_FLAG: bool | None = None
-
-# Transformer Options
-ENCODER_NUM_LAYERS = 3
-DECODER_NUM_LAYERS = 3
-ENCODER_LAYER_NORM_POSITION = LayerNormPositionOptions.BEFORE
-ENCODER_NORMALIZATION: NormalizationOptions = NormalizationOptions.RMS_NORM
-ENCODER_OUTPUT_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
-DECODER_OUTPUT_NORMALIZATION: NormalizationOptions = NormalizationOptions.LAYER_NORM
-DECODER_LAYER_NORM_POSITION = LayerNormPositionOptions.BEFORE
-DECODER_NORMALIZATION: NormalizationOptions = NormalizationOptions.RMS_NORM
-ENCODER_ATTN_NUM_HEADS = ATTN_NUM_HEADS
-DECODER_SELF_ATTN_NUM_HEADS = ATTN_NUM_HEADS
-DECODER_CROSS_ATTN_NUM_HEADS = ATTN_NUM_HEADS
-ENCODER_FEED_FORWARD_HIDDEN_DIM = FF_STACK_HIDDEN_DIM
-DECODER_FEED_FORWARD_HIDDEN_DIM = FF_STACK_HIDDEN_DIM
-ENCODER_FEED_FORWARD_NUM_LAYERS = FF_NUM_LAYERS
-DECODER_FEED_FORWARD_NUM_LAYERS = FF_NUM_LAYERS
-
-# Mixture Of Experts Options
-EXPERT_ATTENTION_USE_KV_EXPERT_MODELS_FLAG: bool | None = None
-NUM_EXPERTS = 4
-TOP_K = 2
-DROPPED_TOKEN_BEHAVIOR: DroppedTokenOptions = DroppedTokenOptions.ZEROS
-COMPUTE_EXPERT_MIXTURE_FLAG: bool = True
-WEIGHTED_PARAMETERS_FLAG: bool = False
-WEIGHTING_POSITION_OPTION: ExpertWeightingPositionOptions = (
-    ExpertWeightingPositionOptions.BEFORE_EXPERTS
-)
-ROUTING_INITIALIZATION_MODE: RoutingInitializationMode = RoutingInitializationMode.LAYER
-SAMPLER_THRESHOLD: float = 0.0
-SAMPLER_FILTER_ABOVE_THRESHOLD: bool = False
-SAMPLER_NUM_TOPK_SAMPLES: int = 0
-NORMALIZE_PROBABILITIES_FLAG = True
-SAMPLER_NOISY_TOPK_FLAG: bool = False
-COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: float = 0.0
-SWITCH_LOSS_WEIGHT = 0.0
-ZERO_CENTRED_LOSS_WEIGHT: float = 0.0
-MUTUAL_INFORMATION_LOSS_WEIGHT: float = 0.0
-CAPACITY_FACTOR = 0.0
-ROUTER_NOISY_TOPK_FLAG: bool = False
-
-# Adaptive Parameter Options
-_CONFIG_FIELD_METADATA_ALIASES: dict[str, str] = {}
-
-# Grouping accepts all-valid fixed sequences. None leaves generation per row.
-GROUPING_SCOPE: AdaptiveParameterGroupingScopeOptions | None = None
-GROUP_COUNT: int | None = None
-# Tokens per chunk; final incomplete chunks are padded internally.
-CHUNK_SIZE: int | None = None
-GROUPING_SEQUENCE_LENGTH: int | None = None
-GROUPING_INPUT_ORDER: AdaptiveParameterInputOrderOptions | None = None
-# Chunk reducer: SUM, MEAN, MEAN_STD, ATTENTION, or RMS. None uses SUM.
-GROUPING_METHOD: type[GroupingConfig] | None = None
-# Summary normalization: DISABLED or RMS_NORM. None uses DISABLED.
-GROUPING_SUMMARY_NORMALIZATION: SummaryNormalizationOptions | None = None
-# ATTENTION scorer width. None preserves the supplied attention model width.
-GROUPING_MODEL_CONFIG: ConfigBase | None = None
-GROUPING_ATTENTION_HIDDEN_DIM: int | None = None
-# RMS_NORM epsilon. None uses 1e-6 when summary normalization is selected.
-GROUPING_RMS_NORM_EPSILON: float | None = None
-WEIGHT_INPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-WEIGHT_OUTPUT_FACTOR_SOURCE: LowRankFactorSourceOptions | None = None
-WEIGHT_MIXTURE_NUM_EXPERTS: int | None = None
-BIAS_MIXTURE_NUM_EXPERTS: int | None = None
-WEIGHT_MIXTURE_TOP_K: int | None = None
-BIAS_MIXTURE_TOP_K: int | None = None
-WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: bool | None = None
-WEIGHT_OPTION_FLAG: bool = True
-WEIGHT_OPTION: type[DynamicWeightConfig] | None = None
-GENERATOR_DEPTH: int = 1
-WEIGHT_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
-WEIGHT_DECAY_RATE: float = 0.0
-WEIGHT_DECAY_WARMUP_BATCHES: int = 0
-WEIGHT_NORMALIZATION_OPTION: WeightNormalizationOptions = (
-    WeightNormalizationOptions.DISABLED
-)
-WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: bool = False
-WEIGHT_NORMALIZATION_POSITION_OPTION: WeightNormalizationPositionOptions = (
-    WeightNormalizationPositionOptions.DISABLED
-)
-WEIGHT_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    BankExpansionFactorOptions.FACTOR_OF_ONE
-)
-BIAS_OPTION_FLAG: bool = True
-BIAS_OPTION: type[DynamicBiasConfig] | None = None
-BIAS_DECAY_SCHEDULE: WeightDecayScheduleOptions = WeightDecayScheduleOptions.DISABLED
-BIAS_DECAY_RATE: float = 0.0
-BIAS_DECAY_WARMUP_BATCHES: int = 0
-BIAS_BANK_EXPANSION_FACTOR: BankExpansionFactorOptions = (
-    BankExpansionFactorOptions.FACTOR_OF_ONE
-)
-DIAGONAL_OPTION_FLAG: bool = True
-DIAGONAL_OPTION: type[DynamicDiagonalConfig] | None = None
-MASK_OPTION_FLAG: bool = True
-ROW_MASK_OPTION: type[AxisMaskConfig] | None = None
-MASK_THRESHOLD: float = 0.5
-MASK_SURROGATE_SCALE: float = 1.0
-MASK_FLOOR: float = 0.0
-MASK_DIMENSION_OPTION: MaskDimensionOptions = MaskDimensionOptions.ROW
-MASK_TRANSITION_WIDTH: float = 0.1
-
-ADAPTIVE_GENERATOR_STACK_HIDDEN_DIM: int = 64
-ADAPTIVE_GENERATOR_STACK_NUM_LAYERS: int = 1
-ADAPTIVE_GENERATOR_STACK_ACTIVATION: ActivationOptions = ActivationOptions.RELU
-ADAPTIVE_GENERATOR_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions = (
-    LayerNormPositionOptions.DISABLED
-)
-ADAPTIVE_GENERATOR_STACK_NORMALIZATION: NormalizationOptions = (
+FF_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _feed_forward_stack
+] = LayerNormPositionOptions.DISABLED
+FF_STACK_NORMALIZATION: Annotated[NormalizationOptions, _feed_forward_stack] = (
     NormalizationOptions.RMS_NORM
 )
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: bool = False
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-ADAPTIVE_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-ADAPTIVE_GENERATOR_STACK_DROPOUT_PROBABILITY: float = 0.0
-ADAPTIVE_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions = (
-    LastLayerBiasOptions.DEFAULT
-)
-ADAPTIVE_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool = False
-ADAPTIVE_GENERATOR_STACK_BIAS_FLAG: bool = True
+FF_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _feed_forward_stack
+] = LastLayerBiasOptions.DEFAULT
+FF_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool, _feed_forward_stack] = False
 
-_COMPONENT_GENERATOR_DEFAULTS = {
+_feed_forward_gate = _feed_forward_stack.child("Feed-Forward Gate Options")
+FF_STACK_GATE_FLAG: Annotated[bool, _feed_forward_gate] = False
+FF_GATE_OPTION: Annotated[LayerGateOptions | None, _feed_forward_gate] = (
+    LayerGateOptions.MULTIPLIER
+)
+FF_GATE_ACTIVATION: Annotated[ActivationOptions | None, _feed_forward_gate] = (
+    ActivationOptions.SIGMOID
+)
+
+_feed_forward_gate_stack = _feed_forward_gate.child("Feed-Forward Gate Stack Options")
+FF_GATE_STACK_INDEPENDENT_FLAG: Annotated[bool, _feed_forward_gate_stack] = False
+FF_GATE_STACK_HIDDEN_DIM: Annotated[int | None, _feed_forward_gate_stack] = None
+FF_GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _feed_forward_gate_stack
+] = None
+FF_GATE_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _feed_forward_gate_stack
+] = None
+FF_GATE_STACK_NUM_LAYERS: Annotated[int | None, _feed_forward_gate_stack] = None
+FF_GATE_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_gate_stack
+] = ActivationOptions.TANH
+FF_GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_gate_stack
+] = None
+FF_GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _feed_forward_gate_stack] = False
+FF_GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _feed_forward_gate_stack] = (
+    None
+)
+FF_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _feed_forward_gate_stack
+] = None
+FF_GATE_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _feed_forward_gate_stack] = (
+    None
+)
+FF_GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _feed_forward_gate_stack
+] = None
+FF_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _feed_forward_gate_stack
+] = True
+FF_GATE_STACK_BIAS_FLAG: Annotated[bool | None, _feed_forward_gate_stack] = True
+
+_feed_forward_halting = _feed_forward_stack.child("Feed-Forward Halting Options")
+FF_STACK_HALTING_FLAG: Annotated[bool, _feed_forward_halting] = False
+FF_HALTING_OPTION: Annotated[type[HaltingConfig], _feed_forward_halting] = (
+    StickBreakingConfig
+)
+FF_HALTING_THRESHOLD: Annotated[float, _feed_forward_halting] = 0.999
+FF_HALTING_DROPOUT: Annotated[float, _feed_forward_halting] = 0.0
+FF_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _feed_forward_halting
+] = HaltingHiddenStateModeOptions.RAW
+
+_feed_forward_halting_stack = _feed_forward_halting.child(
+    "Feed-Forward Halting Stack Options"
+)
+FF_HALTING_STACK_INDEPENDENT_FLAG: Annotated[bool, _feed_forward_halting_stack] = False
+FF_HALTING_STACK_HIDDEN_DIM: Annotated[int | None, _feed_forward_halting_stack] = None
+FF_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _feed_forward_halting_stack
+] = LayerNormPositionOptions.DISABLED
+FF_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_NUM_LAYERS: Annotated[int | None, _feed_forward_halting_stack] = None
+FF_HALTING_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _feed_forward_halting_stack] = (
+    False
+)
+FF_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _feed_forward_halting_stack
+] = LastLayerBiasOptions.DISABLED
+FF_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _feed_forward_halting_stack
+] = None
+FF_HALTING_STACK_BIAS_FLAG: Annotated[bool | None, _feed_forward_halting_stack] = None
+
+_feed_forward_memory = _feed_forward_stack.child("Feed-Forward Memory Options")
+FF_MEMORY_FLAG: Annotated[bool, _feed_forward_memory] = False
+FF_MEMORY_NUM_MEMORY_SLOTS: Annotated[int, _feed_forward_memory] = 4
+FF_MEMORY_OPTION: Annotated[type[DynamicMemoryConfig], _feed_forward_memory] = (
+    GatedResidualDynamicMemoryConfig
+)
+FF_MEMORY_POSITION_OPTION: Annotated[MemoryPositionOptions, _feed_forward_memory] = (
+    MemoryPositionOptions.AFTER_AFFINE
+)
+FF_MEMORY_TEST_TIME_TRAINING_LEARNING_RATE: Annotated[
+    float | None, _feed_forward_memory
+] = None
+FF_MEMORY_TEST_TIME_TRAINING_NUM_INNER_STEPS: Annotated[
+    int | None, _feed_forward_memory
+] = None
+
+_feed_forward_memory_stack = _feed_forward_memory.child(
+    "Feed-Forward Memory Stack Options"
+)
+FF_MEMORY_STACK_INDEPENDENT_FLAG: Annotated[bool, _feed_forward_memory_stack] = False
+FF_MEMORY_STACK_HIDDEN_DIM: Annotated[int | None, _feed_forward_memory_stack] = None
+FF_MEMORY_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_NUM_LAYERS: Annotated[int | None, _feed_forward_memory_stack] = None
+FF_MEMORY_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _feed_forward_memory_stack] = False
+FF_MEMORY_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _feed_forward_memory_stack
+] = None
+FF_MEMORY_STACK_BIAS_FLAG: Annotated[bool | None, _feed_forward_memory_stack] = None
+
+_feed_forward_recurrent_layer = _feed_forward_stack.child(
+    "Feed-Forward Recurrent Layer Options"
+)
+FF_RECURRENT_FLAG: Annotated[bool, _feed_forward_recurrent_layer] = False
+FF_RECURRENT_MAX_STEPS: Annotated[int, _feed_forward_recurrent_layer] = 2
+FF_RECURRENT_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _feed_forward_recurrent_layer
+] = LayerNormPositionOptions.DISABLED
+FF_RECURRENT_NORMALIZATION: Annotated[
+    NormalizationOptions, _feed_forward_recurrent_layer
+] = NormalizationOptions.LAYER_NORM
+
+_feed_forward_recurrent_gate = _feed_forward_recurrent_layer.child(
+    "Feed-Forward Recurrent Gate Options"
+)
+FF_RECURRENT_STACK_GATE_FLAG: Annotated[bool, _feed_forward_recurrent_gate] = False
+FF_RECURRENT_GATE_OPTION: Annotated[
+    LayerGateOptions | None, _feed_forward_recurrent_gate
+] = LayerGateOptions.MULTIPLIER
+FF_RECURRENT_GATE_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_recurrent_gate
+] = ActivationOptions.SIGMOID
+
+_feed_forward_recurrent_gate_stack = _feed_forward_recurrent_gate.child(
+    "Feed-Forward Recurrent Gate Stack Options"
+)
+FF_RECURRENT_GATE_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _feed_forward_recurrent_gate_stack
+] = False
+FF_RECURRENT_GATE_STACK_HIDDEN_DIM: Annotated[
+    int | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_NUM_LAYERS: Annotated[
+    int | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _feed_forward_recurrent_gate_stack
+] = False
+FF_RECURRENT_GATE_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _feed_forward_recurrent_gate_stack
+] = None
+FF_RECURRENT_GATE_STACK_BIAS_FLAG: Annotated[
+    bool | None, _feed_forward_recurrent_gate_stack
+] = None
+
+_feed_forward_recurrent_halting = _feed_forward_recurrent_layer.child(
+    "Feed-Forward Recurrent Halting Options"
+)
+FF_RECURRENT_STACK_HALTING_FLAG: Annotated[bool, _feed_forward_recurrent_halting] = (
+    False
+)
+FF_RECURRENT_HALTING_OPTION: Annotated[
+    type[HaltingConfig], _feed_forward_recurrent_halting
+] = StickBreakingConfig
+FF_RECURRENT_HALTING_THRESHOLD: Annotated[float, _feed_forward_recurrent_halting] = (
+    0.999
+)
+FF_RECURRENT_HALTING_DROPOUT: Annotated[float, _feed_forward_recurrent_halting] = 0.0
+FF_RECURRENT_HALTING_HIDDEN_STATE_MODE: Annotated[
+    HaltingHiddenStateModeOptions, _feed_forward_recurrent_halting
+] = HaltingHiddenStateModeOptions.RAW
+
+_feed_forward_recurrent_halting_stack = _feed_forward_recurrent_halting.child(
+    "Feed-Forward Recurrent Halting Stack Options"
+)
+FF_RECURRENT_HALTING_STACK_INDEPENDENT_FLAG: Annotated[
+    bool, _feed_forward_recurrent_halting_stack
+] = False
+FF_RECURRENT_HALTING_STACK_HIDDEN_DIM: Annotated[
+    int | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_NUM_LAYERS: Annotated[
+    int | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_ACTIVATION: Annotated[
+    ActivationOptions | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_RESIDUAL_MODEL_FLAG: Annotated[
+    bool, _feed_forward_recurrent_halting_stack
+] = False
+FF_RECURRENT_HALTING_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_DROPOUT_PROBABILITY: Annotated[
+    float | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _feed_forward_recurrent_halting_stack
+] = None
+FF_RECURRENT_HALTING_STACK_BIAS_FLAG: Annotated[
+    bool | None, _feed_forward_recurrent_halting_stack
+] = None
+
+_transformer = Section(("Transformer Options",))
+ENCODER_NUM_LAYERS: Annotated[int, _transformer] = 3
+DECODER_NUM_LAYERS: Annotated[int, _transformer] = 3
+ENCODER_LAYER_NORM_POSITION: Annotated[LayerNormPositionOptions, _transformer] = (
+    LayerNormPositionOptions.BEFORE
+)
+ENCODER_NORMALIZATION: Annotated[NormalizationOptions, _transformer] = (
+    NormalizationOptions.RMS_NORM
+)
+ENCODER_OUTPUT_NORMALIZATION: Annotated[NormalizationOptions, _transformer] = (
+    NormalizationOptions.LAYER_NORM
+)
+DECODER_OUTPUT_NORMALIZATION: Annotated[NormalizationOptions, _transformer] = (
+    NormalizationOptions.LAYER_NORM
+)
+DECODER_LAYER_NORM_POSITION: Annotated[LayerNormPositionOptions, _transformer] = (
+    LayerNormPositionOptions.BEFORE
+)
+DECODER_NORMALIZATION: Annotated[NormalizationOptions, _transformer] = (
+    NormalizationOptions.RMS_NORM
+)
+ENCODER_ATTN_NUM_HEADS: Annotated[int, _transformer] = ATTN_NUM_HEADS
+DECODER_SELF_ATTN_NUM_HEADS: Annotated[int, _transformer] = ATTN_NUM_HEADS
+DECODER_CROSS_ATTN_NUM_HEADS: Annotated[int, _transformer] = ATTN_NUM_HEADS
+ENCODER_FEED_FORWARD_HIDDEN_DIM: Annotated[int, _transformer] = FF_STACK_HIDDEN_DIM
+DECODER_FEED_FORWARD_HIDDEN_DIM: Annotated[int, _transformer] = FF_STACK_HIDDEN_DIM
+ENCODER_FEED_FORWARD_NUM_LAYERS: Annotated[int, _transformer] = FF_NUM_LAYERS
+DECODER_FEED_FORWARD_NUM_LAYERS: Annotated[int, _transformer] = FF_NUM_LAYERS
+
+_mixture_of_experts = Section(("Mixture Of Experts Options",))
+EXPERT_ATTENTION_USE_KV_EXPERT_MODELS_FLAG: Annotated[
+    bool | None, _mixture_of_experts
+] = None
+NUM_EXPERTS: Annotated[int, _mixture_of_experts] = 4
+TOP_K: Annotated[int, _mixture_of_experts] = 2
+DROPPED_TOKEN_BEHAVIOR: Annotated[DroppedTokenOptions, _mixture_of_experts] = (
+    DroppedTokenOptions.ZEROS
+)
+COMPUTE_EXPERT_MIXTURE_FLAG: Annotated[bool, _mixture_of_experts] = True
+WEIGHTED_PARAMETERS_FLAG: Annotated[bool, _mixture_of_experts] = False
+WEIGHTING_POSITION_OPTION: Annotated[
+    ExpertWeightingPositionOptions, _mixture_of_experts
+] = ExpertWeightingPositionOptions.BEFORE_EXPERTS
+ROUTING_INITIALIZATION_MODE: Annotated[
+    RoutingInitializationMode, _mixture_of_experts
+] = RoutingInitializationMode.LAYER
+SAMPLER_THRESHOLD: Annotated[float, _mixture_of_experts] = 0.0
+SAMPLER_FILTER_ABOVE_THRESHOLD: Annotated[bool, _mixture_of_experts] = False
+SAMPLER_NUM_TOPK_SAMPLES: Annotated[int, _mixture_of_experts] = 0
+NORMALIZE_PROBABILITIES_FLAG: Annotated[bool, _mixture_of_experts] = True
+SAMPLER_NOISY_TOPK_FLAG: Annotated[bool, _mixture_of_experts] = False
+COEFFICIENT_OF_VARIATION_LOSS_WEIGHT: Annotated[float, _mixture_of_experts] = 0.0
+SWITCH_LOSS_WEIGHT: Annotated[float, _mixture_of_experts] = 0.0
+ZERO_CENTRED_LOSS_WEIGHT: Annotated[float, _mixture_of_experts] = 0.0
+MUTUAL_INFORMATION_LOSS_WEIGHT: Annotated[float, _mixture_of_experts] = 0.0
+CAPACITY_FACTOR: Annotated[float, _mixture_of_experts] = 0.0
+ROUTER_NOISY_TOPK_FLAG: Annotated[bool, _mixture_of_experts] = False
+
+_adaptive_parameter = Section(("Adaptive Parameter Options",))
+_CONFIG_FIELD_METADATA_ALIASES: Annotated[dict[str, str], _adaptive_parameter] = {}
+
+# Grouping accepts all-valid fixed sequences. None leaves generation per row.
+GROUPING_SCOPE: Annotated[
+    AdaptiveParameterGroupingScopeOptions | None, _adaptive_parameter
+] = None
+GROUP_COUNT: Annotated[int | None, _adaptive_parameter] = None
+# Tokens per chunk; final incomplete chunks are padded internally.
+CHUNK_SIZE: Annotated[int | None, _adaptive_parameter] = None
+GROUPING_SEQUENCE_LENGTH: Annotated[int | None, _adaptive_parameter] = None
+GROUPING_INPUT_ORDER: Annotated[
+    AdaptiveParameterInputOrderOptions | None, _adaptive_parameter
+] = None
+# Chunk reducer: SUM, MEAN, MEAN_STD, ATTENTION, or RMS. None uses SUM.
+GROUPING_METHOD: Annotated[type[GroupingConfig] | None, _adaptive_parameter] = None
+# Summary normalization: DISABLED or RMS_NORM. None uses DISABLED.
+GROUPING_SUMMARY_NORMALIZATION: Annotated[
+    SummaryNormalizationOptions | None, _adaptive_parameter
+] = None
+# ATTENTION scorer width. None preserves the supplied attention model width.
+GROUPING_MODEL_CONFIG: Annotated[ConfigBase | None, _adaptive_parameter] = None
+GROUPING_ATTENTION_HIDDEN_DIM: Annotated[int | None, _adaptive_parameter] = None
+# RMS_NORM epsilon. None uses 1e-6 when summary normalization is selected.
+GROUPING_RMS_NORM_EPSILON: Annotated[float | None, _adaptive_parameter] = None
+WEIGHT_INPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _adaptive_parameter
+] = None
+WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
+    LowRankFactorSourceOptions | None, _adaptive_parameter
+] = None
+WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _adaptive_parameter] = None
+BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _adaptive_parameter] = None
+WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _adaptive_parameter] = None
+BIAS_MIXTURE_TOP_K: Annotated[int | None, _adaptive_parameter] = None
+WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _adaptive_parameter
+] = None
+BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
+    bool | None, _adaptive_parameter
+] = None
+WEIGHT_OPTION_FLAG: Annotated[bool, _adaptive_parameter] = True
+WEIGHT_OPTION: Annotated[type[DynamicWeightConfig] | None, _adaptive_parameter] = None
+GENERATOR_DEPTH: Annotated[int, _adaptive_parameter] = 1
+WEIGHT_DECAY_SCHEDULE: Annotated[WeightDecayScheduleOptions, _adaptive_parameter] = (
+    WeightDecayScheduleOptions.DISABLED
+)
+WEIGHT_DECAY_RATE: Annotated[float, _adaptive_parameter] = 0.0
+WEIGHT_DECAY_WARMUP_BATCHES: Annotated[int, _adaptive_parameter] = 0
+WEIGHT_NORMALIZATION_OPTION: Annotated[
+    WeightNormalizationOptions, _adaptive_parameter
+] = WeightNormalizationOptions.DISABLED
+WEIGHT_NORMALIZATION_LEARNABLE_SCALE_FLAG: Annotated[bool, _adaptive_parameter] = False
+WEIGHT_NORMALIZATION_POSITION_OPTION: Annotated[
+    WeightNormalizationPositionOptions, _adaptive_parameter
+] = WeightNormalizationPositionOptions.DISABLED
+WEIGHT_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _adaptive_parameter
+] = BankExpansionFactorOptions.FACTOR_OF_ONE
+BIAS_OPTION_FLAG: Annotated[bool, _adaptive_parameter] = True
+BIAS_OPTION: Annotated[type[DynamicBiasConfig] | None, _adaptive_parameter] = None
+BIAS_DECAY_SCHEDULE: Annotated[WeightDecayScheduleOptions, _adaptive_parameter] = (
+    WeightDecayScheduleOptions.DISABLED
+)
+BIAS_DECAY_RATE: Annotated[float, _adaptive_parameter] = 0.0
+BIAS_DECAY_WARMUP_BATCHES: Annotated[int, _adaptive_parameter] = 0
+BIAS_BANK_EXPANSION_FACTOR: Annotated[
+    BankExpansionFactorOptions, _adaptive_parameter
+] = BankExpansionFactorOptions.FACTOR_OF_ONE
+DIAGONAL_OPTION_FLAG: Annotated[bool, _adaptive_parameter] = True
+DIAGONAL_OPTION: Annotated[type[DynamicDiagonalConfig] | None, _adaptive_parameter] = (
+    None
+)
+MASK_OPTION_FLAG: Annotated[bool, _adaptive_parameter] = True
+ROW_MASK_OPTION: Annotated[type[AxisMaskConfig] | None, _adaptive_parameter] = None
+MASK_THRESHOLD: Annotated[float, _adaptive_parameter] = 0.5
+MASK_SURROGATE_SCALE: Annotated[float, _adaptive_parameter] = 1.0
+MASK_FLOOR: Annotated[float, _adaptive_parameter] = 0.0
+MASK_DIMENSION_OPTION: Annotated[MaskDimensionOptions, _adaptive_parameter] = (
+    MaskDimensionOptions.ROW
+)
+MASK_TRANSITION_WIDTH: Annotated[float, _adaptive_parameter] = 0.1
+
+ADAPTIVE_GENERATOR_STACK_HIDDEN_DIM: Annotated[int, _adaptive_parameter] = 64
+ADAPTIVE_GENERATOR_STACK_NUM_LAYERS: Annotated[int, _adaptive_parameter] = 1
+ADAPTIVE_GENERATOR_STACK_ACTIVATION: Annotated[
+    ActivationOptions, _adaptive_parameter
+] = ActivationOptions.RELU
+ADAPTIVE_GENERATOR_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions, _adaptive_parameter
+] = LayerNormPositionOptions.DISABLED
+ADAPTIVE_GENERATOR_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions, _adaptive_parameter
+] = NormalizationOptions.RMS_NORM
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _adaptive_parameter
+] = None
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _adaptive_parameter] = (
+    False
+)
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE: Annotated[
+    int | None, _adaptive_parameter
+] = None
+ADAPTIVE_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[
+    float | None, _adaptive_parameter
+] = None
+ADAPTIVE_GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[float, _adaptive_parameter] = (
+    0.0
+)
+ADAPTIVE_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions, _adaptive_parameter
+] = LastLayerBiasOptions.DEFAULT
+ADAPTIVE_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool, _adaptive_parameter
+] = False
+ADAPTIVE_GENERATOR_STACK_BIAS_FLAG: Annotated[bool, _adaptive_parameter] = True
+
+_COMPONENT_GENERATOR_DEFAULTS: Annotated[
+    dict[str, bool | None], _adaptive_parameter
+] = {
     "INDEPENDENT_FLAG": False,
     "HIDDEN_DIM": None,
     "NUM_LAYERS": None,
@@ -575,20 +1008,21 @@ for _component in (
     for _suffix, _value in _COMPONENT_GENERATOR_DEFAULTS.items():
         _target = f"{_component}_GENERATOR_STACK_{_suffix}"
         globals()[_target] = _value
-        _source_suffix = "HIDDEN_DIM" if _suffix == "INDEPENDENT_FLAG" else _suffix
+        _source_suffix = _suffix
+        if _suffix == "INDEPENDENT_FLAG":
+            _source_suffix = "HIDDEN_DIM"
         _source = f"ADAPTIVE_GENERATOR_STACK_{_source_suffix}"
         _CONFIG_FIELD_METADATA_ALIASES[_target] = _source
         if _suffix == "INDEPENDENT_FLAG":
             _annotations[_target] = bool
         elif _source in _annotations:
-            _annotations[_target] = (
-                _annotations[_source]
-                if _value is not None
-                else _annotations[_source] | None
-            )
+            _value_type = without_inspection_section(_annotations[_source])
+            if _value is None:
+                _value_type = _value_type | None
+            _annotations[_target] = _value_type
 
 
-_ADAPTIVE_DEFAULT_NAMES = {
+_ADAPTIVE_DEFAULT_NAMES: Annotated[dict[str, str], _adaptive_parameter] = {
     "WEIGHT_INPUT_FACTOR_SOURCE": "WEIGHT_INPUT_FACTOR_SOURCE",
     "WEIGHT_OUTPUT_FACTOR_SOURCE": "WEIGHT_OUTPUT_FACTOR_SOURCE",
     "WEIGHT_MIXTURE_NUM_EXPERTS": "WEIGHT_MIXTURE_NUM_EXPERTS",
@@ -659,11 +1093,16 @@ def _copy_adaptive_runtime_defaults(
     annotations = globals().setdefault("__annotations__", {})
     for suffix, source in _ADAPTIVE_DEFAULT_NAMES.items():
         target = f"{target_prefix}{suffix}"
-        globals()[target] = None if inherit_shared else globals()[source]
+        if inherit_shared:
+            globals()[target] = None
+        else:
+            globals()[target] = globals()[source]
         _CONFIG_FIELD_METADATA_ALIASES[target] = source
-        if source in annotations:
-            annotation = annotations[source]
-            annotations[target] = annotation | None if inherit_shared else annotation
+        if source in annotations and target not in annotations:
+            annotation = without_inspection_section(annotations[source])
+            if inherit_shared:
+                annotation = annotation | None
+            annotations[target] = annotation
 
 
 for _adaptive_target_prefix in (
@@ -700,109 +1139,124 @@ del (
     _value,
 )
 
-# Controller Options
-STACK_GATE_FLAG = False
-STACK_HALTING_FLAG = False
-HALTING_THRESHOLD: float | None = None
-MEMORY_FLAG = False
-RECURRENT_FLAG = False
-RECURRENT_STACK_GATE_FLAG = False
-RECURRENT_STACK_HALTING_FLAG = False
-RECURRENT_HALTING_THRESHOLD: float | None = None
-RECURRENT_MAX_STEPS = 2
-RECURRENT_INITIAL_ITERATIONS: int = 2
-RECURRENT_GRADIENT_TRANSITION_COUNT: int | None = None
-RECURRENT_NO_GRADIENT_TRANSITION_COUNT: int | None = None
-RECURRENT_ITERATION_INCREMENT: int = 1
-RECURRENT_FORWARD_CALLS_BEFORE_ITERATION_INCREMENT: int = 1
-RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG: bool = False
-RECURRENT_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RECURRENT_RESIDUAL_MODEL_FLAG: bool = False
-RECURRENT_RESIDUAL_BLOCK_SIZE: int | None = None
-RECURRENT_RESIDUAL_RMS_NORM_EPSILON: float | None = None
+_controller = Section(("Controller Options",))
+STACK_GATE_FLAG: Annotated[bool, _controller] = False
+STACK_HALTING_FLAG: Annotated[bool, _controller] = False
+HALTING_THRESHOLD: Annotated[float | None, _controller] = None
+MEMORY_FLAG: Annotated[bool, _controller] = False
+RECURRENT_FLAG: Annotated[bool, _controller] = False
+RECURRENT_STACK_GATE_FLAG: Annotated[bool, _controller] = False
+RECURRENT_STACK_HALTING_FLAG: Annotated[bool, _controller] = False
+RECURRENT_HALTING_THRESHOLD: Annotated[float | None, _controller] = None
+RECURRENT_MAX_STEPS: Annotated[int, _controller] = 2
+RECURRENT_INITIAL_ITERATIONS: Annotated[int, _controller] = 2
+RECURRENT_GRADIENT_TRANSITION_COUNT: Annotated[int | None, _controller] = None
+RECURRENT_NO_GRADIENT_TRANSITION_COUNT: Annotated[int | None, _controller] = None
+RECURRENT_ITERATION_INCREMENT: Annotated[int, _controller] = 1
+RECURRENT_FORWARD_CALLS_BEFORE_ITERATION_INCREMENT: Annotated[int, _controller] = 1
+RECURRENT_SMOOTH_ITERATION_GROWTH_FLAG: Annotated[bool, _controller] = False
+RECURRENT_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _controller
+] = None
+RECURRENT_RESIDUAL_MODEL_FLAG: Annotated[bool, _controller] = False
+RECURRENT_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _controller] = None
+RECURRENT_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _controller] = None
 
-## Residual Options
+_residual = _controller.child("Residual Options")
 # - False uses the residual variant's learned query or coefficient parameters.
 # - True uses the residual stack for input-dependent queries or coefficients.
 # - For every attention residual selector, supply its RESIDUAL_BLOCK_SIZE and
 #   RESIDUAL_RMS_NORM_EPSILON explicitly (suggested: 1 for full attention, 1e-6).
-STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-STACK_RESIDUAL_MODEL_FLAG: bool = False
-STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
+STACK_RESIDUAL_CONNECTION_OPTION: Annotated[type[ResidualConfig] | None, _residual] = (
+    None
+)
+STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual] = False
+STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual] = None
+STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual] = None
 # - Applies to scalar and model-generated weighted residual coefficients.
 #   SIGMOID is recommended; DISABLED leaves the raw coefficient unchanged.
-RESIDUAL_COEFFICIENT_ACTIVATION: ActivationOptions = ActivationOptions.SIGMOID
+RESIDUAL_COEFFICIENT_ACTIVATION: Annotated[ActivationOptions, _residual] = (
+    ActivationOptions.SIGMOID
+)
 
-### Residual Stack Options
+_residual_stack = _residual.child("Residual Stack Options")
 # - If False, residual stack options inherit layer stack submodule options.
-RESIDUAL_STACK_INDEPENDENT_FLAG: bool = False
-RESIDUAL_STACK_HIDDEN_DIM: int | None = None
-RESIDUAL_STACK_LAYER_NORM_POSITION: LayerNormPositionOptions | None = None
-RESIDUAL_STACK_NORMALIZATION: NormalizationOptions | None = None
-RESIDUAL_STACK_NUM_LAYERS: int | None = None
-RESIDUAL_STACK_ACTIVATION: ActivationOptions | None = None
-RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: type[ResidualConfig] | None = None
-RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: bool = False
-RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: int | None = None
-RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: float | None = None
-RESIDUAL_STACK_DROPOUT_PROBABILITY: float | None = None
-RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: LastLayerBiasOptions | None = None
-RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: bool | None = None
-RESIDUAL_STACK_BIAS_FLAG: bool | None = None
+RESIDUAL_STACK_INDEPENDENT_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_HIDDEN_DIM: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_LAYER_NORM_POSITION: Annotated[
+    LayerNormPositionOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NORMALIZATION: Annotated[
+    NormalizationOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_NUM_LAYERS: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_ACTIVATION: Annotated[ActivationOptions | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION: Annotated[
+    type[ResidualConfig] | None, _residual_stack
+] = None
+RESIDUAL_STACK_RESIDUAL_MODEL_FLAG: Annotated[bool, _residual_stack] = False
+RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE: Annotated[int | None, _residual_stack] = None
+RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON: Annotated[float | None, _residual_stack] = (
+    None
+)
+RESIDUAL_STACK_DROPOUT_PROBABILITY: Annotated[float | None, _residual_stack] = None
+RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION: Annotated[
+    LastLayerBiasOptions | None, _residual_stack
+] = None
+RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
+    bool | None, _residual_stack
+] = None
+RESIDUAL_STACK_BIAS_FLAG: Annotated[bool | None, _residual_stack] = None
 
 
-# Trainer
-NUM_EPOCHS = 30
-TRAINER_ACCELERATOR: str = "auto"
-TRAINER_DEVICES: str | int = "auto"
-TRAINER_ACCUMULATE_GRAD_BATCHES: int = 1
-TRAINER_PRECISION: str = "32-true"
-TRAINER_DETERMINISTIC = True
-TRAINER_BENCHMARK: bool = False
-TRAINER_MAX_STEPS: int = -1
-TRAINER_MAX_TIME: str | None = None
-TRAINER_VAL_CHECK_INTERVAL: float = 1.0
-TRAINER_LIMIT_TRAIN_BATCHES: float = 1.0
-TRAINER_LIMIT_VAL_BATCHES: float = 1.0
-TRAINER_OVERFIT_BATCHES: int | float = 0.0
-TRAINER_NUM_SANITY_VAL_STEPS: int = 2
-TRAINER_GRADIENT_CLIP_VAL = 1.0
-TRAINER_GRADIENT_CLIP_ALGORITHM = "norm"
-TRAINER_LOG_EVERY_N_STEPS = 10
-TRAINER_ENABLE_PROGRESS_BAR: bool = False
-TRAINER_ENABLE_CHECKPOINTING: bool = False
-TRAINER_ENABLE_MODEL_SUMMARY: bool = False
-TRAINER_PROFILER: str | None = None
+_trainer = Section(("Trainer",))
+NUM_EPOCHS: Annotated[int, _trainer] = 30
+TRAINER_ACCELERATOR: Annotated[str, _trainer] = "auto"
+TRAINER_DEVICES: Annotated[str | int, _trainer] = "auto"
+TRAINER_ACCUMULATE_GRAD_BATCHES: Annotated[int, _trainer] = 1
+TRAINER_PRECISION: Annotated[str, _trainer] = "32-true"
+TRAINER_DETERMINISTIC: Annotated[bool, _trainer] = True
+TRAINER_BENCHMARK: Annotated[bool, _trainer] = False
+TRAINER_MAX_STEPS: Annotated[int, _trainer] = -1
+TRAINER_MAX_TIME: Annotated[str | None, _trainer] = None
+TRAINER_VAL_CHECK_INTERVAL: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_TRAIN_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_LIMIT_VAL_BATCHES: Annotated[float, _trainer] = 1.0
+TRAINER_OVERFIT_BATCHES: Annotated[int | float, _trainer] = 0.0
+TRAINER_NUM_SANITY_VAL_STEPS: Annotated[int, _trainer] = 2
+TRAINER_GRADIENT_CLIP_VAL: Annotated[float, _trainer] = 1.0
+TRAINER_GRADIENT_CLIP_ALGORITHM: Annotated[str, _trainer] = "norm"
+TRAINER_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 10
+TRAINER_ENABLE_PROGRESS_BAR: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_CHECKPOINTING: Annotated[bool, _trainer] = False
+TRAINER_ENABLE_MODEL_SUMMARY: Annotated[bool, _trainer] = False
+TRAINER_PROFILER: Annotated[str | None, _trainer] = None
 
-MONITOR_LOG_EVERY_N_STEPS: int = 100
+MONITOR_LOG_EVERY_N_STEPS: Annotated[int, _trainer] = 100
 
-# Callback
-CALLBACK_EARLY_STOPPING_PATIENCE = 5
-CALLBACK_EARLY_STOPPING_METRIC = "validation/loss"
-CALLBACK_EARLY_STOPPING_MIN_DELTA = 0.0
-CALLBACK_EARLY_STOPPING_STRICT = True
-CALLBACK_EARLY_STOPPING_CHECK_FINITE = True
-CALLBACK_CHECKPOINT_FLAG = False
+_callback = Section(("Callback",))
+CALLBACK_EARLY_STOPPING_PATIENCE: Annotated[int, _callback] = 5
+CALLBACK_EARLY_STOPPING_METRIC: Annotated[str, _callback] = "validation/loss"
+CALLBACK_EARLY_STOPPING_MIN_DELTA: Annotated[float, _callback] = 0.0
+CALLBACK_EARLY_STOPPING_STRICT: Annotated[bool, _callback] = True
+CALLBACK_EARLY_STOPPING_CHECK_FINITE: Annotated[bool, _callback] = True
+CALLBACK_CHECKPOINT_FLAG: Annotated[bool, _callback] = False
 
-# Run
-DATA_NUM_WORKERS = 0
-RUN_TEST_AFTER_FIT = True
-SEED: int | None = 0
+_run = Section(("Run",))
+DATA_NUM_WORKERS: Annotated[int, _run] = 0
+RUN_TEST_AFTER_FIT: Annotated[bool, _run] = True
+SEED: Annotated[int | None, _run] = 0
 
 
 def _copy_path_runtime_defaults(source_prefix: str, target_prefix: str) -> None:
-    annotations = globals().setdefault("__annotations__", {})
     for name, value in tuple(globals().items()):
         if not name.isupper() or not name.startswith(source_prefix):
             continue
         target = f"{target_prefix}{name.removeprefix(source_prefix)}"
-        globals()[target] = (
-            False if target == "DECODER_CROSS_ATTN_SOURCE_MEMORY_FLAG" else value
-        )
+        if target == "DECODER_CROSS_ATTN_SOURCE_MEMORY_FLAG":
+            value = False
+        globals()[target] = value
         _CONFIG_FIELD_METADATA_ALIASES[target] = name
-        if name in annotations:
-            annotations[target] = annotations[name]
 
 
 for _target_prefix in (
@@ -816,51 +1270,76 @@ for _target_prefix in ("ENCODER_FF_", "DECODER_FF_"):
 for _target_prefix in ("ROUTER_", "EXPERT_"):
     _copy_path_runtime_defaults("FF_", _target_prefix)
 
-ENCODER_FF_STACK_HIDDEN_DIM = ENCODER_FEED_FORWARD_HIDDEN_DIM
-DECODER_FF_STACK_HIDDEN_DIM = DECODER_FEED_FORWARD_HIDDEN_DIM
-ENCODER_FF_NUM_LAYERS = ENCODER_FEED_FORWARD_NUM_LAYERS
-DECODER_FF_NUM_LAYERS = DECODER_FEED_FORWARD_NUM_LAYERS
-ROUTER_STACK_HIDDEN_DIM = MODEL_DIM
-ROUTER_STACK_NUM_LAYERS = 2
-ROUTER_STACK_ACTIVATION = ActivationOptions.GELU
-EXPERT_STACK_HIDDEN_DIM = MODEL_DIM
-EXPERT_STACK_NUM_LAYERS = 1
-EXPERT_STACK_ACTIVATION = ActivationOptions.RELU
+ENCODER_FF_STACK_HIDDEN_DIM: Annotated[int, _run] = ENCODER_FEED_FORWARD_HIDDEN_DIM
+DECODER_FF_STACK_HIDDEN_DIM: Annotated[int, _run] = DECODER_FEED_FORWARD_HIDDEN_DIM
+ENCODER_FF_NUM_LAYERS: Annotated[int, _run] = ENCODER_FEED_FORWARD_NUM_LAYERS
+DECODER_FF_NUM_LAYERS: Annotated[int, _run] = DECODER_FEED_FORWARD_NUM_LAYERS
+ROUTER_STACK_HIDDEN_DIM: Annotated[int, _run] = MODEL_DIM
+ROUTER_STACK_NUM_LAYERS: Annotated[int, _run] = 2
+ROUTER_STACK_ACTIVATION: Annotated[ActivationOptions, _run] = ActivationOptions.GELU
+EXPERT_STACK_HIDDEN_DIM: Annotated[int, _run] = MODEL_DIM
+EXPERT_STACK_NUM_LAYERS: Annotated[int, _run] = 1
+EXPERT_STACK_ACTIVATION: Annotated[ActivationOptions, _run] = ActivationOptions.RELU
+
+inherit_alias_annotations(__annotations__, _CONFIG_FIELD_METADATA_ALIASES)
 
 del _target_prefix
 
 
-# Sequence Expansion
-SEQUENCE_EXPANSION_FLAG: bool = False
-SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
-SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
-SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
-SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+_sequence_expansion = Section(("Sequence Expansion",))
+SEQUENCE_EXPANSION_FLAG: Annotated[bool, _sequence_expansion] = False
+SEQUENCE_EXPANSION_CONFIG: Annotated[
+    SequenceExpansionConfig | None, _sequence_expansion
+] = None
+SEQUENCE_EXPANSION_MAX_NEW_TOKENS: Annotated[int | None, _sequence_expansion] = None
+SEQUENCE_EXPANSION_MODEL_CONFIG: Annotated[ConfigBase | None, _sequence_expansion] = (
+    None
+)
+SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
     TextLearnedPositionalEmbeddingConfig
     | TextSinusoidalPositionalEmbeddingConfig
-    | None
-) = None
+    | None,
+    _sequence_expansion,
+] = None
 
-# Encoder Sequence Expansion
-ENCODER_SEQUENCE_EXPANSION_FLAG: bool | None = None
-ENCODER_SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
-ENCODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
-ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
-ENCODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+_encoder_sequence_expansion = Section(("Encoder Sequence Expansion",))
+ENCODER_SEQUENCE_EXPANSION_FLAG: Annotated[bool | None, _encoder_sequence_expansion] = (
+    None
+)
+ENCODER_SEQUENCE_EXPANSION_CONFIG: Annotated[
+    SequenceExpansionConfig | None, _encoder_sequence_expansion
+] = None
+ENCODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: Annotated[
+    int | None, _encoder_sequence_expansion
+] = None
+ENCODER_SEQUENCE_EXPANSION_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _encoder_sequence_expansion
+] = None
+ENCODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
     TextLearnedPositionalEmbeddingConfig
     | TextSinusoidalPositionalEmbeddingConfig
-    | None
-) = None
+    | None,
+    _encoder_sequence_expansion,
+] = None
 
-# Decoder Sequence Expansion
-DECODER_SEQUENCE_EXPANSION_FLAG: bool | None = None
-DECODER_SEQUENCE_EXPANSION_CONFIG: SequenceExpansionConfig | None = None
-DECODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: int | None = None
-DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG: ConfigBase | None = None
-DECODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: (
+_decoder_sequence_expansion = Section(("Decoder Sequence Expansion",))
+DECODER_SEQUENCE_EXPANSION_FLAG: Annotated[bool | None, _decoder_sequence_expansion] = (
+    None
+)
+DECODER_SEQUENCE_EXPANSION_CONFIG: Annotated[
+    SequenceExpansionConfig | None, _decoder_sequence_expansion
+] = None
+DECODER_SEQUENCE_EXPANSION_MAX_NEW_TOKENS: Annotated[
+    int | None, _decoder_sequence_expansion
+] = None
+DECODER_SEQUENCE_EXPANSION_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _decoder_sequence_expansion
+] = None
+DECODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
     TextLearnedPositionalEmbeddingConfig
     | TextSinusoidalPositionalEmbeddingConfig
-    | None
-) = None
+    | None,
+    _decoder_sequence_expansion,
+] = None
 
 _component_defaults.declare_component_defaults(globals())
