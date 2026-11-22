@@ -11,10 +11,12 @@ from emperor.augmentations.adaptive_parameters import (
     MeanStdGroupingConfig,
 )
 from model_runtime.packages.runtime_values import validate_runtime_default_values
+from models import _attention_settings, _learned_grouping, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models import _learned_grouping, _sequence_expansion
+from models._flat_updates import pop_prefixed_updates as _pop_updates
 
 from . import config
+from ._validation import validate_runtime
 from .runtime_options import (
     AdaptiveParameterOptions,
     ControllerStackOptions,
@@ -304,49 +306,63 @@ def adaptive_options_from_config(
     config_module: ModuleType,
     prefix: str,
 ) -> AdaptiveParameterOptions:
+    weight_input_factor_source = getattr(
+        config_module, f"{prefix}_WEIGHT_INPUT_FACTOR_SOURCE"
+    )
+    weight_output_factor_source = getattr(
+        config_module, f"{prefix}_WEIGHT_OUTPUT_FACTOR_SOURCE"
+    )
+    weight_mixture_num_experts = getattr(
+        config_module, f"{prefix}_WEIGHT_MIXTURE_NUM_EXPERTS"
+    )
+    bias_mixture_num_experts = getattr(
+        config_module, f"{prefix}_BIAS_MIXTURE_NUM_EXPERTS"
+    )
+    weight_mixture_top_k = getattr(config_module, f"{prefix}_WEIGHT_MIXTURE_TOP_K")
+    bias_mixture_top_k = getattr(config_module, f"{prefix}_BIAS_MIXTURE_TOP_K")
+    weight_mixture_normalize_probabilities_flag = getattr(
+        config_module, f"{prefix}_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
+    )
+    bias_mixture_normalize_probabilities_flag = getattr(
+        config_module, f"{prefix}_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
+    )
+    weight_input_factor_generator_stack_options = _controller_stack_from_config(
+        config_module, f"{prefix}_WEIGHT_INPUT_FACTOR_GENERATOR_STACK"
+    )
+    weight_output_factor_generator_stack_options = _controller_stack_from_config(
+        config_module, f"{prefix}_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK"
+    )
+    weight_coefficient_generator_stack_options = _controller_stack_from_config(
+        config_module, f"{prefix}_WEIGHT_COEFFICIENT_GENERATOR_STACK"
+    )
+    weight_mixture_router_generator_stack_options = _controller_stack_from_config(
+        config_module, f"{prefix}_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK"
+    )
+    bias_mixture_router_generator_stack_options = _controller_stack_from_config(
+        config_module, f"{prefix}_BIAS_MIXTURE_ROUTER_GENERATOR_STACK"
+    )
+    grouping_config = _learned_grouping.grouping_from_fields(
+        {
+            field: getattr(config_module, f"{prefix}_{field.upper()}")
+            for field in _learned_grouping.GROUPING_FIELDS
+        },
+        prefix=prefix,
+    )
     return AdaptiveParameterOptions(
-        weight_input_factor_source=getattr(
-            config_module, f"{prefix}_WEIGHT_INPUT_FACTOR_SOURCE"
-        ),
-        weight_output_factor_source=getattr(
-            config_module, f"{prefix}_WEIGHT_OUTPUT_FACTOR_SOURCE"
-        ),
-        weight_mixture_num_experts=getattr(
-            config_module, f"{prefix}_WEIGHT_MIXTURE_NUM_EXPERTS"
-        ),
-        bias_mixture_num_experts=getattr(
-            config_module, f"{prefix}_BIAS_MIXTURE_NUM_EXPERTS"
-        ),
-        weight_mixture_top_k=getattr(config_module, f"{prefix}_WEIGHT_MIXTURE_TOP_K"),
-        bias_mixture_top_k=getattr(config_module, f"{prefix}_BIAS_MIXTURE_TOP_K"),
-        weight_mixture_normalize_probabilities_flag=getattr(
-            config_module, f"{prefix}_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
-        ),
-        bias_mixture_normalize_probabilities_flag=getattr(
-            config_module, f"{prefix}_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
-        ),
-        weight_input_factor_generator_stack_options=_controller_stack_from_config(
-            config_module, f"{prefix}_WEIGHT_INPUT_FACTOR_GENERATOR_STACK"
-        ),
-        weight_output_factor_generator_stack_options=_controller_stack_from_config(
-            config_module, f"{prefix}_WEIGHT_OUTPUT_FACTOR_GENERATOR_STACK"
-        ),
-        weight_coefficient_generator_stack_options=_controller_stack_from_config(
-            config_module, f"{prefix}_WEIGHT_COEFFICIENT_GENERATOR_STACK"
-        ),
-        weight_mixture_router_generator_stack_options=_controller_stack_from_config(
-            config_module, f"{prefix}_WEIGHT_MIXTURE_ROUTER_GENERATOR_STACK"
-        ),
-        bias_mixture_router_generator_stack_options=_controller_stack_from_config(
-            config_module, f"{prefix}_BIAS_MIXTURE_ROUTER_GENERATOR_STACK"
-        ),
-        grouping_config=_learned_grouping.grouping_from_fields(
-            {
-                field: getattr(config_module, f"{prefix}_{field.upper()}")
-                for field in _learned_grouping.GROUPING_FIELDS
-            },
-            prefix=prefix,
-        ),
+        weight_input_factor_source=weight_input_factor_source,
+        weight_output_factor_source=weight_output_factor_source,
+        weight_mixture_num_experts=weight_mixture_num_experts,
+        bias_mixture_num_experts=bias_mixture_num_experts,
+        weight_mixture_top_k=weight_mixture_top_k,
+        bias_mixture_top_k=bias_mixture_top_k,
+        weight_mixture_normalize_probabilities_flag=weight_mixture_normalize_probabilities_flag,
+        bias_mixture_normalize_probabilities_flag=bias_mixture_normalize_probabilities_flag,
+        weight_input_factor_generator_stack_options=weight_input_factor_generator_stack_options,
+        weight_output_factor_generator_stack_options=weight_output_factor_generator_stack_options,
+        weight_coefficient_generator_stack_options=weight_coefficient_generator_stack_options,
+        weight_mixture_router_generator_stack_options=weight_mixture_router_generator_stack_options,
+        bias_mixture_router_generator_stack_options=bias_mixture_router_generator_stack_options,
+        grouping_config=grouping_config,
         weight_option_flag=getattr(config_module, f"{prefix}_WEIGHT_OPTION_FLAG"),
         weight_option=getattr(config_module, f"{prefix}_WEIGHT_OPTION"),
         generator_depth=getattr(config_module, f"{prefix}_GENERATOR_DEPTH"),
@@ -499,123 +515,81 @@ _STACK_OPTION_FIELDS = (
 _CONTROLLER_STACK_FIELDS = ("independent_flag", *_STACK_OPTION_FIELDS)
 
 
-def _path_field_map(*, attention: bool) -> dict[str, tuple[str, str]]:
-    mapping = {
-        "num_layers": ("stack", "num_layers"),
-        "bias_flag": ("stack", "bias_flag"),
-        "stack_num_layers": ("stack", "num_layers"),
-        "stack_bias_flag": ("stack", "bias_flag"),
+def _path_field_map(*, attention: bool) -> dict[str, tuple[str, ...]]:
+    # Preserve the override order when both a short and a stack-prefixed alias are supplied.
+    mapping: dict[str, tuple[str, ...]] = {
+        "num_layers": ("stack_options", "num_layers"),
+        "bias_flag": ("stack_options", "bias_flag"),
+        "stack_num_layers": ("stack_options", "num_layers"),
+        "stack_bias_flag": ("stack_options", "bias_flag"),
     }
     if attention:
-        mapping.update(
-            {
-                "num_heads": ("path", "num_heads"),
-                "add_key_value_bias_flag": (
-                    "path",
-                    "add_key_value_bias_flag",
-                ),
-                "zero_attention_flag": ("path", "zero_attention_flag"),
-                "source_memory_flag": ("path", "source_memory_flag"),
-                **{
-                    name: ("path", name) for name in _source_memory.SOURCE_MEMORY_FIELDS
-                },
-            }
-        )
-    for field_name in _STACK_OPTION_FIELDS:
-        if field_name not in {"num_layers", "bias_flag"}:
-            mapping[f"stack_{field_name}"] = ("stack", field_name)
-    mapping.update(
-        {
-            "stack_gate_flag": ("controller", "stack_gate_flag"),
-            "gate_option": ("controller", "gate_option"),
-            "gate_activation": ("controller", "gate_activation"),
-            "stack_halting_flag": ("controller", "stack_halting_flag"),
-            "halting_option": ("controller", "halting_option"),
-            "halting_threshold": ("controller", "halting_threshold"),
-            "halting_dropout": ("controller", "halting_dropout"),
-            "halting_hidden_state_mode": (
-                "controller",
+        for name in (
+            "num_heads",
+            "add_key_value_bias_flag",
+            "zero_attention_flag",
+            "source_memory_flag",
+            *_source_memory.SOURCE_MEMORY_FIELDS,
+        ):
+            mapping[name] = (name,)
+    for name in _STACK_OPTION_FIELDS:
+        mapping[f"stack_{name}"] = ("stack_options", name)
+
+    for group, names in (
+        (
+            "layer_controller_options",
+            (
+                "stack_gate_flag",
+                "gate_option",
+                "gate_activation",
+                "stack_halting_flag",
+                "halting_option",
+                "halting_threshold",
+                "halting_dropout",
                 "halting_hidden_state_mode",
             ),
-            "memory_flag": ("memory", "memory_flag"),
-            "memory_option": ("memory", "memory_option"),
-            "memory_num_memory_slots": ("memory", "memory_num_memory_slots"),
-            "memory_position_option": (
-                "memory",
+        ),
+        (
+            "dynamic_memory_options",
+            (
+                "memory_flag",
+                "memory_option",
+                "memory_num_memory_slots",
                 "memory_position_option",
-            ),
-            "memory_test_time_training_learning_rate": (
-                "memory",
                 "memory_test_time_training_learning_rate",
-            ),
-            "memory_test_time_training_num_inner_steps": (
-                "memory",
                 "memory_test_time_training_num_inner_steps",
             ),
-            "recurrent_flag": ("recurrent", "recurrent_flag"),
-            "recurrent_max_steps": ("recurrent", "recurrent_max_steps"),
-            "recurrent_layer_norm_position": (
-                "recurrent",
+        ),
+        (
+            "recurrent_controller_options",
+            (
+                "recurrent_flag",
+                "recurrent_max_steps",
                 "recurrent_layer_norm_position",
-            ),
-            "recurrent_normalization": (
-                "recurrent",
                 "recurrent_normalization",
-            ),
-            "recurrent_stack_gate_flag": (
-                "recurrent",
                 "recurrent_stack_gate_flag",
-            ),
-            "recurrent_gate_option": (
-                "recurrent",
                 "recurrent_gate_option",
-            ),
-            "recurrent_gate_activation": (
-                "recurrent",
                 "recurrent_gate_activation",
-            ),
-            "recurrent_stack_halting_flag": (
-                "recurrent",
                 "recurrent_stack_halting_flag",
-            ),
-            "recurrent_halting_option": (
-                "recurrent",
                 "recurrent_halting_option",
-            ),
-            "recurrent_halting_threshold": (
-                "recurrent",
                 "recurrent_halting_threshold",
-            ),
-            "recurrent_halting_dropout": (
-                "recurrent",
                 "recurrent_halting_dropout",
-            ),
-            "recurrent_halting_hidden_state_mode": (
-                "recurrent",
                 "recurrent_halting_hidden_state_mode",
             ),
-        }
-    )
-    for role, component, field_name in (
-        ("gate", "gate_stack", "gate_stack_options"),
-        ("halting", "halting_stack", "halting_stack_options"),
-        ("memory", "memory_stack", "memory_stack_options"),
-        (
-            "recurrent_gate",
-            "recurrent_gate_stack",
-            "recurrent_gate_stack_options",
-        ),
-        (
-            "recurrent_halting",
-            "recurrent_halting_stack",
-            "recurrent_halting_stack_options",
         ),
     ):
-        for field in _CONTROLLER_STACK_FIELDS:
-            mapping[f"{role}_stack_{field}"] = (
-                component,
-                f"{field_name}.{field}",
-            )
+        for name in names:
+            mapping[name] = (group, name)
+
+    for role, group in (
+        ("gate", "layer_controller_options"),
+        ("halting", "layer_controller_options"),
+        ("memory", "dynamic_memory_options"),
+        ("recurrent_gate", "recurrent_controller_options"),
+        ("recurrent_halting", "recurrent_controller_options"),
+    ):
+        for name in _CONTROLLER_STACK_FIELDS:
+            mapping[f"{role}_stack_{name}"] = (group, f"{role}_stack_options", name)
     return mapping
 
 
@@ -623,69 +597,14 @@ _ATTENTION_FIELD_MAP = _path_field_map(attention=True)
 _FEED_FORWARD_FIELD_MAP = _path_field_map(attention=False)
 
 
-_PATH_COMPONENT_FIELDS: Final[dict[str, str]] = {
-    "path": "",
-    "stack": "stack_options",
-    "controller": "layer_controller_options",
-    "memory": "dynamic_memory_options",
-    "recurrent": "recurrent_controller_options",
-    "gate_stack": "layer_controller_options",
-    "halting_stack": "layer_controller_options",
-    "memory_stack": "dynamic_memory_options",
-    "recurrent_gate_stack": "recurrent_controller_options",
-    "recurrent_halting_stack": "recurrent_controller_options",
-}
-
-
-def _replace_dataclass_path(source: Any, dotted_field: str, value: Any) -> Any:
-    field_name, separator, nested_field = dotted_field.partition(".")
-    if not separator:
-        return replace(source, **{field_name: value})
-    nested = _replace_dataclass_path(
-        getattr(source, field_name),
-        nested_field,
-        value,
-    )
-    return replace(source, **{field_name: nested})
-
-
-def _component_field_path(component: str, field_name: str) -> str:
-    try:
-        component_field = _PATH_COMPONENT_FIELDS[component]
-    except KeyError:
-        raise ValueError(component) from None
-    return f"{component_field}.{field_name}" if component_field else field_name
-
-
 def _apply_path_updates(
     options: TransformerAttentionOptions | TransformerFeedForwardOptions,
     updates: dict[str, Any],
     *,
-    attention: bool,
+    field_map: dict[str, tuple[str, ...]],
 ) -> TransformerAttentionOptions | TransformerFeedForwardOptions:
-    field_map = _ATTENTION_FIELD_MAP if attention else _FEED_FORWARD_FIELD_MAP
-    path = options
-    for suffix, value in updates.items():
-        component, field_name = field_map[suffix]
-        path = _replace_dataclass_path(
-            path,
-            _component_field_path(component, field_name),
-            value,
-        )
-    return replace(path)
-
-
-def _pop_updates(
-    values: MutableMapping[str, Any],
-    prefix: str,
-    field_map: dict[str, tuple[str, str]],
-) -> dict[str, Any]:
-    updates = {}
-    for suffix in field_map:
-        key = f"{prefix}{suffix}"
-        if key in values:
-            updates[suffix] = values.pop(key)
-    return updates
+    paths = {field_map[suffix]: value for suffix, value in updates.items()}
+    return _attention_settings.replace_option_paths(options, paths)
 
 
 _ADAPTIVE_NESTED_FIELDS = {
@@ -728,9 +647,9 @@ def _pop_adaptive_options(
 
     generator = current.generator_stack_options
     generator_updates = {}
-    generator_prefix = (
-        f"{prefix}generator_stack_" if prefix else "adaptive_generator_stack_"
-    )
+    generator_prefix = "adaptive_generator_stack_"
+    if prefix:
+        generator_prefix = f"{prefix}generator_stack_"
     for field_name in _STACK_OPTION_FIELDS:
         key = f"{generator_prefix}{field_name}"
         if key in values:
@@ -826,68 +745,48 @@ def resolve_transformer_path_options(
 
     attention_updates = _pop_updates(values, "attn_", _ATTENTION_FIELD_MAP)
     feed_forward_updates = _pop_updates(values, "ff_", _FEED_FORWARD_FIELD_MAP)
-    encoder_attention = _apply_path_updates(
-        encoder_attention, attention_updates, attention=True
-    )
-    decoder_self_attention = _apply_path_updates(
-        decoder_self_attention, attention_updates, attention=True
-    )
-    decoder_cross_attention = _apply_path_updates(
-        decoder_cross_attention,
-        {
-            key: value
-            for key, value in attention_updates.items()
-            if not key.startswith("source_memory_")
-        },
-        attention=True,
-    )
-    encoder_feed_forward = _apply_path_updates(
-        encoder_feed_forward, feed_forward_updates, attention=False
-    )
-    decoder_feed_forward = _apply_path_updates(
-        decoder_feed_forward, feed_forward_updates, attention=False
-    )
-
+    cross_attention_updates = {
+        key: value
+        for key, value in attention_updates.items()
+        if not key.startswith("source_memory_")
+    }
     encoder_attention = _apply_path_updates(
         encoder_attention,
-        _source_memory.scoped_source_memory_updates(
+        attention_updates
+        | _source_memory.scoped_source_memory_updates(
             _pop_updates(values, "encoder_attn_", _ATTENTION_FIELD_MAP)
         ),
-        attention=True,
+        field_map=_ATTENTION_FIELD_MAP,
     )
     decoder_self_attention = _apply_path_updates(
         decoder_self_attention,
-        _source_memory.scoped_source_memory_updates(
+        attention_updates
+        | _source_memory.scoped_source_memory_updates(
             _pop_updates(values, "decoder_self_attn_", _ATTENTION_FIELD_MAP)
         ),
-        attention=True,
+        field_map=_ATTENTION_FIELD_MAP,
     )
     decoder_cross_attention = _apply_path_updates(
         decoder_cross_attention,
-        _source_memory.scoped_source_memory_updates(
+        cross_attention_updates
+        | _source_memory.scoped_source_memory_updates(
             _pop_updates(values, "decoder_cross_attn_", _ATTENTION_FIELD_MAP)
         ),
-        attention=True,
+        field_map=_ATTENTION_FIELD_MAP,
     )
     encoder_feed_forward = _apply_path_updates(
         encoder_feed_forward,
-        _pop_updates(values, "encoder_ff_", _FEED_FORWARD_FIELD_MAP),
-        attention=False,
+        feed_forward_updates
+        | _pop_updates(values, "encoder_ff_", _FEED_FORWARD_FIELD_MAP)
+        | _pop_scoped_feed_forward_updates(values, "encoder_feed_forward_"),
+        field_map=_FEED_FORWARD_FIELD_MAP,
     )
     decoder_feed_forward = _apply_path_updates(
         decoder_feed_forward,
-        _pop_updates(values, "decoder_ff_", _FEED_FORWARD_FIELD_MAP),
-        attention=False,
-    )
-    encoder_feed_forward = _apply_path_updates(
-        encoder_feed_forward,
-        _pop_scoped_feed_forward_updates(values, "encoder_feed_forward_"),
-        attention=False,
-    )
-    decoder_feed_forward = _apply_path_updates(
-        decoder_feed_forward,
-        _pop_scoped_feed_forward_updates(values, "decoder_feed_forward_"),
-        attention=False,
+        feed_forward_updates
+        | _pop_updates(values, "decoder_ff_", _FEED_FORWARD_FIELD_MAP)
+        | _pop_scoped_feed_forward_updates(values, "decoder_feed_forward_"),
+        field_map=_FEED_FORWARD_FIELD_MAP,
     )
     return TransformerPathOptions(
         encoder_attention_options=encoder_attention,
@@ -1172,15 +1071,13 @@ def _resolve_adaptive_groups(
             groups[name] = _pop_adaptive_options(
                 values, prefix, groups[name], grouping_fields[name]
             )
-    return {
-        name: replace(
-            options,
-            grouping_config=_learned_grouping.grouping_from_fields(
-                grouping_fields[name], prefix=name
-            ),
+    resolved_groups: dict[str, AdaptiveParameterOptions] = {}
+    for name, options in groups.items():
+        grouping_config = _learned_grouping.grouping_from_fields(
+            grouping_fields[name], prefix=name
         )
-        for name, options in groups.items()
-    }
+        resolved_groups[name] = replace(options, grouping_config=grouping_config)
+    return resolved_groups
 
 
 def _reject_unknown_runtime_default(values: MutableMapping[str, Any]) -> None:
@@ -1202,10 +1099,9 @@ def runtime_from_flat(
         package="models.transformer.linear_adaptive",
         config_module=config,
     )
-    runtime = _resolve_top_level_runtime(
-        values,
-        DEFAULT_RUNTIME if base is None else base,
-    )
+    if base is None:
+        base = DEFAULT_RUNTIME
+    runtime = _resolve_top_level_runtime(values, base)
     stacks = _resolve_transformer_stacks(values, runtime)
     paths = resolve_transformer_path_options(
         values,
@@ -1213,7 +1109,7 @@ def runtime_from_flat(
     )
     adaptive_groups = _resolve_adaptive_groups(values, runtime)
     _reject_unknown_runtime_default(values)
-    return replace(
+    resolved = replace(
         runtime,
         encoder_options=stacks.encoder,
         decoder_options=stacks.decoder,
@@ -1234,6 +1130,9 @@ def runtime_from_flat(
         encoder_feed_forward_adaptive_options=adaptive_groups["encoder_feed_forward"],
         decoder_feed_forward_adaptive_options=adaptive_groups["decoder_feed_forward"],
     )
+
+    validate_runtime(resolved)
+    return resolved
 
 
 DEFAULT_RUNTIME: Final[RuntimeOptions] = runtime_from_config()

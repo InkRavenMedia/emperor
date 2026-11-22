@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from models.transformer._experiment_builder import build_translation_model_config
+
 from ._building import build_experiment_config
 from ._validation import validate_runtime
 from .runtime_defaults import DEFAULT_RUNTIME
@@ -17,26 +19,21 @@ class TransformerLinearConfigBuilder:
         *,
         runtime: RuntimeOptions = DEFAULT_RUNTIME,
     ) -> None:
+        self.runtime = runtime
+
+    @property
+    def runtime(self) -> RuntimeOptions:
+        return self._runtime
+
+    @runtime.setter
+    def runtime(self, runtime: RuntimeOptions) -> None:
         if not isinstance(runtime, RuntimeOptions):
             raise TypeError("runtime must be a RuntimeOptions value")
-        self.runtime = runtime
-        validate_runtime(self.runtime)
+        validate_runtime(runtime)
+        self._runtime = runtime
 
     def build(self) -> ModelConfig:
-        from emperor.config import ModelConfig
-
-        runtime = self.runtime
-        return ModelConfig(
-            batch_size=runtime.batch_size,
-            learning_rate=runtime.learning_rate,
-            sequence_length=max(
-                runtime.source_sequence_length, runtime.target_sequence_length
-            ),
-            input_dim=runtime.vocab_size,
-            hidden_dim=runtime.model_dim,
-            output_dim=runtime.vocab_size,
-            experiment_config=build_experiment_config(runtime),
-        )
+        return build_translation_model_config(self.runtime, build_experiment_config)
 
 
 __all__ = ["TransformerLinearConfigBuilder"]

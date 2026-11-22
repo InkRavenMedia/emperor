@@ -13,6 +13,7 @@ from model_runtime.runs import ExperimentBase
 
 from .config_builder import TransformerExpertLinearConfigBuilder
 from .runtime_defaults import runtime_from_flat
+from .runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -49,122 +50,136 @@ class ExperimentPreset(BaseOptions):
 _RECOMMENDED_HALTING_THRESHOLD = 0.999
 
 
-_PRESET_OVERRIDES = {
-    "BASELINE": {},
-    "PRE_NORM": {
-        "encoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-        "decoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-    },
-    "POST_NORM": {
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-    "LEARNED_POSITIONAL": {
-        "positional_embedding_option": TextLearnedPositionalEmbeddingConfig
-    },
-    "ATTENTION_BIAS": {
-        "attn_bias_flag": True,
-        "attn_add_key_value_bias_flag": True,
-    },
-    "GATING": {"stack_gate_flag": True},
-    "HALTING": {
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "GATING_HALTING": {
-        "stack_gate_flag": True,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "MEMORY": {"memory_flag": True},
-    "GATING_MEMORY": {"stack_gate_flag": True, "memory_flag": True},
-    "HALTING_MEMORY": {
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "GATING_HALTING_MEMORY": {
-        "stack_gate_flag": True,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RECURRENT": {"recurrent_flag": True},
-    "RECURRENT_GATING": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-    },
-    "RECURRENT_HALTING": {
-        "recurrent_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RECURRENT_MEMORY": {"recurrent_flag": True, "memory_flag": True},
-    "RECURRENT_GATING_HALTING": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RECURRENT_GATING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "memory_flag": True,
-    },
-    "RECURRENT_HALTING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RECURRENT_GATING_HALTING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RESIDUAL": {"stack_residual_connection_option": AdditiveResidualConfig},
-    "RESIDUAL_POST_NORM": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-    "RESIDUAL_GATING": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "stack_gate_flag": True,
-    },
-    "RESIDUAL_HALTING": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RESIDUAL_MEMORY": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "memory_flag": True,
-    },
-    "RECURRENT_RESIDUAL": {
-        "recurrent_flag": True,
-        "recurrent_residual_connection_option": AdditiveResidualConfig,
-    },
-    "RECURRENT_POST_NORM": {
-        "recurrent_flag": True,
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-    "TOP1_SWITCH_AUX": {
-        "top_k": 1,
-        "normalize_probabilities_flag": False,
-        "switch_loss_weight": 0.1,
-    },
+_PRESET_VALUES: dict[ExperimentPreset, PresetValues] = {
+    ExperimentPreset.BASELINE: PresetValues(),
+    ExperimentPreset.PRE_NORM: PresetValues(
+        encoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
+        decoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
+    ),
+    ExperimentPreset.POST_NORM: PresetValues(
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.LEARNED_POSITIONAL: PresetValues(
+        positional_embedding_option=TextLearnedPositionalEmbeddingConfig,
+    ),
+    ExperimentPreset.ATTENTION_BIAS: PresetValues(
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
+    ),
+    ExperimentPreset.GATING: PresetValues(
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.HALTING: PresetValues(
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.GATING_HALTING: PresetValues(
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.MEMORY: PresetValues(
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_MEMORY: PresetValues(
+        stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.HALTING_MEMORY: PresetValues(
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_HALTING_MEMORY: PresetValues(
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT: PresetValues(
+        recurrent_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RECURRENT_MEMORY: PresetValues(
+        recurrent_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RESIDUAL_POST_NORM: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.RESIDUAL_GATING: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL_HALTING: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RESIDUAL_MEMORY: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_RESIDUAL: PresetValues(
+        recurrent_flag=True,
+        recurrent_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RECURRENT_POST_NORM: PresetValues(
+        recurrent_flag=True,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.TOP1_SWITCH_AUX: PresetValues(
+        top_k=1,
+        normalize_probabilities_flag=False,
+        switch_loss_weight=0.1,
+    ),
 }
 
 _PRESET_DEFINITIONS = {
-    ExperimentPreset[name]: PresetDefinition(
+    preset: PresetDefinition(
         preset_values=values,
-        description=f"Expert Transformer preset: {name.replace('_', ' ').lower()}.",
+        description=f"Expert Transformer preset: {preset.name.replace('_', ' ').lower()}.",
     )
-    for name, values in _PRESET_OVERRIDES.items()
+    for preset, values in _PRESET_VALUES.items()
 }
 
 
