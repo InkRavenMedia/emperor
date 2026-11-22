@@ -24,6 +24,7 @@ from emperor.layers import (
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
 from models import _attention_source_memory as _source_memory
 from models import _sequence_expansion
+from models._component_defaults import resolve_options as resolve_options
 from models.bert.linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.bert.linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,

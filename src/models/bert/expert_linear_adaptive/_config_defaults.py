@@ -8,6 +8,7 @@ from emperor.layers import (
     NormalizationOptions,
     ResidualConfig,
 )
+from models._stack_fields import GeneratorStackFields, StackScope
 from models.bert.expert_linear_adaptive._generation import AdaptiveGeneratorStackSource
 from models.bert.expert_linear_adaptive.runtime_options import (
     AdaptiveGeneratorStackOptions,
@@ -83,52 +84,16 @@ def _adaptive_generator_stack_source(
 
 def weight_generator_stack_source(config: ModuleType) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.WEIGHT_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.WEIGHT_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=config.WEIGHT_GENERATOR_STACK_LAYER_NORM_POSITION,
-            normalization=config.WEIGHT_GENERATOR_STACK_NORMALIZATION,
-            num_layers=config.WEIGHT_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.WEIGHT_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.WEIGHT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.WEIGHT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.WEIGHT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.WEIGHT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.WEIGHT_GENERATOR_STACK_DROPOUT_PROBABILITY,
-            last_layer_bias_option=(
-                config.WEIGHT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.WEIGHT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.WEIGHT_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.WEIGHT_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults
         )
     )
 
 
 def bias_generator_stack_source(config: ModuleType) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.BIAS_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.BIAS_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=config.BIAS_GENERATOR_STACK_LAYER_NORM_POSITION,
-            normalization=config.BIAS_GENERATOR_STACK_NORMALIZATION,
-            num_layers=config.BIAS_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.BIAS_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.BIAS_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.BIAS_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.BIAS_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.BIAS_GENERATOR_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.BIAS_GENERATOR_STACK_DROPOUT_PROBABILITY,
-            last_layer_bias_option=(config.BIAS_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION),
-            apply_output_postprocessing_flag=(
-                config.BIAS_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.BIAS_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.BIAS_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults
         )
     )
 
@@ -137,52 +102,16 @@ def diagonal_generator_stack_source(
     config: ModuleType,
 ) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.DIAGONAL_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.DIAGONAL_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=config.DIAGONAL_GENERATOR_STACK_LAYER_NORM_POSITION,
-            normalization=config.DIAGONAL_GENERATOR_STACK_NORMALIZATION,
-            num_layers=config.DIAGONAL_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.DIAGONAL_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.DIAGONAL_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.DIAGONAL_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.DIAGONAL_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.DIAGONAL_GENERATOR_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.DIAGONAL_GENERATOR_STACK_DROPOUT_PROBABILITY,
-            last_layer_bias_option=(
-                config.DIAGONAL_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.DIAGONAL_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.DIAGONAL_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.DIAGONAL_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults
         )
     )
 
 
 def mask_generator_stack_source(config: ModuleType) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.MASK_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.MASK_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=config.MASK_GENERATOR_STACK_LAYER_NORM_POSITION,
-            normalization=config.MASK_GENERATOR_STACK_NORMALIZATION,
-            num_layers=config.MASK_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.MASK_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.MASK_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.MASK_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.MASK_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=config.MASK_GENERATOR_STACK_RESIDUAL_MODEL_FLAG,
-            dropout_probability=config.MASK_GENERATOR_STACK_DROPOUT_PROBABILITY,
-            last_layer_bias_option=(config.MASK_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION),
-            apply_output_postprocessing_flag=(
-                config.MASK_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.MASK_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.MASK_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults
         )
     )
 
@@ -191,33 +120,8 @@ def router_weight_generator_stack_source(
     config: ModuleType,
 ) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.ROUTER_WEIGHT_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_WEIGHT_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config.ROUTER_WEIGHT_GENERATOR_STACK_NORMALIZATION),
-            num_layers=config.ROUTER_WEIGHT_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.ROUTER_WEIGHT_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ROUTER_WEIGHT_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_WEIGHT_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_DROPOUT_PROBABILITY
-            ),
-            last_layer_bias_option=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.ROUTER_WEIGHT_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.ROUTER_WEIGHT_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.WEIGHT_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults, scope=StackScope.ROUTER
         )
     )
 
@@ -226,33 +130,8 @@ def router_bias_generator_stack_source(
     config: ModuleType,
 ) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.ROUTER_BIAS_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_BIAS_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=(
-                config.ROUTER_BIAS_GENERATOR_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config.ROUTER_BIAS_GENERATOR_STACK_NORMALIZATION),
-            num_layers=config.ROUTER_BIAS_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.ROUTER_BIAS_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.ROUTER_BIAS_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ROUTER_BIAS_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_BIAS_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config.ROUTER_BIAS_GENERATOR_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config.ROUTER_BIAS_GENERATOR_STACK_DROPOUT_PROBABILITY
-            ),
-            last_layer_bias_option=(
-                config.ROUTER_BIAS_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.ROUTER_BIAS_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.ROUTER_BIAS_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.BIAS_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults, scope=StackScope.ROUTER
         )
     )
 
@@ -261,33 +140,8 @@ def router_diagonal_generator_stack_source(
     config: ModuleType,
 ) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.ROUTER_DIAGONAL_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_DIAGONAL_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config.ROUTER_DIAGONAL_GENERATOR_STACK_NORMALIZATION),
-            num_layers=config.ROUTER_DIAGONAL_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.ROUTER_DIAGONAL_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ROUTER_DIAGONAL_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_DIAGONAL_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_DROPOUT_PROBABILITY
-            ),
-            last_layer_bias_option=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.ROUTER_DIAGONAL_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.ROUTER_DIAGONAL_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.DIAGONAL_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults, scope=StackScope.ROUTER
         )
     )
 
@@ -296,33 +150,8 @@ def router_mask_generator_stack_source(
     config: ModuleType,
 ) -> AdaptiveGeneratorStackSource:
     return _adaptive_generator_stack_source(
-        _AdaptiveGeneratorStackDefaults(
-            independent_flag=config.ROUTER_MASK_GENERATOR_STACK_INDEPENDENT_FLAG,
-            hidden_dim=config.ROUTER_MASK_GENERATOR_STACK_HIDDEN_DIM,
-            layer_norm_position=(
-                config.ROUTER_MASK_GENERATOR_STACK_LAYER_NORM_POSITION
-            ),
-            normalization=(config.ROUTER_MASK_GENERATOR_STACK_NORMALIZATION),
-            num_layers=config.ROUTER_MASK_GENERATOR_STACK_NUM_LAYERS,
-            activation=config.ROUTER_MASK_GENERATOR_STACK_ACTIVATION,
-            residual_connection_option=(
-                config.ROUTER_MASK_GENERATOR_STACK_RESIDUAL_CONNECTION_OPTION
-            ),
-            residual_block_size=config.ROUTER_MASK_GENERATOR_STACK_RESIDUAL_BLOCK_SIZE,
-            residual_rms_norm_epsilon=config.ROUTER_MASK_GENERATOR_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            residual_model_flag=(
-                config.ROUTER_MASK_GENERATOR_STACK_RESIDUAL_MODEL_FLAG
-            ),
-            dropout_probability=(
-                config.ROUTER_MASK_GENERATOR_STACK_DROPOUT_PROBABILITY
-            ),
-            last_layer_bias_option=(
-                config.ROUTER_MASK_GENERATOR_STACK_LAST_LAYER_BIAS_OPTION
-            ),
-            apply_output_postprocessing_flag=(
-                config.ROUTER_MASK_GENERATOR_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG
-            ),
-            bias_flag=config.ROUTER_MASK_GENERATOR_STACK_BIAS_FLAG,
+        GeneratorStackFields.MASK_GENERATOR.read(
+            config, _AdaptiveGeneratorStackDefaults, scope=StackScope.ROUTER
         )
     )
 

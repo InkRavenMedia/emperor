@@ -696,14 +696,18 @@ class TestBertExpertLinearModel(unittest.TestCase):
 
     def test_invalid_dimensions_and_dropout_are_rejected(self):
         defaults = _default_builder()
+        with self.assertRaisesRegex(ValueError, "hidden_dim"):
+            self._direct_config(
+                encoder_options=replace(defaults.encoder_options, hidden_dim=0)
+            )
+        with self.assertRaisesRegex(ValueError, "token_type_vocab_size"):
+            self._direct_config(
+                embedding_options=replace(
+                    defaults.embedding_options, token_type_vocab_size=0
+                )
+            )
         cases = {
             "input_dim": {"input_dim": 0},
-            "hidden_dim": {
-                "encoder_options": replace(
-                    defaults.encoder_options,
-                    hidden_dim=0,
-                )
-            },
             "output_dim": {
                 "output_dim": 0,
                 "mlm_head_options": replace(
@@ -712,12 +716,6 @@ class TestBertExpertLinearModel(unittest.TestCase):
                 ),
             },
             "sequence_length": {"sequence_length": 0},
-            "token_type_vocab_size": {
-                "embedding_options": replace(
-                    defaults.embedding_options,
-                    token_type_vocab_size=0,
-                )
-            },
         }
         for field, overrides in cases.items():
             with self.subTest(field=field):
