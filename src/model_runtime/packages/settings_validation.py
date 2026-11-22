@@ -1,7 +1,8 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import cache
-from typing import TYPE_CHECKING, Protocol, get_args, get_type_hints
+from inspect import isabstract
+from typing import TYPE_CHECKING, Protocol, TypeGuard, get_args, get_type_hints
 
 if TYPE_CHECKING:
     from emperor.layers import ResidualConfig
@@ -79,12 +80,23 @@ class BuildSettingsValidation:
         )
 
     def residual(self, key: str, selected: object) -> None:
+        if selected is not None and not self.is_selectable_residual(selected):
+            raise TypeError(f"{key} must be a concrete ResidualConfig type or None.")
+
+    @staticmethod
+    def is_selectable_residual(value: object) -> TypeGuard[type["ResidualConfig"]]:
+        from emperor.config import ConfigBase
         from emperor.layers import ResidualConfig
 
-        if selected is not None and not ResidualConfig.is_concrete_implementation(
-            selected
-        ):
-            raise TypeError(f"{key} must be a concrete ResidualConfig type or None.")
+        if not isinstance(value, type) or not issubclass(value, ResidualConfig):
+            return False
+        if isabstract(value):
+            return False
+        owner_hook = "_registry_owner"
+        return (
+            getattr(value, owner_hook) is not getattr(ResidualConfig, owner_hook)
+            or value.registry_owner is not ConfigBase.registry_owner
+        )
 
     def flat_stack_controls(self, settings: object) -> None:
         """Check stack and controller fields in a package's flat settings dataclass."""

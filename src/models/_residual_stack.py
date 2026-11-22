@@ -17,6 +17,7 @@ from emperor.layers import (
     WeightedResidualConfig,
 )
 from emperor.linears import LinearLayerConfig
+from model_runtime.packages.settings_validation import BuildSettingsValidation
 
 
 class _StackLayout(Protocol):
@@ -427,7 +428,7 @@ class ResidualBuilder:
         if type(model_flag) is not bool:
             raise TypeError(f"{model_flag_field} must be bool.")
         selector_type_name = type(selector).__name__
-        if selector is not None and not ResidualConfig.is_concrete_implementation(
+        if selector is not None and not BuildSettingsValidation.is_selectable_residual(
             selector
         ):
             raise TypeError(

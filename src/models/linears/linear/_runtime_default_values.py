@@ -72,7 +72,7 @@ _INTEGER = _exact_type(int)
 _FLOAT = _exact_type(float)
 _RESIDUAL: _ValueType[type[ResidualConfig]] = _ValueType(
     "concrete type[ResidualConfig]",
-    ResidualConfig.is_concrete_implementation,
+    SETTINGS_VALIDATION.is_selectable_residual,
 )
 
 
