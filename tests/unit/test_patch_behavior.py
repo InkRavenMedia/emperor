@@ -16,6 +16,7 @@ from emperor.layers import (
     LayerConfig,
     LayerNormPositionOptions,
     LayerStackConfig,
+    LayerState,
 )
 from emperor.linears import LinearLayerConfig
 from emperor.patch import (
@@ -116,6 +117,39 @@ def conv_config(**overrides: object) -> ConvPatchEmbeddingConfig:
     }
     values.update(overrides)
     return ConvPatchEmbeddingConfig(**values)
+
+
+@pytest.mark.parametrize("make_config", [linear_config, conv_config])
+def test_patch_hooks_receive_and_transform_tensors_during_loss_collection(make_config):
+    patch = make_config().build().eval()
+    images = torch.ones(2, 1, 4, 4)
+    expected = patch(images) + 1
+    with patch.register_forward_hook(lambda _module, _args, tensor: tensor + 1):
+        state = LayerState.run_tensor_module(patch, images)
+    torch.testing.assert_close(state.hidden, expected)
+
+
+def test_patch_override_delegating_to_super_retains_inner_and_own_gradients():
+    class WrappedPatch(PatchEmbeddingLinear):
+        def forward(self, images):
+            return super().forward(images) + 1
+
+        def get_auxiliary_loss(self):
+            return self.penalty
+
+    patch = WrappedPatch(linear_config()).eval()
+    patch.penalty = torch.nn.Parameter(torch.tensor(0.0))
+    inner_penalty = torch.tensor(0.0, requires_grad=True)
+
+    def attach_inner_loss(_module, _inputs, state):
+        state.loss = inner_penalty
+        return state
+
+    images = torch.ones(2, 1, 4, 4)
+    with patch.embedding_model.register_forward_hook(attach_inner_loss):
+        state = LayerState.run_tensor_module(patch, images)
+    torch.testing.assert_close(state.hidden, patch(images))
+    assert torch.autograd.grad(state.loss, (inner_penalty, patch.penalty)) == (1.0, 1.0)
 
 
 class PatchConfigurationBehaviorTests(unittest.TestCase):
