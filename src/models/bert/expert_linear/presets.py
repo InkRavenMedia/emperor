@@ -1,3 +1,5 @@
+from typing import Unpack
+
 from emperor.config import BaseOptions
 from emperor.datasets.text.bert_pretraining import PennTreebankBertPretraining
 from emperor.embedding.absolute import (
@@ -11,6 +13,7 @@ from model_runtime.packages import (
 from model_runtime.runs import ExperimentBase
 from models.bert.expert_linear.config_builder import BertExpertLinearConfigBuilder
 from models.bert.expert_linear.runtime_defaults import runtime_from_flat
+from models.bert.expert_linear.runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -38,183 +41,141 @@ class ExperimentPreset(BaseOptions):
     TOP1_SWITCH_AUX = 22
 
 
+def _define_preset(
+    *,
+    description: str,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    return PresetDefinition(preset_values=values, description=description)
+
+
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values={},
-        description="Default config: a BERT-style pretraining encoder with expert "
-        "attention and feed-forward sub-stacks, learned positional "
-        "embeddings, and bidirectional attention.",
+    ExperimentPreset.BASELINE: _define_preset(
+        description=(
+            "Default config: a BERT-style pretraining encoder with expert "
+            "attention and feed-forward sub-stacks, learned positional "
+            "embeddings, and bidirectional attention."
+        ),
     ),
-    ExperimentPreset.PRE_NORM: PresetDefinition(
-        preset_values={
-            "layer_norm_position": LayerNormPositionOptions.BEFORE,
-        },
+    ExperimentPreset.PRE_NORM: _define_preset(
         description=(
             "Default config with layer normalization applied before each encoder "
             "sub-block."
         ),
+        layer_norm_position=LayerNormPositionOptions.BEFORE,
     ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values={
-            "layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
+    ExperimentPreset.POST_NORM: _define_preset(
         description=(
             "Default config with layer normalization applied after each encoder "
             "sub-block."
         ),
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.SINUSOIDAL: PresetDefinition(
-        preset_values={
-            "positional_embedding_option": TextSinusoidalPositionalEmbeddingConfig,
-        },
+    ExperimentPreset.SINUSOIDAL: _define_preset(
         description="Default config with fixed sinusoidal positional embeddings.",
+        positional_embedding_option=TextSinusoidalPositionalEmbeddingConfig,
     ),
-    ExperimentPreset.CAUSAL: PresetDefinition(
-        preset_values={
-            "causal_attention_mask_flag": True,
-        },
-        description="Default config with causal attention masking enabled for "
-        "autoregressive modeling.",
+    ExperimentPreset.CAUSAL: _define_preset(
+        description=(
+            "Default config with causal attention masking enabled for "
+            "autoregressive modeling."
+        ),
+        causal_attention_mask_flag=True,
     ),
-    ExperimentPreset.ATTENTION_BIAS: PresetDefinition(
-        preset_values={
-            "attn_bias_flag": True,
-            "attn_add_key_value_bias_flag": True,
-        },
-        description="Default config with attention projection bias and key/value bias "
-        "enabled.",
+    ExperimentPreset.ATTENTION_BIAS: _define_preset(
+        description=(
+            "Default config with attention projection bias and key/value bias enabled."
+        ),
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
     ),
-    ExperimentPreset.GATING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-        },
+    ExperimentPreset.GATING: _define_preset(
         description="Default config with per-encoder-block gating enabled.",
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.HALTING: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-        },
+    ExperimentPreset.HALTING: _define_preset(
         description="Default config with encoder-block stack halting enabled.",
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-        },
-        description=(
-            "Default config with both encoder-block gating and halting enabled."
-        ),
+    ExperimentPreset.GATING_HALTING: _define_preset(
+        description="Default config with both encoder-block gating and halting enabled.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.MEMORY: PresetDefinition(
-        preset_values={
-            "memory_flag": True,
-        },
+    ExperimentPreset.MEMORY: _define_preset(
         description="Default config with shared encoder-stack memory enabled.",
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with encoder-block gating and shared memory enabled."
-        ),
+    ExperimentPreset.GATING_MEMORY: _define_preset(
+        description="Default config with encoder-block gating and shared memory enabled.",
+        stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with encoder-block halting and shared memory enabled."
-        ),
+    ExperimentPreset.HALTING_MEMORY: _define_preset(
+        description="Default config with encoder-block halting and shared memory enabled.",
+        stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default config with encoder-block gating, halting, and shared memory."
-        ),
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
+        description="Default config with encoder-block gating, halting, and shared memory.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-        },
+    ExperimentPreset.RECURRENT: _define_preset(
         description="Default encoder stack wrapped in fixed-step recurrence.",
+        recurrent_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING: _define_preset(
         description="Default recurrent encoder with step-level gating enabled.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
+    ExperimentPreset.RECURRENT_HALTING: _define_preset(
         description="Default recurrent encoder with recurrent halting enabled.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.RECURRENT_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "memory_flag": True,
-        },
+    ExperimentPreset.RECURRENT_MEMORY: _define_preset(
         description="Default recurrent encoder whose reused stack has shared memory.",
+        recurrent_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING_HALTING: _define_preset(
         description="Default recurrent encoder with step-level gating and halting.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default recurrent encoder with step-level gating and shared memory."
-        ),
+    ExperimentPreset.RECURRENT_GATING_MEMORY: _define_preset(
+        description="Default recurrent encoder with step-level gating and shared memory.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description=(
-            "Default recurrent encoder with recurrent halting and shared memory."
-        ),
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: _define_preset(
+        description="Default recurrent encoder with recurrent halting and shared memory.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _define_preset(
         description=(
             "Default recurrent encoder with step-level gating, recurrent halting, "
             "and shared memory."
         ),
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
     ),
 }
 
-_PRESET_DEFINITIONS[ExperimentPreset.TOP1_SWITCH_AUX] = PresetDefinition(
-    preset_values={
-        "top_k": 1,
-        "sampler_normalize_probabilities_flag": False,
-        "sampler_switch_loss_weight": 0.1,
-    },
+_PRESET_DEFINITIONS[ExperimentPreset.TOP1_SWITCH_AUX] = _define_preset(
     description="Default config with top-1 expert routing and switch auxiliary loss.",
+    top_k=1,
+    sampler_normalize_probabilities_flag=False,
+    sampler_switch_loss_weight=0.1,
 )
 
 

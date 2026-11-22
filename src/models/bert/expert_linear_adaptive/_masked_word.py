@@ -4,6 +4,7 @@ from typing import cast
 import torch
 from torch import Tensor
 
+from emperor.attention import MixtureOfAttentionHeadsConfig, SelfAttentionConfig
 from emperor.embedding.hierarchical import (
     HierarchicalByteDecoderConfig,
     HierarchicalByteEmbeddingConfig,
@@ -28,6 +29,7 @@ from emperor.transformer import (
     TransformerDecoderBlockLayerConfig,
     TransformerDecoderLayerConfig,
     TransformerEncoderBlockLayerConfig,
+    TransformerEncoderLayerConfig,
 )
 
 
@@ -37,6 +39,13 @@ def validate_masked_word_attention(*, masked_words: bool, causal: bool) -> None:
 
 
 def _decoder_projection(input_dim: int, output_dim: int) -> LayerStackConfig:
+    layer_model_config = LinearLayerConfig(bias_flag=True)
+    layer_config = LayerConfig(
+        activation=ActivationOptions.RELU,
+        dropout_probability=0.0,
+        layer_norm_position=LayerNormPositionOptions.DISABLED,
+        layer_model_config=layer_model_config,
+    )
     return LayerStackConfig(
         input_dim=input_dim,
         output_dim=output_dim,
@@ -44,12 +53,7 @@ def _decoder_projection(input_dim: int, output_dim: int) -> LayerStackConfig:
         num_layers=1,
         last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
         apply_output_postprocessing_flag=False,
-        layer_config=LayerConfig(
-            activation=ActivationOptions.RELU,
-            dropout_probability=0.0,
-            layer_norm_position=LayerNormPositionOptions.DISABLED,
-            layer_model_config=LinearLayerConfig(bias_flag=True),
-        ),
+        layer_config=layer_config,
     )
 
 
@@ -60,39 +64,46 @@ def build_masked_word_decoder(
     transformer = cast(TransformerConfig, encoder.encoder_config)
     stack = cast(LayerStackConfig, transformer.encoder_stack_config)
     block = cast(TransformerEncoderBlockLayerConfig, stack.layer_config)
-    layer = block.layer_model_config
+    layer = cast(TransformerEncoderLayerConfig, block.layer_model_config)
+    embedding_dim = layer.embedding_dim
+    encoder_attention = cast(
+        SelfAttentionConfig | MixtureOfAttentionHeadsConfig, layer.attention_config
+    )
+    causal_attention_config = replace(
+        encoder_attention, causal_attention_mask_flag=True
+    )
     decoder_layer = TransformerDecoderLayerConfig(
-        embedding_dim=layer.embedding_dim,
+        embedding_dim=embedding_dim,
         layer_norm_position=layer.layer_norm_position,
         dropout_probability=layer.dropout_probability,
         residual_config=layer.residual_config,
         normalization=layer.normalization,
         feed_forward_config=layer.feed_forward_config,
-        self_attention_config=replace(
-            layer.attention_config, causal_attention_mask_flag=True
-        ),
+        self_attention_config=causal_attention_config,
+    )
+    layer_config = TransformerDecoderBlockLayerConfig(
+        activation=block.activation,
+        dropout_probability=block.dropout_probability,
+        layer_norm_position=block.layer_norm_position,
+        layer_model_config=decoder_layer,
     )
     decoder_stack = replace(
         stack,
         num_layers=1,
-        layer_config=TransformerDecoderBlockLayerConfig(
-            activation=block.activation,
-            dropout_probability=block.dropout_probability,
-            layer_norm_position=block.layer_norm_position,
-            layer_model_config=decoder_layer,
-        ),
+        layer_config=layer_config,
     )
     byte_dim = encoder.byte_embedding_dim
+    decoder_config = TransformerConfig(decoder_stack_config=decoder_stack)
+    conditioning_projection_config = _decoder_projection(encoder.output_dim, byte_dim)
+    output_projection_config = _decoder_projection(byte_dim, OUTPUT_SYMBOLS)
     return HierarchicalByteDecoderConfig(
         conditioning_dim=encoder.output_dim,
         byte_embedding_dim=byte_dim,
         max_token_bytes=encoder.max_token_bytes,
         byte_position_config=encoder.byte_position_config,
-        decoder_config=TransformerConfig(decoder_stack_config=decoder_stack),
-        conditioning_projection_config=_decoder_projection(
-            encoder.output_dim, byte_dim
-        ),
-        output_projection_config=_decoder_projection(byte_dim, OUTPUT_SYMBOLS),
+        decoder_config=decoder_config,
+        conditioning_projection_config=conditioning_projection_config,
+        output_projection_config=output_projection_config,
     )
 
 

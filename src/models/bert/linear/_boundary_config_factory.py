@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import models.bert.linear.config as config
+from models._language_boundary import BertBoundaryBuilder
 from models.bert.linear import _config_defaults as config_defaults
 from models.bert.linear.runtime_options import (
     BertEmbeddingOptions,
@@ -27,7 +28,13 @@ class BoundaryConfigDependencies:
     nsp_head_options: BertNspHeadOptions | None
 
 
-class BoundaryConfigFactory:
+class BoundaryConfigFactory(
+    BertBoundaryBuilder[
+        BertEmbeddingOptions, BertMlmHeadOptions, BertNspHeadOptions, BertBoundaryConfig
+    ]
+):
+    _boundary = staticmethod(BertBoundaryConfig)
+
     def __init__(self, dependencies: BoundaryConfigDependencies) -> None:
         self.input_dim = dependencies.input_dim
         self.hidden_dim = dependencies.hidden_dim
@@ -45,55 +52,3 @@ class BoundaryConfigFactory:
             dependencies.nsp_head_options
             or config_defaults.bert_nsp_head_options(config)
         )
-
-    def build_boundary_config(self) -> BertBoundaryConfig:
-        self.__validate()
-        return BertBoundaryConfig(
-            embedding_options=self.embedding_options,
-            mlm_head_options=self.mlm_head_options,
-            nsp_head_options=self.nsp_head_options,
-        )
-
-    def __validate(self) -> None:
-        self.__validate_positive_dimensions()
-        self.__validate_binary_nsp_output()
-        self.__validate_embedding_dropout_probability()
-        self.__validate_tied_vocabulary_dimensions()
-
-    def __validate_positive_dimensions(self) -> None:
-        dimensions = {
-            "input_dim": self.input_dim,
-            "hidden_dim": self.hidden_dim,
-            "output_dim": self.output_dim,
-            "sequence_length": self.sequence_length,
-            "token_type_vocab_size": self.embedding_options.token_type_vocab_size,
-            "nsp_output_dim": self.nsp_head_options.output_dim,
-        }
-        for name, value in dimensions.items():
-            if value <= 0:
-                raise ValueError(f"{name} must be greater than 0, received {value}.")
-
-    def __validate_binary_nsp_output(self) -> None:
-        if self.nsp_head_options.output_dim != 2:
-            raise ValueError(
-                "BERT next-sentence prediction requires exactly 2 output "
-                f"classes, received {self.nsp_head_options.output_dim}."
-            )
-
-    def __validate_embedding_dropout_probability(self) -> None:
-        probability = self.embedding_options.dropout_probability
-        if not 0.0 <= probability <= 1.0:
-            raise ValueError(
-                "embedding dropout_probability must be in [0.0, 1.0], "
-                f"received {probability}."
-            )
-
-    def __validate_tied_vocabulary_dimensions(self) -> None:
-        if not self.mlm_head_options.decoder_weight_tying_flag:
-            return
-        if self.input_dim != self.output_dim:
-            raise ValueError(
-                "BERT MLM decoder weight tying requires input_dim to equal "
-                f"output_dim, received input_dim={self.input_dim} and "
-                f"output_dim={self.output_dim}."
-            )

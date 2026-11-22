@@ -1,10 +1,10 @@
-from emperor.layers import LayerConfig, LayerStackConfig
-from emperor.linears import LinearLayerConfig
+from emperor.layers import LayerStackConfig
+from models import _controller_stack, _stack_controllers
 from models.bert.linear.runtime_options import (
     SubmoduleStackOptions,
+    SubmoduleStackSource,
+    resolve_controller_stack_options,
 )
-
-from ._residual import build_residual_config
 
 
 def build_controller_stack_config(
@@ -15,27 +15,15 @@ def build_controller_stack_config(
 ) -> LayerStackConfig:
     """Build the package-local stack used by controller models."""
 
-    return LayerStackConfig(
-        hidden_dim=options.hidden_dim if hidden_dim is None else hidden_dim,
-        output_dim=output_dim,
-        num_layers=options.num_layers,
-        last_layer_bias_option=options.last_layer_bias_option,
-        apply_output_postprocessing_flag=options.apply_output_postprocessing_flag,
-        layer_config=LayerConfig(
-            activation=options.activation,
-            layer_norm_position=options.layer_norm_position,
-            normalization=options.normalization,
-            residual_config=build_residual_config(
-                options.residual_connection_option,
-                options.residual_model_flag,
-                options.residual_stack_options,
-                residual_block_size=options.residual_block_size,
-                residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-            ),
-            dropout_probability=options.dropout_probability,
-            halting_config=None,
-            gate_config=None,
-            memory_config=None,
-            layer_model_config=LinearLayerConfig(bias_flag=options.bias_flag),
-        ),
+    return _controller_stack.build_controller_stack_config(
+        options, hidden_dim=hidden_dim, output_dim=output_dim
+    )
+
+
+def controller_stacks() -> _stack_controllers.ControllerStacks[
+    SubmoduleStackSource, SubmoduleStackOptions
+]:
+    return _stack_controllers.ControllerStacks(
+        resolve=resolve_controller_stack_options,
+        build=build_controller_stack_config,
     )

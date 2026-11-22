@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from types import ModuleType
-from typing import cast
+from typing import TypedDict, cast
 
 from emperor.augmentations.adaptive_parameters import (
     AxisMaskConfig,
@@ -42,14 +42,20 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models import _sequence_expansion
+from models._stack_options import resolve_expert_controller, resolve_expert_options
 from models.bert.expert_linear_adaptive import _generation
 from models.bert.expert_linear_adaptive._generation import (
     BiasGenerationOptions,
     WeightGenerationOptions,
 )
-from models.bert.expert_linear_adaptive._residual import ResidualStackOptions
+from models.bert.expert_linear_adaptive._residual import (
+    ResidualStackOptions,
+)
+from models.bert.expert_linear_adaptive._residual import (
+    inherit_if_unset as inherit_if_unset,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +79,11 @@ class ExpertsStackOptions:
     last_layer_bias_option: LastLayerBiasOptions
     apply_output_postprocessing_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class ExpertsSubmoduleStackOptions:
@@ -95,6 +106,11 @@ class ExpertsSubmoduleStackOptions:
     dropout_probability: float
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class ExpertsSubmoduleStackSource:
@@ -112,6 +128,10 @@ class ExpertsSubmoduleStackSource:
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
     dropout_probability: float | None
     bias_flag: bool | None
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_stack_source(validation, self)
 
 
 def resolve_experts_submodule_stack_options(
@@ -131,51 +151,23 @@ def resolve_experts_submodule_stack_options(
     dropout_probability: float | None = None,
     bias_flag: bool | None = None,
 ) -> ExpertsSubmoduleStackOptions:
-    return ExpertsSubmoduleStackOptions(
-        hidden_dim=defaults.hidden_dim if hidden_dim is None else hidden_dim,
-        num_layers=defaults.num_layers if num_layers is None else num_layers,
-        last_layer_bias_option=(
-            defaults.last_layer_bias_option
-            if last_layer_bias_option is None
-            else last_layer_bias_option
-        ),
-        apply_output_postprocessing_flag=(
-            defaults.apply_output_postprocessing_flag
-            if apply_output_postprocessing_flag is None
-            else apply_output_postprocessing_flag
-        ),
-        activation=defaults.activation if activation is None else activation,
-        layer_norm_position=(
-            defaults.layer_norm_position
-            if layer_norm_position is None
-            else layer_norm_position
-        ),
-        normalization=(
-            defaults.normalization if normalization is None else normalization
-        ),
-        residual_connection_option=(
-            defaults.residual_connection_option
-            if residual_connection_option is None
-            else residual_connection_option
-        ),
-        residual_block_size=defaults.residual_block_size
-        if residual_block_size is None
-        else residual_block_size,
-        residual_rms_norm_epsilon=defaults.residual_rms_norm_epsilon
-        if residual_rms_norm_epsilon is None
-        else residual_rms_norm_epsilon,
-        residual_model_flag=(
-            defaults.residual_model_flag
-            if residual_model_flag is None
-            else residual_model_flag
-        ),
-        residual_stack_options=defaults.residual_stack_options,
-        dropout_probability=(
-            defaults.dropout_probability
-            if dropout_probability is None
-            else dropout_probability
-        ),
-        bias_flag=defaults.bias_flag if bias_flag is None else bias_flag,
+    return resolve_expert_options(
+        ExpertsSubmoduleStackOptions,
+        defaults,
+        residual_stack_last=False,
+        hidden_dim=hidden_dim,
+        num_layers=num_layers,
+        last_layer_bias_option=last_layer_bias_option,
+        apply_output_postprocessing_flag=apply_output_postprocessing_flag,
+        activation=activation,
+        layer_norm_position=layer_norm_position,
+        normalization=normalization,
+        residual_connection_option=residual_connection_option,
+        residual_model_flag=residual_model_flag,
+        residual_block_size=residual_block_size,
+        residual_rms_norm_epsilon=residual_rms_norm_epsilon,
+        dropout_probability=dropout_probability,
+        bias_flag=bias_flag,
     )
 
 
@@ -183,23 +175,8 @@ def resolve_experts_controller_stack_options(
     source: ExpertsSubmoduleStackSource,
     defaults: ExpertsSubmoduleStackOptions,
 ) -> ExpertsSubmoduleStackOptions:
-    if not source.independent_flag:
-        return defaults
-    return resolve_experts_submodule_stack_options(
-        defaults,
-        hidden_dim=source.hidden_dim,
-        num_layers=source.num_layers,
-        last_layer_bias_option=source.last_layer_bias_option,
-        apply_output_postprocessing_flag=source.apply_output_postprocessing_flag,
-        activation=source.activation,
-        layer_norm_position=source.layer_norm_position,
-        normalization=source.normalization,
-        residual_connection_option=source.residual_connection_option,
-        residual_block_size=source.residual_block_size,
-        residual_rms_norm_epsilon=source.residual_rms_norm_epsilon,
-        residual_model_flag=source.residual_model_flag,
-        dropout_probability=source.dropout_probability,
-        bias_flag=source.bias_flag,
+    return resolve_expert_controller(
+        source, defaults, resolve_experts_submodule_stack_options
     )
 
 
@@ -248,6 +225,10 @@ class ExpertsLayerControllerOptions:
     shared_gate_config: GateConfig | None = None
     halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_controller(validation, self)
+
 
 @dataclass(frozen=True, slots=True)
 class ExpertsDynamicMemoryOptions:
@@ -258,6 +239,10 @@ class ExpertsDynamicMemoryOptions:
     memory_num_memory_slots: int = field(default=4, kw_only=True)
     memory_test_time_training_num_inner_steps: int | None
     memory_stack_source: ExpertsSubmoduleStackSource
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_memory(validation, self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +293,15 @@ class ExpertsRecurrentControllerOptions:
     recurrent_halting_stack_source: ExpertsSubmoduleStackSource
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("recurrent_max_steps", self.recurrent_max_steps)
+        _attention_settings.validate_recurrent_controller(validation, self)
+        _attention_settings.validate_residual(
+            "recurrent_residual_connection_option",
+            self.recurrent_residual_connection_option,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class ExpertsAdaptiveGeneratorStackOptions:
@@ -328,6 +322,11 @@ class ExpertsAdaptiveGeneratorStackOptions:
         default=None, kw_only=True
     )
     dropout_probability: float
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -351,6 +350,11 @@ class AdaptiveGeneratorStackOptions:
     apply_output_postprocessing_flag: bool
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class HiddenAdaptiveWeightOptions:
@@ -369,6 +373,18 @@ class HiddenAdaptiveWeightOptions:
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
     normalization_learnable_scale_flag: bool = False
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.option is None:
+            raise ValueError(
+                "weight_option must be set when weight_option_flag is True"
+            )
+        validation.positive_integer("generator_depth", self.generator_depth)
+        validation.nonnegative_float("decay_rate", self.decay_rate)
+        validation.nonnegative_integer(
+            "decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class HiddenAdaptiveBiasOptions:
@@ -383,12 +399,27 @@ class HiddenAdaptiveBiasOptions:
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.option is None:
+            raise ValueError("bias_option must be set when bias_option_flag is True")
+        validation.nonnegative_float("decay_rate", self.decay_rate)
+        validation.nonnegative_integer(
+            "decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class HiddenAdaptiveDiagonalOptions:
     option_flag: bool
     option: type[DynamicDiagonalConfig] | None
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
+
+    def __post_init__(self) -> None:
+        if self.option_flag and self.option is None:
+            raise ValueError(
+                "diagonal_option must be set when diagonal_option_flag is True"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -401,6 +432,14 @@ class HiddenAdaptiveMaskOptions:
     mask_floor: float
     mask_transition_width: float
     generator_stack_source: _generation.AdaptiveGeneratorStackSource
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        if self.option_flag and self.row_mask_option is None:
+            raise ValueError(
+                "row_mask_option must be set when mask_option_flag is True"
+            )
+        _attention_settings.validate_mask(validation, self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -419,6 +458,10 @@ class SubmoduleStackSource:
     residual_rms_norm_epsilon: float | None = field(default=None, kw_only=True)
     dropout_probability: float | None
     bias_flag: bool | None
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_stack_source(validation, self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -442,6 +485,11 @@ class SubmoduleStackOptions:
     dropout_probability: float
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class MainLayerStackOptions:
@@ -463,6 +511,10 @@ class MainLayerStackOptions:
     last_layer_bias_option: LastLayerBiasOptions
     apply_output_postprocessing_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class LayerControllerOptions:
@@ -478,6 +530,10 @@ class LayerControllerOptions:
     shared_gate_config: GateConfig | None = None
     halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_controller(validation, self)
+
 
 @dataclass(frozen=True, slots=True)
 class DynamicMemoryOptions:
@@ -488,6 +544,10 @@ class DynamicMemoryOptions:
     memory_num_memory_slots: int = field(default=4, kw_only=True)
     memory_test_time_training_num_inner_steps: int | None
     memory_stack_source: SubmoduleStackSource
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        _attention_settings.validate_memory(validation, self)
 
 
 @dataclass(frozen=True, slots=True)
@@ -519,6 +579,11 @@ class RecurrentControllerOptions:
     recurrent_halting_stack_source: SubmoduleStackSource
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("recurrent_max_steps", self.recurrent_max_steps)
+        _attention_settings.validate_recurrent_controller(validation, self)
+
 
 @dataclass(frozen=True, slots=True)
 class TransformerEncoderOptions(_sequence_expansion.SequenceExpansionOptions):
@@ -534,6 +599,12 @@ class TransformerEncoderOptions(_sequence_expansion.SequenceExpansionOptions):
         default=NormalizationOptions.RMS_NORM, kw_only=True
     )
     causal_attention_mask_flag: bool = False
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("hidden_dim", self.hidden_dim)
+        validation.positive_integer("num_layers", self.num_layers)
+        validation.dropout("dropout_probability", self.dropout_probability)
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,12 +623,21 @@ class TransformerAttentionOptions(_source_memory.AttentionSourceMemoryOptions):
     add_key_value_bias_flag: bool
     source_memory_flag: bool = False
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("num_layers", self.num_layers)
+        validation.positive_integer("num_heads", self.num_heads)
+
 
 @dataclass(frozen=True, slots=True)
 class TransformerFeedForwardOptions:
     soft_moe_config: SoftMoEConfig | None = field(default=None, kw_only=True)
     num_layers: int
     bias_flag: bool
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("num_layers", self.num_layers)
 
 
 @dataclass(frozen=True, slots=True)
@@ -575,6 +655,11 @@ class BertEmbeddingOptions:
         default=NormalizationOptions.LAYER_NORM, kw_only=True
     )
     dropout_probability: float
+
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("token_type_vocab_size", self.token_type_vocab_size)
+        validation.dropout("dropout_probability", self.dropout_probability)
 
 
 @dataclass(frozen=True, slots=True)
@@ -596,9 +681,13 @@ class BertNspHeadOptions:
     output_dim: int
     head_bias_flag: bool
 
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        validation.positive_integer("nsp_output_dim", self.output_dim)
+
 
 @dataclass(frozen=True, slots=True)
-class _ConstructionOptions:
+class ConstructionOptions:
     attention_grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
     feed_forward_grouping_config: GroupingConfig | None = field(
         default=None, kw_only=True
@@ -610,13 +699,13 @@ class _ConstructionOptions:
     input_dim: int
     output_dim: int
     sequence_length: int
-    embedding_options: BertEmbeddingOptions | None
-    mlm_head_options: BertMlmHeadOptions | None
-    nsp_head_options: BertNspHeadOptions | None
-    encoder_options: TransformerEncoderOptions | None
-    positional_embedding_options: TransformerPositionalEmbeddingOptions | None
-    attention_options: TransformerAttentionOptions | None
-    feed_forward_options: TransformerFeedForwardOptions | None
+    embedding_options: BertEmbeddingOptions
+    mlm_head_options: BertMlmHeadOptions
+    nsp_head_options: BertNspHeadOptions
+    encoder_options: TransformerEncoderOptions
+    positional_embedding_options: TransformerPositionalEmbeddingOptions
+    attention_options: TransformerAttentionOptions
+    feed_forward_options: TransformerFeedForwardOptions
     attention_projection_stack_options: ExpertsSubmoduleStackOptions | None
     attention_projection_layer_controller_options: ExpertsLayerControllerOptions | None
     attention_projection_dynamic_memory_options: ExpertsDynamicMemoryOptions | None
@@ -627,45 +716,59 @@ class _ConstructionOptions:
     feed_forward_layer_controller_options: ExpertsLayerControllerOptions | None
     feed_forward_dynamic_memory_options: ExpertsDynamicMemoryOptions | None
     feed_forward_recurrent_controller_options: ExpertsRecurrentControllerOptions | None
-    submodule_stack_options: ExpertsSubmoduleStackOptions | None
-    layer_controller_options: ExpertsLayerControllerOptions | None
-    dynamic_memory_options: ExpertsDynamicMemoryOptions | None
-    recurrent_controller_options: ExpertsRecurrentControllerOptions | None
-    mixture_options: ExpertsMixtureOptions | None
-    mixture_submodule_stack_options: ExpertsSubmoduleStackOptions | None
-    mixture_layer_controller_options: ExpertsLayerControllerOptions | None
-    mixture_dynamic_memory_options: ExpertsDynamicMemoryOptions | None
-    mixture_recurrent_controller_options: ExpertsRecurrentControllerOptions | None
-    expert_stack_options: ExpertsSubmoduleStackOptions | None
-    sampler_options: ExpertsSamplerOptions | None
-    router_options: ExpertsRouterOptions | None
-    router_stack_options: ExpertsSubmoduleStackOptions | None
-    router_layer_controller_options: ExpertsLayerControllerOptions | None
-    router_dynamic_memory_options: ExpertsDynamicMemoryOptions | None
-    router_recurrent_controller_options: ExpertsRecurrentControllerOptions | None
-    expert_layer_controller_options: ExpertsLayerControllerOptions | None
-    expert_dynamic_memory_options: ExpertsDynamicMemoryOptions | None
-    expert_recurrent_controller_options: ExpertsRecurrentControllerOptions | None
-    adaptive_generator_stack_options: AdaptiveGeneratorStackOptions | None
-    hidden_adaptive_weight_options: HiddenAdaptiveWeightOptions | None
-    hidden_adaptive_bias_options: HiddenAdaptiveBiasOptions | None
-    hidden_adaptive_diagonal_options: HiddenAdaptiveDiagonalOptions | None
-    hidden_adaptive_mask_options: HiddenAdaptiveMaskOptions | None
-    router_adaptive_weight_options: HiddenAdaptiveWeightOptions | None
-    router_adaptive_bias_options: HiddenAdaptiveBiasOptions | None
-    router_adaptive_diagonal_options: HiddenAdaptiveDiagonalOptions | None
-    router_adaptive_mask_options: HiddenAdaptiveMaskOptions | None
+    submodule_stack_options: ExpertsSubmoduleStackOptions
+    layer_controller_options: ExpertsLayerControllerOptions
+    dynamic_memory_options: ExpertsDynamicMemoryOptions
+    recurrent_controller_options: ExpertsRecurrentControllerOptions
+    mixture_options: ExpertsMixtureOptions
+    mixture_submodule_stack_options: ExpertsSubmoduleStackOptions
+    mixture_layer_controller_options: ExpertsLayerControllerOptions
+    mixture_dynamic_memory_options: ExpertsDynamicMemoryOptions
+    mixture_recurrent_controller_options: ExpertsRecurrentControllerOptions
+    expert_stack_options: ExpertsSubmoduleStackOptions
+    sampler_options: ExpertsSamplerOptions
+    router_options: ExpertsRouterOptions
+    router_stack_options: ExpertsSubmoduleStackOptions
+    router_layer_controller_options: ExpertsLayerControllerOptions
+    router_dynamic_memory_options: ExpertsDynamicMemoryOptions
+    router_recurrent_controller_options: ExpertsRecurrentControllerOptions
+    expert_layer_controller_options: ExpertsLayerControllerOptions
+    expert_dynamic_memory_options: ExpertsDynamicMemoryOptions
+    expert_recurrent_controller_options: ExpertsRecurrentControllerOptions
+    adaptive_generator_stack_options: AdaptiveGeneratorStackOptions
+    hidden_adaptive_weight_options: HiddenAdaptiveWeightOptions
+    hidden_adaptive_bias_options: HiddenAdaptiveBiasOptions
+    hidden_adaptive_diagonal_options: HiddenAdaptiveDiagonalOptions
+    hidden_adaptive_mask_options: HiddenAdaptiveMaskOptions
+    router_adaptive_weight_options: HiddenAdaptiveWeightOptions
+    router_adaptive_bias_options: HiddenAdaptiveBiasOptions
+    router_adaptive_diagonal_options: HiddenAdaptiveDiagonalOptions
+    router_adaptive_mask_options: HiddenAdaptiveMaskOptions
     expert_attention_use_kv_expert_models_flag: bool
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(ResolvedRuntimeOptions):
-    def _construction_options(
+    def __post_init__(self) -> None:
+        validation = _attention_settings.strict_float_validation(__package__)
+        ResolvedRuntimeOptions.__post_init__(self)
+        _attention_settings.validate_dimensions(validation, self._values)
+
+    def construction_options(
         self,
         config_module: ModuleType,
-    ) -> _ConstructionOptions:
+        *,
+        group_defaults: "RuntimeOptions",
+    ) -> ConstructionOptions:
         values = self._values
-        return _ConstructionOptions(
+
+        def option_group(name: str) -> object:
+            selected = values.get(name) or group_defaults._values[name]
+            if selected is None:
+                raise ValueError(f"Missing construction defaults for {name}")
+            return selected
+
+        return ConstructionOptions(
             attention_grouping_config=cast(
                 GroupingConfig | None, values.get("attention_grouping_config")
             ),
@@ -684,180 +787,180 @@ class RuntimeOptions(ResolvedRuntimeOptions):
                 values.get("sequence_length", config_module.SEQUENCE_LENGTH),
             ),
             embedding_options=cast(
-                BertEmbeddingOptions | None,
-                values.get("embedding_options"),
+                BertEmbeddingOptions,
+                option_group("embedding_options"),
             ),
             mlm_head_options=cast(
-                BertMlmHeadOptions | None,
-                values.get("mlm_head_options"),
+                BertMlmHeadOptions,
+                option_group("mlm_head_options"),
             ),
             nsp_head_options=cast(
-                BertNspHeadOptions | None,
-                values.get("nsp_head_options"),
+                BertNspHeadOptions,
+                option_group("nsp_head_options"),
             ),
             encoder_options=cast(
-                TransformerEncoderOptions | None,
-                values.get("encoder_options"),
+                TransformerEncoderOptions,
+                option_group("encoder_options"),
             ),
             positional_embedding_options=cast(
-                TransformerPositionalEmbeddingOptions | None,
-                values.get("positional_embedding_options"),
+                TransformerPositionalEmbeddingOptions,
+                option_group("positional_embedding_options"),
             ),
             attention_options=cast(
-                TransformerAttentionOptions | None,
-                values.get("attention_options"),
+                TransformerAttentionOptions,
+                option_group("attention_options"),
             ),
             feed_forward_options=cast(
-                TransformerFeedForwardOptions | None,
-                values.get("feed_forward_options"),
+                TransformerFeedForwardOptions,
+                option_group("feed_forward_options"),
             ),
             attention_projection_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("attention_projection_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("attention_projection_stack_options"),
             ),
             attention_projection_layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("attention_projection_layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("attention_projection_layer_controller_options"),
             ),
             attention_projection_dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("attention_projection_dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("attention_projection_dynamic_memory_options"),
             ),
             attention_projection_recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("attention_projection_recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("attention_projection_recurrent_controller_options"),
             ),
             feed_forward_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("feed_forward_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("feed_forward_stack_options"),
             ),
             feed_forward_layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("feed_forward_layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("feed_forward_layer_controller_options"),
             ),
             feed_forward_dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("feed_forward_dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("feed_forward_dynamic_memory_options"),
             ),
             feed_forward_recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("feed_forward_recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("feed_forward_recurrent_controller_options"),
             ),
             submodule_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("submodule_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("submodule_stack_options"),
             ),
             layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("layer_controller_options"),
             ),
             dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("dynamic_memory_options"),
             ),
             recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("recurrent_controller_options"),
             ),
             mixture_options=cast(
-                ExpertsMixtureOptions | None,
-                values.get("mixture_options"),
+                ExpertsMixtureOptions,
+                option_group("mixture_options"),
             ),
             mixture_submodule_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("mixture_submodule_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("mixture_submodule_stack_options"),
             ),
             mixture_layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("mixture_layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("mixture_layer_controller_options"),
             ),
             mixture_dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("mixture_dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("mixture_dynamic_memory_options"),
             ),
             mixture_recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("mixture_recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("mixture_recurrent_controller_options"),
             ),
             expert_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("expert_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("expert_stack_options"),
             ),
             sampler_options=cast(
-                ExpertsSamplerOptions | None,
-                values.get("sampler_options"),
+                ExpertsSamplerOptions,
+                option_group("sampler_options"),
             ),
             router_options=cast(
-                ExpertsRouterOptions | None,
-                values.get("router_options"),
+                ExpertsRouterOptions,
+                option_group("router_options"),
             ),
             router_stack_options=cast(
-                ExpertsSubmoduleStackOptions | None,
-                values.get("router_stack_options"),
+                ExpertsSubmoduleStackOptions,
+                option_group("router_stack_options"),
             ),
             router_layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("router_layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("router_layer_controller_options"),
             ),
             router_dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("router_dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("router_dynamic_memory_options"),
             ),
             router_recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("router_recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("router_recurrent_controller_options"),
             ),
             expert_layer_controller_options=cast(
-                ExpertsLayerControllerOptions | None,
-                values.get("expert_layer_controller_options"),
+                ExpertsLayerControllerOptions,
+                option_group("expert_layer_controller_options"),
             ),
             expert_dynamic_memory_options=cast(
-                ExpertsDynamicMemoryOptions | None,
-                values.get("expert_dynamic_memory_options"),
+                ExpertsDynamicMemoryOptions,
+                option_group("expert_dynamic_memory_options"),
             ),
             expert_recurrent_controller_options=cast(
-                ExpertsRecurrentControllerOptions | None,
-                values.get("expert_recurrent_controller_options"),
+                ExpertsRecurrentControllerOptions,
+                option_group("expert_recurrent_controller_options"),
             ),
             adaptive_generator_stack_options=cast(
-                AdaptiveGeneratorStackOptions | None,
-                values.get("adaptive_generator_stack_options"),
+                AdaptiveGeneratorStackOptions,
+                option_group("adaptive_generator_stack_options"),
             ),
             grouping_config=cast(GroupingConfig | None, values.get("grouping_config")),
             hidden_adaptive_weight_options=cast(
-                HiddenAdaptiveWeightOptions | None,
-                values.get("hidden_adaptive_weight_options"),
+                HiddenAdaptiveWeightOptions,
+                option_group("hidden_adaptive_weight_options"),
             ),
             hidden_adaptive_bias_options=cast(
-                HiddenAdaptiveBiasOptions | None,
-                values.get("hidden_adaptive_bias_options"),
+                HiddenAdaptiveBiasOptions,
+                option_group("hidden_adaptive_bias_options"),
             ),
             hidden_adaptive_diagonal_options=cast(
-                HiddenAdaptiveDiagonalOptions | None,
-                values.get("hidden_adaptive_diagonal_options"),
+                HiddenAdaptiveDiagonalOptions,
+                option_group("hidden_adaptive_diagonal_options"),
             ),
             hidden_adaptive_mask_options=cast(
-                HiddenAdaptiveMaskOptions | None,
-                values.get("hidden_adaptive_mask_options"),
+                HiddenAdaptiveMaskOptions,
+                option_group("hidden_adaptive_mask_options"),
             ),
             router_grouping_config=cast(
                 GroupingConfig | None, values.get("router_grouping_config")
             ),
             router_adaptive_weight_options=cast(
-                HiddenAdaptiveWeightOptions | None,
-                values.get("router_adaptive_weight_options"),
+                HiddenAdaptiveWeightOptions,
+                option_group("router_adaptive_weight_options"),
             ),
             router_adaptive_bias_options=cast(
-                HiddenAdaptiveBiasOptions | None,
-                values.get("router_adaptive_bias_options"),
+                HiddenAdaptiveBiasOptions,
+                option_group("router_adaptive_bias_options"),
             ),
             router_adaptive_diagonal_options=cast(
-                HiddenAdaptiveDiagonalOptions | None,
-                values.get("router_adaptive_diagonal_options"),
+                HiddenAdaptiveDiagonalOptions,
+                option_group("router_adaptive_diagonal_options"),
             ),
             router_adaptive_mask_options=cast(
-                HiddenAdaptiveMaskOptions | None,
-                values.get("router_adaptive_mask_options"),
+                HiddenAdaptiveMaskOptions,
+                option_group("router_adaptive_mask_options"),
             ),
             expert_attention_use_kv_expert_models_flag=cast(
                 bool,
@@ -867,3 +970,49 @@ class RuntimeOptions(ResolvedRuntimeOptions):
                 ),
             ),
         )
+
+
+class PresetValues(TypedDict, total=False):
+    attn_add_key_value_bias_flag: bool
+    attn_bias_flag: bool
+    attn_num_heads: int
+    bias_option: type[DynamicBiasConfig] | None
+    bias_option_flag: bool
+    capacity_factor: float
+    causal_attention_mask_flag: bool
+    diagonal_option: type[DynamicDiagonalConfig] | None
+    diagonal_option_flag: bool
+    expert_attention_use_kv_expert_models_flag: bool
+    expert_bias_flag: bool
+    ff_stack_hidden_dim: int
+    generator_depth: int
+    hidden_dim: int
+    layer_norm_position: LayerNormPositionOptions
+    mask_option_flag: bool
+    memory_flag: bool
+    num_experts: int
+    positional_embedding_option: type[AbsolutePositionalEmbeddingConfig]
+    recurrent_flag: bool
+    recurrent_halting_hidden_state_mode: HaltingHiddenStateModeOptions
+    recurrent_halting_option: type[HaltingConfig]
+    recurrent_halting_threshold: float
+    recurrent_max_steps: int
+    recurrent_residual_connection_option: type[ResidualConfig] | None
+    recurrent_stack_gate_flag: bool
+    recurrent_stack_halting_flag: bool
+    sampler_normalize_probabilities_flag: bool
+    sampler_switch_loss_weight: float
+    sampler_zero_centred_loss_weight: float
+    sequence_length: int
+    stack_dropout_probability: float
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    stack_num_layers: int
+    top_k: int
+    weight_decay_rate: float
+    weight_decay_schedule: WeightDecayScheduleOptions
+    weight_decay_warmup_batches: int
+    weight_normalization_option: WeightNormalizationOptions
+    weight_normalization_position_option: WeightNormalizationPositionOptions
+    weight_option: type[DynamicWeightConfig] | None
+    weight_option_flag: bool

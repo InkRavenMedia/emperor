@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from models import _attention_source_memory as _source_memory
 from models import _bert_embedding, _sequence_expansion
+from models._residual_stack import residual_source_from_overrides
 from models.bert.expert_linear import _config_defaults as config_defaults
 from models.bert.expert_linear._experts_builder_adapter import (
     _expert_dynamic_memory_options_from_kwargs,
@@ -38,26 +39,26 @@ from models.bert.expert_linear.runtime_options import (
     TransformerPositionalEmbeddingOptions,
 )
 
-_CONTROLLER_STACK_FIELD_MAP = {
-    "independent_flag": "independent_flag",
-    "hidden_dim": "hidden_dim",
-    "num_layers": "num_layers",
-    "last_layer_bias_option": "last_layer_bias_option",
-    "apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
-    "activation": "activation",
-    "layer_norm_position": "layer_norm_position",
-    "normalization": "normalization",
-    "residual_connection_option": "residual_connection_option",
-    "residual_block_size": "residual_block_size",
-    "residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
-    "residual_model_flag": "residual_model_flag",
-    "dropout_probability": "dropout_probability",
-    "bias_flag": "bias_flag",
-}
+_CONTROLLER_STACK_FIELDS = (
+    "independent_flag",
+    "hidden_dim",
+    "num_layers",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "activation",
+    "layer_norm_position",
+    "normalization",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "bias_flag",
+)
 
-_SUBMODULE_STACK_FIELD_MAP = {
-    field: field for field in _CONTROLLER_STACK_FIELD_MAP if field != "independent_flag"
-}
+SUBMODULE_STACK_FIELDS = tuple(
+    field for field in _CONTROLLER_STACK_FIELDS if field != "independent_flag"
+)
 
 _MODERN_TOP_LEVEL_KEYS = {
     "batch_size",
@@ -338,64 +339,7 @@ def _attach_residual_stack_options(
 ) -> None:
     defaults = builder_kwargs["submodule_stack_options"]
     residual_stack_options = resolve_residual_stack_options(
-        ResidualStackSource(
-            coefficient_activation=kwargs.get(
-                "residual_coefficient_activation",
-                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
-            ),
-            independent_flag=kwargs.get(
-                "residual_stack_independent_flag",
-                config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,
-            ),
-            hidden_dim=kwargs.get(
-                "residual_stack_hidden_dim", config_module.RESIDUAL_STACK_HIDDEN_DIM
-            ),
-            layer_norm_position=kwargs.get(
-                "residual_stack_layer_norm_position",
-                config_module.RESIDUAL_STACK_LAYER_NORM_POSITION,
-            ),
-            normalization=kwargs.get(
-                "residual_stack_normalization",
-                config_module.RESIDUAL_STACK_NORMALIZATION,
-            ),
-            num_layers=kwargs.get(
-                "residual_stack_num_layers", config_module.RESIDUAL_STACK_NUM_LAYERS
-            ),
-            activation=kwargs.get(
-                "residual_stack_activation", config_module.RESIDUAL_STACK_ACTIVATION
-            ),
-            residual_connection_option=kwargs.get(
-                "residual_stack_residual_connection_option",
-                config_module.RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION,
-            ),
-            residual_block_size=kwargs.get(
-                "residual_stack_residual_block_size",
-                config_module.RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE,
-            ),
-            residual_rms_norm_epsilon=kwargs.get(
-                "residual_stack_residual_rms_norm_epsilon",
-                config_module.RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            ),
-            residual_model_flag=kwargs.get(
-                "residual_stack_residual_model_flag",
-                config_module.RESIDUAL_STACK_RESIDUAL_MODEL_FLAG,
-            ),
-            dropout_probability=kwargs.get(
-                "residual_stack_dropout_probability",
-                config_module.RESIDUAL_STACK_DROPOUT_PROBABILITY,
-            ),
-            last_layer_bias_option=kwargs.get(
-                "residual_stack_last_layer_bias_option",
-                config_module.RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION,
-            ),
-            apply_output_postprocessing_flag=kwargs.get(
-                "residual_stack_apply_output_postprocessing_flag",
-                config_module.RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            ),
-            bias_flag=kwargs.get(
-                "residual_stack_bias_flag", config_module.RESIDUAL_STACK_BIAS_FLAG
-            ),
-        ),
+        residual_source_from_overrides(config_module, kwargs.get, ResidualStackSource),
         defaults,
     )
     for key, value in tuple(builder_kwargs.items()):
@@ -639,7 +583,7 @@ def _modern_attention_projection_stack_options(
     )
     updates = _modern_option_updates(
         kwargs,
-        {f"attn_stack_{field}": field for field in _SUBMODULE_STACK_FIELD_MAP},
+        {f"attn_stack_{field}": field for field in SUBMODULE_STACK_FIELDS},
     )
     if "attn_num_layers" in kwargs:
         updates["num_layers"] = attention_options.num_layers
@@ -663,7 +607,7 @@ def _modern_feed_forward_stack_options(
     )
     updates = _modern_option_updates(
         kwargs,
-        {f"ff_stack_{field}": field for field in _SUBMODULE_STACK_FIELD_MAP},
+        {f"ff_stack_{field}": field for field in SUBMODULE_STACK_FIELDS},
     )
     if "ff_num_layers" in kwargs:
         updates["num_layers"] = feed_forward_options.num_layers
@@ -682,7 +626,7 @@ def _modern_submodule_stack_options_with_prefix(
         options,
         **_modern_option_updates(
             kwargs,
-            {f"{flat_prefix}_{field}": field for field in _SUBMODULE_STACK_FIELD_MAP},
+            {f"{flat_prefix}_{field}": field for field in SUBMODULE_STACK_FIELDS},
         ),
     )
 
@@ -695,7 +639,9 @@ def _modern_layer_controller_options(
     role: Literal["main", "attention", "feed_forward"],
     provided: LayerControllerOptions | None,
 ) -> LayerControllerOptions:
-    flat_lead = f"{flat_prefix}_" if flat_prefix else ""
+    flat_lead = ""
+    if flat_prefix:
+        flat_lead = f"{flat_prefix}_"
     gate_stack_flat_prefix = f"{flat_lead}gate_stack"
     halting_stack_flat_prefix = f"{flat_lead}halting_stack"
     options = provided or config_defaults.linears_layer_controller_options(
@@ -746,7 +692,9 @@ def _modern_dynamic_memory_options(
     role: Literal["main", "attention", "feed_forward"],
     provided: DynamicMemoryOptions | None,
 ) -> DynamicMemoryOptions:
-    flat_lead = f"{flat_prefix}_" if flat_prefix else ""
+    flat_lead = ""
+    if flat_prefix:
+        flat_lead = f"{flat_prefix}_"
     options = provided or config_defaults.linears_dynamic_memory_options(
         config_module,
         role,
@@ -842,7 +790,7 @@ def _modern_controller_stack_source_from_kwargs(
         source,
         **_modern_option_updates(
             kwargs,
-            {f"{flat_prefix}_{field}": field for field in _CONTROLLER_STACK_FIELD_MAP},
+            {f"{flat_prefix}_{field}": field for field in _CONTROLLER_STACK_FIELDS},
         ),
     )
 
@@ -926,9 +874,9 @@ def _modern_supported_flat_keys() -> set[str]:
             "bias_flag",
         )
     )
-    keys.update(f"submodule_stack_{field}" for field in _SUBMODULE_STACK_FIELD_MAP)
-    keys.update(f"attn_stack_{field}" for field in _SUBMODULE_STACK_FIELD_MAP)
-    keys.update(f"ff_stack_{field}" for field in _SUBMODULE_STACK_FIELD_MAP)
+    keys.update(f"submodule_stack_{field}" for field in SUBMODULE_STACK_FIELDS)
+    keys.update(f"attn_stack_{field}" for field in SUBMODULE_STACK_FIELDS)
+    keys.update(f"ff_stack_{field}" for field in SUBMODULE_STACK_FIELDS)
     keys.update(_modern_role_control_flat_keys(""))
     keys.update(_modern_role_control_flat_keys("attn"))
     keys.update(_modern_role_control_flat_keys("ff"))
@@ -939,7 +887,9 @@ def _modern_supported_flat_keys() -> set[str]:
 
 
 def _modern_role_control_flat_keys(prefix: str) -> set[str]:
-    lead = f"{prefix}_" if prefix else ""
+    lead = ""
+    if prefix:
+        lead = f"{prefix}_"
     keys = {
         f"{lead}stack_gate_flag",
         f"{lead}gate_option",
@@ -959,9 +909,7 @@ def _modern_role_control_flat_keys(prefix: str) -> set[str]:
     if not prefix:
         keys.update({"stack_gate_flag", "stack_halting_flag"})
     for stack_name in ("gate_stack", "halting_stack", "memory_stack"):
-        keys.update(
-            f"{lead}{stack_name}_{field}" for field in _CONTROLLER_STACK_FIELD_MAP
-        )
+        keys.update(f"{lead}{stack_name}_{field}" for field in _CONTROLLER_STACK_FIELDS)
     return keys
 
 
@@ -988,6 +936,6 @@ def _modern_recurrent_flat_keys(prefix: str) -> set[str]:
     }
     for stack_name in ("gate_stack", "halting_stack"):
         keys.update(
-            f"{prefix}_{stack_name}_{field}" for field in _CONTROLLER_STACK_FIELD_MAP
+            f"{prefix}_{stack_name}_{field}" for field in _CONTROLLER_STACK_FIELDS
         )
     return keys

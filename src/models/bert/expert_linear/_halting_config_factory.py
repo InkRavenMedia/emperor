@@ -1,122 +1,13 @@
-from dataclasses import replace
-
-from emperor.halting import HaltingConfig
-from emperor.layers import (
-    LastLayerBiasOptions,
-    LayerStackConfig,
-)
+from models import _stack_controllers
 from models.bert.expert_linear.runtime_options import (
-    LayerControllerOptions,
-    RecurrentControllerOptions,
     SubmoduleStackOptions,
-    resolve_controller_stack_options,
+    SubmoduleStackSource,
 )
 
-from ._controller_stack_config import build_controller_stack_config
-
-STICK_BREAKING_GATE_OUTPUT_DIM = 2
+from ._controller_stack_config import controller_stacks
 
 
-class HaltingConfigFactory:
-    def __init__(
-        self,
-        *,
-        layer_controller_options: LayerControllerOptions,
-        recurrent_controller_options: RecurrentControllerOptions,
-        submodule_stack_options: SubmoduleStackOptions,
-        output_dim: int,
-        halting_stack_defaults: SubmoduleStackOptions | None = None,
-        recurrent_stack_inherits_halting_stack: bool = True,
-    ) -> None:
-        self.layer_controller_options = layer_controller_options
-        self.recurrent_controller_options = recurrent_controller_options
-        self.submodule_stack_options = submodule_stack_options
-        self.output_dim = output_dim
-        self.halting_stack_defaults = halting_stack_defaults
-        self.recurrent_stack_inherits_halting_stack = (
-            recurrent_stack_inherits_halting_stack
-        )
-
-    def build_halting_config(self) -> HaltingConfig | None:
-        if not self.layer_controller_options.stack_halting_flag:
-            return None
-        halting_stack_source = self.layer_controller_options.halting_stack_source
-        halting_stack_defaults = self.__submodule_stack_defaults(
-            last_layer_bias_option=LastLayerBiasOptions.DISABLED
-        )
-        resolved_halting_stack_options = resolve_controller_stack_options(
-            halting_stack_source,
-            halting_stack_defaults,
-        )
-        halting_gate_config = self.__build_halting_gate_stack(
-            resolved_halting_stack_options,
-        )
-        return self.layer_controller_options.halting_option(
-            threshold=self.layer_controller_options.halting_threshold,
-            min_steps=1,
-            ponder_cost_weight=1.0,
-            dropout_probability=self.layer_controller_options.halting_dropout,
-            hidden_state_mode=self.layer_controller_options.halting_hidden_state_mode,
-            halting_gate_config=halting_gate_config,
-        )
-
-    def build_recurrent_halting_config(self) -> HaltingConfig | None:
-        if not self.recurrent_controller_options.recurrent_stack_halting_flag:
-            return None
-        resolved_halting_stack_defaults = self.__recurrent_halting_stack_defaults()
-        recurrent_halting_stack_source = (
-            self.recurrent_controller_options.recurrent_halting_stack_source
-        )
-        resolved_recurrent_halting_stack_options = resolve_controller_stack_options(
-            recurrent_halting_stack_source,
-            resolved_halting_stack_defaults,
-        )
-        halting_gate_config = self.__build_halting_gate_stack(
-            resolved_recurrent_halting_stack_options,
-        )
-        return self.recurrent_controller_options.recurrent_halting_option(
-            threshold=self.recurrent_controller_options.recurrent_halting_threshold,
-            min_steps=1,
-            ponder_cost_weight=1.0,
-            dropout_probability=self.recurrent_controller_options.recurrent_halting_dropout,
-            hidden_state_mode=(
-                self.recurrent_controller_options.recurrent_halting_hidden_state_mode
-            ),
-            halting_gate_config=halting_gate_config,
-        )
-
-    def __build_halting_gate_stack(
-        self,
-        options: SubmoduleStackOptions,
-    ) -> LayerStackConfig:
-        halting_hidden_dim = options.hidden_dim or self.output_dim
-        return build_controller_stack_config(
-            options,
-            hidden_dim=halting_hidden_dim,
-            output_dim=STICK_BREAKING_GATE_OUTPUT_DIM,
-        )
-
-    def __submodule_stack_defaults(
-        self,
-        *,
-        last_layer_bias_option: LastLayerBiasOptions | None = None,
-    ) -> SubmoduleStackOptions:
-        if self.halting_stack_defaults is not None:
-            return self.halting_stack_defaults
-        if last_layer_bias_option is None:
-            return self.submodule_stack_options
-        return replace(
-            self.submodule_stack_options,
-            last_layer_bias_option=last_layer_bias_option,
-        )
-
-    def __recurrent_halting_stack_defaults(self) -> SubmoduleStackOptions:
-        halting_stack_defaults = self.__submodule_stack_defaults(
-            last_layer_bias_option=LastLayerBiasOptions.DISABLED
-        )
-        if not self.recurrent_stack_inherits_halting_stack:
-            return halting_stack_defaults
-        return resolve_controller_stack_options(
-            self.layer_controller_options.halting_stack_source,
-            halting_stack_defaults,
-        )
+class HaltingConfigFactory(
+    _stack_controllers.HaltingConfigFactory[SubmoduleStackSource, SubmoduleStackOptions]
+):
+    stacks = controller_stacks()

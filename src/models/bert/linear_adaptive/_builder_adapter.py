@@ -6,14 +6,15 @@ from typing import Any, TypeVar, cast
 
 from models import _attention_source_memory as _source_memory
 from models import _bert_embedding, _sequence_expansion
+from models._adaptive_grouping import apply_grouping_options, grouping_keys
+from models._flat_updates import pop_updates as _pop_updates
+from models._residual_stack import residual_source_from_overrides
 from models.bert.linear_adaptive import _config_defaults as config_defaults
-from models.bert.linear_adaptive._flat_updates import pop_updates as _pop_updates
 from models.bert.linear_adaptive._generation import (
     AdaptiveGeneratorStackSource,
     apply_generation_options,
     generation_keys,
 )
-from models.bert.linear_adaptive._grouping import apply_grouping_options, grouping_keys
 from models.bert.linear_adaptive._linears_builder_adapter import (
     _adaptive_generator_stack_options_from_kwargs,
     _auto_enable_adaptive_option_flags,
@@ -94,42 +95,40 @@ _ADAPTIVE_GROUPED_KEYS = {
     "feed_forward_hidden_adaptive_diagonal_options",
     "feed_forward_hidden_adaptive_mask_options",
 }
-_CONTROLLER_STACK_FIELD_MAP = {
-    "independent_flag": "independent_flag",
-    "hidden_dim": "hidden_dim",
-    "num_layers": "num_layers",
-    "last_layer_bias_option": "last_layer_bias_option",
-    "apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
-    "activation": "activation",
-    "layer_norm_position": "layer_norm_position",
-    "normalization": "normalization",
-    "residual_connection_option": "residual_connection_option",
-    "residual_block_size": "residual_block_size",
-    "residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
-    "residual_model_flag": "residual_model_flag",
-    "dropout_probability": "dropout_probability",
-    "bias_flag": "bias_flag",
-}
-_SUBMODULE_STACK_FIELD_MAP = {
-    key: value
-    for key, value in _CONTROLLER_STACK_FIELD_MAP.items()
-    if key != "independent_flag"
-}
-_ADAPTIVE_GENERATOR_STACK_FIELD_MAP = {
-    "hidden_dim": "hidden_dim",
-    "layer_norm_position": "layer_norm_position",
-    "normalization": "normalization",
-    "num_layers": "num_layers",
-    "activation": "activation",
-    "residual_connection_option": "residual_connection_option",
-    "residual_block_size": "residual_block_size",
-    "residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
-    "residual_model_flag": "residual_model_flag",
-    "dropout_probability": "dropout_probability",
-    "last_layer_bias_option": "last_layer_bias_option",
-    "apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
-    "bias_flag": "bias_flag",
-}
+_CONTROLLER_STACK_FIELDS = (
+    "independent_flag",
+    "hidden_dim",
+    "num_layers",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "activation",
+    "layer_norm_position",
+    "normalization",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "bias_flag",
+)
+_SUBMODULE_STACK_FIELDS = tuple(
+    field for field in _CONTROLLER_STACK_FIELDS if field != "independent_flag"
+)
+_ADAPTIVE_GENERATOR_STACK_FIELDS = (
+    "hidden_dim",
+    "layer_norm_position",
+    "normalization",
+    "num_layers",
+    "activation",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "bias_flag",
+)
 
 
 def linear_adaptive_builder_kwargs_from_flat(
@@ -203,64 +202,7 @@ def _attach_residual_stack_options(
             config_defaults.LinearRole.MAIN,
         )
     residual_stack_options = resolve_residual_stack_options(
-        ResidualStackSource(
-            coefficient_activation=kwargs.get(
-                "residual_coefficient_activation",
-                config_module.RESIDUAL_COEFFICIENT_ACTIVATION,
-            ),
-            independent_flag=kwargs.get(
-                "residual_stack_independent_flag",
-                config_module.RESIDUAL_STACK_INDEPENDENT_FLAG,
-            ),
-            hidden_dim=kwargs.get(
-                "residual_stack_hidden_dim", config_module.RESIDUAL_STACK_HIDDEN_DIM
-            ),
-            layer_norm_position=kwargs.get(
-                "residual_stack_layer_norm_position",
-                config_module.RESIDUAL_STACK_LAYER_NORM_POSITION,
-            ),
-            normalization=kwargs.get(
-                "residual_stack_normalization",
-                config_module.RESIDUAL_STACK_NORMALIZATION,
-            ),
-            num_layers=kwargs.get(
-                "residual_stack_num_layers", config_module.RESIDUAL_STACK_NUM_LAYERS
-            ),
-            activation=kwargs.get(
-                "residual_stack_activation", config_module.RESIDUAL_STACK_ACTIVATION
-            ),
-            residual_connection_option=kwargs.get(
-                "residual_stack_residual_connection_option",
-                config_module.RESIDUAL_STACK_RESIDUAL_CONNECTION_OPTION,
-            ),
-            residual_block_size=kwargs.get(
-                "residual_stack_residual_block_size",
-                config_module.RESIDUAL_STACK_RESIDUAL_BLOCK_SIZE,
-            ),
-            residual_rms_norm_epsilon=kwargs.get(
-                "residual_stack_residual_rms_norm_epsilon",
-                config_module.RESIDUAL_STACK_RESIDUAL_RMS_NORM_EPSILON,
-            ),
-            residual_model_flag=kwargs.get(
-                "residual_stack_residual_model_flag",
-                config_module.RESIDUAL_STACK_RESIDUAL_MODEL_FLAG,
-            ),
-            dropout_probability=kwargs.get(
-                "residual_stack_dropout_probability",
-                config_module.RESIDUAL_STACK_DROPOUT_PROBABILITY,
-            ),
-            last_layer_bias_option=kwargs.get(
-                "residual_stack_last_layer_bias_option",
-                config_module.RESIDUAL_STACK_LAST_LAYER_BIAS_OPTION,
-            ),
-            apply_output_postprocessing_flag=kwargs.get(
-                "residual_stack_apply_output_postprocessing_flag",
-                config_module.RESIDUAL_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG,
-            ),
-            bias_flag=kwargs.get(
-                "residual_stack_bias_flag", config_module.RESIDUAL_STACK_BIAS_FLAG
-            ),
-        ),
+        residual_source_from_overrides(config_module, kwargs.get, ResidualStackSource),
         submodule_stack_options,
     )
     builder_kwargs["submodule_stack_options"] = replace(
@@ -615,7 +557,7 @@ def _bert_boundary_builder_kwargs(
 
 
 def _submodule_stack_keys(flat_prefix: str) -> set[str]:
-    return {f"{flat_prefix}_{flat_field}" for flat_field in _SUBMODULE_STACK_FIELD_MAP}
+    return {f"{flat_prefix}_{flat_field}" for flat_field in _SUBMODULE_STACK_FIELDS}
 
 
 def _layer_controller_keys(
@@ -623,7 +565,9 @@ def _layer_controller_keys(
     gate_stack_prefix: str,
     halting_stack_prefix: str,
 ) -> set[str]:
-    prefix = f"{flat_prefix}_" if flat_prefix else ""
+    prefix = ""
+    if flat_prefix:
+        prefix = f"{flat_prefix}_"
     return (
         {
             f"{prefix}stack_gate_flag",
@@ -644,7 +588,9 @@ def _dynamic_memory_keys(
     flat_prefix: str,
     memory_stack_prefix: str,
 ) -> set[str]:
-    prefix = f"{flat_prefix}_" if flat_prefix else ""
+    prefix = ""
+    if flat_prefix:
+        prefix = f"{flat_prefix}_"
     return {
         f"{prefix}memory_flag",
         f"{prefix}memory_option",
@@ -1092,14 +1038,11 @@ def _adaptive_generator_stack_options_with_prefix_from_kwargs(
     )
     updates = _pop_updates(
         kwargs,
-        {
-            f"{flat_prefix}_{flat_field}": dataclass_field
-            for flat_field, dataclass_field in (
-                _ADAPTIVE_GENERATOR_STACK_FIELD_MAP.items()
-            )
-        },
+        {f"{flat_prefix}_{field}": field for field in _ADAPTIVE_GENERATOR_STACK_FIELDS},
     )
-    return replace(options, **updates) if updates else options
+    if updates:
+        options = replace(options, **updates)
+    return options
 
 
 _OptionValue = TypeVar("_OptionValue")
@@ -1110,7 +1053,9 @@ def _role_value(
     global_default: _OptionValue,
     role_default: _OptionValue,
 ) -> _OptionValue:
-    return role_default if role_default != global_default else base
+    if role_default != global_default:
+        return role_default
+    return base
 
 
 def _merge_adaptive_generator_stack_source(
@@ -1567,10 +1512,7 @@ def _submodule_stack_options_from_kwargs(
         options,
         **_updates(
             kwargs,
-            {
-                f"{flat_prefix}_{flat_field}": dataclass_field
-                for flat_field, dataclass_field in _SUBMODULE_STACK_FIELD_MAP.items()
-            },
+            {f"{flat_prefix}_{field}": field for field in _SUBMODULE_STACK_FIELDS},
         ),
     )
 
@@ -1583,29 +1525,22 @@ def _layer_controller_options_from_kwargs(
     gate_stack_prefix: str,
     halting_stack_prefix: str,
 ) -> LayerControllerOptions:
-    prefix = f"{flat_prefix}_" if flat_prefix else ""
+    prefix = ""
     if flat_prefix:
-        flag_map = {
-            f"{prefix}stack_gate_flag": "stack_gate_flag",
-            f"{prefix}gate_option": "gate_option",
-            f"{prefix}gate_activation": "gate_activation",
-            f"{prefix}stack_halting_flag": "stack_halting_flag",
-            f"{prefix}halting_option": "halting_option",
-            f"{prefix}halting_threshold": "halting_threshold",
-            f"{prefix}halting_dropout": "halting_dropout",
-            f"{prefix}halting_hidden_state_mode": "halting_hidden_state_mode",
-        }
-    else:
-        flag_map = {
-            "stack_gate_flag": "stack_gate_flag",
-            "gate_option": "gate_option",
-            "gate_activation": "gate_activation",
-            "stack_halting_flag": "stack_halting_flag",
-            "halting_option": "halting_option",
-            "halting_threshold": "halting_threshold",
-            "halting_dropout": "halting_dropout",
-            "halting_hidden_state_mode": "halting_hidden_state_mode",
-        }
+        prefix = f"{flat_prefix}_"
+    flag_map = {
+        f"{prefix}{field}": field
+        for field in (
+            "stack_gate_flag",
+            "gate_option",
+            "gate_activation",
+            "stack_halting_flag",
+            "halting_option",
+            "halting_threshold",
+            "halting_dropout",
+            "halting_hidden_state_mode",
+        )
+    }
     updates = _updates(kwargs, flag_map)
     updates["gate_stack_source"] = _controller_stack_source_from_kwargs(
         options.gate_stack_source,
@@ -1627,7 +1562,9 @@ def _dynamic_memory_options_from_kwargs(
     flat_prefix: str,
     memory_stack_prefix: str,
 ) -> DynamicMemoryOptions:
-    prefix = f"{flat_prefix}_" if flat_prefix else ""
+    prefix = ""
+    if flat_prefix:
+        prefix = f"{flat_prefix}_"
     updates = _updates(
         kwargs,
         {
@@ -1711,10 +1648,7 @@ def _controller_stack_source_from_kwargs(
         source,
         **_updates(
             kwargs,
-            {
-                f"{flat_prefix}_{flat_field}": dataclass_field
-                for flat_field, dataclass_field in _CONTROLLER_STACK_FIELD_MAP.items()
-            },
+            {f"{flat_prefix}_{field}": field for field in _CONTROLLER_STACK_FIELDS},
         ),
     )
 
@@ -1835,7 +1769,7 @@ def _ensure_feed_forward_control_dependencies(
 
 
 def _controller_stack_keys(prefix: str) -> set[str]:
-    return {f"{prefix}_{flat_field}" for flat_field in _CONTROLLER_STACK_FIELD_MAP}
+    return {f"{prefix}_{flat_field}" for flat_field in _CONTROLLER_STACK_FIELDS}
 
 
 def _updates(kwargs: dict[str, Any], field_map: dict[str, str]) -> dict[str, Any]:
