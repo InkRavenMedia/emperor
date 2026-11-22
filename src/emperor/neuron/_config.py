@@ -3,7 +3,9 @@ from typing import TYPE_CHECKING
 
 from emperor.config import ConfigBase, optional_field
 from emperor.halting import HaltingConfig
+from emperor.layers import AttentionResidualConfig
 from emperor.neuron._options import (
+    NeuronSequenceRoutingOptions,
     TerminalConnectionShapeOptions,
     TerminalRangeOptions,
     TerminalRoutingTreeDepthOptions,
@@ -110,6 +112,9 @@ class NeuronConfig(ConfigBase):
         "processing and routing are position-aware. Requires "
         "terminal_config.input_dim of at least 3. Defaults to False."
     )
+    sequence_residual_config: AttentionResidualConfig | None = optional_field(
+        "Per-neuron attention residual over completed whole-sequence routing rounds."
+    )
 
     def _registry_owner(self) -> type:
         from emperor.neuron._neuron import Neuron
@@ -215,6 +220,9 @@ class NeuronClusterConfig(ConfigBase):
     )
     neuron_config: NeuronConfig | None = optional_field(
         "Base neuron configuration used for each cluster coordinate."
+    )
+    sequence_routing_mode: NeuronSequenceRoutingOptions | None = optional_field(
+        "Route whole encoder sequences in coordinate order or by learned terminals."
     )
 
     def _registry_owner(self) -> type:

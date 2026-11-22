@@ -15,6 +15,7 @@ from emperor.neuron._neuron import Neuron
 from emperor.neuron._nucleus import Nucleus
 from emperor.neuron._optimizer_sync import NeuronClusterOptimizerSyncCallback
 from emperor.neuron._options import (
+    NeuronSequenceRoutingOptions,
     TerminalConnectionShapeOptions,
     TerminalRangeOptions,
     TerminalRoutingTreeDepthOptions,
@@ -33,6 +34,7 @@ __all__ = (
     "NeuronClusterTrace",
     "NeuronClusterTraceStep",
     "NeuronConfig",
+    "NeuronSequenceRoutingOptions",
     "Nucleus",
     "NucleusConfig",
     "Terminal",

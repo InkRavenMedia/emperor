@@ -10,6 +10,7 @@ from emperor.config import ConfigBase
 from emperor.neuron._cluster.checkpointing import ClusterCheckpointDelegate
 from emperor.neuron._cluster.plasticity import ClusterPlasticityDelegate
 from emperor.neuron._cluster.routing import ClusterRoutingDelegate
+from emperor.neuron._cluster.routing.sequences import SequenceRouting
 from emperor.neuron._cluster.routing.state import _NeuronClusterForwardContext
 from emperor.neuron._cluster.runtime_policy import inherit_runtime_policy
 from emperor.neuron._cluster.topology import ClusterTopologyDelegate
@@ -17,9 +18,11 @@ from emperor.neuron._cluster.validation import NeuronClusterValidator
 from emperor.neuron._config import NeuronClusterConfig, TerminalConfig
 from emperor.neuron._trace import NeuronClusterTrace
 from emperor.nn import Module
+from emperor.transformer import TransformerEncoderLayerState
 
 if TYPE_CHECKING:
     from emperor.halting import HaltingBase
+    from emperor.neuron._cluster.plasticity import _GrowthCounterBaseline
 
 
 class NeuronCluster(Module):
@@ -358,9 +361,32 @@ class NeuronCluster(Module):
 
     def forward(
         self,
-        input: Tensor,
+        input: Tensor | TransformerEncoderLayerState,
         return_trace: bool = False,
-    ) -> tuple[Tensor, Tensor] | tuple[Tensor, Tensor, NeuronClusterTrace]:
+    ) -> (
+        tuple[Tensor, Tensor]
+        | tuple[Tensor, Tensor, NeuronClusterTrace]
+        | TransformerEncoderLayerState
+        | tuple[TransformerEncoderLayerState, NeuronClusterTrace]
+    ):
+        if isinstance(input, TransformerEncoderLayerState):
+            if self.cfg.sequence_routing_mode is None:
+                raise ValueError(
+                    "A sequence routing mode is required for encoder states."
+                )
+            routing = SequenceRouting(self, self.__routing, self.__topology)
+            context = _NeuronClusterForwardContext()
+            growth_baseline = self.__plasticity.capture_growth_counter_baseline()
+            result, steps = routing.run(input, return_trace, context)
+            if self.training:
+                self.__finish_training_forward(growth_baseline, context)
+            if return_trace:
+                return result, routing.trace(input.hidden.shape, steps)
+            return result
+        if self.cfg.sequence_routing_mode is not None:
+            raise TypeError(
+                "A whole-sequence cluster expects a TransformerEncoderLayerState."
+            )
         self.VALIDATOR.validate_forward_input(input)
         self.__validate_feature_dimension(input)
         if return_trace and self.beam_width > 1:
@@ -389,14 +415,19 @@ class NeuronCluster(Module):
         if self.training:
             # Warmup advances before growth so a neuron grown this forward
             # keeps its full countdown for its first routable forward.
-            self.__plasticity.advance_grown_neuron_warmup()
-            self.__plasticity.check_neuron_growth(
-                growth_counter_baseline, forward_context
-            )
-            self.__plasticity.check_neuron_atrophy(forward_context)
+            self.__finish_training_forward(growth_counter_baseline, forward_context)
         if return_trace:
             return routed_output, auxiliary_loss, trace
         return routed_output, auxiliary_loss
+
+    def __finish_training_forward(
+        self,
+        growth_baseline: "_GrowthCounterBaseline | None",
+        context: _NeuronClusterForwardContext,
+    ) -> None:
+        self.__plasticity.advance_grown_neuron_warmup()
+        self.__plasticity.check_neuron_growth(growth_baseline, context)
+        self.__plasticity.check_neuron_atrophy(context)
 
     def __validate_feature_dimension(self, input: Tensor) -> None:
         if input.shape[-1] != self.input_dim:

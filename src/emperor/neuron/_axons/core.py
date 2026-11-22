@@ -38,3 +38,15 @@ class Axons(Module):
         if self.memory_model is None:
             return input
         return self.memory_model(input)
+
+    def process_sequence(self, hidden: Tensor, padding_mask: Tensor | None) -> Tensor:
+        if self.memory_model is None:
+            return hidden
+        if padding_mask is None:
+            return self(hidden.flatten(0, 1)).reshape_as(hidden)
+        valid = ~padding_mask.bool()
+        if not valid.any():
+            return hidden
+        output = hidden.clone()
+        output[valid] = self(hidden[valid])
+        return output

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import torch
@@ -6,6 +7,7 @@ from torch import Tensor
 from emperor.layers import LayerState
 from emperor.neuron._neuron.validation import NeuronValidator
 from emperor.nn import Module
+from emperor.transformer import TransformerEncoderLayerState
 
 if TYPE_CHECKING:
     from emperor.neuron._config import NeuronConfig
@@ -35,6 +37,8 @@ class Neuron(Module):
         self.nucleus = self.cfg.nucleus_config.build()
         self.axons = self.cfg.axons_config.build()
         self.terminal = self.cfg.terminal_config.build()
+        residual = self.cfg.sequence_residual_config
+        self.sequence_residual = residual.build() if residual is not None else None
 
     def __initialize_counters(self) -> None:
         self.register_buffer(
@@ -102,7 +106,11 @@ class Neuron(Module):
             torch.cos(sinusoidal_angles),
         )
 
-    def forward(self, input: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    def forward(
+        self, input: Tensor | TransformerEncoderLayerState
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor] | TransformerEncoderLayerState:
+        if isinstance(input, TransformerEncoderLayerState):
+            return self.process_sequence(input)
         signal = self.process_signal_state(input)
         probabilities, selected_neurons, auxiliary_loss = self.route_signal(
             signal.hidden
@@ -129,6 +137,28 @@ class Neuron(Module):
         if self.training:
             self.batch_counter += 1
         return self.__inject_coordinate_embedding(input)
+
+    def process_sequence(
+        self, state: TransformerEncoderLayerState
+    ) -> TransformerEncoderLayerState:
+        """Run one visit, with fresh inner halting, residual and loss state."""
+        if self.training:
+            self.batch_counter += 1
+        local = replace(
+            state,
+            hidden=self.__inject_coordinate_embedding(state.hidden),
+            loss=None,
+            residual_state=None,
+            halting_state=None,
+        )
+        result = self.nucleus(local)
+        hidden = self.axons.process_sequence(result.hidden, result.key_padding_mask)
+        loss = result.loss
+        if state.loss is not None:
+            loss = state.loss if loss is None else state.loss + loss
+        return replace(
+            result, hidden=hidden, loss=loss, residual_state=None, halting_state=None
+        )
 
     def __inject_coordinate_embedding(self, input: Tensor) -> Tensor:
         if self.coordinate_embedding is None:
