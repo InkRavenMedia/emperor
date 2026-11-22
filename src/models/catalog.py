@@ -64,6 +64,9 @@ from models.vit.expert_linear import MODEL_PACKAGE as VIT_EXPERT_LINEAR
 from models.vit.expert_linear_adaptive import (
     MODEL_PACKAGE as VIT_EXPERT_LINEAR_ADAPTIVE,
 )
+from models.vit.expert_linear_adaptive_cluster import (
+    MODEL_PACKAGE as VIT_EXPERT_LINEAR_ADAPTIVE_CLUSTER,
+)
 from models.vit.linear import MODEL_PACKAGE as VIT_LINEAR
 from models.vit.linear_adaptive import MODEL_PACKAGE as VIT_LINEAR_ADAPTIVE
 
@@ -162,6 +165,7 @@ _MODEL_REGISTRATIONS = (
     ModelRegistration(VIT_LINEAR_ADAPTIVE, 1),
     ModelRegistration(VIT_EXPERT_LINEAR, 2),
     ModelRegistration(VIT_EXPERT_LINEAR_ADAPTIVE, 3),
+    ModelRegistration(VIT_EXPERT_LINEAR_ADAPTIVE_CLUSTER, 4),
     ModelRegistration(MLP_MIXER_LINEAR, 0),
     ModelRegistration(MLP_MIXER_LINEAR_ADAPTIVE, 1),
     ModelRegistration(MLP_MIXER_EXPERT_LINEAR, 2),

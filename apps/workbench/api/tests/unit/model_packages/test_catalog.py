@@ -52,6 +52,7 @@ class InspectorDiscoveryTests(unittest.TestCase):
                 "vit/linear_adaptive",
                 "vit/expert_linear",
                 "vit/expert_linear_adaptive",
+                "vit/expert_linear_adaptive_cluster",
             },
         )
 
@@ -247,6 +248,16 @@ class InspectorDiscoveryTests(unittest.TestCase):
                 result = inspect_model(model, preset)
                 self.assertGreater(len(result["nodes"]), 0)
                 self.assertGreater(len(result["edges"]), 0)
+
+    def test_vit_three_neuron_chain_exposes_each_encoder_in_the_graph(self) -> None:
+        result = inspect_model(
+            "vit/expert_linear_adaptive_cluster", "three-neuron-chain"
+        )
+        paths = {node["path"] for node in result["nodes"]}
+        for x in range(1, 4):
+            nucleus = f"transformer.cluster.neuron_{x}_1_1.nucleus"
+            self.assertIn(nucleus, paths)
+            self.assertIn(f"{nucleus}.model", paths)
 
 
 if __name__ == "__main__":

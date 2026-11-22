@@ -132,7 +132,11 @@ def expanded_sequence_capacity(config: ConfigBase, input_length: int) -> int:
 
 
 def with_expansion_attention_capacity(
-    config: ConfigBase, input_length: int, source_capacity: int | None = None
+    config: ConfigBase,
+    input_length: int,
+    source_capacity: int | None = None,
+    *,
+    passes: int = 1,
 ) -> ConfigBase:
     """Size existing attention bounds for every configured expansion invocation."""
     growth, _ = _expansion_schedule(config)
@@ -140,7 +144,7 @@ def with_expansion_attention_capacity(
         return config
     config = deepcopy(config)
     _, layers = _expansion_schedule(config)
-    capacity = input_length + growth
+    capacity = input_length + passes * growth
     for layer in layers:
         self_attention = getattr(layer, "self_attention_config", None)
         if self_attention is None:

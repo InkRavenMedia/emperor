@@ -58,6 +58,7 @@ RECURRENT_MODEL_PACKAGES = frozenset(
         "transformer/linear_adaptive",
         "vit/expert_linear",
         "vit/expert_linear_adaptive",
+        "vit/expert_linear_adaptive_cluster",
         "vit/linear",
         "vit/linear_adaptive",
     }
@@ -504,6 +505,7 @@ class TestRecurrentRuntimeControlScope(unittest.TestCase):
             "gpt/expert_linear_adaptive",
             "bert/expert_linear_adaptive",
             "vit/expert_linear_adaptive",
+            "vit/expert_linear_adaptive_cluster",
             "mlp_mixer/expert_linear_adaptive",
         }
 
