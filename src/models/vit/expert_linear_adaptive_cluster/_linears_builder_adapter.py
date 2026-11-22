@@ -1,0 +1,250 @@
+# ruff: noqa: E501
+
+from __future__ import annotations
+
+from dataclasses import replace
+from types import ModuleType
+from typing import Any
+
+from models._flat_updates import (
+    pop_updates as _pop_updates,
+)
+from models.vit.expert_linear_adaptive_cluster import (
+    _config_defaults as config_defaults,
+)
+from models.vit.expert_linear_adaptive_cluster._generation import (
+    AdaptiveGeneratorStackSource,
+)
+from models.vit.expert_linear_adaptive_cluster.runtime_options import (
+    AdaptiveGeneratorStackOptions,
+    HiddenAdaptiveBiasOptions,
+    HiddenAdaptiveDiagonalOptions,
+    HiddenAdaptiveMaskOptions,
+    HiddenAdaptiveWeightOptions,
+)
+
+_ADAPTIVE_GENERATOR_SOURCE_FIELDS = (
+    "independent_flag",
+    "hidden_dim",
+    "layer_norm_position",
+    "normalization",
+    "num_layers",
+    "activation",
+    "residual_connection_option",
+    "residual_block_size",
+    "residual_rms_norm_epsilon",
+    "residual_model_flag",
+    "dropout_probability",
+    "last_layer_bias_option",
+    "apply_output_postprocessing_flag",
+    "bias_flag",
+)
+_HIDDEN_ADAPTIVE_WEIGHT_FIELD_MAP = {
+    "generator_depth": "generator_depth",
+    "weight_option_flag": "option_flag",
+    "weight_option": "option",
+    "weight_normalization_option": "normalization_option",
+    "weight_normalization_learnable_scale_flag": "normalization_learnable_scale_flag",
+    "weight_normalization_position_option": "normalization_position_option",
+    "weight_decay_schedule": "decay_schedule",
+    "weight_decay_rate": "decay_rate",
+    "weight_decay_warmup_batches": "decay_warmup_batches",
+    "weight_bank_expansion_factor": "bank_expansion_factor",
+}
+_HIDDEN_ADAPTIVE_BIAS_FIELD_MAP = {
+    "bias_option_flag": "option_flag",
+    "bias_option": "option",
+    "bias_decay_schedule": "decay_schedule",
+    "bias_decay_rate": "decay_rate",
+    "bias_decay_warmup_batches": "decay_warmup_batches",
+    "bias_bank_expansion_factor": "bank_expansion_factor",
+}
+_HIDDEN_ADAPTIVE_DIAGONAL_FIELD_MAP = {
+    "diagonal_option_flag": "option_flag",
+    "diagonal_option": "option",
+}
+_HIDDEN_ADAPTIVE_MASK_FIELD_MAP = {
+    "mask_option_flag": "option_flag",
+    "row_mask_option": "row_mask_option",
+    "mask_dimension_option": "mask_dimension_option",
+    "mask_threshold": "mask_threshold",
+    "mask_surrogate_scale": "mask_surrogate_scale",
+    "mask_floor": "mask_floor",
+    "mask_transition_width": "mask_transition_width",
+}
+
+
+def _adaptive_generator_stack_options_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    *,
+    provided: AdaptiveGeneratorStackOptions | None,
+) -> AdaptiveGeneratorStackOptions:
+    options = provided or config_defaults.adaptive_generator_stack_options(
+        config_module
+    )
+    updates = _pop_updates(
+        kwargs,
+        {
+            "adaptive_generator_stack_hidden_dim": "hidden_dim",
+            "adaptive_generator_stack_layer_norm_position": "layer_norm_position",
+            "adaptive_generator_stack_normalization": "normalization",
+            "adaptive_generator_stack_num_layers": "num_layers",
+            "adaptive_generator_stack_activation": "activation",
+            "adaptive_generator_stack_residual_connection_option": "residual_connection_option",
+            "adaptive_generator_stack_residual_block_size": "residual_block_size",
+            "adaptive_generator_stack_residual_rms_norm_epsilon": "residual_rms_norm_epsilon",
+            "adaptive_generator_stack_residual_model_flag": "residual_model_flag",
+            "adaptive_generator_stack_dropout_probability": "dropout_probability",
+            "adaptive_generator_stack_last_layer_bias_option": "last_layer_bias_option",
+            "adaptive_generator_stack_apply_output_postprocessing_flag": "apply_output_postprocessing_flag",
+            "adaptive_generator_stack_bias_flag": "bias_flag",
+        },
+    )
+    if updates:
+        options = replace(options, **updates)
+    return options
+
+
+def _adaptive_generator_stack_source_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    flat_prefix: str,
+    *,
+    provided: AdaptiveGeneratorStackSource | None,
+    role: config_defaults.AdaptiveRole,
+    parameter: config_defaults.AdaptiveParameter,
+) -> AdaptiveGeneratorStackSource:
+    source = provided or config_defaults.adaptive_generator_stack_source(
+        config_module, role, parameter
+    )
+    updates = _pop_updates(
+        kwargs,
+        {
+            f"{flat_prefix}_{field}": field
+            for field in _ADAPTIVE_GENERATOR_SOURCE_FIELDS
+        },
+    )
+    if updates:
+        source = replace(source, **updates)
+    return source
+
+
+def _hidden_adaptive_weight_options_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    *,
+    provided: HiddenAdaptiveWeightOptions | None,
+    flat_prefix: str = "",
+    stack_prefix: str = "weight_generator_stack",
+    role: config_defaults.AdaptiveRole = config_defaults.AdaptiveRole.MAIN,
+) -> HiddenAdaptiveWeightOptions:
+    options = provided or config_defaults.hidden_adaptive_weight_options(
+        config_module, role
+    )
+    updates = _pop_updates(
+        kwargs, _prefixed_field_map(_HIDDEN_ADAPTIVE_WEIGHT_FIELD_MAP, flat_prefix)
+    )
+    updates["generator_stack_source"] = _adaptive_generator_stack_source_from_kwargs(
+        kwargs,
+        config_module,
+        stack_prefix,
+        provided=kwargs.pop(
+            f"{flat_prefix}weight_generator_stack_source",
+            options.generator_stack_source,
+        ),
+        role=role,
+        parameter=config_defaults.AdaptiveParameter.WEIGHT,
+    )
+    return replace(options, **updates)
+
+
+def _hidden_adaptive_bias_options_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    *,
+    provided: HiddenAdaptiveBiasOptions | None,
+    flat_prefix: str = "",
+    stack_prefix: str = "bias_generator_stack",
+    role: config_defaults.AdaptiveRole = config_defaults.AdaptiveRole.MAIN,
+) -> HiddenAdaptiveBiasOptions:
+    options = provided or config_defaults.hidden_adaptive_bias_options(
+        config_module, role
+    )
+    updates = _pop_updates(
+        kwargs, _prefixed_field_map(_HIDDEN_ADAPTIVE_BIAS_FIELD_MAP, flat_prefix)
+    )
+    updates["generator_stack_source"] = _adaptive_generator_stack_source_from_kwargs(
+        kwargs,
+        config_module,
+        stack_prefix,
+        provided=kwargs.pop(
+            f"{flat_prefix}bias_generator_stack_source", options.generator_stack_source
+        ),
+        role=role,
+        parameter=config_defaults.AdaptiveParameter.BIAS,
+    )
+    return replace(options, **updates)
+
+
+def _hidden_adaptive_diagonal_options_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    *,
+    provided: HiddenAdaptiveDiagonalOptions | None,
+    flat_prefix: str = "",
+    stack_prefix: str = "diagonal_generator_stack",
+    role: config_defaults.AdaptiveRole = config_defaults.AdaptiveRole.MAIN,
+) -> HiddenAdaptiveDiagonalOptions:
+    options = provided or config_defaults.hidden_adaptive_diagonal_options(
+        config_module, role
+    )
+    updates = _pop_updates(
+        kwargs, _prefixed_field_map(_HIDDEN_ADAPTIVE_DIAGONAL_FIELD_MAP, flat_prefix)
+    )
+    updates["generator_stack_source"] = _adaptive_generator_stack_source_from_kwargs(
+        kwargs,
+        config_module,
+        stack_prefix,
+        provided=kwargs.pop(
+            f"{flat_prefix}diagonal_generator_stack_source",
+            options.generator_stack_source,
+        ),
+        role=role,
+        parameter=config_defaults.AdaptiveParameter.DIAGONAL,
+    )
+    return replace(options, **updates)
+
+
+def _hidden_adaptive_mask_options_from_kwargs(
+    kwargs: dict[str, Any],
+    config_module: ModuleType,
+    *,
+    provided: HiddenAdaptiveMaskOptions | None,
+    flat_prefix: str = "",
+    stack_prefix: str = "mask_generator_stack",
+    role: config_defaults.AdaptiveRole = config_defaults.AdaptiveRole.MAIN,
+) -> HiddenAdaptiveMaskOptions:
+    options = provided or config_defaults.hidden_adaptive_mask_options(
+        config_module, role
+    )
+    updates = _pop_updates(
+        kwargs, _prefixed_field_map(_HIDDEN_ADAPTIVE_MASK_FIELD_MAP, flat_prefix)
+    )
+    updates["generator_stack_source"] = _adaptive_generator_stack_source_from_kwargs(
+        kwargs,
+        config_module,
+        stack_prefix,
+        provided=kwargs.pop(
+            f"{flat_prefix}mask_generator_stack_source", options.generator_stack_source
+        ),
+        role=role,
+        parameter=config_defaults.AdaptiveParameter.MASK,
+    )
+    return replace(options, **updates)
+
+
+def _prefixed_field_map(mapping: dict[str, str], prefix: str) -> dict[str, str]:
+    if not prefix:
+        return mapping
+    return {f"{prefix}{flat_key}": field for flat_key, field in mapping.items()}
