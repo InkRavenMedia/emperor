@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from emperor.layers import LayerState
 from emperor.neuron._cluster.routing.beam import BeamRoutingDelegate
 from emperor.neuron._cluster.routing.state import (
     NeuronClusterRouteState,
@@ -15,6 +16,8 @@ from emperor.neuron._cluster.routing.state import (
 from emperor.neuron._trace import NeuronClusterTrace, NeuronClusterTraceStep
 
 if TYPE_CHECKING:
+    from torch.nn import Module
+
     from emperor.halting import HaltingStateBase
     from emperor.neuron._cluster.model import NeuronCluster
     from emperor.neuron._cluster.plasticity import ClusterPlasticityDelegate
@@ -182,6 +185,7 @@ class ClusterRoutingDelegate:
             processed_branch_output = self.process_neuron(
                 self.__owner.cluster[neuron_name],
                 source_hidden.index_select(0, batch_index_tensor),
+                forward_context,
             )
             branch_outputs, processed_branch_output = (
                 self.__state.promote_floating_values(
@@ -228,9 +232,27 @@ class ClusterRoutingDelegate:
         self.__plasticity.record_escaped_missing_positions(escaped_missing_positions)
         return process_calls_by_neuron, valid_target_mask, escape_mask
 
-    def process_neuron(self, neuron, hidden: Tensor) -> Tensor:
-        if hasattr(neuron, "process_signal"):
-            processed_output = neuron.process_signal(hidden)
+    def process_neuron(
+        self,
+        neuron: Module,
+        hidden: Tensor,
+        forward_context: _NeuronClusterForwardContext | None = None,
+    ) -> Tensor:
+        run_with_state = getattr(neuron, "process_signal_state", None)
+        process_signal = getattr(neuron, "process_signal", None)
+        if forward_context is not None and callable(run_with_state):
+            state = run_with_state(hidden)
+            if not isinstance(state, LayerState):
+                raise TypeError("process_signal_state must return LayerState")
+            processed_output = state.hidden
+            if state.loss is not None:
+                forward_context.processing_loss = LayerState.sum_losses(
+                    forward_context.processing_loss, state.loss
+                )
+        elif callable(process_signal):
+            processed_output = process_signal(hidden)
+            if not isinstance(processed_output, Tensor):
+                raise TypeError("process_signal must return a tensor")
         else:
             processed_output, _, _, _ = neuron(hidden)
         return self.__blend_warming_up_neuron_output(

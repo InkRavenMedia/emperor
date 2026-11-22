@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 import torch
 from torch import Tensor
 
+from emperor.layers import LayerState
 from emperor.neuron._neuron.validation import NeuronValidator
 from emperor.nn import Module
 
@@ -102,19 +103,32 @@ class Neuron(Module):
         )
 
     def forward(self, input: Tensor) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        processed_signal = self.process_signal(input)
+        signal = self.process_signal_state(input)
         probabilities, selected_neurons, auxiliary_loss = self.route_signal(
-            processed_signal
+            signal.hidden
         )
-        return processed_signal, probabilities, selected_neurons, auxiliary_loss
+        if signal.loss is not None:
+            auxiliary_loss = auxiliary_loss + signal.loss
+        return signal.hidden, probabilities, selected_neurons, auxiliary_loss
 
     def process_signal(self, input: Tensor) -> Tensor:
+        embedded_input = self.__signal_input(input)
+        record_loss = LayerState.loss_recorder(self)
+        if record_loss is None:
+            return self.axons(self.nucleus(embedded_input))
+        state = LayerState.run_tensor_module(self.nucleus, embedded_input)
+        record_loss(state.loss)
+        return self.axons(state.hidden)
+
+    def process_signal_state(self, input: Tensor) -> LayerState:
+        return LayerState.run_tensor_module(self, input, forward=self.process_signal)
+
+    def __signal_input(self, input: Tensor) -> Tensor:
         self.VALIDATOR.validate_forward_input(input)
         self.VALIDATOR.validate_feature_dimension(self, input)
         if self.training:
             self.batch_counter += 1
-        processed_signal = self.nucleus(self.__inject_coordinate_embedding(input))
-        return self.axons(processed_signal)
+        return self.__inject_coordinate_embedding(input)
 
     def __inject_coordinate_embedding(self, input: Tensor) -> Tensor:
         if self.coordinate_embedding is None:

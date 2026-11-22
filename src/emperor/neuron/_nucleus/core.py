@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING
 
 from torch import Tensor
 
+from emperor.layers import LayerState
 from emperor.neuron._nucleus.validation import NucleusValidator
 from emperor.nn import Module
 
@@ -25,4 +26,17 @@ class Nucleus(Module):
 
     def forward(self, input: Tensor) -> Tensor:
         self.VALIDATOR.validate_forward_input(input)
+        record_loss = LayerState.loss_recorder(self)
+        if record_loss is not None:
+            run_with_state = getattr(self.model, "forward_state", None)
+            if callable(run_with_state):
+                state = run_with_state(input)
+                if not isinstance(state, LayerState):
+                    raise TypeError(
+                        "The nucleus model's forward_state must return LayerState"
+                    )
+            else:
+                state = LayerState.run_tensor_module(self.model, input)
+            record_loss(state.loss)
+            return state.hidden
         return self.model(input)
