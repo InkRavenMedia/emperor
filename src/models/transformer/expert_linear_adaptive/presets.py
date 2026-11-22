@@ -2,9 +2,12 @@ from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
     AffineTransformDynamicBiasConfig,
     AntiDynamicDiagonalConfig,
+    AxisMaskConfig,
     CombinedDynamicDiagonalConfig,
     DiagonalAxisMaskConfig,
     DualModelDynamicWeightConfig,
+    DynamicBiasConfig,
+    DynamicDiagonalConfig,
     GeneratorDynamicBiasConfig,
     HypernetworkDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -36,6 +39,7 @@ from model_runtime.runs import ExperimentBase
 
 from .config_builder import TransformerExpertLinearAdaptiveConfigBuilder
 from .runtime_defaults import runtime_from_flat
+from .runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -94,218 +98,222 @@ class ExperimentPreset(BaseOptions):
 _RECOMMENDED_HALTING_THRESHOLD = 0.999
 
 
-_COMMON_OVERRIDES = {
-    "BASELINE": {},
-    "PRE_NORM": {
-        "encoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-        "decoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-    },
-    "POST_NORM": {
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-    "LEARNED_POSITIONAL": {
-        "positional_embedding_option": TextLearnedPositionalEmbeddingConfig
-    },
-    "ATTENTION_BIAS": {
-        "attn_bias_flag": True,
-        "attn_add_key_value_bias_flag": True,
-    },
-    "GATING": {"stack_gate_flag": True},
-    "HALTING": {
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "GATING_HALTING": {
-        "stack_gate_flag": True,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "MEMORY": {"memory_flag": True},
-    "GATING_MEMORY": {"stack_gate_flag": True, "memory_flag": True},
-    "HALTING_MEMORY": {
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "GATING_HALTING_MEMORY": {
-        "stack_gate_flag": True,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RECURRENT": {"recurrent_flag": True},
-    "RECURRENT_GATING": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-    },
-    "RECURRENT_HALTING": {
-        "recurrent_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RECURRENT_MEMORY": {"recurrent_flag": True, "memory_flag": True},
-    "RECURRENT_GATING_HALTING": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RECURRENT_GATING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "memory_flag": True,
-    },
-    "RECURRENT_HALTING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RECURRENT_GATING_HALTING_MEMORY": {
-        "recurrent_flag": True,
-        "recurrent_stack_gate_flag": True,
-        "recurrent_stack_halting_flag": True,
-        "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        "memory_flag": True,
-    },
-    "RESIDUAL": {"stack_residual_connection_option": AdditiveResidualConfig},
-    "RESIDUAL_POST_NORM": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-    "RESIDUAL_GATING": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "stack_gate_flag": True,
-    },
-    "RESIDUAL_HALTING": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "stack_halting_flag": True,
-        "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-    },
-    "RESIDUAL_MEMORY": {
-        "stack_residual_connection_option": AdditiveResidualConfig,
-        "memory_flag": True,
-    },
-    "RECURRENT_RESIDUAL": {
-        "recurrent_flag": True,
-        "recurrent_residual_connection_option": AdditiveResidualConfig,
-    },
-    "RECURRENT_POST_NORM": {
-        "recurrent_flag": True,
-        "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-    },
-}
-
-_ADAPTIVE_OVERRIDES = {
-    "SINGLE_MODEL_WEIGHT": {
-        "attention_projection_adaptive_weight_option": (SingleModelDynamicWeightConfig)
-    },
-    "DUAL_MODEL_WEIGHT": {
-        "attention_projection_adaptive_weight_option": DualModelDynamicWeightConfig
-    },
-    "LOW_RANK_WEIGHT": {
-        "attention_projection_adaptive_weight_option": LowRankDynamicWeightConfig
-    },
-    "HYPERNETWORK_WEIGHT": {
-        "attention_projection_adaptive_weight_option": (HypernetworkDynamicWeightConfig)
-    },
-    "LAYERED_WEIGHTED_BANK_WEIGHT": {
-        "attention_projection_adaptive_weight_option": (
-            LayeredWeightedBankDynamicWeightConfig
-        )
-    },
-    "SOFT_WEIGHTED_BANK_WEIGHT": {
-        "attention_projection_adaptive_weight_option": (
-            SoftWeightedBankDynamicWeightConfig
-        )
-    },
-}
+def _bias_for_all_roles(bias: type[DynamicBiasConfig]) -> PresetValues:
+    return PresetValues(
+        attention_projection_adaptive_bias_option=bias,
+        attention_expert_adaptive_bias_option=bias,
+        router_adaptive_bias_option=bias,
+        feed_forward_adaptive_bias_option=bias,
+    )
 
 
-def _all_adaptive_roles(field: str, value: type) -> dict[str, type]:
-    return {
-        f"attention_projection_adaptive_{field}": value,
-        f"attention_expert_adaptive_{field}": value,
-        f"router_adaptive_{field}": value,
-        f"feed_forward_adaptive_{field}": value,
-    }
+def _diagonal_for_all_roles(diagonal: type[DynamicDiagonalConfig]) -> PresetValues:
+    return PresetValues(
+        attention_projection_adaptive_diagonal_option=diagonal,
+        attention_expert_adaptive_diagonal_option=diagonal,
+        router_adaptive_diagonal_option=diagonal,
+        feed_forward_adaptive_diagonal_option=diagonal,
+    )
 
 
-_ADAPTIVE_OVERRIDES.update(
-    {
-        "AFFINE_TRANSFORM_BIAS": _all_adaptive_roles(
-            "bias_option", AffineTransformDynamicBiasConfig
-        ),
-        "ADDITIVE_BIAS": _all_adaptive_roles("bias_option", AdditiveDynamicBiasConfig),
-        "GENERATOR_BIAS": _all_adaptive_roles(
-            "bias_option", GeneratorDynamicBiasConfig
-        ),
-        "MULTIPLICATIVE_BIAS": _all_adaptive_roles(
-            "bias_option", MultiplicativeDynamicBiasConfig
-        ),
-        "SIGMOID_GATED_BIAS": _all_adaptive_roles(
-            "bias_option", SigmoidGatedDynamicBiasConfig
-        ),
-        "TANH_GATED_BIAS": _all_adaptive_roles(
-            "bias_option", TanhGatedDynamicBiasConfig
-        ),
-        "WEIGHTED_BANK_BIAS": _all_adaptive_roles(
-            "bias_option", WeightedBankDynamicBiasConfig
-        ),
-        "STANDARD_DIAGONAL": _all_adaptive_roles(
-            "diagonal_option", StandardDynamicDiagonalConfig
-        ),
-        "ANTI_DIAGONAL": _all_adaptive_roles(
-            "diagonal_option", AntiDynamicDiagonalConfig
-        ),
-        "COMBINED_DIAGONAL": _all_adaptive_roles(
-            "diagonal_option", CombinedDynamicDiagonalConfig
-        ),
-        "DIAGONAL_AXIS_MASK": _all_adaptive_roles(
-            "row_mask_option", DiagonalAxisMaskConfig
-        ),
-        "OUTER_PRODUCT_MASK": _all_adaptive_roles(
-            "row_mask_option", OuterProductMaskConfig
-        ),
-        "PER_AXIS_SCORE_MASK": _all_adaptive_roles(
-            "row_mask_option", PerAxisScoreMaskConfig
-        ),
-        "TOP_SLICE_AXIS_MASK": _all_adaptive_roles(
-            "row_mask_option", TopSliceAxisMaskConfig
-        ),
-        "WEIGHT_INFORMED_SCORE_MASK": _all_adaptive_roles(
-            "row_mask_option", WeightInformedScoreAxisMaskConfig
-        ),
-    }
-)
+def _row_mask_for_all_roles(row_mask: type[AxisMaskConfig]) -> PresetValues:
+    return PresetValues(
+        attention_projection_adaptive_row_mask_option=row_mask,
+        attention_expert_adaptive_row_mask_option=row_mask,
+        router_adaptive_row_mask_option=row_mask,
+        feed_forward_adaptive_row_mask_option=row_mask,
+    )
 
-_EXPERT_OVERRIDES = {
-    "TOP1_SWITCH_AUX": {
-        "top_k": 1,
-        "normalize_probabilities_flag": False,
-        "switch_loss_weight": 0.1,
-    },
-    "LOW_RANK_EXPERT_WEIGHT": {
-        "attention_expert_adaptive_weight_option": LowRankDynamicWeightConfig,
-        "feed_forward_adaptive_weight_option": LowRankDynamicWeightConfig,
-    },
+
+_PRESET_VALUES: dict[ExperimentPreset, PresetValues] = {
+    ExperimentPreset.BASELINE: PresetValues(),
+    ExperimentPreset.PRE_NORM: PresetValues(
+        encoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
+        decoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
+    ),
+    ExperimentPreset.POST_NORM: PresetValues(
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.LEARNED_POSITIONAL: PresetValues(
+        positional_embedding_option=TextLearnedPositionalEmbeddingConfig,
+    ),
+    ExperimentPreset.ATTENTION_BIAS: PresetValues(
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
+    ),
+    ExperimentPreset.GATING: PresetValues(
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.HALTING: PresetValues(
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.GATING_HALTING: PresetValues(
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.MEMORY: PresetValues(
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_MEMORY: PresetValues(
+        stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.HALTING_MEMORY: PresetValues(
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_HALTING_MEMORY: PresetValues(
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT: PresetValues(
+        recurrent_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RECURRENT_MEMORY: PresetValues(
+        recurrent_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetValues(
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RESIDUAL_POST_NORM: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.RESIDUAL_GATING: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL_HALTING: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+    ),
+    ExperimentPreset.RESIDUAL_MEMORY: PresetValues(
+        stack_residual_connection_option=AdditiveResidualConfig,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_RESIDUAL: PresetValues(
+        recurrent_flag=True,
+        recurrent_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RECURRENT_POST_NORM: PresetValues(
+        recurrent_flag=True,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.SINGLE_MODEL_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=SingleModelDynamicWeightConfig,
+    ),
+    ExperimentPreset.DUAL_MODEL_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=DualModelDynamicWeightConfig,
+    ),
+    ExperimentPreset.LOW_RANK_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=LowRankDynamicWeightConfig,
+    ),
+    ExperimentPreset.HYPERNETWORK_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=HypernetworkDynamicWeightConfig,
+    ),
+    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=LayeredWeightedBankDynamicWeightConfig,
+    ),
+    ExperimentPreset.SOFT_WEIGHTED_BANK_WEIGHT: PresetValues(
+        attention_projection_adaptive_weight_option=SoftWeightedBankDynamicWeightConfig,
+    ),
+    ExperimentPreset.AFFINE_TRANSFORM_BIAS: _bias_for_all_roles(
+        AffineTransformDynamicBiasConfig
+    ),
+    ExperimentPreset.ADDITIVE_BIAS: _bias_for_all_roles(AdditiveDynamicBiasConfig),
+    ExperimentPreset.GENERATOR_BIAS: _bias_for_all_roles(GeneratorDynamicBiasConfig),
+    ExperimentPreset.MULTIPLICATIVE_BIAS: _bias_for_all_roles(
+        MultiplicativeDynamicBiasConfig
+    ),
+    ExperimentPreset.SIGMOID_GATED_BIAS: _bias_for_all_roles(
+        SigmoidGatedDynamicBiasConfig
+    ),
+    ExperimentPreset.TANH_GATED_BIAS: _bias_for_all_roles(TanhGatedDynamicBiasConfig),
+    ExperimentPreset.WEIGHTED_BANK_BIAS: _bias_for_all_roles(
+        WeightedBankDynamicBiasConfig
+    ),
+    ExperimentPreset.STANDARD_DIAGONAL: _diagonal_for_all_roles(
+        StandardDynamicDiagonalConfig
+    ),
+    ExperimentPreset.ANTI_DIAGONAL: _diagonal_for_all_roles(AntiDynamicDiagonalConfig),
+    ExperimentPreset.COMBINED_DIAGONAL: _diagonal_for_all_roles(
+        CombinedDynamicDiagonalConfig
+    ),
+    ExperimentPreset.DIAGONAL_AXIS_MASK: _row_mask_for_all_roles(
+        DiagonalAxisMaskConfig
+    ),
+    ExperimentPreset.OUTER_PRODUCT_MASK: _row_mask_for_all_roles(
+        OuterProductMaskConfig
+    ),
+    ExperimentPreset.PER_AXIS_SCORE_MASK: _row_mask_for_all_roles(
+        PerAxisScoreMaskConfig
+    ),
+    ExperimentPreset.TOP_SLICE_AXIS_MASK: _row_mask_for_all_roles(
+        TopSliceAxisMaskConfig
+    ),
+    ExperimentPreset.WEIGHT_INFORMED_SCORE_MASK: _row_mask_for_all_roles(
+        WeightInformedScoreAxisMaskConfig
+    ),
+    ExperimentPreset.TOP1_SWITCH_AUX: PresetValues(
+        top_k=1,
+        normalize_probabilities_flag=False,
+        switch_loss_weight=0.1,
+    ),
+    ExperimentPreset.LOW_RANK_EXPERT_WEIGHT: PresetValues(
+        attention_expert_adaptive_weight_option=LowRankDynamicWeightConfig,
+        feed_forward_adaptive_weight_option=LowRankDynamicWeightConfig,
+    ),
 }
 
 _PRESET_DEFINITIONS = {
-    ExperimentPreset[name]: PresetDefinition(
+    preset: PresetDefinition(
         preset_values=values,
-        description=(
-            f"Adaptive expert Transformer preset: {name.replace('_', ' ').lower()}."
-        ),
+        description=f"Adaptive expert Transformer preset: {preset.name.replace('_', ' ').lower()}.",
     )
-    for name, values in {
-        **_COMMON_OVERRIDES,
-        **_ADAPTIVE_OVERRIDES,
-        **_EXPERT_OVERRIDES,
-    }.items()
+    for preset, values in _PRESET_VALUES.items()
 }
 
 

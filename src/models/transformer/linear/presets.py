@@ -1,3 +1,5 @@
+from typing import Unpack
+
 from emperor.config import BaseOptions
 from emperor.datasets.text.translation import Multi30kDeEn
 from emperor.embedding.absolute import TextLearnedPositionalEmbeddingConfig
@@ -13,6 +15,7 @@ from model_runtime.runs import ExperimentBase
 
 from .config_builder import TransformerLinearConfigBuilder
 from .runtime_defaults import runtime_from_flat
+from .runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -48,181 +51,158 @@ class ExperimentPreset(BaseOptions):
 _RECOMMENDED_HALTING_THRESHOLD = 0.999
 
 
-def _definition(values: dict, description: str) -> PresetDefinition:
+def _define_preset(
+    *,
+    description: str,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
     return PresetDefinition(preset_values=values, description=description)
 
 
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: _definition(
-        {}, "Canonical De-to-En Transformer baseline."
+    ExperimentPreset.BASELINE: _define_preset(
+        description="Canonical De-to-En Transformer baseline.",
     ),
-    ExperimentPreset.PRE_NORM: _definition(
-        {
-            "encoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-            "decoder_layer_norm_position": LayerNormPositionOptions.BEFORE,
-        },
-        "Use pre-normalization in both encoder and decoder blocks.",
+    ExperimentPreset.PRE_NORM: _define_preset(
+        description="Use pre-normalization in both encoder and decoder blocks.",
+        encoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
+        decoder_layer_norm_position=LayerNormPositionOptions.BEFORE,
     ),
-    ExperimentPreset.POST_NORM: _definition(
-        {
-            "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-            "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
-        "Use post-normalization in both encoder and decoder blocks.",
+    ExperimentPreset.POST_NORM: _define_preset(
+        description="Use post-normalization in both encoder and decoder blocks.",
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.LEARNED_POSITIONAL: _definition(
-        {"positional_embedding_option": TextLearnedPositionalEmbeddingConfig},
-        "Replace the sinusoidal baseline with separate learned positions.",
+    ExperimentPreset.LEARNED_POSITIONAL: _define_preset(
+        description="Replace the sinusoidal baseline with separate learned positions.",
+        positional_embedding_option=TextLearnedPositionalEmbeddingConfig,
     ),
-    ExperimentPreset.ATTENTION_BIAS: _definition(
-        {"attn_bias_flag": True, "attn_add_key_value_bias_flag": True},
-        "Enable projection and learned key/value bias in every attention path.",
+    ExperimentPreset.ATTENTION_BIAS: _define_preset(
+        description="Enable projection and learned key/value bias in every attention path.",
+        attn_bias_flag=True,
+        attn_add_key_value_bias_flag=True,
     ),
-    ExperimentPreset.GATING: _definition(
-        {"stack_gate_flag": True}, "Gate encoder and decoder block outputs."
+    ExperimentPreset.GATING: _define_preset(
+        description="Gate encoder and decoder block outputs.",
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.HALTING: _definition(
-        {
-            "stack_halting_flag": True,
-            "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        },
-        "Enable block-level adaptive halting.",
+    ExperimentPreset.HALTING: _define_preset(
+        description="Enable block-level adaptive halting.",
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
     ),
-    ExperimentPreset.GATING_HALTING: _definition(
-        {
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        },
-        "Combine block gating and halting.",
+    ExperimentPreset.GATING_HALTING: _define_preset(
+        description="Combine block gating and halting.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
     ),
-    ExperimentPreset.MEMORY: _definition(
-        {"memory_flag": True}, "Enable shared dynamic memory in both stacks."
+    ExperimentPreset.MEMORY: _define_preset(
+        description="Enable shared dynamic memory in both stacks.",
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_MEMORY: _definition(
-        {"stack_gate_flag": True, "memory_flag": True},
-        "Combine block gating and dynamic memory.",
+    ExperimentPreset.GATING_MEMORY: _define_preset(
+        description="Combine block gating and dynamic memory.",
+        stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.HALTING_MEMORY: _definition(
-        {
-            "stack_halting_flag": True,
-            "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-            "memory_flag": True,
-        },
-        "Combine block halting and dynamic memory.",
+    ExperimentPreset.HALTING_MEMORY: _define_preset(
+        description="Combine block halting and dynamic memory.",
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING_MEMORY: _definition(
-        {
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-            "memory_flag": True,
-        },
-        "Combine block gating, halting, and memory.",
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
+        description="Combine block gating, halting, and memory.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT: _definition(
-        {"recurrent_flag": True}, "Reuse both Transformer stacks recurrently."
+    ExperimentPreset.RECURRENT: _define_preset(
+        description="Reuse both Transformer stacks recurrently.",
+        recurrent_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING: _definition(
-        {"recurrent_flag": True, "recurrent_stack_gate_flag": True},
-        "Use recurrent stacks with step gates.",
+    ExperimentPreset.RECURRENT_GATING: _define_preset(
+        description="Use recurrent stacks with step gates.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        },
-        "Use recurrent stacks with adaptive step halting.",
+    ExperimentPreset.RECURRENT_HALTING: _define_preset(
+        description="Use recurrent stacks with adaptive step halting.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
     ),
-    ExperimentPreset.RECURRENT_MEMORY: _definition(
-        {"recurrent_flag": True, "memory_flag": True},
-        "Use recurrent stacks with shared block memory.",
+    ExperimentPreset.RECURRENT_MEMORY: _define_preset(
+        description="Use recurrent stacks with shared block memory.",
+        recurrent_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        },
-        "Combine recurrence, step gating, and step halting.",
+    ExperimentPreset.RECURRENT_GATING_HALTING: _define_preset(
+        description="Combine recurrence, step gating, and step halting.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
     ),
-    ExperimentPreset.RECURRENT_GATING_MEMORY: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        "Combine recurrence, step gating, and memory.",
+    ExperimentPreset.RECURRENT_GATING_MEMORY: _define_preset(
+        description="Combine recurrence, step gating, and memory.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_HALTING_MEMORY: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-            "memory_flag": True,
-        },
-        "Combine recurrence, step halting, and memory.",
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: _define_preset(
+        description="Combine recurrence, step halting, and memory.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "recurrent_halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-            "memory_flag": True,
-        },
-        "Enable all recurrent stack controllers.",
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _define_preset(
+        description="Enable all recurrent stack controllers.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        recurrent_halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
+        memory_flag=True,
     ),
-    ExperimentPreset.RESIDUAL: _definition(
-        {"stack_residual_connection_option": (AdditiveResidualConfig)},
-        "Add residual joins between full Transformer blocks.",
+    ExperimentPreset.RESIDUAL: _define_preset(
+        description="Add residual joins between full Transformer blocks.",
+        stack_residual_connection_option=AdditiveResidualConfig,
     ),
-    ExperimentPreset.RESIDUAL_POST_NORM: _definition(
-        {
-            "stack_residual_connection_option": AdditiveResidualConfig,
-            "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-            "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
-        "Combine block residuals with internal post-normalization.",
+    ExperimentPreset.RESIDUAL_POST_NORM: _define_preset(
+        description="Combine block residuals with internal post-normalization.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.RESIDUAL_GATING: _definition(
-        {
-            "stack_residual_connection_option": AdditiveResidualConfig,
-            "stack_gate_flag": True,
-        },
-        "Combine block residuals and block gates.",
+    ExperimentPreset.RESIDUAL_GATING: _define_preset(
+        description="Combine block residuals and block gates.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.RESIDUAL_HALTING: _definition(
-        {
-            "stack_residual_connection_option": AdditiveResidualConfig,
-            "stack_halting_flag": True,
-            "halting_threshold": _RECOMMENDED_HALTING_THRESHOLD,
-        },
-        "Combine block residuals and block halting.",
+    ExperimentPreset.RESIDUAL_HALTING: _define_preset(
+        description="Combine block residuals and block halting.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_halting_flag=True,
+        halting_threshold=_RECOMMENDED_HALTING_THRESHOLD,
     ),
-    ExperimentPreset.RESIDUAL_MEMORY: _definition(
-        {
-            "stack_residual_connection_option": AdditiveResidualConfig,
-            "memory_flag": True,
-        },
-        "Combine block residuals and dynamic memory.",
+    ExperimentPreset.RESIDUAL_MEMORY: _define_preset(
+        description="Combine block residuals and dynamic memory.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        memory_flag=True,
     ),
-    ExperimentPreset.RECURRENT_RESIDUAL: _definition(
-        {
-            "recurrent_flag": True,
-            "recurrent_residual_connection_option": (AdditiveResidualConfig),
-        },
-        "Add residual joins between recurrent applications.",
+    ExperimentPreset.RECURRENT_RESIDUAL: _define_preset(
+        description="Add residual joins between recurrent applications.",
+        recurrent_flag=True,
+        recurrent_residual_connection_option=AdditiveResidualConfig,
     ),
-    ExperimentPreset.RECURRENT_POST_NORM: _definition(
-        {
-            "recurrent_flag": True,
-            "encoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-            "decoder_layer_norm_position": LayerNormPositionOptions.AFTER,
-        },
-        "Use recurrent Transformer stacks with post-normalization.",
+    ExperimentPreset.RECURRENT_POST_NORM: _define_preset(
+        description="Use recurrent Transformer stacks with post-normalization.",
+        recurrent_flag=True,
+        encoder_layer_norm_position=LayerNormPositionOptions.AFTER,
+        decoder_layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
 }
 
