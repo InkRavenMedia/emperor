@@ -5,6 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 from torch.nn import Parameter
 
+from emperor.layers import LayerState
 from emperor.nn import Module
 from emperor.patch._validation import PatchValidator
 
@@ -34,6 +35,13 @@ class PatchBase(Module):
         if self.class_token_flag:
             self.class_token = self._create_class_token()
         self.dropout = nn.Dropout(self.dropout_probability)
+
+    def forward(self, X: Tensor) -> Tensor:
+        state = self._embed_patches(X)
+        return state.tensor_output(self)
+
+    def _embed_patches(self, X: Tensor) -> LayerState:
+        raise NotImplementedError
 
     def _create_class_token(self, shape: tuple | None = None) -> Parameter:
         class_token_shape = shape
