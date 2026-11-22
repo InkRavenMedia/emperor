@@ -6,6 +6,7 @@ from typing import Final, cast
 
 from emperor.layers import ActivationOptions, LastLayerBiasOptions
 from models.neuron.linear import config
+from models.neuron.linear._hidden import SETTINGS_VALIDATION
 from models.neuron.linear._hidden._runtime_default_values import (
     GateConditionValues,
     HaltingMeasureValues,
@@ -57,6 +58,7 @@ from models.neuron.linear._hidden.runtime_options import (
 from models.neuron.linear._residual import (
     ResidualStackOptions,
     ResidualStackSource,
+    inherit_if_unset,
     resolve_residual_stack_options,
 )
 
@@ -86,14 +88,7 @@ def _runtime_dimensions(
     reader: RuntimeOverrideReader,
 ) -> RuntimeDimensionsValues:
     dimensions = read_runtime_dimensions(reader)
-    for key, value in (
-        ("batch_size", dimensions.batch_size),
-        ("learning_rate", dimensions.learning_rate),
-        ("input_dim", dimensions.input_dim),
-        ("hidden_dim", dimensions.hidden_dim),
-        ("output_dim", dimensions.output_dim),
-    ):
-        _positive(key, value)
+    SETTINGS_VALIDATION.dimensions(dimensions)
     return dimensions
 
 
@@ -166,51 +161,30 @@ def _resolved_controller_stack(
     if not values.independent_flag:
         return defaults
     return ControllerStackOptions(
-        hidden_dim=(
-            defaults.hidden_dim if values.hidden_dim is None else values.hidden_dim
+        hidden_dim=inherit_if_unset(values.hidden_dim, defaults.hidden_dim),
+        num_layers=inherit_if_unset(values.num_layers, defaults.num_layers),
+        last_layer_bias_option=inherit_if_unset(
+            values.last_layer_bias_option, defaults.last_layer_bias_option
         ),
-        num_layers=(
-            defaults.num_layers if values.num_layers is None else values.num_layers
+        apply_output_postprocessing_flag=inherit_if_unset(
+            values.apply_output_postprocessing_flag,
+            defaults.apply_output_postprocessing_flag,
         ),
-        last_layer_bias_option=(
-            defaults.last_layer_bias_option
-            if values.last_layer_bias_option is None
-            else values.last_layer_bias_option
+        activation=inherit_if_unset(values.activation, defaults.activation),
+        layer_norm_position=inherit_if_unset(
+            values.layer_norm_position, defaults.layer_norm_position
         ),
-        apply_output_postprocessing_flag=(
-            defaults.apply_output_postprocessing_flag
-            if values.apply_output_postprocessing_flag is None
-            else values.apply_output_postprocessing_flag
-        ),
-        activation=(
-            defaults.activation if values.activation is None else values.activation
-        ),
-        layer_norm_position=(
-            defaults.layer_norm_position
-            if values.layer_norm_position is None
-            else values.layer_norm_position
-        ),
-        normalization=(
-            defaults.normalization
-            if values.normalization is None
-            else values.normalization
-        ),
-        residual_connection_option=(
-            defaults.residual_connection_option
-            if values.residual_connection_option is None
-            else values.residual_connection_option
+        normalization=inherit_if_unset(values.normalization, defaults.normalization),
+        residual_connection_option=inherit_if_unset(
+            values.residual_connection_option, defaults.residual_connection_option
         ),
         residual_block_size=values.residual_block_size,
         residual_rms_norm_epsilon=values.residual_rms_norm_epsilon,
         residual_model_flag=values.residual_model_flag,
-        dropout_probability=(
-            defaults.dropout_probability
-            if values.dropout_probability is None
-            else values.dropout_probability
+        dropout_probability=inherit_if_unset(
+            values.dropout_probability, defaults.dropout_probability
         ),
-        bias_flag=(
-            defaults.bias_flag if values.bias_flag is None else values.bias_flag
-        ),
+        bias_flag=inherit_if_unset(values.bias_flag, defaults.bias_flag),
         residual_stack_options=defaults.residual_stack_options,
     )
 

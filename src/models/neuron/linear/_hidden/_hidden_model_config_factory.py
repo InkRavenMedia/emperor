@@ -21,14 +21,16 @@ class HiddenModelConfigFactory:
         gate_config = self.control_factory.build_gate_config()
         halting_config = self.control_factory.build_halting_config()
         memory_config = self.control_factory.build_memory_config()
+        layer_config = self._layer_config(
+            gate_config=gate_config,
+            halting_config=halting_config,
+        )
         stack_config = self._stack_config(
             memory_config=memory_config,
-            layer_config=self._layer_config(
-                gate_config=gate_config,
-                halting_config=halting_config,
-            ),
+            layer_config=layer_config,
         )
-        return self.control_factory.wrap_recurrent(stack_config)
+        hidden_model_config = self.control_factory.wrap_recurrent(stack_config)
+        return hidden_model_config
 
     def _stack_config(
         self,
@@ -54,23 +56,25 @@ class HiddenModelConfigFactory:
         halting_config: HaltingConfig | None,
     ) -> LayerConfig:
         options = self.runtime.stack
+        residual_config = build_residual_config(
+            options.residual_connection_option,
+            options.residual_model_flag,
+            options.residual_stack_options,
+            residual_block_size=options.residual_block_size,
+            residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
+            selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
+            model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
+        )
+        linear_layer_config = LinearLayerConfig(
+            bias_flag=options.bias_flag,
+        )
         return LayerConfig(
             activation=options.activation,
             layer_norm_position=options.layer_norm_position,
             normalization=options.normalization,
-            residual_config=build_residual_config(
-                options.residual_connection_option,
-                options.residual_model_flag,
-                options.residual_stack_options,
-                residual_block_size=options.residual_block_size,
-                residual_rms_norm_epsilon=options.residual_rms_norm_epsilon,
-                selector_field="STACK_RESIDUAL_CONNECTION_OPTION",
-                model_flag_field="STACK_RESIDUAL_MODEL_FLAG",
-            ),
+            residual_config=residual_config,
             dropout_probability=options.dropout_probability,
             gate_config=gate_config,
             halting_config=halting_config,
-            layer_model_config=LinearLayerConfig(
-                bias_flag=options.bias_flag,
-            ),
+            layer_model_config=linear_layer_config,
         )

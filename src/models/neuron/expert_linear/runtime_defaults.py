@@ -9,7 +9,7 @@ from model_runtime.packages.runtime_values import (
 )
 
 from . import config
-from ._runtime_defaults_resolver import NeuronExpertLinearRuntimeDefaultsResolver
+from ._runtime_defaults_resolver import resolve_neuron_runtime
 from .runtime_options import RuntimeOptions
 
 
@@ -20,17 +20,7 @@ def runtime_from_flat(values: Mapping[str, object] | None = None) -> RuntimeOpti
         package="models.neuron.expert_linear",
         config_module=config,
     )
-    resolver = NeuronExpertLinearRuntimeDefaultsResolver(flat_values)
-    return RuntimeOptions(
-        {
-            "hidden_runtime": resolver.hidden_runtime,
-            "cluster_capacity_options": resolver.cluster_capacity_options,
-            "terminal_options": resolver.terminal_options,
-            "terminal_router_options": resolver.terminal_router_options,
-            "terminal_sampler_options": resolver.terminal_sampler_options,
-            "cluster_halting_options": resolver.cluster_halting_options,
-        }
-    )
+    return resolve_neuron_runtime(flat_values)
 
 
 DEFAULT_RUNTIME: Final = runtime_from_flat()

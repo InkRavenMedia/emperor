@@ -30,7 +30,10 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models.neuron.linear_adaptive._hidden import SETTINGS_VALIDATION
 from models.neuron.linear_adaptive._residual import ResidualStackOptions
+
+_PACKAGE = "models.neuron.linear_adaptive._hidden"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +54,10 @@ class StackOptions:
     dropout_probability: float
     bias_flag: bool
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("stack.hidden_dim", self.hidden_dim)
+        SETTINGS_VALIDATION.stack(self)
+
 
 @dataclass(frozen=True, slots=True)
 class GateOptions:
@@ -59,6 +66,9 @@ class GateOptions:
     activation: ActivationOptions | None
     stack: StackOptions
     shared_config: GateConfig | None = None
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.gate(self.enabled, self.option)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +79,12 @@ class HaltingOptions:
     hidden_state_mode: HaltingHiddenStateModeOptions
     stack: StackOptions
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.halting_threshold("halting_threshold", self.threshold)
+        SETTINGS_VALIDATION.probability(
+            "halting.dropout_probability", self.dropout_probability
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class MemoryOptions:
@@ -78,6 +94,18 @@ class MemoryOptions:
     test_time_training_learning_rate: float | None
     test_time_training_num_inner_steps: int | None
     stack: StackOptions
+
+    def __post_init__(self) -> None:
+        if self.test_time_training_learning_rate is not None:
+            SETTINGS_VALIDATION.positive_float(
+                "memory.test_time_training_learning_rate",
+                self.test_time_training_learning_rate,
+            )
+        if self.test_time_training_num_inner_steps is not None:
+            SETTINGS_VALIDATION.positive_integer(
+                "memory.test_time_training_num_inner_steps",
+                self.test_time_training_num_inner_steps,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +124,9 @@ class RecurrenceOptions:
     )
     gate: GateOptions
     halting: HaltingOptions
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.positive_integer("recurrence.max_steps", self.max_steps)
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,6 +168,16 @@ class AdaptiveWeightOptions:
     generator_stack: GeneratorStackOptions
     normalization_learnable_scale_flag: bool = False
 
+    def __post_init__(self) -> None:
+        if self.enabled and self.option is None:
+            raise ValueError(
+                f"{_PACKAGE}: 'weight.option' must be set when weight is enabled"
+            )
+        SETTINGS_VALIDATION.nonnegative_float("weight.decay_rate", self.decay_rate)
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "weight.decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class AdaptiveBiasOptions:
@@ -148,12 +189,28 @@ class AdaptiveBiasOptions:
     bank_expansion_factor: BankExpansionFactorOptions
     generator_stack: GeneratorStackOptions
 
+    def __post_init__(self) -> None:
+        if self.enabled and self.option is None:
+            raise ValueError(
+                f"{_PACKAGE}: 'bias.option' must be set when bias is enabled"
+            )
+        SETTINGS_VALIDATION.nonnegative_float("bias.decay_rate", self.decay_rate)
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "bias.decay_warmup_batches", self.decay_warmup_batches
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class AdaptiveDiagonalOptions:
     enabled: bool
     option: type[DynamicDiagonalConfig] | None
     generator_stack: GeneratorStackOptions
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.option is None:
+            raise ValueError(
+                f"{_PACKAGE}: 'diagonal.option' must be set when diagonal is enabled"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +223,28 @@ class AdaptiveMaskOptions:
     floor: float
     transition_width: float
     generator_stack: GeneratorStackOptions
+
+    def __post_init__(self) -> None:
+        if self.enabled and self.row_mask_option is None:
+            raise ValueError(
+                f"{_PACKAGE}: 'mask.row_mask_option' must be set when mask is enabled"
+            )
+        SETTINGS_VALIDATION.probability("mask.threshold", self.threshold)
+        SETTINGS_VALIDATION.probability("mask.floor", self.floor)
+        SETTINGS_VALIDATION.positive_float("mask.surrogate_scale", self.surrogate_scale)
+        SETTINGS_VALIDATION.positive_float(
+            "mask.transition_width", self.transition_width
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ProjectionMaskOptions:
+    row_mask_option: type[AxisMaskConfig] | None
+    dimension_option: MaskDimensionOptions
+    threshold: float
+    surrogate_scale: float
+    floor: float
+    transition_width: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,6 +275,43 @@ class AdaptiveProjectionOptions:
     mask_transition_width: float
     weight_normalization_learnable_scale_flag: bool = False
 
+    @property
+    def mask(self) -> ProjectionMaskOptions:
+        return ProjectionMaskOptions(
+            row_mask_option=self.row_mask_option,
+            dimension_option=self.mask_dimension_option,
+            threshold=self.mask_threshold,
+            surrogate_scale=self.mask_surrogate_scale,
+            floor=self.mask_floor,
+            transition_width=self.mask_transition_width,
+        )
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.nonnegative_float(
+            "projection.weight_decay_rate", self.weight_decay_rate
+        )
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "projection.weight_decay_warmup_batches",
+            self.weight_decay_warmup_batches,
+        )
+        SETTINGS_VALIDATION.nonnegative_float(
+            "projection.bias_decay_rate", self.bias_decay_rate
+        )
+        SETTINGS_VALIDATION.nonnegative_integer(
+            "projection.bias_decay_warmup_batches",
+            self.bias_decay_warmup_batches,
+        )
+        SETTINGS_VALIDATION.probability(
+            "projection.mask_threshold", self.mask_threshold
+        )
+        SETTINGS_VALIDATION.probability("projection.mask_floor", self.mask_floor)
+        SETTINGS_VALIDATION.positive_float(
+            "projection.mask_surrogate_scale", self.mask_surrogate_scale
+        )
+        SETTINGS_VALIDATION.positive_float(
+            "projection.mask_transition_width", self.mask_transition_width
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions:
@@ -224,3 +340,7 @@ class RuntimeOptions:
     output_projection: AdaptiveProjectionOptions
     halting_option: type[HaltingConfig] = StickBreakingConfig
     recurrent_halting_option: type[HaltingConfig] = StickBreakingConfig
+
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.shared_gate(self.gate.enabled, self.gate.shared_config)
