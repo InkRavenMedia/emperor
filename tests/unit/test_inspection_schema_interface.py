@@ -1648,7 +1648,7 @@ if __name__ == "__main__":
 
 def test_postponed_annotated_nullable_enum_parses_validates_and_describes_one_field():
     from enum import Enum
-    from typing import Annotated
+    from typing import Annotated, get_args
 
     class Choice(Enum):
         FIRST = 1
@@ -1660,9 +1660,12 @@ def test_postponed_annotated_nullable_enum_parses_validates_and_describes_one_fi
     config.__dict__.update(vars(original._runtime_defaults_source))
     config.CALLBACK_EARLY_STOPPING_METRIC = None
     config.Choice, config.Annotated = Choice, Annotated
+    config.callback_section = get_args(
+        config.__annotations__["CALLBACK_EARLY_STOPPING_METRIC"]
+    )[1]
     config.__annotations__ = {
         **config.__annotations__,
-        "CALLBACK_EARLY_STOPPING_METRIC": "Annotated[Choice | None, 'choice']",
+        "CALLBACK_EARLY_STOPPING_METRIC": "Annotated[Choice | None, 'choice', callback_section]",
     }
     metadata = ModelMetadata(
         source.identity,
@@ -1679,6 +1682,10 @@ def test_postponed_annotated_nullable_enum_parses_validates_and_describes_one_fi
         source.inspection_construction_limits,
     )
     spec = package.runtime_defaults_spec
+    assert (
+        spec.annotations["CALLBACK_EARLY_STOPPING_METRIC"]
+        == Annotated[Choice | None, "choice"]
+    )
     assert spec.parse_value("CALLBACK_EARLY_STOPPING_METRIC", "FIRST") is Choice.FIRST
     spec.validate_typed_values({"callback_early_stopping_metric": Choice.FIRST})
     field = next(
