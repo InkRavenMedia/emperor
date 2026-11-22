@@ -1,3 +1,5 @@
+from typing import Unpack
+
 from emperor.augmentations.adaptive_parameters import (
     AdditiveDynamicBiasConfig,
     AffineTransformDynamicBiasConfig,
@@ -42,6 +44,7 @@ from models.experts.linear_adaptive.config_builder import (
     LinearAdaptiveConfigBuilder,
 )
 from models.experts.linear_adaptive.runtime_defaults import runtime_from_flat
+from models.experts.linear_adaptive.runtime_options import PresetValues
 
 
 class ExperimentPreset(BaseOptions):
@@ -135,738 +138,570 @@ _ADAPTIVE_OPTION_FLAGS = {
 }
 
 
-def _with_adaptive_option_flags(overrides: dict[str, object]) -> dict[str, object]:
-    option_flags = {
+_FULL_STACK_VALUES = PresetValues(
+    weight_option=DualModelDynamicWeightConfig,
+    bias_option=AdditiveDynamicBiasConfig,
+    diagonal_option=CombinedDynamicDiagonalConfig,
+    row_mask_option=WeightInformedScoreAxisMaskConfig,
+)
+
+
+def _define_preset(
+    *,
+    description: str,
+    base: PresetValues | None = None,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    if base is not None:
+        values = {**base, **values}
+    enabled_flags = {
         flag: True
         for option, flag in _ADAPTIVE_OPTION_FLAGS.items()
-        if option in overrides and overrides[option] is not None
+        if values.get(option) is not None
     }
-    return {**option_flags, **overrides}
-
-
-def _full_adaptive_values() -> dict[str, object]:
-    return {
-        "weight_option": DualModelDynamicWeightConfig,
-        "bias_option": AdditiveDynamicBiasConfig,
-        "diagonal_option": CombinedDynamicDiagonalConfig,
-        "row_mask_option": WeightInformedScoreAxisMaskConfig,
-    }
-
-
-_FULL_STACK_OVERRIDES = _with_adaptive_option_flags(_full_adaptive_values())
+    return PresetDefinition(
+        preset_values={**enabled_flags, **values},
+        description=description,
+    )
 
 
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values={},
-        description="Default config: a mixture-of-experts classifier with adaptive linear "
-        "input, output, expert, and router stacks.",
-    ),
-    ExperimentPreset.GATING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-        },
-        description="Default config with per-layer gating enabled in the adaptive expert "
-        "stack.",
-    ),
-    ExperimentPreset.HALTING: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-        },
-        description="Default config with stack halting enabled in the adaptive expert "
-        "stack.",
-    ),
-    ExperimentPreset.GATING_HALTING: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-        },
-        description="Default config with both per-layer gating and stack halting "
-        "enabled in the adaptive expert stack.",
-    ),
-    ExperimentPreset.MEMORY: PresetDefinition(
-        preset_values={
-            "memory_flag": True,
-        },
-        description="Default config with shared stack memory enabled in the adaptive "
-        "expert stack.",
-    ),
-    ExperimentPreset.GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description="Default config with both per-layer gating and shared stack "
-        "memory enabled in the adaptive expert stack.",
-    ),
-    ExperimentPreset.HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description="Default config with both stack halting and shared stack memory "
-        "enabled in the adaptive expert stack.",
-    ),
-    ExperimentPreset.GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description="Default config with per-layer gating, stack halting, and shared "
-        "stack memory enabled in the adaptive expert stack.",
-    ),
-    ExperimentPreset.RESIDUAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-            }
+    ExperimentPreset.BASELINE: _define_preset(
+        description=(
+            "Default config: a mixture-of-experts classifier with adaptive linear "
+            "input, output, expert, and router stacks."
         ),
+    ),
+    ExperimentPreset.GATING: _define_preset(
+        description=(
+            "Default config with per-layer gating enabled in the adaptive expert stack."
+        ),
+        stack_gate_flag=True,
+    ),
+    ExperimentPreset.HALTING: _define_preset(
+        description=(
+            "Default config with stack halting enabled in the adaptive expert stack."
+        ),
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.GATING_HALTING: _define_preset(
+        description=(
+            "Default config with both per-layer gating and stack halting "
+            "enabled in the adaptive expert stack."
+        ),
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+    ),
+    ExperimentPreset.MEMORY: _define_preset(
+        description=(
+            "Default config with shared stack memory enabled in the adaptive "
+            "expert stack."
+        ),
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_MEMORY: _define_preset(
+        description=(
+            "Default config with both per-layer gating and shared stack "
+            "memory enabled in the adaptive expert stack."
+        ),
+        stack_gate_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.HALTING_MEMORY: _define_preset(
+        description=(
+            "Default config with both stack halting and shared stack memory "
+            "enabled in the adaptive expert stack."
+        ),
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default config with per-layer gating, stack halting, and shared "
+            "stack memory enabled in the adaptive expert stack."
+        ),
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RESIDUAL: _define_preset(
         description="Default adaptive expert config with residual skip connections.",
+        stack_residual_connection_option=AdditiveResidualConfig,
     ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
-        ),
+    ExperimentPreset.POST_NORM: _define_preset(
         description="Default adaptive expert config with post-layer normalization.",
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.RESIDUAL_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
+    ExperimentPreset.RESIDUAL_POST_NORM: _define_preset(
+        description=(
+            "Default adaptive expert config with residual connections and "
+            "post-layer normalization."
         ),
-        description="Default adaptive expert config with residual connections and "
-        "post-layer normalization.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.RESIDUAL_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "stack_gate_flag": True,
-            }
+    ExperimentPreset.RESIDUAL_GATING: _define_preset(
+        description=(
+            "Default adaptive expert config with residual connections and "
+            "per-layer gating."
         ),
-        description="Default adaptive expert config with residual connections and "
-        "per-layer gating.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.RESIDUAL_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "stack_halting_flag": True,
-            }
+    ExperimentPreset.RESIDUAL_HALTING: _define_preset(
+        description=(
+            "Default adaptive expert config with residual connections and "
+            "stack halting."
         ),
-        description="Default adaptive expert config with residual connections and "
-        "stack halting.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.RESIDUAL_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-                "memory_flag": True,
-            }
+    ExperimentPreset.RESIDUAL_MEMORY: _define_preset(
+        description=(
+            "Default adaptive expert config with residual connections and "
+            "shared stack memory."
         ),
-        description="Default adaptive expert config with residual connections and "
-        "shared stack memory.",
+        stack_residual_connection_option=AdditiveResidualConfig,
+        memory_flag=True,
     ),
-    ExperimentPreset.SINGLE_MODEL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": SingleModelDynamicWeightConfig,
-            }
-        ),
+    ExperimentPreset.SINGLE_MODEL_WEIGHT: _define_preset(
         description="Default adaptive expert config with single-model dynamic weights.",
+        weight_option=SingleModelDynamicWeightConfig,
     ),
-    ExperimentPreset.DUAL_MODEL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-            }
-        ),
+    ExperimentPreset.DUAL_MODEL_WEIGHT: _define_preset(
         description="Default adaptive expert config with dual-model dynamic weights.",
+        weight_option=DualModelDynamicWeightConfig,
     ),
-    ExperimentPreset.LOW_RANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-            }
-        ),
+    ExperimentPreset.LOW_RANK_WEIGHT: _define_preset(
         description="Default adaptive expert config with low-rank dynamic weights.",
+        weight_option=LowRankDynamicWeightConfig,
     ),
-    ExperimentPreset.HYPERNETWORK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": HypernetworkDynamicWeightConfig,
-            }
-        ),
+    ExperimentPreset.HYPERNETWORK_WEIGHT: _define_preset(
         description="Default adaptive expert config with hypernetwork dynamic weights.",
+        weight_option=HypernetworkDynamicWeightConfig,
     ),
-    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-            }
+    ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT: _define_preset(
+        description=(
+            "Default adaptive expert config with layered weighted-bank dynamic weights."
         ),
-        description="Default adaptive expert config with layered weighted-bank dynamic "
-        "weights.",
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
     ),
-    ExperimentPreset.SOFT_WEIGHTED_BANK_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": SoftWeightedBankDynamicWeightConfig,
-            }
+    ExperimentPreset.SOFT_WEIGHTED_BANK_WEIGHT: _define_preset(
+        description=(
+            "Default adaptive expert config with soft weighted-bank dynamic weights."
         ),
-        description="Default adaptive expert config with soft weighted-bank dynamic "
-        "weights.",
+        weight_option=SoftWeightedBankDynamicWeightConfig,
     ),
-    ExperimentPreset.AFFINE_TRANSFORM_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": AffineTransformDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.AFFINE_TRANSFORM_BIAS: _define_preset(
         description="Default adaptive expert config with affine-transform dynamic bias.",
+        bias_option=AffineTransformDynamicBiasConfig,
     ),
-    ExperimentPreset.ADDITIVE_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": AdditiveDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.ADDITIVE_BIAS: _define_preset(
         description="Default adaptive expert config with additive dynamic bias.",
+        bias_option=AdditiveDynamicBiasConfig,
     ),
-    ExperimentPreset.GENERATOR_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": GeneratorDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.GENERATOR_BIAS: _define_preset(
         description="Default adaptive expert config with generator dynamic bias.",
+        bias_option=GeneratorDynamicBiasConfig,
     ),
-    ExperimentPreset.MULTIPLICATIVE_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": MultiplicativeDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.MULTIPLICATIVE_BIAS: _define_preset(
         description="Default adaptive expert config with multiplicative dynamic bias.",
+        bias_option=MultiplicativeDynamicBiasConfig,
     ),
-    ExperimentPreset.SIGMOID_GATED_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": SigmoidGatedDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.SIGMOID_GATED_BIAS: _define_preset(
         description="Default adaptive expert config with sigmoid-gated dynamic bias.",
+        bias_option=SigmoidGatedDynamicBiasConfig,
     ),
-    ExperimentPreset.TANH_GATED_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": TanhGatedDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.TANH_GATED_BIAS: _define_preset(
         description="Default adaptive expert config with tanh-gated dynamic bias.",
+        bias_option=TanhGatedDynamicBiasConfig,
     ),
-    ExperimentPreset.WEIGHTED_BANK_BIAS: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "bias_option": WeightedBankDynamicBiasConfig,
-            }
-        ),
+    ExperimentPreset.WEIGHTED_BANK_BIAS: _define_preset(
         description="Default adaptive expert config with weighted-bank dynamic bias.",
+        bias_option=WeightedBankDynamicBiasConfig,
     ),
-    ExperimentPreset.STANDARD_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": StandardDynamicDiagonalConfig,
-            }
-        ),
+    ExperimentPreset.STANDARD_DIAGONAL: _define_preset(
         description="Default adaptive expert config with standard dynamic diagonal.",
+        diagonal_option=StandardDynamicDiagonalConfig,
     ),
-    ExperimentPreset.ANTI_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": AntiDynamicDiagonalConfig,
-            }
-        ),
+    ExperimentPreset.ANTI_DIAGONAL: _define_preset(
         description="Default adaptive expert config with anti dynamic diagonal.",
+        diagonal_option=AntiDynamicDiagonalConfig,
     ),
-    ExperimentPreset.COMBINED_DIAGONAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "diagonal_option": CombinedDynamicDiagonalConfig,
-            }
-        ),
+    ExperimentPreset.COMBINED_DIAGONAL: _define_preset(
         description="Default adaptive expert config with combined dynamic diagonal.",
+        diagonal_option=CombinedDynamicDiagonalConfig,
     ),
-    ExperimentPreset.DIAGONAL_AXIS_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": DiagonalAxisMaskConfig,
-            }
-        ),
+    ExperimentPreset.DIAGONAL_AXIS_MASK: _define_preset(
         description="Default adaptive expert config with diagonal-axis row masking.",
+        row_mask_option=DiagonalAxisMaskConfig,
     ),
-    ExperimentPreset.OUTER_PRODUCT_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": OuterProductMaskConfig,
-            }
-        ),
+    ExperimentPreset.OUTER_PRODUCT_MASK: _define_preset(
         description="Default adaptive expert config with outer-product row masking.",
+        row_mask_option=OuterProductMaskConfig,
     ),
-    ExperimentPreset.PER_AXIS_SCORE_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": PerAxisScoreMaskConfig,
-            }
-        ),
+    ExperimentPreset.PER_AXIS_SCORE_MASK: _define_preset(
         description="Default adaptive expert config with per-axis score row masking.",
+        row_mask_option=PerAxisScoreMaskConfig,
     ),
-    ExperimentPreset.TOP_SLICE_AXIS_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": TopSliceAxisMaskConfig,
-            }
-        ),
+    ExperimentPreset.TOP_SLICE_AXIS_MASK: _define_preset(
         description="Default adaptive expert config with top-slice axis row masking.",
+        row_mask_option=TopSliceAxisMaskConfig,
     ),
-    ExperimentPreset.WEIGHT_INFORMED_SCORE_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "row_mask_option": WeightInformedScoreAxisMaskConfig,
-            }
+    ExperimentPreset.WEIGHT_INFORMED_SCORE_MASK: _define_preset(
+        description=(
+            "Default adaptive expert config with weight-informed score row masking."
         ),
-        description="Default adaptive expert config with weight-informed score row "
-        "masking.",
+        row_mask_option=WeightInformedScoreAxisMaskConfig,
     ),
     ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": SingleModelDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": CombinedDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with single-model weights, "
+                "additive bias, and combined diagonal."
             ),
-            description="Default adaptive expert config with single-model weights, "
-            "additive bias, and combined diagonal.",
+            weight_option=SingleModelDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=CombinedDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": DualModelDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": CombinedDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with dual-model weights, "
+                "additive bias, and combined diagonal."
             ),
-            description="Default adaptive expert config with dual-model weights, "
-            "additive bias, and combined diagonal.",
+            weight_option=DualModelDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=CombinedDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": CombinedDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with layered weighted-bank "
+                "weights, additive bias, and combined diagonal."
             ),
-            description="Default adaptive expert config with layered weighted-bank "
-            "weights, additive bias, and combined diagonal.",
+            weight_option=LayeredWeightedBankDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=CombinedDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_COMBINED_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": LowRankDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": CombinedDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with low-rank weights, "
+                "additive bias, and combined diagonal."
             ),
-            description="Default adaptive expert config with low-rank weights, "
-            "additive bias, and combined diagonal.",
+            weight_option=LowRankDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=CombinedDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.SINGLE_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": SingleModelDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": StandardDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with single-model weights, "
+                "additive bias, and standard diagonal."
             ),
-            description="Default adaptive expert config with single-model weights, "
-            "additive bias, and standard diagonal.",
+            weight_option=SingleModelDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=StandardDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.DUAL_MODEL_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": DualModelDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": StandardDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with dual-model weights, "
+                "additive bias, and standard diagonal."
             ),
-            description="Default adaptive expert config with dual-model weights, "
-            "additive bias, and standard diagonal.",
+            weight_option=DualModelDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=StandardDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.LAYERED_WEIGHTED_BANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": StandardDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with layered weighted-bank "
+                "weights, additive bias, and standard diagonal."
             ),
-            description="Default adaptive expert config with layered weighted-bank "
-            "weights, additive bias, and standard diagonal.",
+            weight_option=LayeredWeightedBankDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=StandardDynamicDiagonalConfig,
         )
     ),
     ExperimentPreset.LOW_RANK_WEIGHT_ADDITIVE_BIAS_STANDARD_DIAGONAL: (
-        PresetDefinition(
-            preset_values=_with_adaptive_option_flags(
-                {
-                    "weight_option": LowRankDynamicWeightConfig,
-                    "bias_option": AdditiveDynamicBiasConfig,
-                    "diagonal_option": StandardDynamicDiagonalConfig,
-                }
+        _define_preset(
+            description=(
+                "Default adaptive expert config with low-rank weights, "
+                "additive bias, and standard diagonal."
             ),
-            description="Default adaptive expert config with low-rank weights, "
-            "additive bias, and standard diagonal.",
+            weight_option=LowRankDynamicWeightConfig,
+            bias_option=AdditiveDynamicBiasConfig,
+            diagonal_option=StandardDynamicDiagonalConfig,
         )
     ),
-    ExperimentPreset.DECAY_EXPONENTIAL_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "weight_decay_schedule": WeightDecayScheduleOptions.EXPONENTIAL,
-                "weight_decay_rate": 1e-3,
-                "weight_decay_warmup_batches": 500,
-            }
+    ExperimentPreset.DECAY_EXPONENTIAL_WEIGHT: _define_preset(
+        description=(
+            "Default adaptive expert config with exponentially decayed "
+            "dual-model dynamic weights."
         ),
-        description="Default adaptive expert config with exponentially decayed "
-        "dual-model dynamic weights.",
+        weight_option=DualModelDynamicWeightConfig,
+        weight_decay_schedule=WeightDecayScheduleOptions.EXPONENTIAL,
+        weight_decay_rate=0.001,
+        weight_decay_warmup_batches=500,
     ),
-    ExperimentPreset.NORM_L2_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "weight_normalization_option": WeightNormalizationOptions.L2_SCALE,
-            }
+    ExperimentPreset.NORM_L2_WEIGHT: _define_preset(
+        description=(
+            "Default adaptive expert config with L2-scale normalized dynamic weights."
         ),
-        description="Default adaptive expert config with L2-scale normalized dynamic "
-        "weights.",
+        weight_option=DualModelDynamicWeightConfig,
+        weight_normalization_option=WeightNormalizationOptions.L2_SCALE,
     ),
-    ExperimentPreset.DEEP_GENERATOR: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "generator_depth": 8,
-            }
-        ),
+    ExperimentPreset.DEEP_GENERATOR: _define_preset(
         description="Default adaptive expert config with a depth-8 weight generator.",
+        weight_option=DualModelDynamicWeightConfig,
+        generator_depth=8,
     ),
-    ExperimentPreset.FULL_STACK: PresetDefinition(
-        preset_values=_FULL_STACK_OVERRIDES,
-        description="Default adaptive expert config with dynamic weights, bias, "
-        "diagonal, and row masking.",
-    ),
-    ExperimentPreset.DUAL_WEIGHT_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-            }
+    ExperimentPreset.FULL_STACK: _define_preset(
+        description=(
+            "Default adaptive expert config with dynamic weights, bias, "
+            "diagonal, and row masking."
         ),
-        description="Default adaptive expert config with dual-model weights and "
-        "per-layer gating.",
+        base=_FULL_STACK_VALUES,
     ),
-    ExperimentPreset.DUAL_WEIGHT_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_halting_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_GATING: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights and "
+            "per-layer gating."
         ),
-        description="Default adaptive expert config with dual-model weights and "
-        "stack halting.",
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.DUAL_WEIGHT_GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_HALTING: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights and stack halting."
         ),
-        description="Default adaptive expert config with dual-model weights, "
-        "per-layer gating, and stack halting.",
+        weight_option=DualModelDynamicWeightConfig,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.DUAL_WEIGHT_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "memory_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_GATING_HALTING: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights, "
+            "per-layer gating, and stack halting."
         ),
-        description="Default adaptive expert config with dual-model weights and "
-        "shared stack memory.",
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.DUAL_WEIGHT_GATING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_gate_flag": True,
-                "memory_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_MEMORY: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights and "
+            "shared stack memory."
         ),
-        description="Default adaptive expert config with dual-model weights, "
-        "per-layer gating, and shared stack memory.",
+        weight_option=DualModelDynamicWeightConfig,
+        memory_flag=True,
     ),
-    ExperimentPreset.DUAL_WEIGHT_HALTING_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "stack_halting_flag": True,
-                "memory_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_GATING_MEMORY: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights, "
+            "per-layer gating, and shared stack memory."
         ),
-        description="Default adaptive expert config with dual-model weights, "
-        "stack halting, and shared stack memory.",
+        weight_option=DualModelDynamicWeightConfig,
+        stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.FULL_STACK_GATING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_gate_flag": True,
-            }
+    ExperimentPreset.DUAL_WEIGHT_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default adaptive expert config with dual-model weights, "
+            "stack halting, and shared stack memory."
         ),
+        weight_option=DualModelDynamicWeightConfig,
+        stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.FULL_STACK_GATING: _define_preset(
         description="Default full adaptive expert config with per-layer gating.",
+        base=_FULL_STACK_VALUES,
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.FULL_STACK_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_halting_flag": True,
-            }
-        ),
+    ExperimentPreset.FULL_STACK_HALTING: _define_preset(
         description="Default full adaptive expert config with stack halting.",
+        base=_FULL_STACK_VALUES,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.FULL_STACK_MEMORY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "memory_flag": True,
-            }
-        ),
+    ExperimentPreset.FULL_STACK_MEMORY: _define_preset(
         description="Default full adaptive expert config with shared stack memory.",
+        base=_FULL_STACK_VALUES,
+        memory_flag=True,
     ),
-    ExperimentPreset.FULL_STACK_GATING_HALTING: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "stack_gate_flag": True,
-                "stack_halting_flag": True,
-            }
+    ExperimentPreset.FULL_STACK_GATING_HALTING: _define_preset(
+        description=(
+            "Default full adaptive expert config with per-layer gating and "
+            "stack halting."
         ),
-        description="Default full adaptive expert config with per-layer gating and "
-        "stack halting.",
+        base=_FULL_STACK_VALUES,
+        stack_gate_flag=True,
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.FULL_STACK_RECURRENT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_FULL_STACK_OVERRIDES,
-                "recurrent_flag": True,
-            }
-        ),
+    ExperimentPreset.FULL_STACK_RECURRENT: _define_preset(
         description="Default full adaptive expert config wrapped in recurrence.",
+        base=_FULL_STACK_VALUES,
+        recurrent_flag=True,
     ),
-    ExperimentPreset.BANK_WEIGHT_MASK: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LayeredWeightedBankDynamicWeightConfig,
-                "row_mask_option": WeightInformedScoreAxisMaskConfig,
-            }
+    ExperimentPreset.BANK_WEIGHT_MASK: _define_preset(
+        description=(
+            "Default adaptive expert config with bank weights and "
+            "weight-informed row masking."
         ),
-        description="Default adaptive expert config with bank weights and "
-        "weight-informed row masking.",
+        weight_option=LayeredWeightedBankDynamicWeightConfig,
+        row_mask_option=WeightInformedScoreAxisMaskConfig,
     ),
-    ExperimentPreset.LOW_RANK_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": LowRankDynamicWeightConfig,
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
+    ExperimentPreset.LOW_RANK_POST_NORM: _define_preset(
+        description=(
+            "Default adaptive expert config with low-rank weights and "
+            "post-layer normalization."
         ),
-        description="Default adaptive expert config with low-rank weights and "
-        "post-layer normalization.",
+        weight_option=LowRankDynamicWeightConfig,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.RECURRENT: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-        },
-        description="Default config wrapped in fixed-step recurrence, reusing the adaptive "
-        "expert stack for each recurrent step.",
-    ),
-    ExperimentPreset.RECURRENT_GATING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-        },
-        description="Default recurrent config with step-level gating enabled after each "
-        "recurrent update.",
-    ),
-    ExperimentPreset.RECURRENT_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
-        description="Default recurrent config with recurrent halting enabled, allowing "
-        "early stopping before the max step count.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_HALTING: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-        },
-        description="Default recurrent config with both step-level gating and recurrent "
-        "halting enabled.",
-    ),
-    ExperimentPreset.RECURRENT_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "memory_flag": True,
-        },
-        description="Default recurrent config whose reused adaptive expert stack has "
-        "shared memory enabled.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "memory_flag": True,
-        },
-        description="Default recurrent config with step-level gating and shared memory "
-        "in the reused adaptive expert stack.",
-    ),
-    ExperimentPreset.RECURRENT_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description="Default recurrent config with recurrent halting and shared memory "
-        "in the reused adaptive expert stack.",
-    ),
-    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-            "recurrent_stack_halting_flag": True,
-            "memory_flag": True,
-        },
-        description="Default recurrent config with step-level gating, recurrent "
-        "halting, and shared memory in the reused adaptive expert stack.",
-    ),
-    ExperimentPreset.RECURRENT_RESIDUAL: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "stack_residual_connection_option": (AdditiveResidualConfig),
-            }
+    ExperimentPreset.RECURRENT: _define_preset(
+        description=(
+            "Default config wrapped in fixed-step recurrence, reusing the adaptive "
+            "expert stack for each recurrent step."
         ),
-        description="Default recurrent adaptive expert config using a residual expert "
-        "stack at each recurrent step.",
+        recurrent_flag=True,
     ),
-    ExperimentPreset.RECURRENT_POST_NORM: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "recurrent_flag": True,
-                "layer_norm_position": LayerNormPositionOptions.AFTER,
-            }
+    ExperimentPreset.RECURRENT_GATING: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating enabled after each "
+            "recurrent update."
         ),
-        description="Default recurrent adaptive expert config using a post-normalized "
-        "expert stack at each recurrent step.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_SHARED_ROUTER: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "routing_initialization_mode": RoutingInitializationMode.SHARED,
-            }
+    ExperimentPreset.RECURRENT_HALTING: _define_preset(
+        description=(
+            "Default recurrent config with recurrent halting enabled, allowing "
+            "early stopping before the max step count."
         ),
-        description="Default adaptive config with dual-model dynamic weights and shared "
-        "expert routing.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_AFTER_WEIGHT: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "weighting_position_option": (
-                    ExpertWeightingPositionOptions.AFTER_EXPERTS
-                ),
-            }
+    ExperimentPreset.RECURRENT_GATING_HALTING: _define_preset(
+        description=(
+            "Default recurrent config with both step-level gating and recurrent "
+            "halting enabled."
         ),
-        description="Default adaptive config with dual-model dynamic weights and expert "
-        "weighting after expert outputs.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_TOP1_SWITCH: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "weight_option": DualModelDynamicWeightConfig,
-                "top_k": 1,
-                "sampler_normalize_probabilities_flag": False,
-                "sampler_switch_loss_weight": 0.1,
-            }
+    ExperimentPreset.RECURRENT_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config whose reused adaptive expert stack has "
+            "shared memory enabled."
         ),
-        description="Default adaptive config with dual-model dynamic weights, top-1 switch "
-        "routing, and switch auxiliary loss enabled.",
+        recurrent_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_FULL_SHARED: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_full_adaptive_values(),
-                "routing_initialization_mode": RoutingInitializationMode.SHARED,
-            }
+    ExperimentPreset.RECURRENT_GATING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating and shared memory "
+            "in the reused adaptive expert stack."
         ),
-        description="Default adaptive config with dynamic weights, bias, diagonal, row "
-        "mask, and shared expert routing.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_FULL_CAPACITY: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                **_full_adaptive_values(),
-                "top_k": 1,
-                "capacity_factor": 1.0,
-                "dropped_token_behavior": DroppedTokenOptions.ZEROS,
-                "sampler_normalize_probabilities_flag": False,
-            }
+    ExperimentPreset.RECURRENT_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with recurrent halting and shared memory "
+            "in the reused adaptive expert stack."
         ),
-        description="Default adaptive config with dynamic weights, bias, diagonal, row "
-        "mask, top-1 capacity limiting, and dropped tokens zeroed.",
+        recurrent_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE_BANK_ROUTER: PresetDefinition(
-        preset_values=_with_adaptive_option_flags(
-            {
-                "router_weight_option": LayeredWeightedBankDynamicWeightConfig,
-                "routing_initialization_mode": RoutingInitializationMode.SHARED,
-            }
+    ExperimentPreset.RECURRENT_GATING_HALTING_MEMORY: _define_preset(
+        description=(
+            "Default recurrent config with step-level gating, recurrent "
+            "halting, and shared memory in the reused adaptive expert stack."
         ),
-        description="Default adaptive config with layered weighted-bank dynamic "
-        "weights and shared expert routing.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
+        recurrent_stack_halting_flag=True,
+        memory_flag=True,
+    ),
+    ExperimentPreset.RECURRENT_RESIDUAL: _define_preset(
+        description=(
+            "Default recurrent adaptive expert config using a residual expert "
+            "stack at each recurrent step."
+        ),
+        recurrent_flag=True,
+        stack_residual_connection_option=AdditiveResidualConfig,
+    ),
+    ExperimentPreset.RECURRENT_POST_NORM: _define_preset(
+        description=(
+            "Default recurrent adaptive expert config using a post-normalized "
+            "expert stack at each recurrent step."
+        ),
+        recurrent_flag=True,
+        layer_norm_position=LayerNormPositionOptions.AFTER,
+    ),
+    ExperimentPreset.ADAPTIVE_SHARED_ROUTER: _define_preset(
+        description=(
+            "Default adaptive config with dual-model dynamic weights and shared "
+            "expert routing."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        routing_initialization_mode=RoutingInitializationMode.SHARED,
+    ),
+    ExperimentPreset.ADAPTIVE_AFTER_WEIGHT: _define_preset(
+        description=(
+            "Default adaptive config with dual-model dynamic weights and expert "
+            "weighting after expert outputs."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        weighting_position_option=ExpertWeightingPositionOptions.AFTER_EXPERTS,
+    ),
+    ExperimentPreset.ADAPTIVE_TOP1_SWITCH: _define_preset(
+        description=(
+            "Default adaptive config with dual-model dynamic weights, top-1 switch "
+            "routing, and switch auxiliary loss enabled."
+        ),
+        weight_option=DualModelDynamicWeightConfig,
+        top_k=1,
+        sampler_normalize_probabilities_flag=False,
+        sampler_switch_loss_weight=0.1,
+    ),
+    ExperimentPreset.ADAPTIVE_FULL_SHARED: _define_preset(
+        description=(
+            "Default adaptive config with dynamic weights, bias, diagonal, row "
+            "mask, and shared expert routing."
+        ),
+        base=_FULL_STACK_VALUES,
+        routing_initialization_mode=RoutingInitializationMode.SHARED,
+    ),
+    ExperimentPreset.ADAPTIVE_FULL_CAPACITY: _define_preset(
+        description=(
+            "Default adaptive config with dynamic weights, bias, diagonal, row "
+            "mask, top-1 capacity limiting, and dropped tokens zeroed."
+        ),
+        base=_FULL_STACK_VALUES,
+        top_k=1,
+        capacity_factor=1.0,
+        dropped_token_behavior=DroppedTokenOptions.ZEROS,
+        sampler_normalize_probabilities_flag=False,
+    ),
+    ExperimentPreset.ADAPTIVE_BANK_ROUTER: _define_preset(
+        description=(
+            "Default adaptive config with layered weighted-bank dynamic "
+            "weights and shared expert routing."
+        ),
+        router_weight_option=LayeredWeightedBankDynamicWeightConfig,
+        routing_initialization_mode=RoutingInitializationMode.SHARED,
     ),
 }
 

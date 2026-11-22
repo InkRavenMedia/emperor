@@ -1,11 +1,10 @@
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from models.experts.linear._hidden_model_config_factory import (
-    HiddenModelConfigDependencies,
     HiddenModelConfigFactory,
 )
 from models.experts.linear._projection_config_factory import (
-    ProjectionConfigDependencies,
     ProjectionConfigFactory,
 )
 from models.experts.linear.experiment_config import ExperimentConfig
@@ -22,10 +21,17 @@ class LinearConfigBuilder:
         *,
         runtime: RuntimeOptions = DEFAULT_RUNTIME,
     ) -> None:
+        self.runtime = runtime
+
+    @property
+    def runtime(self) -> RuntimeOptions:
+        return self._runtime
+
+    @runtime.setter
+    def runtime(self, runtime: RuntimeOptions) -> None:
         if not isinstance(runtime, RuntimeOptions):
             raise TypeError("runtime must be a RuntimeOptions value")
 
-        self.runtime = runtime
         self.batch_size = runtime.batch_size
         self.learning_rate = runtime.learning_rate
         self.input_dim = runtime.input_dim
@@ -46,36 +52,15 @@ class LinearConfigBuilder:
         self.expert_recurrent_controller_options = (
             runtime.expert_recurrent_controller_options
         )
+        self._runtime = runtime
 
     def build(self) -> "ModelConfig":
         from emperor.config import ModelConfig
 
-        projection_factory = ProjectionConfigFactory(
-            self.__projection_config_dependencies()
-        )
-        hidden_factory = HiddenModelConfigFactory(
-            self.__hidden_model_config_dependencies()
-        )
-        return ModelConfig(
-            learning_rate=self.learning_rate,
-            batch_size=self.batch_size,
-            input_dim=self.input_dim,
-            hidden_dim=hidden_factory.stack_options.hidden_dim,
+        projection_factory = ProjectionConfigFactory(self.stack_options)
+        hidden_settings = replace(
+            self.runtime,
             output_dim=self.output_dim,
-            experiment_config=ExperimentConfig(
-                input_model_config=projection_factory.build_input_model_config(),
-                model_config=hidden_factory.build(),
-                output_model_config=projection_factory.build_output_model_config(),
-            ),
-        )
-
-    def __projection_config_dependencies(self) -> ProjectionConfigDependencies:
-        return ProjectionConfigDependencies(
-            stack_options=self.stack_options,
-        )
-
-    def __hidden_model_config_dependencies(self) -> HiddenModelConfigDependencies:
-        return HiddenModelConfigDependencies(
             stack_options=self.stack_options,
             submodule_stack_options=self.submodule_stack_options,
             mixture_options=self.mixture_options,
@@ -88,8 +73,22 @@ class LinearConfigBuilder:
             recurrent_controller_options=self.recurrent_controller_options,
             expert_layer_controller_options=self.expert_layer_controller_options,
             expert_dynamic_memory_options=self.expert_dynamic_memory_options,
-            expert_recurrent_controller_options=(
-                self.expert_recurrent_controller_options
-            ),
+            expert_recurrent_controller_options=self.expert_recurrent_controller_options,
+        )
+        hidden_factory = HiddenModelConfigFactory(hidden_settings)
+        input_model_config = projection_factory.build_input_model_config()
+        hidden_model_config = hidden_factory.build()
+        output_model_config = projection_factory.build_output_model_config()
+        experiment_config = ExperimentConfig(
+            input_model_config=input_model_config,
+            model_config=hidden_model_config,
+            output_model_config=output_model_config,
+        )
+        return ModelConfig(
+            learning_rate=self.learning_rate,
+            batch_size=self.batch_size,
+            input_dim=self.input_dim,
+            hidden_dim=hidden_settings.stack_options.hidden_dim,
             output_dim=self.output_dim,
+            experiment_config=experiment_config,
         )
