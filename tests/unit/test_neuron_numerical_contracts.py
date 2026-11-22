@@ -351,6 +351,41 @@ class TestNeuronRoutingLifecycleContracts(unittest.TestCase):
 
 
 class TestNeuronRecurrentGradientContract(NeuronTestCase):
+    def test_vector_routing_counts_each_executed_nucleus_penalty_once(self):
+        class PenalizedProjection(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.penalty = nn.Parameter(torch.tensor(0.5))
+                self.calls = 0
+
+            def forward(self, hidden):
+                self.calls += 1
+                return hidden
+
+            def get_auxiliary_loss(self):
+                return self.penalty
+
+        for beam_width in (1, 2):
+            with self.subTest(beam_width=beam_width):
+                cluster = neuron_test_fixtures.TestNeuronCluster.scripted_cluster(
+                    self, input_dim=4, max_steps=2, beam_width=beam_width
+                ).eval()
+                projections = []
+                for neuron in cluster.cluster.values():
+                    projection = PenalizedProjection()
+                    neuron.nucleus.model = projection
+                    projections.append(projection)
+                _, loss = cluster(torch.ones(3, 4))
+                loss.backward()
+                self.assertGreater(sum(p.calls for p in projections), 0)
+                for projection in projections:
+                    if projection.calls:
+                        self.assertEqual(
+                            projection.penalty.grad.item(), projection.calls
+                        )
+                    else:
+                        self.assertIsNone(projection.penalty.grad)
+
     def _assert_cluster_stick_breaking_gradcheck(self, cluster) -> None:
         parameters_by_name = dict(cluster.named_parameters())
         parameter_names = tuple(
