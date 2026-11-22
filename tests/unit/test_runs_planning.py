@@ -12,6 +12,7 @@ from unittest.mock import patch
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/matplotlib")
 
 from model_runtime.inspection import InspectionError, configuration_schema
+from model_runtime.monitoring_catalog import monitors_for_model
 from model_runtime.packages import (
     ModelMetadata,
     ModelPackage,
@@ -30,7 +31,6 @@ from model_runtime.runs import (
 from models.catalog import model_package
 from models.linears.linear import config as linears_linear_config
 from models.linears.linear import dataset_options as linears_linear_datasets
-from models.linears.linear import monitor_options as linears_linear_monitors
 
 
 def _linears_linear():
@@ -126,7 +126,7 @@ def _linears_linear_with_duplicate_implicit_axes() -> ModelPackage:
         identity=package.identity,
         runtime_defaults=linears_linear_config,
         dataset_options=linears_linear_datasets,
-        monitor_options_source=linears_linear_monitors,
+        monitor_options_source=monitors_for_model,
         search_space=search_space,
         configuration_metadata_sections=package._adapter.load_metadata()._configuration_metadata_sections,
         search_metadata_sections=(

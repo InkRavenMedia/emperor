@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from types import MappingProxyType, ModuleType
 from typing import TYPE_CHECKING, Any, cast
@@ -26,6 +26,9 @@ if TYPE_CHECKING:
     from emperor.monitoring import MonitorOption
     from model_runtime.packages.definition import ModelPackage
     from model_runtime.packages.inspection_limits import InspectionConstructionLimits
+
+
+_MonitorOptionsSource = ModuleType | Callable[[str], list["MonitorOption"]]
 
 
 def _coerce_dataset_options_by_task(
@@ -245,11 +248,14 @@ def _compile_declared_metadata(
 
 def _coerce_monitor_options(
     identity: ModelIdentity,
-    source: ModuleType,
+    source: _MonitorOptionsSource,
 ) -> tuple[MonitorOption, ...]:
     from emperor.monitoring import MonitorOption
 
-    raw_monitors = getattr(source, "MONITOR_OPTIONS", []) or []
+    if callable(source):
+        raw_monitors = source(identity.catalog_key)
+    else:
+        raw_monitors = getattr(source, "MONITOR_OPTIONS", []) or []
     if not isinstance(raw_monitors, list):
         raise ValueError(
             f"Model Package '{identity.catalog_key}' MONITOR_OPTIONS must be a list."
@@ -293,7 +299,7 @@ class ModelMetadata:
     identity: ModelIdentity
     _runtime_defaults_source: ModuleType = field(repr=False)
     _dataset_options_source: ModuleType = field(repr=False)
-    _monitor_options_source: ModuleType = field(repr=False)
+    _monitor_options_source: _MonitorOptionsSource = field(repr=False)
     _search_space_source: ModuleType = field(repr=False)
     _configuration_metadata_sections: tuple[RuntimeDefaultsSection, ...] = field(
         repr=False
@@ -321,7 +327,7 @@ class ModelMetadata:
         identity: ModelIdentity,
         runtime_defaults: ModuleType,
         dataset_options: ModuleType,
-        monitor_options_source: ModuleType,
+        monitor_options_source: _MonitorOptionsSource,
         search_space: ModuleType,
         *,
         configuration_metadata_sections: Sequence[RuntimeDefaultsSection],
