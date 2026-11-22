@@ -244,6 +244,8 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
                 def ordered_sections(entries, order):
                     return [(key, entries[key].get("sectionPath", [])) for key in order]
 
+                self.assertIsNone(metadata._configuration_metadata_sections)
+                self.assertIsNone(metadata._search_metadata_sections)
                 self.assertEqual(
                     ordered_sections(
                         spec.configuration_metadata,
@@ -272,6 +274,27 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
                         ),
                     ),
                 )
+
+    def test_annotated_linear_fields_keep_source_locations_in_authoring_only(
+        self,
+    ) -> None:
+        from models.linears.linear import config
+
+        runtime = _linears_linear().runtime_defaults_spec.configuration_metadata
+        with patch.object(
+            Path, "read_text", side_effect=AssertionError("unexpected source read")
+        ):
+            fresh = ModelPackage(_linears_linear().identity, _linears_linear()._adapter)
+            self.assertEqual(
+                fresh.runtime_defaults_spec.configuration_metadata["BATCH_SIZE"],
+                runtime["BATCH_SIZE"],
+            )
+        self.assertNotIn("line", runtime["BATCH_SIZE"])
+        source = configuration_field_metadata(config)
+        source_lines = Path(config.__file__).read_text().splitlines()
+        self.assertTrue(
+            source_lines[source["BATCH_SIZE"]["line"] - 1].startswith("BATCH_SIZE:")
+        )
 
     def test_annotated_owner_places_generated_bert_controls_in_catalog_order(
         self,
@@ -308,27 +331,6 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         self.assertEqual(sorted(keys, key=lambda key: reference[key]["sortKey"]), keys)
         for key in keys:
             self.assertEqual(actual[key]["sectionPath"], reference[key]["sectionPath"])
-
-    def test_annotated_linear_fields_keep_source_locations_in_authoring_only(
-        self,
-    ) -> None:
-        from models.linears.linear import config
-
-        runtime = _linears_linear().runtime_defaults_spec.configuration_metadata
-        with patch.object(
-            Path, "read_text", side_effect=AssertionError("unexpected source read")
-        ):
-            fresh = ModelPackage(_linears_linear().identity, _linears_linear()._adapter)
-            self.assertEqual(
-                fresh.runtime_defaults_spec.configuration_metadata["BATCH_SIZE"],
-                runtime["BATCH_SIZE"],
-            )
-        self.assertNotIn("line", runtime["BATCH_SIZE"])
-        source = configuration_field_metadata(config)
-        source_lines = Path(config.__file__).read_text().splitlines()
-        self.assertTrue(
-            source_lines[source["BATCH_SIZE"]["line"] - 1].startswith("BATCH_SIZE:")
-        )
 
     def test_legacy_import_keeps_the_annotated_fields_section_and_order(self) -> None:
         config = ModuleType("legacy_import_fixture")
@@ -612,33 +614,6 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         for name in tuple(parameters)[5:]:
             self.assertIs(parameters[name].kind, inspect.Parameter.KEYWORD_ONLY)
             self.assertIsNone(parameters[name].default)
-
-    def test_authoring_generator_bootstraps_a_missing_declaration(self) -> None:
-        from tools import generate_model_package_inspection_metadata as generator
-
-        package = _linears_linear()
-        with TemporaryDirectory() as temporary_directory:
-            models_root = Path(temporary_directory)
-            target = models_root / "linears" / "linear" / "_inspection_metadata.py"
-            target.parent.mkdir(parents=True)
-            with (
-                patch.object(generator, "_MODELS_ROOT", models_root),
-                patch.object(
-                    generator,
-                    "discover_model_packages",
-                    return_value=[package],
-                ),
-                patch.object(
-                    type(package._adapter),
-                    "load_metadata",
-                    side_effect=AssertionError("generator cannot load declarations"),
-                ),
-            ):
-                self.assertEqual(generator._synchronize(check=True), (target,))
-                self.assertFalse(target.exists())
-                self.assertEqual(generator._synchronize(check=False), (target,))
-                self.assertTrue(target.is_file())
-                self.assertEqual(generator._synchronize(check=True), ())
 
 
 if __name__ == "__main__":

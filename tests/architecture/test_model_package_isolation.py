@@ -381,6 +381,12 @@ if loaded:
     def test_catalog_discovers_packages_without_loading_configuration_or_search_axes(
         self,
     ):
+        for entry in MODEL_CATALOG.values():
+            package = _package_module(entry)
+            package_root = SOURCE_ROOT.joinpath(*package.split("."))
+            with self.subTest(package=package):
+                self.assertFalse((package_root / "_inspection_metadata.py").exists())
+
         script = """
 import sys
 import models.catalog
