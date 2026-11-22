@@ -85,24 +85,22 @@ def resolve_grouping_model(
     if option is not None or (model_config is None and bias_flag is not None):
         if option is not None and option is not GroupingModelOptions.LINEAR:
             raise ValueError("The grouping model option must be LINEAR.")
-        layer = projection_layer_config(
-            LinearLayerConfig(bias_flag=bias_flag is not False)
-        )
+        linear_config = LinearLayerConfig(bias_flag=bias_flag is not False)
+        layer = projection_layer_config(linear_config)
         if hidden_dim is None:
             return layer
+        grouping_layer_config = replace(layer, activation=ActivationOptions.TANH)
         return LayerStackConfig(
             hidden_dim=hidden_dim,
             num_layers=2,
             apply_output_postprocessing_flag=False,
             last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
-            layer_config=replace(layer, activation=ActivationOptions.TANH),
+            layer_config=grouping_layer_config,
         )
     if bias_flag is not None:
-        layer = (
-            model_config.layer_config
-            if isinstance(model_config, LayerStackConfig)
-            else model_config
-        )
+        layer = model_config
+        if isinstance(model_config, LayerStackConfig):
+            layer = model_config.layer_config
         if (
             not isinstance(layer, LayerConfig)
             or type(layer.layer_model_config) is not LinearLayerConfig
@@ -110,15 +108,15 @@ def resolve_grouping_model(
             raise ValueError(
                 "The grouping model bias flag requires a LINEAR grouping model."
             )
+        layer_model_config = replace(layer.layer_model_config, bias_flag=bias_flag)
         layer = replace(
             layer,
-            layer_model_config=replace(layer.layer_model_config, bias_flag=bias_flag),
+            layer_model_config=layer_model_config,
         )
-        model_config = (
-            replace(model_config, layer_config=layer)
-            if isinstance(model_config, LayerStackConfig)
-            else layer
-        )
+        if isinstance(model_config, LayerStackConfig):
+            model_config = replace(model_config, layer_config=layer)
+        else:
+            model_config = layer
     if hidden_dim is not None:
         if not isinstance(model_config, ConfigBase):
             raise ValueError(
@@ -159,15 +157,14 @@ def grouping_from_overrides(
     }
     if prefix:
         prefer_scoped_grouping_model(scoped)
-    resolved = {
-        name: scoped.get(
-            name,
-            values[name]
-            if prefix in ("attn_", "ff_") and name in values
-            else getattr(config_module, (prefix + name).upper(), None),
-        )
-        for name in GROUPING_FIELDS
-    }
+    resolved: dict[str, Any] = {}
+    for name in GROUPING_FIELDS:
+        if name in scoped:
+            resolved[name] = scoped[name]
+        elif prefix in ("attn_", "ff_") and name in values:
+            resolved[name] = values[name]
+        else:
+            resolved[name] = getattr(config_module, (prefix + name).upper(), None)
     return grouping_from_fields(resolved, prefix=prefix or "main")
 
 
@@ -189,8 +186,9 @@ def grouping_from_fields(
 ) -> GroupingConfig | None:
     if all(values.get(field) is None for field in GROUPING_FIELDS):
         return None
-    method = values.get("grouping_method")
-    config_type = SumGroupingConfig if method is None else method
+    config_type = values.get("grouping_method")
+    if config_type is None:
+        config_type = SumGroupingConfig
     if not isinstance(config_type, type) or not issubclass(config_type, GroupingConfig):
         raise ValueError(
             "grouping_method must be a concrete grouping configuration class."
