@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.experts import (
     DroppedTokenOptions,
@@ -23,6 +24,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _sequence_expansion
+from models.mlp_mixer.expert_linear import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
@@ -802,5 +804,21 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     expert_recurrent_halting_stack_apply_output_postprocessing_flag: bool | None
     expert_recurrent_halting_stack_bias_flag: bool | None
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.flat_stack_controls(self)
+
 
 __all__ = ["RuntimeOptions"]
+
+
+class PresetValues(TypedDict, total=False):
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    sampler_normalize_probabilities_flag: bool
+    sampler_switch_loss_weight: float
+    stack_gate_flag: bool
+    stack_halting_flag: bool
+    top_k: int

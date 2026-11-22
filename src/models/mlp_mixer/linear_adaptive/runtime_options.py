@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveParameterGroupingScopeOptions,
@@ -35,6 +36,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _learned_grouping, _sequence_expansion
+from models.mlp_mixer.linear_adaptive import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
@@ -916,5 +918,27 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     mask_generator_stack_bias_flag: bool | None
     weight_normalization_learnable_scale_flag: bool = False
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.flat_stack_controls(self)
+        for flag, option in (
+            ("weight_option_flag", "weight_option"),
+            ("bias_option_flag", "bias_option"),
+            ("diagonal_option_flag", "diagonal_option"),
+            ("mask_option_flag", "row_mask_option"),
+        ):
+            if getattr(self, flag) and getattr(self, option) is None:
+                raise ValueError(f"{option} must be set when {flag} is True")
+
 
 __all__ = ["RuntimeOptions"]
+
+
+class PresetValues(TypedDict, total=False):
+    diagonal_option_flag: bool
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    stack_gate_flag: bool
+    stack_halting_flag: bool

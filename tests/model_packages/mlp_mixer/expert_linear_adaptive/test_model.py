@@ -5,7 +5,6 @@ import unittest
 import torch
 
 from emperor.augmentations.adaptive_parameters import (
-    AdaptiveLinearLayerConfig,
     AdditiveDynamicBiasConfig,
     DualModelDynamicWeightConfig,
     LayeredWeightedBankDynamicWeightConfig,
@@ -14,6 +13,9 @@ from emperor.augmentations.adaptive_parameters import (
 )
 from emperor.experts import MixtureOfExpertsModelConfig, RoutingInitializationMode
 from emperor.linears import LinearLayerConfig
+from models.mlp_mixer.expert_linear_adaptive._adaptive_linear_template import (
+    AdaptiveLinearLayerTemplateConfig,
+)
 from models.mlp_mixer.expert_linear_adaptive.config_builder import (
     MlpMixerExpertLinearAdaptiveConfigBuilder,
 )
@@ -52,11 +54,11 @@ class MlpMixerExpertLinearAdaptivePackageTests(
         self.assertIsInstance(channel_config, MixtureOfExpertsModelConfig)
         self.assertIsInstance(
             token_config.stack_config.layer_config.layer_model_config.expert_model_config.layer_config.layer_model_config,
-            AdaptiveLinearLayerConfig,
+            AdaptiveLinearLayerTemplateConfig,
         )
         self.assertIsInstance(
             channel_config.stack_config.layer_config.layer_model_config.expert_model_config.layer_config.layer_model_config,
-            AdaptiveLinearLayerConfig,
+            AdaptiveLinearLayerTemplateConfig,
         )
         self.assertIsInstance(
             config.experiment_config.patch_config.embedding_stack_config.layer_config.layer_model_config,

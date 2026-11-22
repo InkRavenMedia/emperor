@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TypedDict
 
 from emperor.experts import SoftMoEConfig
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
@@ -18,6 +19,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _sequence_expansion
+from models.mlp_mixer.linear import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
@@ -607,5 +609,18 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
     channel_mixer_recurrent_halting_stack_apply_output_postprocessing_flag: bool | None
     channel_mixer_recurrent_halting_stack_bias_flag: bool | None
 
+    def __post_init__(self) -> None:
+        SETTINGS_VALIDATION.dimensions(self)
+        SETTINGS_VALIDATION.flat_stack_controls(self)
+
 
 __all__ = ["RuntimeOptions"]
+
+
+class PresetValues(TypedDict, total=False):
+    layer_norm_position: LayerNormPositionOptions
+    memory_flag: bool
+    recurrent_flag: bool
+    recurrent_stack_gate_flag: bool
+    stack_gate_flag: bool
+    stack_halting_flag: bool

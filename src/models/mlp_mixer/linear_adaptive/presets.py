@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Unpack
+
 import models.mlp_mixer.linear_adaptive.config as config
 from emperor.config import BaseOptions
 from emperor.layers import LayerNormPositionOptions
@@ -11,6 +13,7 @@ from model_runtime.runs import ExperimentBase
 
 from .config_builder import MlpMixerLinearAdaptiveConfigBuilder
 from .runtime_defaults import runtime_from_flat
+from .runtime_options import PresetValues
 
 
 def default_patch_size_for_dataset(dataset: type) -> int:
@@ -38,55 +41,56 @@ class ExperimentPreset(BaseOptions):
     ADAPTIVE = 9
 
 
+def _define_preset(
+    *,
+    description: str,
+    **values: Unpack[PresetValues],
+) -> PresetDefinition:
+    return PresetDefinition(preset_values=values, description=description)
+
+
 _PRESET_DEFINITIONS = {
-    ExperimentPreset.BASELINE: PresetDefinition(
-        preset_values={},
+    ExperimentPreset.BASELINE: _define_preset(
         description=(
             "Eight pre-normalized MLP-Mixer blocks with adaptive-linear token and "
             "channel mixers, mean pooling, and no class token or positional "
             "embedding."
         ),
     ),
-    ExperimentPreset.POST_NORM: PresetDefinition(
-        preset_values={"layer_norm_position": LayerNormPositionOptions.AFTER},
+    ExperimentPreset.POST_NORM: _define_preset(
         description="MLP-Mixer blocks with post-normalized residual branches.",
+        layer_norm_position=LayerNormPositionOptions.AFTER,
     ),
-    ExperimentPreset.RECURRENT: PresetDefinition(
-        preset_values={"recurrent_flag": True},
+    ExperimentPreset.RECURRENT: _define_preset(
         description="Reuses the Mixer block stack for recurrent refinement.",
+        recurrent_flag=True,
     ),
-    ExperimentPreset.RECURRENT_CONTROLLER: PresetDefinition(
-        preset_values={
-            "recurrent_flag": True,
-            "recurrent_stack_gate_flag": True,
-        },
+    ExperimentPreset.RECURRENT_CONTROLLER: _define_preset(
         description="Recurrent Mixer refinement with a learned step controller.",
+        recurrent_flag=True,
+        recurrent_stack_gate_flag=True,
     ),
-    ExperimentPreset.GATING: PresetDefinition(
-        preset_values={"stack_gate_flag": True},
+    ExperimentPreset.GATING: _define_preset(
         description="Mixer blocks with learned output gates.",
+        stack_gate_flag=True,
     ),
-    ExperimentPreset.HALTING: PresetDefinition(
-        preset_values={"stack_halting_flag": True},
+    ExperimentPreset.HALTING: _define_preset(
         description="Mixer blocks with adaptive-computation halting.",
+        stack_halting_flag=True,
     ),
-    ExperimentPreset.MEMORY: PresetDefinition(
-        preset_values={"memory_flag": True},
+    ExperimentPreset.MEMORY: _define_preset(
         description="Mixer blocks with shared dynamic memory.",
+        memory_flag=True,
     ),
-    ExperimentPreset.GATING_HALTING_MEMORY: PresetDefinition(
-        preset_values={
-            "stack_gate_flag": True,
-            "stack_halting_flag": True,
-            "memory_flag": True,
-        },
+    ExperimentPreset.GATING_HALTING_MEMORY: _define_preset(
         description="Mixer blocks with gates, halting, and shared dynamic memory.",
+        stack_gate_flag=True,
+        stack_halting_flag=True,
+        memory_flag=True,
     ),
-    ExperimentPreset.ADAPTIVE: PresetDefinition(
-        preset_values={"diagonal_option_flag": True},
-        description=(
-            "Token and channel affine layers use input-adaptive diagonal generators."
-        ),
+    ExperimentPreset.ADAPTIVE: _define_preset(
+        description="Token and channel affine layers use input-adaptive diagonal generators.",
+        diagonal_option_flag=True,
     ),
 }
 
