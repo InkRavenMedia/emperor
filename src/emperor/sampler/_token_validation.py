@@ -62,7 +62,9 @@ class TokenSamplerValidator(ValidatorBase):
             raise ValueError("Token router must preserve hidden device and dtype.")
 
     @staticmethod
-    def padding(hidden: Tensor, padding_mask: Tensor | None) -> Tensor:
+    def padding(
+        hidden: Tensor, padding_mask: Tensor | None, *, allow_empty: bool = False
+    ) -> Tensor:
         padding = torch.zeros(hidden.shape[:-1], dtype=torch.bool, device=hidden.device)
         if padding_mask is not None:
             if not isinstance(padding_mask, Tensor):
@@ -81,7 +83,7 @@ class TokenSamplerValidator(ValidatorBase):
                 if padding_mask.dtype == torch.bool
                 else padding_mask.isneginf()
             )
-        if padding.all(dim=-1).any():
+        if not allow_empty and padding.all(dim=-1).any():
             raise ValueError(
                 "Token sampling requires at least one unpadded token per sequence."
             )

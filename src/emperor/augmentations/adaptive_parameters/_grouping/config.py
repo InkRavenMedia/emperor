@@ -1,5 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from emperor._validation import current_recurrent_length
 from emperor.augmentations.adaptive_parameters._grouping.options import (
     SummaryNormalizationOptions,
 )
@@ -37,6 +38,20 @@ class GroupingConfig(ConfigBase):
     rms_norm_epsilon: float | None = optional_field(
         "Positive RMS_NORM epsilon. None resolves to 1e-6 when selected."
     )
+
+    # Building expert-slot and other fixed layouts with dataclasses.replace
+    # deliberately drops this forward-local binding.
+    __slots__ = ("_uses_recurrent_slots",)
+
+    def for_recurrent_slots(self):
+        config = replace(self)
+        config._uses_recurrent_slots = True
+        return config
+
+    def effective_sequence_length(self):
+        if getattr(self, "_uses_recurrent_slots", False):
+            return current_recurrent_length() or self.sequence_length
+        return self.sequence_length
 
     def _registry_owner(self) -> type:
         raise ValueError(

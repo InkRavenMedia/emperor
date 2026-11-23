@@ -28,6 +28,7 @@ from emperor.layers._validation.common import (
 
 _RECURRENT_SHARED_OPTIONAL_FIELDS = {
     "smooth_iteration_growth_flag",
+    "compression_config",
     "gate_config",
     "residual_config",
     "halting_config",

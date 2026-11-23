@@ -1,9 +1,11 @@
 """Configure and execute token-axis models through their sequence interface."""
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, TypeVar, cast
 
 from torch import Tensor
 
+from emperor._validation import _adaptive_grouping_configs
 from emperor.attention._variants.mixer.validation import MixerAttentionValidator
 from emperor.config import ConfigBase
 from emperor.nn import Module
@@ -39,6 +41,11 @@ class MixerProcessor(Module):
     def __build_mixing_model(self) -> Module:
         model_config = cast(ConfigBase, self.cfg.mixing_model_config)
         mixing_config = self.__prepare_model_config(model_config)
+        # Mixer rows index embedding channels, even when the caller routes tokens to slots.
+        for _, augmentation in _adaptive_grouping_configs(
+            mixing_config, root="MixerAttention.mixing_model"
+        ):
+            augmentation.grouping_config = replace(augmentation.grouping_config)
         return mixing_config.build()
 
     def __prepare_model_config(self, config: _Config) -> _Config:

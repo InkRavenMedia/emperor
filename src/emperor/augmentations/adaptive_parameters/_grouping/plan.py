@@ -48,8 +48,12 @@ class GroupPlan:
         )
         batch_size, sequence_length = self.canonical_shape
         output_dim = grouped_output.size(-1)
-        restored = grouped_output.reshape(batch_size, -1, output_dim)
-        restored = restored[:, :sequence_length]
+        if self.valid_members is None:
+            restored = grouped_output.reshape(batch_size, sequence_length, output_dim)
+        else:
+            restored = grouped_output[self.valid_members].reshape(
+                batch_size, sequence_length, output_dim
+            )
         if self.input_order is AdaptiveParameterInputOrderOptions.SEQUENCE_FIRST:
             restored = restored.transpose(0, 1)
         return restored.reshape(self.row_count, output_dim)

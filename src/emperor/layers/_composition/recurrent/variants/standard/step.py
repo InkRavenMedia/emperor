@@ -69,9 +69,13 @@ class StandardRecurrentStep(RecurrentStep[StandardRecurrentState]):
             return recurrent_state.hidden + recurrent_state.fixed_input
         return recurrent_state.hidden
 
-    def _run_block(self, state: LayerState) -> LayerState:
+    def _run_block(
+        self, state: LayerState, *, complete_prefix: bool = False
+    ) -> LayerState:
         block_input = state.hidden
-        output_state = self.block_model(state)
+        output_state = self._call_transition_block(
+            self.block_model, state, complete_prefix=complete_prefix
+        )
         self.VALIDATOR.validate_transition_output(
             output_state, block_input, self.cfg.output_dim
         )

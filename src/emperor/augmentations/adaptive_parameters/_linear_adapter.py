@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor
 
+from emperor._validation import current_recurrent_length
 from emperor.augmentations.adaptive_parameters._config import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
@@ -55,6 +56,19 @@ class AdaptiveLinearLayer(LinearAbstract):
         self,
         X: Tensor,
     ) -> Tensor:
+        # A compressed transition may call a row model with batched slots.
+        # Keep sequence axes visible to its controllers while generating parameters on rows.
+        if (
+            isinstance(X, Tensor)
+            and X.ndim > 2
+            and current_recurrent_length() is not None
+        ):
+            return self.__transform_rows(X.reshape(-1, X.size(-1))).reshape(
+                *X.shape[:-1], self.output_dim
+            )
+        return self.__transform_rows(X)
+
+    def __transform_rows(self, X: Tensor) -> Tensor:
         self.VALIDATOR.validate_input_is_2d(X)
         if not self.has_adaptive_augmentation:
             return self._compute_affine_transformation_callback(

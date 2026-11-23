@@ -353,6 +353,7 @@ modules = [
   "src/emperor/layers/_composition/recurrent/runtime/handoff/results.py",
   "src/emperor/layers/_composition/recurrent/runtime/iteration_schedule.py",
   "src/emperor/layers/_composition/recurrent/runtime/runtime_state.py",
+  "src/emperor/layers/_composition/recurrent/runtime/compression.py",
   "src/emperor/layers/_composition/recurrent/runtime/step.py",
   "src/emperor/layers/_composition/recurrent/state.py",
   "src/emperor/layers/_composition/recurrent/validation/__init__.py",
