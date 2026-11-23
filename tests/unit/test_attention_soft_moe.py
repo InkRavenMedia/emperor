@@ -253,6 +253,26 @@ def test_source_extensions_match_reference(add_bias, add_zero, causal):
 
 
 @pytest.mark.parametrize("causal", [False, True])
+def test_nested_attention_call_restores_each_calls_own_tokens(causal):
+    model = attention_config(causal_attention_mask_flag=causal).build().eval()
+    outer = torch.randn(2, 5, 8)
+    inner = torch.randn(2, 3, 8)
+    expected_outer = model(outer, outer, outer)[0]
+    expected_inner = model(inner, inner, inner)[0]
+    nested_outputs = []
+
+    def run_inner_call(module, args):
+        hook.remove()
+        nested_outputs.append(model(inner, inner, inner)[0])
+
+    with model.projector.key_model.register_forward_pre_hook(run_inner_call) as hook:
+        actual_outer = model(outer, outer, outer)[0]
+    torch.testing.assert_close(actual_outer, expected_outer)
+    torch.testing.assert_close(nested_outputs[0], expected_inner)
+    assert model.projector.combine_weights is None
+
+
+@pytest.mark.parametrize("causal", [False, True])
 def test_routing_and_shared_projections_run_once_and_transient_state_is_cleared(causal):
     model = attention_config(causal_attention_mask_flag=causal).build()
     calls = []

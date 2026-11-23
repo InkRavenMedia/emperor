@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
 
 from torch import Tensor
+
+if TYPE_CHECKING:
+    from emperor.nn import SoftSlotRouting
 
 
 @dataclass(frozen=True, eq=False, kw_only=True)
@@ -28,6 +32,9 @@ class AttentionRuntimeLayout:
     input_was_batched: bool = True
     input_was_batch_first: bool = False
     source_extension_count: int = 0
+    soft_slot_routing: SoftSlotRouting | None = field(
+        default=None, repr=False, compare=False
+    )
 
     def branch_count(self, num_heads: int) -> int:
         return self.batch_size * num_heads
