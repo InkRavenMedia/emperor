@@ -19,7 +19,7 @@ from emperor.linears import LinearLayerConfig
 from emperor.memory import (
     DynamicMemoryConfig,
 )
-from emperor.patch import LinearPatchEmbeddingConfig
+from emperor.patch import PatchConfig
 from emperor.sampler import RouterConfig, SamplerConfig
 from models._expert_mixture import build_expert_mixture, build_expert_model
 from models._residual_stack import residual_source_from_settings
@@ -136,7 +136,7 @@ def _component_factory() -> MixerComponentFactory[RuntimeOptions]:
     return MixerComponentFactory(_residual, _plain_linear_config)
 
 
-def patch_config(runtime: RuntimeOptions) -> LinearPatchEmbeddingConfig:
+def patch_config(runtime: RuntimeOptions) -> PatchConfig:
     components = _component_factory()
     return components.build_patch(runtime)
 

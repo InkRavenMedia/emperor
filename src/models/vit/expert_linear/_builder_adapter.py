@@ -434,6 +434,8 @@ def _patch_options_from_kwargs(
             kwargs,
             {
                 "image_patch_size": "patch_size",
+                "image_patch_stride": "stride",
+                "image_patch_embedding": "embedding",
                 "input_channels": "input_channels",
                 "image_height": "image_height",
                 "patch_dropout_probability": "dropout_probability",
@@ -685,6 +687,8 @@ def _controller_stack_source_from_kwargs(
 _PATCH_FLAT_KEYS = frozenset(
     {
         "image_patch_size",
+        "image_patch_stride",
+        "image_patch_embedding",
         "input_channels",
         "image_height",
         "patch_dropout_probability",

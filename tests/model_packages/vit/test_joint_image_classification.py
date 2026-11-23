@@ -10,9 +10,11 @@ from emperor.datasets.image.classification import (
     JointImageBatch,
     JointImageClassification,
 )
+from emperor.patch import PatchEmbeddingConv, PatchEmbeddingLinear
 from model_runtime.runs import RunRequest, plan_runs
 from models.catalog import model_package
 from models.project_cli.main import run_experiment
+from tests.model_packages.test_soft_moe_cli import cli_values
 from tests.support.dataset_metadata import offline_dataset_metadata
 
 TASK = "joint-image-classification"
@@ -25,6 +27,57 @@ VARIANTS = (
     "expert_linear_adaptive_cluster",
 )
 SMALL_MODEL = {"image_patch_size": 16, "stack_num_layers": 1}
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+@pytest.mark.parametrize(
+    ("embedding", "patch_type"),
+    [("linear", PatchEmbeddingLinear), ("cnn", PatchEmbeddingConv)],
+)
+def test_overlapping_patch_embeddings_reach_the_joint_encoder(
+    variant, embedding, patch_type
+):
+    package = model_package(f"vit/{variant}")
+    options = cli_values(
+        package,
+        [
+            "--image-patch-embedding",
+            embedding,
+            "--image-patch-size",
+            "5",
+            "--image-patch-stride",
+            "3",
+            "--hidden-dim",
+            "32",
+            "--attn-num-heads",
+            "4",
+            "--stack-num-layers",
+            "1",
+        ],
+    )
+    config = package.build_configuration(
+        dataset=JointImageClassification, config_overrides=options
+    )
+    model = package.build_model(config).eval()
+    assert isinstance(model.encoder.patch, patch_type)
+    assert model.encoder.patch.class_token_flag
+    assert config.sequence_length == 101
+
+    encoder_inputs = []
+    model.encoder.transformer.register_forward_pre_hook(
+        lambda _, args: encoder_inputs.append(args[0].hidden.shape)
+    )
+    images = torch.randn(1, 3, 32, 32)
+    with torch.no_grad():
+        for source in SOURCES:
+            result = model(images, source)
+            logits = result[0] if isinstance(result, tuple) else result
+            assert logits.shape == (
+                1,
+                JointImageClassification.sources[source].num_classes,
+            )
+            assert torch.isfinite(logits).all()
+    assert encoder_inputs == [(1, 101, 32)] * len(SOURCES)
 
 
 @pytest.mark.parametrize("variant", VARIANTS)

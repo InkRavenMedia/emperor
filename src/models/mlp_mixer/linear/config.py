@@ -45,6 +45,7 @@ from model_runtime.packages import runtime_values, soft_moe
 from model_runtime.packages.configuration_metadata import Section
 from model_runtime.packages.metric_direction import MetricDirection
 from models import _component_defaults, _recurrent_compression
+from models._image_patches import ImagePatchEmbedding
 from models.mlp_mixer._settings import ImageReadout
 
 _general = Section(("Global",))
@@ -434,6 +435,10 @@ IMAGE_READOUT: Annotated[ImageReadout, _output_layer] = ImageReadout.MEAN
 
 _image_patch = _mlp_mixer.child("Image Patch Options")
 IMAGE_PATCH_SIZE: Annotated[int, _image_patch] = 16
+IMAGE_PATCH_STRIDE: Annotated[int | None, _image_patch] = None
+IMAGE_PATCH_EMBEDDING: Annotated[ImagePatchEmbedding, _image_patch] = (
+    ImagePatchEmbedding.LINEAR
+)
 INPUT_CHANNELS: Annotated[int, _image_patch] = 3
 IMAGE_HEIGHT: Annotated[int, _image_patch] = 224
 PATCH_DROPOUT_PROBABILITY: Annotated[float, _image_patch] = 0.0
