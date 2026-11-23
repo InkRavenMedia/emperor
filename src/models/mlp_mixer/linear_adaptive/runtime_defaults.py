@@ -6,6 +6,10 @@ from typing import Final
 
 import models.mlp_mixer.linear_adaptive.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_values
+from models._recurrent_compression import (
+    bind_compression_options,
+    compression_from_config,
+)
 from models.mlp_mixer.linear_adaptive.runtime_options import RuntimeOptions
 
 _PACKAGE = "models.mlp_mixer.linear_adaptive"
@@ -32,13 +36,16 @@ def _runtime_updates(values: dict[str, object]) -> dict[str, object]:
 
 def runtime_from_config(config_module: ModuleType = config) -> RuntimeOptions:
     return RuntimeOptions(
+        recurrent_compression_config=compression_from_config(config_module),
         **{
             field.name: getattr(config_module, field.name.upper())
             for field in fields(RuntimeOptions)
-        }
+            if field.name != "recurrent_compression_config"
+        },
     )
 
 
+@bind_compression_options(config)
 def runtime_from_flat(
     flat_kwargs: dict | None = None,
     config_module: ModuleType = config,

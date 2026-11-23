@@ -68,7 +68,12 @@ from model_runtime.packages.runtime_values import (
     positive_runtime_fields,
 )
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory, _bert_embedding, _component_defaults
+from models import (
+    _attention_source_memory,
+    _bert_embedding,
+    _component_defaults,
+    _recurrent_compression,
+)
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "cpu"
@@ -1588,3 +1593,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
+
+_recurrent_compression.declare_compression_options(globals())

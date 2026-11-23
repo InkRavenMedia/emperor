@@ -24,11 +24,12 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _sequence_expansion
+from models._recurrent_compression import CompressionOptions
 from models.mlp_mixer.expert_linear import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions):
+class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions, CompressionOptions):
     residual_coefficient_activation: ActivationOptions = field(
         default=ActivationOptions.SIGMOID, kw_only=True
     )

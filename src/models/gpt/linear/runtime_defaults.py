@@ -7,6 +7,10 @@ from typing import Any, Final
 import models.gpt.linear.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_value_types
 from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
+from models._recurrent_compression import (
+    bind_compression_options,
+    compression_from_config,
+)
 from models.gpt.linear._builder_adapter import linear_builder_kwargs_from_flat
 from models.gpt.linear.runtime_options import RuntimeOptions
 
@@ -15,6 +19,7 @@ _RUNTIME_FIELDS = {field.name for field in fields(RuntimeOptions)}
 
 def runtime_from_config(config_module: ModuleType = config) -> RuntimeOptions:
     return RuntimeOptions(
+        recurrent_compression_config=compression_from_config(config_module),
         batch_size=config_module.BATCH_SIZE,
         learning_rate=config_module.LEARNING_RATE,
         input_dim=config_module.INPUT_DIM,
@@ -56,6 +61,7 @@ def _runtime_with_fields(
     return replace(runtime, **builder_options)
 
 
+@bind_compression_options(config)
 def runtime_from_flat(
     flat_kwargs: dict[str, Any] | None = None,
     config_module: ModuleType = config,

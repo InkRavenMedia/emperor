@@ -33,6 +33,7 @@ from emperor.memory import (
 )
 from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
+from models._recurrent_compression import CompressionOptions
 from models._stack_options import resolve_transformer_controller_options
 
 from ._residual import inherit_if_unset as inherit_if_unset
@@ -290,7 +291,7 @@ class ExpertOptions:
 
 
 @dataclass(frozen=True)
-class RuntimeOptions:
+class RuntimeOptions(CompressionOptions):
     residual_coefficient_activation: ActivationOptions = field(
         default=ActivationOptions.SIGMOID, kw_only=True
     )
