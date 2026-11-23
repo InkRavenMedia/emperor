@@ -58,8 +58,7 @@ def annotated_configuration_metadata(
             "sortKey": [len(metadata)],
         }
         if source_lines is not None and key in source_lines:
-            line = source_lines[key]
-            entry.update(line=line, sortKey=[line])
+            entry["line"] = source_lines[key]
         metadata[key] = entry
     _add_field_aliases(config, metadata)
     for key in metadata:

@@ -332,6 +332,23 @@ class RuntimeDefaultsExplicitMetadataTests(unittest.TestCase):
         for key in keys:
             self.assertEqual(actual[key]["sectionPath"], reference[key]["sectionPath"])
 
+    def test_source_line_changes_preserve_annotated_option_order(self) -> None:
+        from models.bert.linear import config
+
+        package = model_package("bert/linear")
+        assert package is not None
+        runtime = package.runtime_defaults_spec.configuration_metadata
+        source = Path(config.__file__).read_text()
+        original = configuration_field_metadata(config)
+        with patch.object(Path, "read_text", return_value="\n" * 20 + source):
+            shifted = configuration_field_metadata(config)
+
+        for key, entry in runtime.items():
+            self.assertEqual(original[key]["sortKey"], entry["sortKey"], key)
+            self.assertEqual(shifted[key]["sortKey"], entry["sortKey"], key)
+            if "line" in original[key]:
+                self.assertEqual(shifted[key]["line"], original[key]["line"] + 20, key)
+
     def test_legacy_import_keeps_the_annotated_fields_section_and_order(self) -> None:
         config = ModuleType("legacy_import_fixture")
         with TemporaryDirectory() as directory:
