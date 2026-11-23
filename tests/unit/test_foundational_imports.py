@@ -183,6 +183,7 @@ print(json.dumps({
             {
                 "all": [
                     "Module",
+                    "SoftSlotRouting",
                     "ForwardSchedule",
                     "ForwardScheduleCounterOptions",
                     "freeze_forward_schedules",
