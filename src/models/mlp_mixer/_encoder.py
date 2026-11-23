@@ -27,6 +27,7 @@ from emperor.transformer import (
 )
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _sequence_expansion
+from models._image_patches import image_patch_count
 from models.mlp_mixer._component_factory import BuildResidual
 from models.mlp_mixer._settings import ImageReadout
 
@@ -34,6 +35,7 @@ from models.mlp_mixer._settings import ImageReadout
 class _ImageGrid(Protocol):
     image_height: Final[int]
     image_patch_size: Final[int]
+    image_patch_stride: Final[int | None]
     image_readout: Final[ImageReadout]
 
 
@@ -67,17 +69,9 @@ _Settings = TypeVar("_Settings", bound=_EncoderSettings)
 
 
 def patch_sequence_length(runtime: _ImageGrid) -> int:
-    image_height = runtime.image_height
-    patch_size = runtime.image_patch_size
-    if image_height <= 0 or patch_size <= 0:
-        raise ValueError("image_height and image_patch_size must be positive")
-    if image_height % patch_size != 0:
-        raise ValueError(
-            "image_height must be exactly divisible by image_patch_size, got "
-            f"image_height={image_height}, image_patch_size={patch_size}"
-        )
-    patches_per_side = image_height // patch_size
-    patch_count = patches_per_side**2
+    patch_count = image_patch_count(
+        runtime.image_height, runtime.image_patch_size, runtime.image_patch_stride
+    )
     return patch_count + int(runtime.image_readout == ImageReadout.CLS)
 
 

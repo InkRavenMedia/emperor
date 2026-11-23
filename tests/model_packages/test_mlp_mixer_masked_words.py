@@ -118,11 +118,18 @@ def batch(*, max_token_bytes=64, mlm_probability=1.0):
     )
 
 
-def test_image_cls_readout_preserves_the_masked_word_model():
+def test_image_tokenizer_options_preserve_the_masked_word_model():
     default = configuration()
-    with_cls = configuration(image_readout="cls")
-    assert with_cls.sequence_length == default.sequence_length
-    assert asdict(with_cls.experiment_config) == asdict(default.experiment_config)
+    with_image_options = configuration(
+        image_readout="cls",
+        image_patch_embedding="cnn",
+        image_patch_size=5,
+        image_patch_stride=3,
+    )
+    assert with_image_options.sequence_length == default.sequence_length
+    assert asdict(with_image_options.experiment_config) == asdict(
+        default.experiment_config
+    )
 
 
 def test_reference_configuration_has_separate_mixer_backbone_and_matching_text_boundary():

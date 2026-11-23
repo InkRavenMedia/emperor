@@ -20,7 +20,12 @@ from emperor.memory import (
     DynamicMemoryConfig,
     MemoryPositionOptions,
 )
-from emperor.patch import LinearPatchEmbeddingConfig
+from emperor.patch import LinearPatchEmbeddingConfig, PatchConfig
+from models._image_patches import (
+    ImagePatchEmbedding,
+    build_conv_patch_config,
+    image_patch_stride,
+)
 from models._recurrent_block import RecurrentSchedule, build_recurrent_block
 from models.mlp_mixer._control_options import (
     ControlOptions,
@@ -35,7 +40,10 @@ from models.mlp_mixer._settings import ImageReadout
 class _MixerSettings(Protocol):
     hidden_dim: Final[int]
     input_channels: Final[int]
+    image_height: Final[int]
     image_patch_size: Final[int]
+    image_patch_stride: Final[int | None]
+    image_patch_embedding: Final[ImagePatchEmbedding]
     image_readout: Final[ImageReadout]
     patch_bias_flag: Final[bool]
     patch_dropout_probability: Final[float]
@@ -132,7 +140,25 @@ class MixerComponentFactory(Generic[_Settings]):
         )
         return stack
 
-    def build_patch(self, runtime: _Settings) -> LinearPatchEmbeddingConfig:
+    def build_patch(self, runtime: _Settings) -> PatchConfig:
+        stride = image_patch_stride(
+            runtime.image_height, runtime.image_patch_size, runtime.image_patch_stride
+        )
+        class_token_flag = runtime.image_readout == ImageReadout.CLS
+        if runtime.image_patch_embedding is ImagePatchEmbedding.CNN:
+            return build_conv_patch_config(
+                embedding_dim=runtime.hidden_dim,
+                input_channels=runtime.input_channels,
+                patch_size=runtime.image_patch_size,
+                stride=stride,
+                bias_flag=runtime.patch_bias_flag,
+                dropout_probability=runtime.patch_dropout_probability,
+                class_token_flag=class_token_flag,
+            )
+        if runtime.image_patch_embedding is not ImagePatchEmbedding.LINEAR:
+            raise ValueError(
+                f"Unknown image patch embedding {runtime.image_patch_embedding!r}."
+            )
         patch_stack_options = StackOptions(
             hidden_dim=runtime.hidden_dim,
             num_layers=1,
@@ -159,8 +185,8 @@ class MixerComponentFactory(Generic[_Settings]):
             num_input_channels=runtime.input_channels,
             patch_size=runtime.image_patch_size,
             dropout_probability=runtime.patch_dropout_probability,
-            class_token_flag=runtime.image_readout == ImageReadout.CLS,
-            stride=runtime.image_patch_size,
+            class_token_flag=class_token_flag,
+            stride=stride,
             padding=0,
             embedding_stack_config=projection,
         )

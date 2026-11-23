@@ -25,6 +25,7 @@ from emperor.memory import (
 )
 from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
+from models._image_patches import ImagePatchEmbedding
 from models._recurrent_compression import CompressionOptions
 from models._stack_options import resolve_controller_options
 from models.vit.linear._residual import ResidualStackOptions
@@ -245,6 +246,8 @@ class VitPatchOptions:
     image_height: int
     dropout_probability: float
     bias_flag: bool
+    stride: int | None = None
+    embedding: ImagePatchEmbedding = ImagePatchEmbedding.LINEAR
 
     def __post_init__(self) -> None:
         validation = _attention_settings.strict_float_validation(__package__)
