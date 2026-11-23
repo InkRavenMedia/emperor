@@ -11,7 +11,7 @@ from emperor.linears import LinearLayerConfig
 from emperor.memory import (
     DynamicMemoryConfig,
 )
-from emperor.patch import LinearPatchEmbeddingConfig
+from emperor.patch import PatchConfig
 from models._adaptive_generator_stack import build_generator_layers
 from models._residual_stack import residual_source_from_settings
 from models.mlp_mixer._adaptive_layers import AdaptiveLayerFactory
@@ -150,7 +150,7 @@ def _component_factory() -> MixerComponentFactory[RuntimeOptions]:
     return MixerComponentFactory(_residual, _plain_linear_config)
 
 
-def patch_config(runtime: RuntimeOptions) -> LinearPatchEmbeddingConfig:
+def patch_config(runtime: RuntimeOptions) -> PatchConfig:
     components = _component_factory()
     return components.build_patch(runtime)
 

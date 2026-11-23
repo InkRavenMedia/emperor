@@ -60,6 +60,7 @@ from model_runtime.packages.runtime_values import (
 )
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
 from models import _attention_source_memory, _component_defaults, _recurrent_compression
+from models._image_patches import ImagePatchEmbedding
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "cpu"
@@ -113,6 +114,10 @@ NUM_EPOCHS: Annotated[int, _general] = 10
 
 _image_patches = Section(("Image Patches",))
 IMAGE_PATCH_SIZE: Annotated[int, _image_patches] = 16
+IMAGE_PATCH_STRIDE: Annotated[int | None, _image_patches] = None
+IMAGE_PATCH_EMBEDDING: Annotated[ImagePatchEmbedding, _image_patches] = (
+    ImagePatchEmbedding.LINEAR
+)
 INPUT_CHANNELS: Annotated[int, _image_patches] = 3
 IMAGE_HEIGHT: Annotated[int, _image_patches] = 224
 PATCH_DROPOUT_PROBABILITY: Annotated[float, _image_patches] = 0.0

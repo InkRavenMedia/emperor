@@ -19,6 +19,7 @@ from emperor.memory import (
     MemoryPositionOptions,
 )
 from models import _sequence_expansion
+from models._image_patches import ImagePatchEmbedding
 from models._recurrent_compression import CompressionOptions
 from models.mlp_mixer._settings import ImageReadout
 from models.mlp_mixer.linear import SETTINGS_VALIDATION
@@ -43,6 +44,10 @@ class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions, CompressionOp
     output_dim: int
     output_bias_flag: bool
     image_patch_size: int
+    image_patch_stride: int | None = field(default=None, kw_only=True)
+    image_patch_embedding: ImagePatchEmbedding = field(
+        default=ImagePatchEmbedding.LINEAR, kw_only=True
+    )
     image_readout: ImageReadout = field(default=ImageReadout.MEAN, kw_only=True)
     input_channels: int
     image_height: int

@@ -2,10 +2,50 @@ import pytest
 import torch
 
 from emperor.layers import LayerState
+from emperor.patch import PatchEmbeddingConv, PatchEmbeddingLinear
 from model_runtime.inspection import configuration_schema
 from models.catalog import model_package
 from tests.model_packages.test_mlp_mixer_source_memory import PACKAGES, configuration
 from tests.model_packages.test_soft_moe_cli import cli_values
+
+
+@pytest.mark.parametrize("name", PACKAGES)
+@pytest.mark.parametrize(
+    ("embedding", "patch_type"),
+    [("linear", PatchEmbeddingLinear), ("cnn", PatchEmbeddingConv)],
+)
+@pytest.mark.parametrize("readout", ["mean", "cls"])
+def test_overlapping_image_patch_embeddings(name, embedding, patch_type, readout):
+    package = model_package(name)
+    options = cli_values(
+        package,
+        [
+            "--image-patch-embedding",
+            embedding,
+            "--image-patch-size",
+            "5",
+            "--image-patch-stride",
+            "3",
+            "--image-readout",
+            readout,
+        ],
+    )
+    config = configuration(name, input_dim=1024, image_height=32, **options)
+    model = package.build_model(config).eval()
+    token_count = 100 + int(readout == "cls")
+    assert config.sequence_length == token_count
+    assert isinstance(model.patch, patch_type)
+    assert model.patch.class_token_flag is (readout == "cls")
+
+    encoder_inputs = []
+    model.transformer.register_forward_pre_hook(
+        lambda _, args: encoder_inputs.append(args[0].hidden.shape)
+    )
+    with torch.no_grad():
+        result = model(torch.randn(2, 1, 32, 32))
+    logits = result[0] if isinstance(result, tuple) else result
+    assert logits.shape == (2, 3) and torch.isfinite(logits).all()
+    assert encoder_inputs == [(2, token_count, 8)]
 
 
 @pytest.mark.parametrize("name", PACKAGES)

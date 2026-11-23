@@ -57,6 +57,8 @@ class _ControllerStackRole(Enum):
 def vit_patch_options(config: ModuleType) -> VitPatchOptions:
     return VitPatchOptions(
         patch_size=config.IMAGE_PATCH_SIZE,
+        stride=config.IMAGE_PATCH_STRIDE,
+        embedding=config.IMAGE_PATCH_EMBEDDING,
         input_channels=config.INPUT_CHANNELS,
         image_height=config.IMAGE_HEIGHT,
         dropout_probability=config.PATCH_DROPOUT_PROBABILITY,
