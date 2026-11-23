@@ -92,6 +92,7 @@ from model_runtime.packages import runtime_values, soft_moe
 from model_runtime.packages.configuration_metadata import Section
 from model_runtime.packages.metric_direction import MetricDirection
 from models import _component_defaults, _recurrent_compression
+from models.mlp_mixer._settings import ImageReadout
 
 _general = Section(("Global",))
 BATCH_SIZE: Annotated[int, _general] = 64
@@ -475,6 +476,8 @@ RECURRENT_MEMORY_FLAG: Annotated[bool, _recurrent_memory] = False
 _mlp_mixer = Section(("Mlp Mixer Options",))
 _output_layer = _mlp_mixer.child("Output Layer Options")
 OUTPUT_BIAS_FLAG: Annotated[bool, _output_layer] = True
+# Use mean to average valid patch states, or cls to prepend and read a learned class token.
+IMAGE_READOUT: Annotated[ImageReadout, _output_layer] = ImageReadout.MEAN
 
 _image_patch = _mlp_mixer.child("Image Patch Options")
 IMAGE_PATCH_SIZE: Annotated[int, _image_patch] = 16

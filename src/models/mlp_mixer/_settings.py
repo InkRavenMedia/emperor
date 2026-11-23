@@ -1,3 +1,4 @@
+from enum import StrEnum
 from typing import Final, Protocol
 
 from emperor.halting import HaltingConfig, HaltingHiddenStateModeOptions
@@ -10,6 +11,11 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+
+
+class ImageReadout(StrEnum):
+    MEAN = "mean"
+    CLS = "cls"
 
 
 class ControlSettings(Protocol):

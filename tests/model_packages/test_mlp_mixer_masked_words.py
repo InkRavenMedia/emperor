@@ -118,6 +118,13 @@ def batch(*, max_token_bytes=64, mlm_probability=1.0):
     )
 
 
+def test_image_cls_readout_preserves_the_masked_word_model():
+    default = configuration()
+    with_cls = configuration(image_readout="cls")
+    assert with_cls.sequence_length == default.sequence_length
+    assert asdict(with_cls.experiment_config) == asdict(default.experiment_config)
+
+
 def test_reference_configuration_has_separate_mixer_backbone_and_matching_text_boundary():
     target = configuration()
     package = model_package("bert/expert_linear_adaptive")

@@ -29,12 +29,14 @@ from models.mlp_mixer._control_options import (
     MemoryOptions,
     StackOptions,
 )
+from models.mlp_mixer._settings import ImageReadout
 
 
 class _MixerSettings(Protocol):
     hidden_dim: Final[int]
     input_channels: Final[int]
     image_patch_size: Final[int]
+    image_readout: Final[ImageReadout]
     patch_bias_flag: Final[bool]
     patch_dropout_probability: Final[float]
 
@@ -157,7 +159,7 @@ class MixerComponentFactory(Generic[_Settings]):
             num_input_channels=runtime.input_channels,
             patch_size=runtime.image_patch_size,
             dropout_probability=runtime.patch_dropout_probability,
-            class_token_flag=False,
+            class_token_flag=runtime.image_readout == ImageReadout.CLS,
             stride=runtime.image_patch_size,
             padding=0,
             embedding_stack_config=projection,
