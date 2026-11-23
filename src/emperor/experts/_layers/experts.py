@@ -12,6 +12,7 @@ from emperor.experts._routing.capacity import ExpertCapacityHandler
 from emperor.experts._routing.weighting import ExpertWeightingHandler
 from emperor.experts._validation.experts import ExpertsValidator
 from emperor.layers import Layer, LayerStackConfig, RecurrentCompositionConfig
+from emperor.nn import SoftSlotRouting
 
 
 @dataclass
@@ -434,29 +435,11 @@ class Experts(nn.ModuleList):
         dispatch_weights: Tensor,
         skip_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
-        """Pool a token batch into expert slots and execute every expert's slots."""
-        input_slots = self.__dispatch_tokens_to_slots(
-            input_batch, dispatch_weights, skip_mask
+        routing = SoftSlotRouting(skip_mask)
+        input_slots = routing.pool_tokens_with_dispatch_weights(
+            input_batch, dispatch_weights
         )
         return self.forward_slots(input_slots)
-
-    def __dispatch_tokens_to_slots(
-        self, inputs: Tensor, dispatch_weights: Tensor, skip_mask: Tensor | None
-    ) -> Tensor:
-        masked_token_features = self.__mask_inactive_token_features(inputs, skip_mask)
-        with torch.autocast(device_type=inputs.device.type, enabled=False):
-            dispatch_token_features = masked_token_features.to(dispatch_weights.dtype)
-            input_slots = torch.einsum(
-                "btes,btd->besd", dispatch_weights, dispatch_token_features
-            )
-        return input_slots.to(inputs.dtype)
-
-    def __mask_inactive_token_features(
-        self, token_features: Tensor, skip_mask: Tensor | None
-    ) -> Tensor:
-        if skip_mask is None:
-            return token_features
-        return token_features.masked_fill(~skip_mask, 0)
 
     def forward_causal_soft_tokens(
         self,
@@ -464,45 +447,18 @@ class Experts(nn.ModuleList):
         prefix_update_weights: Tensor,
         skip_mask: Tensor | None = None,
     ) -> tuple[Tensor, Tensor]:
-        """Execute each prefix's slots in token-major, then slot-major order."""
-        self.VALIDATOR.validate_causal_slot_grouping(self)
-        masked_token_features = self.__mask_inactive_token_features(
-            input_batch, skip_mask
+        routing = SoftSlotRouting(skip_mask, causal_prefix_flag=True)
+        input_slots = routing.pool_tokens_with_dispatch_weights(
+            input_batch, prefix_update_weights
         )
-        with torch.autocast(device_type=input_batch.device.type, enabled=False):
-            pooling_features = masked_token_features.to(prefix_update_weights.dtype)
-            prefix_slots = self.__pool_causal_prefix_slots(
-                pooling_features, prefix_update_weights
-            )
-        expert_input_slots = prefix_slots.to(input_batch.dtype)
-        return self.forward_slots(expert_input_slots)
+        return self.forward_slots(input_slots, causal_prefix_flag=True)
 
-    def __pool_causal_prefix_slots(
-        self, token_features: Tensor, prefix_update_weights: Tensor
-    ) -> Tensor:
-        batch_size, sequence_length, input_dim = token_features.shape
-        slots_per_expert = prefix_update_weights.shape[-1]
-        slot_shape = (batch_size, self.num_experts, slots_per_expert, input_dim)
-        running_slots = token_features.new_zeros(slot_shape)
-        prefix_slots = []
-        for token_index in range(sequence_length):
-            current_token = token_features[:, token_index, None, None, :]
-            update_weights = prefix_update_weights[:, token_index, :, :, None]
-            retained_slots = (1 - update_weights) * running_slots
-            current_token_slots = update_weights * current_token
-            running_slots = retained_slots + current_token_slots
-            prefix_slots.append(running_slots)
-        stacked_prefix_slots = torch.stack(prefix_slots, dim=2)
-        flattened_slot_shape = (
-            batch_size,
-            self.num_experts,
-            sequence_length * slots_per_expert,
-            input_dim,
-        )
-        return stacked_prefix_slots.reshape(flattened_slot_shape)
-
-    def forward_slots(self, input_slots: Tensor) -> tuple[Tensor, Tensor]:
+    def forward_slots(
+        self, input_slots: Tensor, *, causal_prefix_flag: bool = False
+    ) -> tuple[Tensor, Tensor]:
         """Execute already-dispatched slots without routing or combining them."""
+        if causal_prefix_flag:
+            self.VALIDATOR.validate_causal_slot_grouping(self)
         self.VALIDATOR.validate_slot_inputs(self, input_slots)
         batch_size, _, slots_per_expert, _ = input_slots.shape
         expert_slot_outputs = []

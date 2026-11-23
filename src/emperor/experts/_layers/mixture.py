@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-import torch
 from torch import Tensor
 
 from emperor.experts._config import MixtureOfExpertsConfig, SoftMoEConfig
@@ -103,9 +102,9 @@ class MixtureOfExperts(Module):
             self, input_batch, probabilities, indices, skip_mask
         )
         if self.soft_router is not None:
-            if causal_prefix_flag:
-                return self.__compute_causal_soft_mixture(input_batch, skip_mask)
-            return self.__compute_soft_mixture(input_batch, skip_mask)
+            return self.__compute_soft_mixture(
+                input_batch, skip_mask, causal_prefix_flag
+            )
         if causal_prefix_flag:
             raise ValueError("Causal prefix routing requires Soft MoE.")
         probabilities, indices, skip_mask, sampler_loss = (
@@ -124,59 +123,25 @@ class MixtureOfExperts(Module):
         return mixture_output, skip_mask, total_loss
 
     def __compute_soft_mixture(
-        self, inputs: Tensor, skip_mask: Tensor | None
+        self, inputs: Tensor, skip_mask: Tensor | None, causal_prefix_flag: bool
     ) -> tuple[Tensor, Tensor | None, Tensor]:
-        dispatch_weights, combine_weights = self.soft_router(inputs, skip_mask)
-        output_slots, expert_loss = self.expert_modules.forward_soft_tokens(
-            inputs, dispatch_weights, skip_mask
+        input_slots, routing = self.soft_router.compress_tokens(
+            inputs, skip_mask, causal_prefix_flag=causal_prefix_flag
         )
-        output = self.__combine_expert_slots(
-            output_slots, combine_weights, inputs.device.type
+        output_slots, expert_loss = self.expert_modules.forward_slots(
+            input_slots, causal_prefix_flag=causal_prefix_flag
         )
-        total_loss = self.__accumulate_soft_router_loss(expert_loss)
-        return output, skip_mask, total_loss
+        return (
+            routing.decompress_slots(output_slots),
+            skip_mask,
+            self.__accumulate_soft_router_loss(expert_loss),
+        )
 
     def __accumulate_soft_router_loss(self, expert_loss: Tensor) -> Tensor:
         router_loss = self.soft_router.get_auxiliary_loss()
         if router_loss is None:
             return expert_loss
         return expert_loss + router_loss
-
-    def __combine_expert_slots(
-        self, output_slots: Tensor, combine_weights: Tensor, device_type: str
-    ) -> Tensor:
-        with torch.autocast(device_type=device_type, enabled=False):
-            combination_slot_features = output_slots.to(combine_weights.dtype)
-            token_outputs = torch.einsum(
-                "btes,besd->btd", combine_weights, combination_slot_features
-            )
-        return token_outputs.to(output_slots.dtype)
-
-    def __compute_causal_soft_mixture(
-        self, inputs: Tensor, skip_mask: Tensor | None
-    ) -> tuple[Tensor, Tensor | None, Tensor]:
-        updates, combine_weights = self.soft_router(
-            inputs, skip_mask, causal_prefix_flag=True
-        )
-        output_slots, expert_loss = self.expert_modules.forward_causal_soft_tokens(
-            inputs, updates, skip_mask
-        )
-        batch_size, sequence_length = inputs.shape[:2]
-        prefix_outputs = output_slots.reshape(
-            batch_size,
-            self.num_experts,
-            sequence_length,
-            self.soft_router.slots_per_expert,
-            self.output_dim,
-        )
-        with torch.autocast(device_type=inputs.device.type, enabled=False):
-            output = torch.einsum(
-                "btes,betsd->btd",
-                combine_weights,
-                prefix_outputs.to(combine_weights.dtype),
-            )
-        total_loss = self.__accumulate_soft_router_loss(expert_loss)
-        return output.to(output_slots.dtype), skip_mask, total_loss
 
     def _maybe_compute_expert_indices(
         self,

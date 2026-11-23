@@ -9,9 +9,11 @@ from emperor.nn._forward_schedule import (
     preserve_forward_schedule_updates,
 )
 from emperor.nn._module import Module
+from emperor.nn._soft_slot_routing import SoftSlotRouting
 
 __all__ = (
     "Module",
+    "SoftSlotRouting",
     "ForwardSchedule",
     "ForwardScheduleCounterOptions",
     "freeze_forward_schedules",
