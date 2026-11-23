@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, ClassVar
 from torch import Tensor, nn
 
 from emperor.layers._composition.recurrent.state import new_recurrent_initial_buffer
+from emperor.layers._state import LayerState
 from emperor.layers._support import LayerModuleBase
 
 if TYPE_CHECKING:
     from emperor.layers._composition.recurrent.config import RecurrentCompositionConfig
-    from emperor.layers._state import LayerState
 
 
 class RecurrentCompositionAbstract(LayerModuleBase, ABC):
@@ -58,6 +58,14 @@ class RecurrentCompositionAbstract(LayerModuleBase, ABC):
 
     def _new_recurrent_initial_buffer(self, standard_deviation: float) -> Tensor:
         return new_recurrent_initial_buffer(self.output_dim, standard_deviation)
+
+    def forward_sequence(self, hidden: Tensor) -> LayerState:
+        if self.step.compressor is None:
+            return super().forward_sequence(hidden)
+        from emperor.layers._layer import Layer
+
+        Layer.VALIDATOR.validate_sequence_input(hidden)
+        return self(LayerState(hidden))
 
     @abstractmethod
     def forward(self, state: LayerState) -> LayerState:

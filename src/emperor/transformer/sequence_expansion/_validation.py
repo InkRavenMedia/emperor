@@ -29,6 +29,10 @@ class SequenceExpansionValidator:
     def validate_recurrent_placement(config, *, path: str, recurrent_config) -> None:
         from emperor.layers import AdditiveResidualConfig
 
+        if recurrent_config.compression_config is not None:
+            raise ValueError(
+                f"Sequence Expansion inside a compressed recurrent block changes slot positions at {path}."
+            )
         for name in ("halting_config", "memory_config", "gate_config"):
             if getattr(recurrent_config, name, None) is not None:
                 raise ValueError(

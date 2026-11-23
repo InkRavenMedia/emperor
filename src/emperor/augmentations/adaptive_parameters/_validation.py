@@ -443,7 +443,7 @@ class AdaptiveParameterAugmentationValidator(
             raise ValueError(
                 f"{path} requires SEQUENCE grouping for token inputs; ROWS mixes samples."
             )
-        if grouping.sequence_length != sequence_length:
+        if grouping.effective_sequence_length() != sequence_length:
             raise ValueError(
                 f"{path} sequence_length={grouping.sequence_length} does not match actual sequence length {sequence_length}."
             )

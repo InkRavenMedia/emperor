@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 
 from torch import Tensor
 
+from emperor._validation import sequence_is_batch_first
 from emperor.attention._runtime import (
     AttentionRuntimeLayout,
     MultiHeadAttentionInputs,
@@ -71,15 +72,7 @@ class BatchDimensionManager:
         )
 
     def __input_is_batch_first(self, query: Tensor) -> bool:
-        query_has_no_explicit_batch_dimension = query.dim() != 3
-        if query_has_no_explicit_batch_dimension:
-            return False
-        if self.batch_first_flag is not None:
-            return self.batch_first_flag
-        # Historical behavior inferred layout by asking whether dimension 1 was the
-        # configured batch size. Explicit flags avoid this ambiguity for new models.
-        legacy_layout_is_inferred_as_batch_first = query.size(1) != self.batch_size
-        return legacy_layout_is_inferred_as_batch_first
+        return sequence_is_batch_first(query, self.batch_first_flag, self.batch_size)
 
     def __maybe_transpose_batch_first_qkv(
         self,

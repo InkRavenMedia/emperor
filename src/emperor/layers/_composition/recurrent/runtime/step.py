@@ -5,6 +5,10 @@ from contextlib import contextmanager
 from dataclasses import replace
 from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar
 
+from emperor.layers._composition.recurrent.config import RecurrentCompressionConfig
+from emperor.layers._composition.recurrent.runtime.compression import (
+    RecurrentTokenCompressor,
+)
 from emperor.layers._composition.recurrent.state import RecurrentState
 from emperor.layers._composition.recurrent.validation import (
     HierarchicalReasoningModelRecurrentValidator,
@@ -39,13 +43,31 @@ class RecurrentStep(Module, Generic[RecurrentStateT], ABC):
         super().__init__()
         self.cfg = cfg
         self.pipeline = LayerProcessingPipeline(self.cfg)
+        compression = cfg.resolve_compression_config()
+        self.compressor = (
+            RecurrentTokenCompressor(
+                compression,
+                RecurrentCompressionConfig(input_dim=cfg.output_dim),
+            )
+            if compression is not None
+            else None
+        )
         self.diagnostic_observer: Callable[[Tensor, Tensor], None] | None = None
         self.__diagnostic_suppression_depth = 0
 
     def _build_transition_model(self, block_config: ConfigBase) -> Module:
+        if self.compressor is not None:
+            block_config = self.compressor.configure_block(block_config)
         return self._build_from_config(
             block_config, input_dim=self.cfg.output_dim, output_dim=self.cfg.output_dim
         )
+
+    def _call_transition_block(
+        self, block: Module, state: LayerState, *, complete_prefix: bool = False
+    ) -> LayerState:
+        if self.compressor is None:
+            return block(state)
+        return self.compressor(block, state, complete_prefix=complete_prefix)
 
     @abstractmethod
     def forward(

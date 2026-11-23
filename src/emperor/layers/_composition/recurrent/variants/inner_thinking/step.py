@@ -3,6 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, ClassVar
 
+from emperor.layers._composition.recurrent.runtime.compression import (
+    block_sequence_layout,
+    requires_prefixes,
+    run_prefixes,
+    token_padding_mask,
+)
 from emperor.layers._composition.recurrent.validation import (
     InnerThinkingRecurrentValidator,
 )
@@ -65,8 +71,30 @@ class InnerThinkingRecurrentStep(StandardRecurrentStep):
     ) -> LayerState:
         block_input = state.hidden
         self.VALIDATOR.validate_block_layout(self.block_model, block_input)
+        causal = False
+        if self.compressor is not None:
+            batch_first, implicit_causal = block_sequence_layout(
+                self.block_model, block_input
+            )
+            if block_input.ndim > 2 and not batch_first:
+                raise ValueError(
+                    "Inner thinking requires batch-first blocks for batched token states."
+                )
+            causal = requires_prefixes(state, implicit_causal)
         if recurrent_state.transition_index == 0:
             output_state = self.__run_initial_thinking_transition(state)
+        elif causal:
+            # Top-k selection itself must only see the prefix of the output token.
+            def select_prefix(prefix: LayerState) -> LayerState:
+                prior = replace(
+                    recurrent_state,
+                    hidden=recurrent_state.hidden[..., : prefix.hidden.size(-2), :],
+                )
+                return self.__run_selected_thinking_transition(
+                    prefix, prior, complete_prefix=True
+                )
+
+            output_state = run_prefixes(state, select_prefix)
         else:
             output_state = self.__run_selected_thinking_transition(
                 state, recurrent_state
@@ -93,6 +121,8 @@ class InnerThinkingRecurrentStep(StandardRecurrentStep):
         self,
         state: LayerState,
         recurrent_state: StandardRecurrentState,
+        *,
+        complete_prefix: bool = False,
     ) -> LayerState:
         transition_index = recurrent_state.transition_index
         token_sample = self.__sample_thinking_tokens(state, transition_index)
@@ -100,7 +130,7 @@ class InnerThinkingRecurrentStep(StandardRecurrentStep):
             token_sample.indices, token_sample.valid, token_sample.sequence_length
         )
         selected_context, output_state = self.__run_block_on_selected_tokens(
-            state, selection
+            state, selection, complete_prefix=complete_prefix
         )
         selected_token_weights = token_sample.weights.unsqueeze(-1)
         step_weight = self.__thinking_step_weight(transition_index, output_state)
@@ -116,20 +146,35 @@ class InnerThinkingRecurrentStep(StandardRecurrentStep):
     def __sample_thinking_tokens(
         self, state: LayerState, transition_index: int
     ) -> TokenSamplingResult:
+        sampler = self.__get_module(f"samplers.{transition_index - 1}")
+        if self.compressor is not None:
+            return sampler(state.hidden, token_padding_mask(state), allow_empty=True)
         padding_mask = getattr(state, "target_key_padding_mask", None)
         if padding_mask is None:
             padding_mask = getattr(state, "key_padding_mask", None)
-        sampler = self.__get_module(f"samplers.{transition_index - 1}")
         return sampler(state.hidden, padding_mask)
 
     def __run_block_on_selected_tokens(
-        self, state: LayerState, selection: InnerThinkingTokenSelection
+        self,
+        state: LayerState,
+        selection: InnerThinkingTokenSelection,
+        *,
+        complete_prefix: bool,
     ) -> tuple[LayerState, LayerState]:
         attention_heads = self.__attention_heads(state)
         sampled_state = selection.select_state(state, attention_heads=attention_heads)
+        if self.compressor is not None:
+            for key in ("input_mask", "skip_mask"):
+                mask = getattr(state, key, None)
+                if mask is not None:
+                    setattr(
+                        sampled_state,
+                        key,
+                        selection.gather_hidden(mask) & selection.valid.unsqueeze(-1),
+                    )
         selected_state = state.select_recurrent_tokens(sampled_state)
         selected_context = replace(selected_state)
-        output_state = self._run_block(selected_state)
+        output_state = self._run_block(selected_state, complete_prefix=complete_prefix)
         return selected_context, output_state
 
     def __attention_heads(self, state: LayerState) -> int:

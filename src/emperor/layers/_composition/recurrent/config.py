@@ -1,25 +1,67 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from copy import deepcopy
+from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, ClassVar
 
 from emperor.config import ConfigBase, optional_field
 from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
     from emperor.halting import HaltingConfig
     from emperor.layers._composition.residual.config import ResidualConfig
     from emperor.layers._config import GateConfig
+    from emperor.linears import LinearLayerConfig
     from emperor.memory import DynamicMemoryConfig
     from emperor.sampler import TokenSamplerConfig
+
+
+_TOKEN_PROCESSING_MODEL_FIELDS = (
+    "feed_forward_config",
+    "layer_config",
+    "layer_model_config",
+    "stack_config",
+    "experts_config",
+    "mixture_config",
+    "attention_config",
+    "self_attention_config",
+    "cross_attention_config",
+    "projection_model_config",
+    "mixing_model_config",
+    "model_config",
+)
+
+
+@dataclass(kw_only=True)
+class RecurrentCompressionConfig(ConfigBase):
+    input_dim: int | None = optional_field(
+        "Feature width supplied by the recurrent owner."
+    )
+    max_slots: int | None = optional_field(
+        "Maximum slot count for each inner block call."
+    )
+    scorer_config: LinearLayerConfig | None = optional_field(
+        "Overrides the linear scorer inherited from the transition's expert or "
+        "ordinary layer. A block without a linear template uses a linear layer with bias."
+    )
+
+    def _registry_owner(self) -> type:
+        from .runtime.compression import RecurrentTokenCompressor
+
+        return RecurrentTokenCompressor
 
 
 @dataclass
 class RecurrentCompositionConfig(ConfigBase):
     _TRANSITION_CONFIG_FIELDS: ClassVar[tuple[str, ...]] = ()
 
+    compression_config: RecurrentCompressionConfig | None = field(
+        default=None,
+        kw_only=True,
+        metadata={"help": "Optional token compression around the inner block."},
+    )
     input_dim: int | None = optional_field("Input feature dimension.")
     output_dim: int | None = optional_field("Output feature dimension.")
     no_gradient_transition_count: int | None = optional_field(
@@ -91,6 +133,59 @@ class RecurrentCompositionConfig(ConfigBase):
             transition_config
             for _, transition_config in self._transition_config_items()
         )
+
+    def resolve_compression_config(self) -> RecurrentCompressionConfig | None:
+        compression = self.compression_config
+        if (
+            not isinstance(compression, RecurrentCompressionConfig)
+            or compression.scorer_config is not None
+        ):
+            return compression
+        template = self.__compression_scorer_template()
+        if template is None:
+            return compression
+        scorer = replace(
+            deepcopy(template),
+            input_dim=self.output_dim,
+            output_dim=compression.max_slots,
+            bias_flag=True if template.bias_flag is None else template.bias_flag,
+        )
+        return replace(compression, scorer_config=scorer)
+
+    def __compression_scorer_template(self) -> LinearLayerConfig | None:
+        first_linear = None
+        for template, is_expert in self.__transition_linear_templates(self):
+            if is_expert:
+                return template
+            if first_linear is None:
+                first_linear = template
+        return first_linear
+
+    def __transition_linear_templates(
+        self, config: ConfigBase, *, inside_expert: bool = False
+    ) -> Iterator[tuple[LinearLayerConfig, bool]]:
+        from emperor.linears import LinearLayerConfig
+
+        if isinstance(config, LinearLayerConfig):
+            yield config, inside_expert
+            return
+        if isinstance(config, RecurrentCompositionConfig):
+            children = config._transition_configs()
+        else:
+            expert = getattr(config, "expert_model_config", None)
+            if isinstance(expert, ConfigBase):
+                yield from self.__transition_linear_templates(
+                    expert, inside_expert=True
+                )
+                return
+            children = (
+                getattr(config, name, None) for name in _TOKEN_PROCESSING_MODEL_FIELDS
+            )
+        for child in children:
+            if isinstance(child, ConfigBase):
+                yield from self.__transition_linear_templates(
+                    child, inside_expert=inside_expert
+                )
 
     def _transition_config_items(self) -> tuple[tuple[str, ConfigBase], ...]:
         return tuple(

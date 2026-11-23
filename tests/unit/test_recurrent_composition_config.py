@@ -19,6 +19,7 @@ from emperor.layers import (
     LayerState,
     NormalizationOptions,
     RecurrentCompositionConfig,
+    RecurrentCompressionConfig,
     RecurrentLayer,
     RecurrentLayerConfig,
     TinyRecursiveModelRecurrentConfig,
@@ -476,6 +477,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
             config_types,
             {
                 RecurrentCompositionConfig,
+                RecurrentCompressionConfig,
                 RecurrentLayerConfig,
                 InnerThinkingRecurrentConfig,
                 TinyRecursiveModelRecurrentConfig,

@@ -107,7 +107,7 @@ class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelSta
 
     def __run_block(self, state: LayerState, block: Module) -> LayerState:
         block_input = state.hidden
-        output_state = block(state)
+        output_state = self._call_transition_block(block, state)
         self.VALIDATOR.validate_transition_output(
             output_state, block_input, self.cfg.output_dim
         )
