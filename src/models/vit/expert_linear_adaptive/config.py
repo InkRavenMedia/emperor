@@ -98,7 +98,7 @@ from model_runtime.packages.runtime_values import (
     positive_runtime_fields,
 )
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory, _component_defaults
+from models import _attention_source_memory, _component_defaults, _recurrent_compression
 
 _general = Section(("Global",))
 INPUT_DIM: Annotated[int, _general] = 224 * 224 * 3
@@ -2925,3 +2925,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
+
+_recurrent_compression.declare_compression_options(globals())

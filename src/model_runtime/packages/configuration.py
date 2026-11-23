@@ -3,7 +3,8 @@ from __future__ import annotations
 import inspect
 import json
 import math
-from collections.abc import Sequence
+from collections import ChainMap
+from collections.abc import Mapping, Sequence
 from dataclasses import fields
 from enum import Enum, StrEnum
 from types import ModuleType
@@ -205,7 +206,12 @@ def parse_config_value(
     ):
         try:
             payload = cast(_ConfigJson, json.loads(raw_value))
-            return _parse_config_object(config_module, payload)
+            extra_types = getattr(config_module, "_CONFIG_OBJECT_TYPES", {}).get(
+                key, {}
+            )
+            return _parse_config_object(
+                ChainMap(vars(config_module), extra_types), payload
+            )
         except (TypeError, ValueError) as exc:
             raise ConfigValueError(
                 f"Invalid configuration object for {key}: {exc}"
@@ -220,7 +226,7 @@ def parse_config_value(
     return parsed
 
 
-def _parse_config_object(config_module: ModuleType, value: _ConfigJson) -> object:
+def _parse_config_object(namespace: Mapping[str, Any], value: _ConfigJson) -> object:
     """Decode only package-exposed config constructors and qualified enum members."""
     if isinstance(value, dict):
         name = value.get("type")
@@ -228,7 +234,9 @@ def _parse_config_object(config_module: ModuleType, value: _ConfigJson) -> objec
             raise ConfigValueError(
                 "Configuration objects require a string 'type' field."
             )
-        config_type = _class_lookup(config_module, name)
+        config_type = namespace.get(name.rsplit(".", 1)[-1])
+        if not inspect.isclass(config_type):
+            raise ConfigValueError(f"unknown config class '{name}'")
         if not issubclass(config_type, ConfigBase):
             raise ConfigValueError(f"{name} is not a configuration class.")
         supplied = value.keys() - {"type"}
@@ -236,13 +244,13 @@ def _parse_config_object(config_module: ModuleType, value: _ConfigJson) -> objec
         if unknown:
             raise ConfigValueError(f"Unknown {name} fields: {sorted(unknown)}")
         return config_type(
-            **{key: _parse_config_object(config_module, value[key]) for key in supplied}
+            **{key: _parse_config_object(namespace, value[key]) for key in supplied}
         )
     if isinstance(value, list):
-        return [_parse_config_object(config_module, item) for item in value]
+        return [_parse_config_object(namespace, item) for item in value]
     if isinstance(value, str) and "." in value:
         enum_name, member = value.rsplit(".", 1)
-        enum_type = getattr(config_module, enum_name, None)
+        enum_type = namespace.get(enum_name)
         if inspect.isclass(enum_type) and issubclass(enum_type, Enum):
             return _enum_lookup(enum_type, member)
     return value
