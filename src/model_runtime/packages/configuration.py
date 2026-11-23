@@ -181,10 +181,10 @@ def _parse_from_current_value(
         parsed = int(raw_value)
     elif isinstance(current_value, float):
         parsed = float(raw_value)
-    elif isinstance(current_value, str):
-        parsed = raw_value
     elif isinstance(current_value, Enum):
         parsed = _enum_lookup(type(current_value), raw_value)
+    elif isinstance(current_value, str):
+        parsed = raw_value
     elif inspect.isclass(current_value):
         parsed = _class_lookup(config_module, raw_value)
     elif current_value is None:

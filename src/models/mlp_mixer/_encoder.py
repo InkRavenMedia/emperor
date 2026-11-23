@@ -28,11 +28,13 @@ from emperor.transformer import (
 from emperor.transformer._soft_moe_config import build_soft_moe_stack
 from models import _sequence_expansion
 from models.mlp_mixer._component_factory import BuildResidual
+from models.mlp_mixer._settings import ImageReadout
 
 
 class _ImageGrid(Protocol):
     image_height: Final[int]
     image_patch_size: Final[int]
+    image_readout: Final[ImageReadout]
 
 
 class _OutputSettings(Protocol):
@@ -75,7 +77,8 @@ def patch_sequence_length(runtime: _ImageGrid) -> int:
             f"image_height={image_height}, image_patch_size={patch_size}"
         )
     patches_per_side = image_height // patch_size
-    return patches_per_side**2
+    patch_count = patches_per_side**2
+    return patch_count + int(runtime.image_readout == ImageReadout.CLS)
 
 
 def build_token_attention(

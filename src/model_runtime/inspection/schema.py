@@ -89,10 +89,10 @@ def _concrete_value_kind(value: Any) -> str | None:
         kind = "int"
     elif isinstance(value, float):
         kind = "float"
-    elif isinstance(value, str):
-        kind = "string"
     elif isinstance(value, Enum):
         kind = "enum"
+    elif isinstance(value, str):
+        kind = "string"
     elif isinstance(value, ConfigBase):
         kind = "json"
     elif inspect.isclass(value):

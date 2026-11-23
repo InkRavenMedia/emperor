@@ -65,7 +65,9 @@ class MixerImageClassifier(ClassifierExperiment):
         normalized_tokens = self.encoder_layer_norm.before_model(
             LayerState(hidden=encoder_state.hidden)
         ).hidden
-        if encoder_state.key_padding_mask is None:
+        if self.patch.class_token_flag:
+            pooled_hidden = normalized_tokens[:, 0, :]
+        elif encoder_state.key_padding_mask is None:
             pooled_hidden = normalized_tokens.mean(dim=1)
         else:
             valid_tokens = ~encoder_state.key_padding_mask
