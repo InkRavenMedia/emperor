@@ -103,7 +103,7 @@ from model_runtime.packages.runtime_values import (
     positive_runtime_fields,
 )
 from model_runtime.packages.soft_moe import declare_soft_moe_runtime_defaults
-from models import _attention_source_memory, _component_defaults
+from models import _attention_source_memory, _component_defaults, _recurrent_compression
 
 _general = Section(("Global",))
 INPUT_DIM: Annotated[int, _general] = 224 * 224 * 3
@@ -2961,3 +2961,5 @@ CLUSTER_PRUNING_THRESHOLD: Annotated[int | None, _neuron_cluster] = None
 CALLBACK_NEURON_CLUSTER_OPTIMIZER_SYNC: Annotated[
     NeuronClusterOptimizerSyncCallback, _neuron_cluster
 ] = NeuronClusterOptimizerSyncCallback()
+
+_recurrent_compression.declare_compression_options(globals())

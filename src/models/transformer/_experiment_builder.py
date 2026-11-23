@@ -7,9 +7,11 @@ from emperor.layers import (
     LayerStackConfig,
     NormalizationOptions,
     RecurrentCompositionConfig,
+    RecurrentCompressionConfig,
 )
 from models import _sequence_expansion
 from models._positional_embedding import supported_position_fields
+from models._recurrent_compression import configure_sequence_stacks
 
 if TYPE_CHECKING:
     from emperor.config import ModelConfig
@@ -132,6 +134,7 @@ def assemble_experiment(
 
 
 class _TranslationSettings(Protocol):
+    recurrent_compression_config: Final[RecurrentCompressionConfig | None]
     batch_size: Final[int]
     learning_rate: Final[float]
     vocab_size: Final[int]
@@ -151,7 +154,9 @@ def build_translation_model_config(
     sequence_length = max(
         runtime.source_sequence_length, runtime.target_sequence_length
     )
-    experiment_config = build_experiment(runtime)
+    experiment_config = configure_sequence_stacks(
+        build_experiment(runtime), runtime.recurrent_compression_config
+    )
     return ModelConfig(
         batch_size=runtime.batch_size,
         learning_rate=runtime.learning_rate,

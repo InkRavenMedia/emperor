@@ -14,6 +14,10 @@ from model_runtime.packages.runtime_values import validate_runtime_default_value
 from models import _attention_settings, _learned_grouping, _sequence_expansion
 from models import _attention_source_memory as _source_memory
 from models._flat_updates import pop_prefixed_updates as _pop_updates
+from models._recurrent_compression import (
+    bind_compression_options,
+    compression_from_config,
+)
 
 from . import config
 from ._validation import validate_runtime
@@ -842,6 +846,7 @@ def runtime_from_config() -> RuntimeOptions:
         "FEED_FORWARD_ADAPTIVE",
     )
     return RuntimeOptions(
+        recurrent_compression_config=compression_from_config(config),
         batch_size=config.BATCH_SIZE,
         learning_rate=config.LEARNING_RATE,
         vocab_size=config.VOCAB_SIZE,
@@ -1090,6 +1095,7 @@ def _reject_unknown_runtime_default(values: MutableMapping[str, Any]) -> None:
         )
 
 
+@bind_compression_options(config)
 def runtime_from_flat(
     values: dict[str, Any] | None = None,
     base: RuntimeOptions | None = None,

@@ -44,7 +44,7 @@ from emperor.transformer import SequenceExpansionConfig  # noqa: F401
 from model_runtime.packages import runtime_values, soft_moe
 from model_runtime.packages.configuration_metadata import Section
 from model_runtime.packages.metric_direction import MetricDirection
-from models import _component_defaults
+from models import _component_defaults, _recurrent_compression
 
 _general = Section(("Global",))
 BATCH_SIZE: Annotated[int, _general] = 64
@@ -1171,3 +1171,5 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
+
+_recurrent_compression.declare_compression_options(globals())
