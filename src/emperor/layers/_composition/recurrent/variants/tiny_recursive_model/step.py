@@ -96,7 +96,7 @@ class TinyRecursiveModelStep(RecurrentStep[TinyRecursiveModelState]):
 
     def __run_block(self, state: LayerState) -> LayerState:
         block_input = state.hidden
-        output_state = self.block_model(state)
+        output_state = self._call_transition_block(self.block_model, state)
         self.VALIDATOR.validate_transition_output(
             output_state, block_input, self.cfg.output_dim
         )

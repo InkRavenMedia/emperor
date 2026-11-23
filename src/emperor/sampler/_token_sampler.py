@@ -36,10 +36,16 @@ class TokenSamplerModel(Module):
         )
 
     def forward(
-        self, hidden: Tensor, padding_mask: Tensor | None = None
+        self,
+        hidden: Tensor,
+        padding_mask: Tensor | None = None,
+        *,
+        allow_empty: bool = False,
     ) -> TokenSamplingResult:
         self.VALIDATOR.validate_hidden(hidden, self.cfg.input_dim)
-        padding = self.VALIDATOR.padding(hidden, padding_mask)
+        padding = self.VALIDATOR.padding(hidden, padding_mask, allow_empty=allow_empty)
+        if allow_empty and padding_mask is not None:
+            hidden = hidden.masked_fill(padding.unsqueeze(-1), 0)
         flattened = hidden.reshape(-1, hidden.shape[-1])
         logits = self.router.compute_logit_scores(flattened)
         self.VALIDATOR.validate_logits(logits, flattened)

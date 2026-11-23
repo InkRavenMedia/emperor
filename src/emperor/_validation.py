@@ -1,9 +1,46 @@
 import types
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, fields
-from typing import Union, get_args, get_origin
+from typing import TYPE_CHECKING, Union, get_args, get_origin
 
 from emperor.config import ConfigBase
+
+if TYPE_CHECKING:
+    from torch import Tensor
+
+_slot_layout: ContextVar[tuple[int, bool | None] | None] = ContextVar(
+    "recurrent_slot_layout", default=None
+)
+
+
+@contextmanager
+def recurrent_slot_layout(length: int, *, batch_first: bool | None = None):
+    token = _slot_layout.set((length, batch_first))
+    try:
+        yield
+    finally:
+        _slot_layout.reset(token)
+
+
+def current_recurrent_length() -> int | None:
+    layout = _slot_layout.get()
+    return layout[0] if layout is not None else None
+
+
+def sequence_is_batch_first(
+    hidden: "Tensor", explicit: bool | None, batch_size: int | None
+) -> bool:
+    if hidden.ndim != 3:
+        return False
+    if explicit is not None:
+        return explicit
+    # Keep the enclosing layout when slots or padding buckets change either axis.
+    layout = _slot_layout.get()
+    if layout is not None and layout[1] is not None:
+        return layout[1]
+    return hidden.size(1) != batch_size
 
 
 @dataclass(frozen=True)

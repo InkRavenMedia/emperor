@@ -1,5 +1,7 @@
 """Layout and splitting delegate for validated grouping configurations."""
 
+from dataclasses import replace
+
 import torch
 from torch import Tensor
 from torch.nn import functional as F
@@ -35,6 +37,37 @@ class GroupSplitter:
         if self.chunk_size is not None:
             return self.__split_by_chunk_size(canonical, input_order)
         return self.__split_by_group_count(canonical, input_order)
+
+    def split_variable_groups(self, input_rows: Tensor, length: int) -> GroupPlan:
+        """Keep up to group_count nonempty balanced groups on short recurrent inputs."""
+        sequence_length = (
+            length
+            if self.scope is AdaptiveParameterGroupingScopeOptions.SEQUENCE
+            else None
+        )
+        layout = GroupSplitter(
+            replace(self.cfg, sequence_length=sequence_length, group_count=1)
+        )
+        self.VALIDATOR.validate_flat_input(input_rows, layout.cfg)
+        tokens, order = layout.__prepare_grouping_input(input_rows)
+        batch_size, token_count, width = tokens.shape
+        groups = min(token_count, self.group_count)
+        quotient, remainder = divmod(token_count, groups)
+        group = torch.arange(groups, device=tokens.device)
+        sizes = quotient + (group < remainder)
+        starts = sizes.cumsum(0) - sizes
+        offsets = torch.arange(quotient + bool(remainder), device=tokens.device)
+        valid = offsets < sizes[:, None]
+        positions = (starts[:, None] + offsets).clamp_max(token_count - 1)
+        members = tokens[:, positions].masked_fill(~valid[..., None], 0)
+        return GroupPlan(
+            grouped_members=members.reshape(batch_size * groups, -1, width),
+            valid_members=valid.expand(batch_size, -1, -1).reshape(
+                batch_size * groups, -1
+            ),
+            canonical_shape=(batch_size, token_count),
+            input_order=order,
+        )
 
     def __prepare_grouping_input(
         self, input_rows: Tensor

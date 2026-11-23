@@ -32,6 +32,7 @@ class GrouperAbstract(Module):
         super().__init__()
         overridden = self._override_config(cfg, overrides)
         self.VALIDATOR.validate_grouping_value(overridden)
+        self.input_layout = overridden
         self.cfg = self.__resolve_config(overridden)
         feature_dim = self.cfg.feature_dim
         self.VALIDATOR.validate_feature_dim(feature_dim)
@@ -81,6 +82,16 @@ class GrouperAbstract(Module):
     ) -> GroupPlan:
         """Split at a runtime sequence length without mutating the configured layout."""
         if sequence_length is None:
+            sequence_length = self.input_layout.effective_sequence_length()
+            if (
+                sequence_length is not None
+                and self.cfg.group_count is not None
+                and sequence_length % self.cfg.group_count
+            ):
+                return self.splitter.split_variable_groups(input_rows, sequence_length)
+            if self.cfg.scope.name == "ROWS":
+                sequence_length = None
+        if sequence_length == self.cfg.sequence_length:
             return self.splitter.split(input_rows)
         config = replace(self.cfg, sequence_length=sequence_length)
         self.VALIDATOR.validate_grouping_value(config)

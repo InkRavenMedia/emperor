@@ -9,6 +9,7 @@ from emperor._validation import (
     _first_adaptive_grouping_path,
     _validate_adaptive_sequence_input,
     _validate_grouped_row_preservation,
+    sequence_is_batch_first,
 )
 from emperor.config import ConfigBase
 
@@ -392,8 +393,8 @@ class TransformerValidator(ValidatorBase):
         attention_model = model.self_attention_model
         batch_first = getattr(attention_model, "batch_first_flag", None)
         if batch_first is None:
-            batch_first = hidden.dim() == 3 and hidden.size(1) != getattr(
-                attention_model, "batch_size", None
+            batch_first = sequence_is_batch_first(
+                hidden, None, getattr(attention_model, "batch_size", None)
             )
         order = "BATCH_FIRST" if batch_first else "SEQUENCE_FIRST"
         sequence_length = hidden.size(0)
@@ -454,8 +455,8 @@ class TransformerValidator(ValidatorBase):
 
         batch_first = getattr(attention_model, "batch_first_flag", None)
         if batch_first is None:
-            batch_first = hidden.dim() == 3 and hidden.size(1) != getattr(
-                attention_model, "batch_size", None
+            batch_first = sequence_is_batch_first(
+                hidden, None, getattr(attention_model, "batch_size", None)
             )
         length = hidden.size(0)
         if hidden.dim() == 3 and batch_first:
@@ -572,7 +573,9 @@ class TransformerValidator(ValidatorBase):
             batch_first_flag = getattr(attention_model, "batch_first_flag", None)
             if batch_first_flag is None:
                 configured_batch_size = getattr(attention_model, "batch_size", None)
-                batch_first_flag = hidden.size(1) != configured_batch_size
+                batch_first_flag = sequence_is_batch_first(
+                    hidden, None, configured_batch_size
+                )
             batch_axis = 0 if batch_first_flag else 1
             sequence_axis = 1 if batch_first_flag else 0
             expected_shape = (
