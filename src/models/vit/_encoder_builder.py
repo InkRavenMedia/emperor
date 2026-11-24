@@ -411,11 +411,13 @@ class VisionEncoderBuilder(
             if attention_config is not None:
                 attention_config.source_memory_flag = source_memory_flag
                 attention_config.source_memory_config = (
-                    _source_memory.build_source_memory_config(attention_options)
+                    _source_memory.build_source_memory_config(
+                        attention_options, attention_config.experts_config
+                    )
                 )
                 return attention_config
         source_memory_config = _source_memory.build_source_memory_config(
-            attention_options
+            attention_options, projection_model_config
         )
         return _transformer_stack.separate_self_attention(
             batch_size=self.batch_size,

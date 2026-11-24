@@ -100,7 +100,7 @@ class BertExpertLinearAdaptiveConfigBuilder(
         )
         projection_model_config = self._build_attention_projection_stack_config()
         source_memory_config = _source_memory.build_source_memory_config(
-            attention_options
+            attention_options, attention_experts_config
         )
         return mixture_attention_heads(
             batch_size=self.batch_size,
