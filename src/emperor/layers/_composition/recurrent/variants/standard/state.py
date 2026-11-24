@@ -10,14 +10,12 @@ from emperor.layers._state import LayerState, are_all_items_halted
 
 if TYPE_CHECKING:
     from emperor.halting import HaltingStateBase
-    from emperor.layers._composition.residual.base import ResidualState
 
 
 @dataclass(frozen=True, kw_only=True)
 class StandardRecurrentState(RecurrentState):
     hidden: Tensor
     loss: Tensor | None
-    residual_state: ResidualState | None = None
 
     @property
     def output_hidden(self) -> Tensor:
@@ -55,9 +53,6 @@ class StandardRecurrentState(RecurrentState):
             halting_state=halting_state,
             all_items_halted=all_items_halted,
         )
-
-    def with_forked_residual_state(self, residual_state: ResidualState | None) -> Self:
-        return replace(self, residual_state=residual_state)
 
     def detach(self) -> Self:
         return replace(

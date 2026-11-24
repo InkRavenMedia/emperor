@@ -9,11 +9,10 @@ from emperor.layers._pipeline.delegates.validation import LayerResidualDelegateV
 from emperor.nn import Module
 
 if TYPE_CHECKING:
-    from emperor.layers._composition.recurrent.state import RecurrentState
-    from emperor.layers._composition.recurrent.variants.standard.state import (
-        StandardRecurrentState,
+    from emperor.layers._composition.residual.base import (
+        ResidualConnectionAbstract,
+        ResidualState,
     )
-    from emperor.layers._composition.residual.base import ResidualConnectionAbstract
     from emperor.layers._config import LayerConfig
     from emperor.layers._pipeline.delegates.residual_schedule import (
         RecurrentResidualSchedule,
@@ -63,14 +62,14 @@ class LayerResidualDelegate(Module):
         self,
         state: LayerState,
         previous: Tensor,
-        recurrent_state: RecurrentState,
+        residual_state: ResidualState | None,
         *,
+        transition_index: int,
         schedule: RecurrentResidualSchedule | None,
     ) -> LayerState:
         connection = self.connection
         if connection is None:
             return state
-        residual_state = getattr(recurrent_state, "residual_state", None)
         if schedule is None:
             state.hidden = connection(
                 state.hidden, previous, residual_state=residual_state
@@ -78,7 +77,7 @@ class LayerResidualDelegate(Module):
         else:
             state.hidden = schedule.apply(
                 connection,
-                recurrent_state.transition_index,
+                transition_index,
                 state.hidden,
                 previous,
                 residual_state=residual_state,
@@ -89,12 +88,12 @@ class LayerResidualDelegate(Module):
         self,
         current: Tensor,
         previous: Tensor,
-        target_state: StandardRecurrentState,
+        residual_state: ResidualState | None,
         *,
         transition_index: int,
         schedule: RecurrentResidualSchedule | None,
     ) -> None:
-        if target_state.residual_state is None:
+        if residual_state is None:
             return
         connection, schedule = self.VALIDATOR.validate_forward_local_residual_runtime(
             self.connection, schedule
@@ -105,5 +104,5 @@ class LayerResidualDelegate(Module):
                 transition_index,
                 current.detach(),
                 previous.detach(),
-                residual_state=target_state.residual_state,
+                residual_state=residual_state,
             )

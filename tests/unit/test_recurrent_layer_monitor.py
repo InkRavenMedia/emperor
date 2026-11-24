@@ -666,7 +666,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         callback.on_fit_end(TrainerStub(), module)
         self.assertIsNone(recurrent.step.diagnostic_observer)
 
-    def test_tiny_recursive_model_reports_shared_recurrent_gate_metrics(self):
+    def test_tiny_recursive_model_reports_gate_metrics_once_per_answer(self):
         recurrent = self.tiny_recursive_model(with_gate=True)
         module = CaptureLightningModule(recurrent=recurrent)
         callback = RecurrentLayerMonitorCallback(log_every_n_steps=1)
@@ -675,7 +675,7 @@ class TestRecurrentLayerMonitorCallback(unittest.TestCase):
         recurrent(self.state())
 
         observation = callback._observations[id(recurrent)]
-        self.assertEqual(len(observation.gate_values), 6)
+        self.assertEqual(len(observation.gate_values), recurrent.answer_update_count)
         self.assertIn("recurrent/recurrent/gate/open_mean", module.logged_tags)
         callback.on_fit_end(TrainerStub(), module)
         self.assertEqual(callback._observed_recurrent_layers, [])

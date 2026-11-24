@@ -96,9 +96,3 @@ class StandardRecurrentStep(RecurrentStep[StandardRecurrentState]):
             observe_transition,
         )
         return recurrent_state.next_state_from_output(output_state, halting_update)
-
-    def fork(self, recurrent_state: StandardRecurrentState) -> StandardRecurrentState:
-        forked_residual_state = self.pipeline.fork_recurrent_residual_state(
-            recurrent_state.residual_state
-        )
-        return recurrent_state.with_forked_residual_state(forked_residual_state)

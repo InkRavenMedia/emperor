@@ -99,25 +99,26 @@ class RecurrentCompositionConfig(ConfigBase):
         "handoff."
     )
     recurrent_layer_norm_position: LayerNormPositionOptions | None = optional_field(
-        "Required position for normalization within each recurrent transition. "
-        "Choose a LayerNormPositionOptions value explicitly; use DISABLED to disable."
+        "Normalization position in the outer recurrent pipeline. TRM runs this "
+        "pipeline on answer updates and HRM runs it on high-state updates. "
+        "Choose a LayerNormPositionOptions value or DISABLED."
     )
     gate_config: GateConfig | None = optional_field(
         "Optional recurrent gate config. Set to None to disable."
     )
     residual_config: ResidualConfig | None = optional_field(
-        "Optional residual connection config applied between recurrent transitions. "
+        "Optional residual connection applied by the outer recurrent pipeline. "
         "Set to None to disable recurrent residuals."
     )
     halting_config: HaltingConfig | None = optional_field(
         "Optional recurrent adaptive computation module. Set to None to disable."
     )
     memory_config: DynamicMemoryConfig | None = optional_field(
-        "Optional dynamic memory module applied around recurrent transition blocks. "
+        "Optional dynamic memory module applied by the outer recurrent pipeline. "
         "Set to None to disable memory."
     )
     recurrent_normalization: NormalizationOptions | None = optional_field(
-        "Required feature normalization used between recurrent transitions. "
+        "Required feature normalization used by the outer recurrent pipeline. "
         "Choose a NormalizationOptions value explicitly, including when "
         "recurrent_layer_norm_position is DISABLED."
     )

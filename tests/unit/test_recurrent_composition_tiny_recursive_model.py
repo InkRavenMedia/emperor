@@ -336,7 +336,7 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
                 with self.assertRaisesRegex(exception, message):
                     config.build()
 
-    def test_attention_rejection_precedes_halting_validation_and_preserves_rng(
+    def test_invalid_halting_with_answer_attention_is_rejected_before_initialization(
         self,
     ) -> None:
         config = _config()
@@ -347,8 +347,8 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
         rng_state = torch.random.get_rng_state().clone()
 
         with self.assertRaisesRegex(
-            ValueError,
-            "AttentionResidualConfig is not supported.*forward-local residual state",
+            TypeError,
+            "instance of HaltingConfig",
         ):
             config.build()
 
@@ -365,12 +365,6 @@ class TestTinyRecursiveModelRecurrentConfig(unittest.TestCase):
             ),
             ("gate_config", object(), TypeError, "instance of GateConfig"),
             ("residual_config", object(), TypeError, "instance of ResidualConfig"),
-            (
-                "residual_config",
-                AttentionResidualConfig(block_size=1, rms_norm_epsilon=1e-6),
-                ValueError,
-                "AttentionResidualConfig is not supported",
-            ),
             ("halting_config", object(), TypeError, "instance of HaltingConfig"),
             ("memory_config", object(), TypeError, "instance of DynamicMemoryConfig"),
         )
@@ -864,7 +858,9 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         ):
             torch.testing.assert_close(actual, torch.full_like(actual, expected))
 
-    def test_residual_uses_the_previous_target_state_for_each_transition(self) -> None:
+    def test_additive_residual_uses_the_previous_answer_on_the_answer_update(
+        self,
+    ) -> None:
         config = _config(
             latent_updates_per_answer_update=1,
             answer_update_count=1,
@@ -884,11 +880,11 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         )
         torch.testing.assert_close(
             runtime.block_model.inputs[1],
-            torch.tensor([[12.0]]),
+            torch.tensor([[9.0]]),
         )
-        torch.testing.assert_close(result.hidden, torch.tensor([[15.0]]))
+        torch.testing.assert_close(result.hidden, torch.tensor([[12.0]]))
 
-    def test_before_normalization_and_memory_wrap_each_transition_input(self) -> None:
+    def test_before_normalization_and_memory_wrap_only_the_answer_input(self) -> None:
         runtime = _config(
             latent_updates_per_answer_update=1,
             answer_update_count=1,
@@ -908,17 +904,15 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         result = runtime(LayerState(hidden=torch.ones(1, 1)))
 
         self.assertEqual(len(runtime.block_model.inputs), 2)
+        torch.testing.assert_close(runtime.block_model.inputs[0], torch.tensor([[6.0]]))
         torch.testing.assert_close(
-            runtime.block_model.inputs[0], torch.tensor([[36.0]])
+            runtime.block_model.inputs[1], torch.tensor([[39.0]])
         )
-        torch.testing.assert_close(
-            runtime.block_model.inputs[1], torch.tensor([[69.0]])
-        )
-        torch.testing.assert_close(normalization.inputs[0], torch.tensor([[6.0]]))
-        torch.testing.assert_close(normalization.inputs[1], torch.tensor([[39.0]]))
-        torch.testing.assert_close(memory.inputs[0], torch.tensor([[16.0]]))
-        torch.testing.assert_close(memory.inputs[1], torch.tensor([[49.0]]))
-        torch.testing.assert_close(result.hidden, torch.tensor([[70.0]]))
+        self.assertEqual(len(normalization.inputs), 1)
+        self.assertEqual(len(memory.inputs), 1)
+        torch.testing.assert_close(normalization.inputs[0], torch.tensor([[9.0]]))
+        torch.testing.assert_close(memory.inputs[0], torch.tensor([[19.0]]))
+        torch.testing.assert_close(result.hidden, torch.tensor([[40.0]]))
 
     def test_halting_observes_answers_and_stops_after_a_complete_cycle(self) -> None:
         config = _config(
@@ -1032,7 +1026,7 @@ class TestTinyRecursiveModelRecurrentRuntime(unittest.TestCase):
         result = runtime(LayerState(hidden=fixed_input))
         result.hidden.sum().backward()
 
-        self.assertEqual(normalization.grad_modes, [False, False, True, True])
+        self.assertEqual(normalization.grad_modes, [False, True])
         self.assertIsNotNone(normalization.offset.grad)
         self.assertIsNotNone(runtime.block_model.scale.grad)
         self.assertIsNotNone(fixed_input.grad)
