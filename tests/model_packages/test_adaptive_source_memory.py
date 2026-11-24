@@ -13,6 +13,7 @@ from emperor.augmentations.adaptive_parameters import (
 from emperor.layers import LayerConfig, LayerStackConfig
 from models._projection_model import (
     ProjectionModelOptions,
+    declare_projection_model_defaults,
     resolve_projection_model,
 )
 from models.catalog import discover_model_packages, model_package
@@ -196,6 +197,19 @@ def test_mixer_accepts_one_token_per_adaptive_source_memory_chunk(variant):
     assert isinstance(memory.model.cfg, AdaptiveLinearLayerConfig)
     result = run_model(model, name, inputs_for(name))[0]
     assert torch.isfinite(result).all()
+
+
+def test_python_model_selector_survives_package_default_declaration():
+    namespace = {
+        "ATTN_SOURCE_MEMORY_MODEL_CONFIG": None,
+        "ATTN_SOURCE_MEMORY_MODEL_OPTION": ProjectionModelOptions.ADAPTIVE_LINEAR,
+        "__annotations__": {},
+    }
+    declare_projection_model_defaults(namespace)
+    assert (
+        namespace["ATTN_SOURCE_MEMORY_MODEL_OPTION"]
+        is ProjectionModelOptions.ADAPTIVE_LINEAR
+    )
 
 
 def test_plain_vit_can_use_bias_free_adaptive_memory():

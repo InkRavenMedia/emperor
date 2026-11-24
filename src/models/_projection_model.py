@@ -53,8 +53,8 @@ def declare_projection_model_defaults(namespace: dict[str, Any]) -> None:
             ("RECURRENT_MAX_STEPS", int | None),
         ):
             key = f"{prefix}_{suffix}"
-            namespace[key] = None
-            annotations[key] = annotation
+            namespace.setdefault(key, None)
+            annotations.setdefault(key, annotation)
             aliases[key] = owner
 
 
