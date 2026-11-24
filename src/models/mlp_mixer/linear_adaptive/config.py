@@ -45,6 +45,7 @@ from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,  # noqa: F401
     WeightInformedScoreAxisMaskConfig,  # noqa: F401
+    WeightNormalizationConfig,  # noqa: F401
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )
@@ -1883,6 +1884,18 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
     | TextSinusoidalPositionalEmbeddingConfig
     | None,
     _optional_sequence_expansion,
+] = None
+
+_token_mixer_source_memory = Section(("Token Mixer Source Memory Options",))
+# Optional chunk-compressed source memory (None retains per-token memory).
+TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: Annotated[
+    int | None, _token_mixer_source_memory
+] = None
+TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD: Annotated[
+    type[GroupingConfig], _token_mixer_source_memory
+] = SumGroupingConfig
+TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _token_mixer_source_memory
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
