@@ -5,6 +5,8 @@ from dataclasses import dataclass, replace
 from typing import Final
 
 from emperor.layers import LastLayerBiasOptions
+from models._recurrent_variants import variant_updates
+from models._runtime_binding import bind_runtime_options
 from models.linears.linear_adaptive import SETTINGS_VALIDATION
 from models.linears.linear_adaptive._residual import (
     ResidualStackOptions,
@@ -40,6 +42,8 @@ from models.linears.linear_adaptive.runtime_options import (
     RuntimeOptions,
     StackOptions,
 )
+
+from . import config
 
 
 def _stack(values: StackValues) -> StackOptions:
@@ -437,6 +441,7 @@ def _runtime(values: RuntimeDefaultValues) -> RuntimeOptions:
     )
 
 
+@bind_runtime_options(config, variant_updates)
 def runtime_from_flat(
     overrides: Mapping[str, object] | None = None,
 ) -> RuntimeOptions:

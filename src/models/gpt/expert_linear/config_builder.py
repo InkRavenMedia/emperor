@@ -151,7 +151,7 @@ class GptExpertLinearConfigBuilder(_attention_settings.RuntimeBuilder[RuntimeOpt
             core_config_dependencies
         ).build_decoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            decoder_config,
+            self.runtime.configure_stack(decoder_config),
             self.sequence_length,
         )
 

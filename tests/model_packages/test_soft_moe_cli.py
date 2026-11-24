@@ -35,9 +35,9 @@ from tests.model_packages.test_memory_expert_parity import (
 )
 
 
-def cli_values(package, arguments):
+def cli_values(package, arguments, *, preset="baseline"):
     parsed = get_experiment_parser(package).parse_args(
-        ["--preset", "baseline", "--config", *arguments]
+        ["--preset", preset, "--config", *arguments]
     )
     selection = resolve_cli_selection(
         parsed, package, package.preset_type, build_monitor_callbacks=False

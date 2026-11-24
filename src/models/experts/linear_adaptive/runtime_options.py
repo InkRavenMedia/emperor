@@ -33,6 +33,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models._recurrent_variants import RecurrentResidualOptions
 from models._stack_options import resolve_expert_controller, resolve_expert_options
 from models.experts.linear_adaptive import SETTINGS_VALIDATION, _generation
 from models.experts.linear_adaptive._generation import (
@@ -488,7 +489,7 @@ class AdaptiveBoundaryModelOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions:
+class RuntimeOptions(RecurrentResidualOptions):
     grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
     router_grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
     batch_size: int

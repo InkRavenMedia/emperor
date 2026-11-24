@@ -128,7 +128,7 @@ class BertLinearConfigBuilder(_attention_settings.RuntimeBuilder[RuntimeOptions]
         core_config_factory = CoreConfigFactory(core_config_dependencies)
         encoder_config = core_config_factory.build_encoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            encoder_config, self.sequence_length
+            self.runtime.configure_stack(encoder_config), self.sequence_length
         )
 
     def __core_config_dependencies(self) -> CoreConfigDependencies:

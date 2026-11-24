@@ -9,6 +9,7 @@ from emperor.layers import (
 )
 from emperor.parametric import MatrixBiasMixtureConfig
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models._recurrent_variants import ParametricRecurrentOptions
 from models.parametric.parametric_matrix import SETTINGS_VALIDATION
 
 from . import config
@@ -238,7 +239,7 @@ class ParametricMatrixConstructionOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(ResolvedRuntimeOptions):
+class RuntimeOptions(ResolvedRuntimeOptions, ParametricRecurrentOptions):
     def construction_options(self) -> ParametricMatrixConstructionOptions:
         inputs = replace(_DEFAULT_CONSTRUCTION_INPUTS, **self._values)
         return ParametricMatrixConstructionOptions.from_inputs(inputs)

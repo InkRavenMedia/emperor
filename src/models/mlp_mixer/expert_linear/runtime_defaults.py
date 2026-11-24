@@ -7,7 +7,7 @@ from typing import Final
 import models.mlp_mixer.expert_linear.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_values
 from models._recurrent_compression import (
-    bind_compression_options,
+    bind_sequence_options,
     compression_from_config,
 )
 from models.mlp_mixer.expert_linear.runtime_options import RuntimeOptions
@@ -45,7 +45,7 @@ def runtime_from_config(config_module: ModuleType = config) -> RuntimeOptions:
     )
 
 
-@bind_compression_options(config)
+@bind_sequence_options(config)
 def runtime_from_flat(
     flat_kwargs: dict | None = None,
     config_module: ModuleType = config,

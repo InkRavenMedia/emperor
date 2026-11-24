@@ -13,7 +13,7 @@ from emperor.layers import (
     LayerStackConfig,
     LayerState,
     NormalizationOptions,
-    RecurrentLayerConfig,
+    RecurrentCompositionConfig,
 )
 from emperor.patch import PatchConfig
 from emperor.transformer import TransformerEncoderLayerState
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 class _MixerStages(Protocol):
     patch_config: Final[PatchConfig | None]
-    encoder_config: Final[LayerStackConfig | RecurrentLayerConfig | None]
+    encoder_config: Final[LayerStackConfig | RecurrentCompositionConfig | None]
     output_config: Final[LayerConfig | None]
     encoder_output_normalization: Final[NormalizationOptions]
 

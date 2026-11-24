@@ -78,7 +78,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
-from models import _component_defaults
+from models import _component_defaults, _recurrent_variants
 
 # Package-local defaults keep each model package independently loadable.
 _trainer = Section(("Trainer",))
@@ -1602,3 +1602,7 @@ OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: Annotated[
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.RecurrentResidualOptions
+)

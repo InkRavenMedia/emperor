@@ -4,14 +4,14 @@ from collections.abc import Mapping
 from typing import Final
 
 from model_runtime.packages.runtime_values import validate_runtime_default_values
-from models._recurrent_compression import bind_compression_options
+from models._recurrent_compression import bind_sequence_options
 
 from . import config
 from ._builder_adapter import expert_linear_builder_kwargs_from_flat
 from .runtime_options import RuntimeOptions
 
 
-@bind_compression_options(config)
+@bind_sequence_options(config)
 def runtime_from_flat(values: Mapping[str, object] | None = None) -> RuntimeOptions:
     return RuntimeOptions(
         expert_linear_builder_kwargs_from_flat(

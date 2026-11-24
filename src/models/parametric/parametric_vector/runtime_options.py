@@ -15,6 +15,7 @@ from model_runtime.packages.runtime_values import (
     ResolvedRuntimeOptions,
     validate_runtime_default_value_types,
 )
+from models._recurrent_variants import ParametricRecurrentOptions
 
 from . import config
 
@@ -87,7 +88,7 @@ class ParametricRouterOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(ResolvedRuntimeOptions):
+class RuntimeOptions(ResolvedRuntimeOptions, ParametricRecurrentOptions):
     """Validated flat values with one deep package-construction projection."""
 
     def __post_init__(self) -> None:

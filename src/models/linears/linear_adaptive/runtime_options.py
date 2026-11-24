@@ -31,6 +31,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models._recurrent_variants import RecurrentResidualOptions
 from models.linears.linear_adaptive import SETTINGS_VALIDATION
 from models.linears.linear_adaptive._residual import ResidualStackOptions
 
@@ -315,7 +316,7 @@ class AdaptiveProjectionOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions:
+class RuntimeOptions(RecurrentResidualOptions):
     grouping_config: GroupingConfig | None = field(default=None, kw_only=True)
     generation: AdaptiveGenerationOptions = field(
         default_factory=AdaptiveGenerationOptions, kw_only=True

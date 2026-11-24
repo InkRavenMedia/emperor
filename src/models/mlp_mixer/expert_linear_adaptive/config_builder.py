@@ -42,7 +42,8 @@ class MlpMixerExpertLinearAdaptiveConfigBuilder:
             encoder_stack_config = encoder_config(runtime, self.sequence_length)
             expanded_encoder_config = (
                 _sequence_expansion.with_expansion_attention_capacity(
-                    encoder_stack_config, self.sequence_length
+                    self.runtime.configure_stack(encoder_stack_config),
+                    self.sequence_length,
                 )
             )
             output_layer_config = output_config(runtime)

@@ -36,6 +36,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
+from models import _recurrent_variants
 
 # Package-local trainer defaults. Model packages intentionally do not import the
 # repository-level trainer configuration so they remain independently loadable.
@@ -754,3 +755,7 @@ ROUTER_STACK_LAST_LAYER_BIAS_OPTION: Annotated[LastLayerBiasOptions, _router_sta
 )
 ROUTER_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[bool, _router_stack] = False
 ROUTER_BIAS_FLAG: Annotated[bool, _router_stack] = STACK_BIAS_FLAG
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.RecurrentResidualOptions
+)

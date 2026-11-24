@@ -15,6 +15,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
+from models import _recurrent_variants
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "cpu"
@@ -910,3 +911,7 @@ CLUSTER_HALTING_STACK_APPLY_OUTPUT_POSTPROCESSING_FLAG: Annotated[
     bool, _cluster_halting
 ] = False
 CLUSTER_HALTING_STACK_BIAS_FLAG: Annotated[bool, _cluster_halting] = True
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.RecurrentResidualOptions
+)

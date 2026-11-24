@@ -37,7 +37,7 @@ class NeuronConfigBuilder:
         )
         hidden_model_config = hidden_factory.build_hidden_model_config()
         neuron_cluster_config = neuron_control_factory.build(
-            hidden_model_config,
+            self.runtime.configure_stack(hidden_model_config),
             hidden_runtime.hidden_dim,
         )
 

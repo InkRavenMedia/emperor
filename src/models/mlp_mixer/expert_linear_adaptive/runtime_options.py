@@ -42,13 +42,15 @@ from emperor.memory import (
 )
 from models import _learned_grouping, _projection_model, _sequence_expansion
 from models._image_patches import ImagePatchEmbedding
-from models._recurrent_compression import CompressionOptions
+from models._recurrent_compression import SequenceRecurrentOptions
 from models.mlp_mixer._settings import ImageReadout
 from models.mlp_mixer.expert_linear_adaptive import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(_sequence_expansion.SequenceExpansionOptions, CompressionOptions):
+class RuntimeOptions(
+    _sequence_expansion.SequenceExpansionOptions, SequenceRecurrentOptions
+):
     residual_coefficient_activation: ActivationOptions = field(
         default=ActivationOptions.SIGMOID, kw_only=True
     )

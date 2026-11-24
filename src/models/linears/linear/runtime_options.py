@@ -16,6 +16,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models._recurrent_variants import RecurrentResidualOptions
 from models.linears.linear import SETTINGS_VALIDATION
 from models.linears.linear._residual import ResidualStackOptions
 
@@ -151,7 +152,7 @@ class RecurrenceOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class LinearBuildSettings:
+class LinearBuildSettings(RecurrentResidualOptions):
     batch_size: int
     learning_rate: float
     input_dim: int
