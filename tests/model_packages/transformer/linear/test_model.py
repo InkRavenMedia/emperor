@@ -27,6 +27,7 @@ from models.transformer.linear.presets import (
     Experiment,
     ExperimentPreset,
 )
+from tests.model_packages.test_soft_moe_cli import cli_values
 from tests.model_packages.training_test_utils import (
     RandomTranslationDataModule,
     tiny_cpu_trainer,
@@ -43,6 +44,50 @@ def _build_config(**runtime_defaults):
 
 
 class TestTransformerLinearModel(unittest.TestCase):
+    def test_answer_cycle_pipeline_cli_and_checkpoint(self):
+        self._check_recurrent_pipeline_cli_and_checkpoint(
+            TinyRecursiveModelRecurrentConfig
+        )
+
+    def test_high_cycle_pipeline_cli_and_checkpoint(self):
+        self._check_recurrent_pipeline_cli_and_checkpoint(
+            HierarchicalReasoningModelRecurrentConfig
+        )
+
+    def _check_recurrent_pipeline_cli_and_checkpoint(self, composition):
+        torch.manual_seed(31)
+        package = model_package("transformer/linear")
+        controls = cli_values(
+            package,
+            [
+                "--recurrent-flag",
+                "true",
+                "--recurrent-composition-option",
+                composition.__name__,
+                "--recurrent-residual-connection-option",
+                "AttentionResidualConfig",
+                "--recurrent-residual-block-size",
+                "1",
+                "--recurrent-residual-rms-norm-epsilon",
+                "0.000001",
+                "--recurrent-compression-slots",
+                "2",
+            ],
+        )
+        cfg = package.build_configuration(config_overrides=self._overrides(**controls))
+        model = package.build_model(cfg).eval()
+        source, target = self._ids()
+        logits, auxiliary = model(source, target)
+        (logits.square().mean() + auxiliary).backward()
+        query = model.decoder.pipeline.residual_schedule.subsequent_connections[0].query
+        self.assertTrue(query.grad is not None and query.grad.abs().sum() > 0)
+        modified = target.clone()
+        modified[:, -1] = 9
+        torch.testing.assert_close(model(source, modified)[0][:, :-1], logits[:, :-1])
+        restored = package.build_model(cfg).eval()
+        restored.load_state_dict(model.state_dict(), strict=True)
+        torch.testing.assert_close(restored(source, target)[0], logits)
+
     def _overrides(self, **overrides):
         return {
             "batch_size": 2,
