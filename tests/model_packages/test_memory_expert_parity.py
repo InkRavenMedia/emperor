@@ -312,18 +312,15 @@ def test_memory_and_expert_options_are_exposed_in_public_configuration(name):
             "NUM_MEMORY_SLOTS",
             "TEST_TIME_TRAINING_LEARNING_RATE",
             "TEST_TIME_TRAINING_NUM_INNER_STEPS",
+            "CHUNK_SIZE",
+            "GROUPING_METHOD",
+            "MODEL_CONFIG",
+            "MODEL_OPTION",
+            "MODEL_BIAS_FLAG",
+            "MODEL_STACK_NUM_LAYERS",
+            "MODEL_STACK_HIDDEN_DIM",
+            "MODEL_RECURRENT_MAX_STEPS",
         )
-        if name == "mlp_mixer/expert_linear_adaptive":
-            suffixes += (
-                "CHUNK_SIZE",
-                "GROUPING_METHOD",
-                "MODEL_CONFIG",
-                "MODEL_OPTION",
-                "MODEL_BIAS_FLAG",
-                "MODEL_STACK_NUM_LAYERS",
-                "MODEL_STACK_HIDDEN_DIM",
-                "MODEL_RECURRENT_MAX_STEPS",
-            )
     else:
         suffixes += tuple(
             field.removeprefix("source_memory_").upper()

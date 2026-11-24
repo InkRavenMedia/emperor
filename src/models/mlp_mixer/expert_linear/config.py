@@ -4,7 +4,18 @@ from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     AdditiveDynamicBiasConfig,
+    AttentionGroupingConfig,  # noqa: F401
+    BroadcastSumDynamicWeightConfig,  # noqa: F401
+    GeneratorDynamicBiasConfig,  # noqa: F401
+    GroupingConfig,  # noqa: F401
+    MeanGroupingConfig,  # noqa: F401
+    MeanStdGroupingConfig,  # noqa: F401
+    RMSGroupingConfig,  # noqa: F401
+    SumGroupingConfig,  # noqa: F401
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,  # noqa: F401
+    WeightNormalizationOptions,  # noqa: F401
+    WeightNormalizationPositionOptions,  # noqa: F401
 )
 from emperor.config import ConfigBase  # noqa: F401
 from emperor.embedding.absolute import (  # noqa: F401
@@ -1447,6 +1458,18 @@ SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
     | TextSinusoidalPositionalEmbeddingConfig
     | None,
     _optional_sequence_expansion,
+] = None
+
+_token_mixer_source_memory = Section(("Token Mixer Source Memory Options",))
+# Optional chunk-compressed source memory (None retains per-token memory).
+TOKEN_MIXER_SOURCE_MEMORY_CHUNK_SIZE: Annotated[
+    int | None, _token_mixer_source_memory
+] = None
+TOKEN_MIXER_SOURCE_MEMORY_GROUPING_METHOD: Annotated[
+    type[GroupingConfig], _token_mixer_source_memory
+] = SumGroupingConfig
+TOKEN_MIXER_SOURCE_MEMORY_MODEL_CONFIG: Annotated[
+    ConfigBase | None, _token_mixer_source_memory
 ] = None
 
 _component_defaults.declare_component_defaults(globals())
