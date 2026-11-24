@@ -134,7 +134,7 @@ class BertBackendConfigBuilder:
         boundary_config = self._build_boundary_config()
         resolved_encoder_config = self._build_encoder_config()
         encoder_config = _sequence_expansion.with_expansion_attention_capacity(
-            resolved_encoder_config, self.sequence_length
+            self.runtime.configure_stack(resolved_encoder_config), self.sequence_length
         )
         masked_word_decoder_config = self._build_masked_word_decoder()
         encoder_output_normalization = config.ENCODER_OUTPUT_NORMALIZATION

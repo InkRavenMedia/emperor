@@ -18,6 +18,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
+from models import _recurrent_variants
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "auto"
@@ -157,3 +158,10 @@ GENERATOR_STACK_ACTIVATION: Annotated[ActivationOptions, _generator_expert_stack
 GENERATOR_STACK_DROPOUT_PROBABILITY: Annotated[float, _generator_expert_stack] = 0.0
 
 # Hyperparameter search space
+
+_recurrent_layer = Section(("Recurrent Layer Options",))
+RECURRENT_FLAG: Annotated[bool, _recurrent_layer] = False
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.ParametricRecurrentOptions
+)

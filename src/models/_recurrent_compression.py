@@ -1,23 +1,40 @@
 """Package controls for the recurrent sequence stacks that own token positions."""
 
-import inspect
-from collections.abc import Callable
 from dataclasses import dataclass, replace
 from enum import Enum
-from functools import cache, wraps
+from functools import cache
 from types import ModuleType
-from typing import ParamSpec, TypeVar
+from typing import Any, cast
 
 from emperor.augmentations import adaptive_parameters
 from emperor.config import ConfigBase
-from emperor.layers import RecurrentCompositionConfig, RecurrentCompressionConfig
+from emperor.layers import (
+    RecurrentCompositionConfig,
+    RecurrentCompressionConfig,
+)
 from emperor.linears import LinearLayerConfig
-from model_runtime.packages.runtime_values import runtime_default_mapping
+from models._recurrent_variants import (
+    RecurrentResidualOptions,
+    RecurrentVariantOptions,
+    declare_variant_options,
+    variant_updates,
+)
+from models._runtime_binding import bind_runtime_options
 
 
 @dataclass(frozen=True, kw_only=True)
 class CompressionOptions:
     recurrent_compression_config: RecurrentCompressionConfig | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
+class SequenceRecurrentOptions(CompressionOptions, RecurrentVariantOptions):
+    pass
+
+
+@dataclass(frozen=True, kw_only=True)
+class SequenceResidualOptions(CompressionOptions, RecurrentResidualOptions):
+    pass
 
 
 @cache
@@ -39,7 +56,7 @@ def _scorer_types() -> dict[str, type]:
     } | {"LinearLayerConfig": LinearLayerConfig}
 
 
-def declare_compression_options(namespace: dict) -> None:
+def declare_compression_options(namespace: dict[str, Any]) -> None:
     fields = {
         "RECURRENT_COMPRESSION_CONFIG": RecurrentCompressionConfig,
         "RECURRENT_COMPRESSION_SLOTS": int,
@@ -55,11 +72,21 @@ def declare_compression_options(namespace: dict) -> None:
         object_types[key] = _scorer_types()
 
 
+def declare_sequence_options(
+    namespace: dict[str, Any], *, include_residual: bool = False
+) -> None:
+    options = RecurrentResidualOptions if include_residual else RecurrentVariantOptions
+    declare_variant_options(namespace, options)
+    declare_compression_options(namespace)
+
+
 def compression_from_config(source: ModuleType) -> RecurrentCompressionConfig | None:
     return _compression_from_values({}, source, None)
 
 
-def _compression_from_values(values, source, base) -> RecurrentCompressionConfig | None:
+def _compression_from_values(
+    values: dict[str, Any], source: ModuleType, base: CompressionOptions | None
+) -> RecurrentCompressionConfig | None:
     compression = values.pop(
         "recurrent_compression_config",
         getattr(base, "recurrent_compression_config", None)
@@ -90,7 +117,7 @@ def _compression_from_values(values, source, base) -> RecurrentCompressionConfig
         if type(compression.max_slots) is not int or compression.max_slots <= 0:
             raise ValueError("recurrent_compression_slots must be a positive integer.")
         if compression.scorer_config is not None and not isinstance(
-            compression.scorer_config, LinearLayerConfig
+            cast(object, compression.scorer_config), LinearLayerConfig
         ):
             raise TypeError(
                 "recurrent_compression_scorer_config requires a linear or adaptive linear configuration."
@@ -98,37 +125,34 @@ def _compression_from_values(values, source, base) -> RecurrentCompressionConfig
     return compression
 
 
-_Args = ParamSpec("_Args")
-_Runtime = TypeVar("_Runtime", bound=CompressionOptions)
+def _compression_updates(
+    values: dict[str, Any], source: ModuleType, base: CompressionOptions | None
+) -> dict[str, Any]:
+    return {
+        "recurrent_compression_config": _compression_from_values(values, source, base)
+    }
 
 
-def bind_compression_options(
-    config: ModuleType,
-) -> Callable[[Callable[_Args, _Runtime]], Callable[_Args, _Runtime]]:
-    """Wrap each package's runtime binder, preserving its public call signature."""
+def bind_compression_options(config: ModuleType):
+    return bind_runtime_options(config, _compression_updates)
 
-    def decorate(bind: Callable[_Args, _Runtime]) -> Callable[_Args, _Runtime]:
-        signature = inspect.signature(bind)
-        values_parameter = next(iter(signature.parameters))
 
-        @wraps(bind)
-        def with_compression(*args: _Args.args, **kwargs: _Args.kwargs) -> _Runtime:
-            bound = signature.bind(*args, **kwargs)
-            source = bound.arguments.get("config_module", config)
-            base = bound.arguments.get("base")
-            values = runtime_default_mapping(
-                bound.arguments.get(values_parameter), package=config.__package__
-            )
-            compression = _compression_from_values(values, source, base)
-            bound.arguments[values_parameter] = values
-            runtime = bind(*bound.args, **bound.kwargs)
-            if runtime.recurrent_compression_config is compression:
-                return runtime
-            return replace(runtime, recurrent_compression_config=compression)
+def _sequence_updates(
+    values: dict[str, Any],
+    source: ModuleType,
+    base: SequenceRecurrentOptions | SequenceResidualOptions | None,
+) -> dict[str, Any]:
+    return variant_updates(values, source, base) | _compression_updates(
+        values, source, base
+    )
 
-        return with_compression
 
-    return decorate
+def sequence_options_from_config(source: ModuleType) -> dict[str, Any]:
+    return _sequence_updates({}, source, None)
+
+
+def bind_sequence_options(config: ModuleType):
+    return bind_runtime_options(config, _sequence_updates)
 
 
 def configure_sequence_stacks(

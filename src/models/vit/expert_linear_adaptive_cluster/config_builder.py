@@ -283,7 +283,7 @@ class _VitExpertLinearAdaptiveClusterConfigBuilderImplementation:
         core_config_factory = CoreConfigFactory(core_config_dependencies)
         encoder_config = core_config_factory.build_encoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            encoder_config,
+            self.runtime.configure_stack(encoder_config),
             self.sequence_length,
             passes=self.cluster_options.max_visits,
         )

@@ -15,6 +15,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
+from models import _recurrent_variants
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "cpu"
@@ -1748,3 +1749,7 @@ OUTPUT_LAYER_GROUPING_RMS_NORM_EPSILON: Annotated[
 from models import _component_defaults
 
 _component_defaults.declare_component_defaults(globals())
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.RecurrentResidualOptions
+)

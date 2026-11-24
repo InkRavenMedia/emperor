@@ -41,7 +41,7 @@ from emperor.memory import (
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
 from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models._recurrent_compression import CompressionOptions
+from models._recurrent_compression import SequenceResidualOptions
 from models._stack_options import resolve_controller_options
 from models.bert.linear_adaptive import _generation
 from models.bert.linear_adaptive._generation import (
@@ -467,7 +467,7 @@ class _ConstructionOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(ResolvedRuntimeOptions, CompressionOptions):
+class RuntimeOptions(ResolvedRuntimeOptions, SequenceResidualOptions):
     def __post_init__(self) -> None:
         validation = _attention_settings.strict_float_validation(__package__)
         ResolvedRuntimeOptions.__post_init__(self)

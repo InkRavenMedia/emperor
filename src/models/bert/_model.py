@@ -9,13 +9,14 @@ from emperor.embedding.contextual import ByteContextualEmbeddingConfig
 from emperor.experiments.bert_pretraining import BertPretrainingExperiment
 from emperor.layers import (
     ActivationOptions,
+    HierarchicalReasoningModelRecurrentConfig,
     LayerConfig,
     LayerNormalizationDelegate,
     LayerNormPositionOptions,
     LayerStackConfig,
     LayerState,
     NormalizationOptions,
-    RecurrentLayerConfig,
+    RecurrentCompositionConfig,
 )
 from emperor.transformer import TransformerEncoderLayerState
 from models import _sequence_expansion
@@ -57,7 +58,7 @@ class _BoundarySettings(Protocol):
 class _ExperimentSettings(Protocol):
     boundary_config: Final[object]
     positional_embedding_config: Final[AbsolutePositionalEmbeddingConfig | None]
-    encoder_config: Final[LayerStackConfig | RecurrentLayerConfig | None]
+    encoder_config: Final[LayerStackConfig | RecurrentCompositionConfig | None]
     encoder_output_normalization: Final[NormalizationOptions]
 
 
@@ -169,7 +170,10 @@ class BertBackbone(BertPretrainingExperiment, Generic[_Experiment, _Boundary]):
 
     def _build_encoder_layer_norm(self) -> LayerNormalizationDelegate:
         encoder_config = self.experiment_config.encoder_config
-        stack_config = getattr(encoder_config, "block_config", encoder_config)
+        if isinstance(encoder_config, HierarchicalReasoningModelRecurrentConfig):
+            stack_config = encoder_config.high_block_config
+        else:
+            stack_config = getattr(encoder_config, "block_config", encoder_config)
         layer_config = stack_config.layer_config.layer_model_config
         layer_norm_position = LayerNormPositionOptions.DISABLED
         if layer_config.layer_norm_position == LayerNormPositionOptions.BEFORE:

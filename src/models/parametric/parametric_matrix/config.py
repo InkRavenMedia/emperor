@@ -18,6 +18,7 @@ from model_runtime.packages.runtime_values import (
     RuntimeValueConstraints,
     positive_runtime_fields,
 )
+from models import _recurrent_variants
 
 _trainer = Section(("Trainer",))
 TRAINER_ACCELERATOR: Annotated[str, _trainer] = "auto"
@@ -145,3 +146,10 @@ SAMPLER_ZERO_CENTRED_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
 SAMPLER_MUTUAL_INFORMATION_LOSS_WEIGHT: Annotated[float, _sampler_model] = 0.0
 
 # Hyperparameter search space
+
+_recurrent_layer = Section(("Recurrent Layer Options",))
+RECURRENT_FLAG: Annotated[bool, _recurrent_layer] = False
+
+_recurrent_variants.declare_variant_options(
+    globals(), _recurrent_variants.ParametricRecurrentOptions
+)

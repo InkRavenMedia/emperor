@@ -2885,4 +2885,4 @@ _component_defaults.declare_component_defaults(globals())
 # Whole-word reconstruction with the hierarchical byte decoder.
 HIERARCHICAL_MASKED_WORD_FLAG: Annotated[bool, _sequence_expansion] = False
 
-_recurrent_compression.declare_compression_options(globals())
+_recurrent_compression.declare_sequence_options(globals())

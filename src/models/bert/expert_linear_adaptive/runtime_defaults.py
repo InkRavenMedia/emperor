@@ -2,7 +2,7 @@
 
 from typing import Final
 
-from models._recurrent_compression import bind_compression_options
+from models._recurrent_compression import bind_sequence_options
 from models.bert.expert_linear_adaptive._option_resolution import (
     expert_linear_adaptive_builder_kwargs_from_flat as expert_linear_adaptive_builder_kwargs_from_flat,
 )
@@ -16,7 +16,7 @@ from models.bert.expert_linear_adaptive.runtime_options import RuntimeOptions
 
 from . import config
 
-runtime_from_flat = bind_compression_options(config)(runtime_from_flat)
+runtime_from_flat = bind_sequence_options(config)(runtime_from_flat)
 
 DEFAULT_RUNTIME: Final[RuntimeOptions] = runtime_from_flat()
 

@@ -52,7 +52,7 @@ class LinearConfigBuilder:
         output_model_config = projection_factory.build_output_model_config()
         experiment_config = ExperimentConfig(
             input_model_config=input_model_config,
-            model_config=hidden_model_config,
+            model_config=self.runtime.configure_stack(hidden_model_config),
             output_model_config=output_model_config,
         )
         return ModelConfig(

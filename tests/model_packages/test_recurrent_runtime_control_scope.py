@@ -52,6 +52,9 @@ RECURRENT_MODEL_PACKAGES = frozenset(
         "neuron/expert_linear_adaptive",
         "neuron/linear",
         "neuron/linear_adaptive",
+        "parametric/parametric_generator",
+        "parametric/parametric_matrix",
+        "parametric/parametric_vector",
         "transformer/expert_linear",
         "transformer/expert_linear_adaptive",
         "transformer/linear",
@@ -509,7 +512,14 @@ class TestRecurrentRuntimeControlScope(unittest.TestCase):
             "mlp_mixer/expert_linear_adaptive",
         }
 
-        self.assertEqual(recurrent_packages, RECURRENT_MODEL_PACKAGES)
+        self.assertEqual(
+            recurrent_packages,
+            {
+                key
+                for key in RECURRENT_MODEL_PACKAGES
+                if not key.startswith("parametric/")
+            },
+        )
         self.assertEqual(
             {
                 catalog_key

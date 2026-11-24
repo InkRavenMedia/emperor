@@ -6,6 +6,8 @@ from typing import Final
 
 from emperor.halting import HaltingConfig
 from emperor.layers import LastLayerBiasOptions
+from models._recurrent_variants import variant_updates
+from models._runtime_binding import bind_runtime_options
 from models.linears.linear._residual import ResidualStackOptions
 from models.linears.linear._runtime_default_values import (
     GATE_STACK_FIELDS,
@@ -30,7 +32,10 @@ from models.linears.linear.runtime_options import (
     MainStackOptions,
 )
 
+from . import config
 
+
+@bind_runtime_options(config, variant_updates)
 def build_settings_from_flat(
     overrides: Mapping[str, object] | None = None,
 ) -> LinearBuildSettings:
@@ -100,13 +105,14 @@ def _read_stacks(reader: RuntimeOverrideReader) -> _LayerStacks:
     )
 
 
-def _package_defaults() -> tuple[LinearBuildSettings, frozenset[str]]:
+def _accepted_keys() -> frozenset[str]:
     reader = RuntimeOverrideReader({})
-    settings = _read_build_settings(reader)
-    return settings, frozenset(reader.accepted)
+    _read_build_settings(reader)
+    return frozenset(reader.accepted)
 
 
-DEFAULT_BUILD_SETTINGS, _ACCEPTED_KEYS = _package_defaults()
+_ACCEPTED_KEYS = _accepted_keys()
+DEFAULT_BUILD_SETTINGS = build_settings_from_flat()
 
 runtime_from_flat = build_settings_from_flat
 DEFAULT_RUNTIME: Final = DEFAULT_BUILD_SETTINGS

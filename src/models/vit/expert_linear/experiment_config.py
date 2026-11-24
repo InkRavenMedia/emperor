@@ -2,7 +2,11 @@ from dataclasses import dataclass, field
 
 from emperor.config import ConfigBase, optional_field
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
-from emperor.layers import LayerStackConfig, NormalizationOptions, RecurrentLayerConfig
+from emperor.layers import (
+    LayerStackConfig,
+    NormalizationOptions,
+    RecurrentCompositionConfig,
+)
 from emperor.linears import LinearLayerConfig
 from emperor.patch import PatchConfig
 
@@ -18,8 +22,10 @@ class ExperimentConfig(ConfigBase):
     positional_embedding_config: AbsolutePositionalEmbeddingConfig | None = (
         optional_field("Config for image positional embeddings added to patches.")
     )
-    encoder_config: LayerStackConfig | RecurrentLayerConfig | None = optional_field(
-        "Config for the generic LayerStack transformer encoder block stack."
+    encoder_config: LayerStackConfig | RecurrentCompositionConfig | None = (
+        optional_field(
+            "Config for the generic LayerStack transformer encoder block stack."
+        )
     )
     output_config: LinearLayerConfig | None = optional_field(
         "Config for the [CLS] classification head."

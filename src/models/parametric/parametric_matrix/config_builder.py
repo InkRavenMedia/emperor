@@ -91,7 +91,7 @@ class ParametricMatrixConfigBuilder:
         )
         experiment_config = ExperimentConfig(
             input_model_config=input_model_config,
-            model_config=model_config,
+            model_config=self.runtime.configure_stack(model_config),
             output_model_config=output_model_config,
         )
         return ModelConfig(

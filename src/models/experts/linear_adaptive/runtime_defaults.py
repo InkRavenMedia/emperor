@@ -7,6 +7,8 @@ import models.experts.linear_adaptive.config as config
 from model_runtime.packages._runtime_default_fields import apply_runtime_default_fields
 from model_runtime.packages.runtime_values import runtime_default_mapping
 from models import _learned_grouping
+from models._recurrent_variants import variant_updates
+from models._runtime_binding import bind_runtime_options
 from models.experts.linear_adaptive._config_implementation import (
     ResolvedRuntimeDefaults,
     RuntimeDefaultValues,
@@ -66,6 +68,7 @@ def _runtime_options_from_defaults(
     )
 
 
+@bind_runtime_options(config, variant_updates)
 def runtime_from_flat(
     flat_kwargs: Mapping[str, object] | None = None,
     config_module: ModuleType = config,
