@@ -4,12 +4,6 @@ from dataclasses import dataclass, fields, replace
 from enum import Enum, auto
 from typing import Any
 
-from emperor.augmentations.adaptive_parameters import (
-    AdaptiveLinearLayerConfig,
-    AdaptiveParameterAugmentationConfig,
-    AdditiveDynamicBiasConfig,
-    WeightDecayScheduleOptions,
-)
 from emperor.config import ConfigBase
 from emperor.embedding.absolute import (
     TextLearnedPositionalEmbeddingConfig,
@@ -18,6 +12,7 @@ from emperor.embedding.absolute import (
 from emperor.linears import LinearLayerConfig
 from models._projection_model import (
     ProjectionModelOptions,
+    default_adaptive_projection,
     projection_stack_config,
     resolve_projection_model,
 )
@@ -163,26 +158,11 @@ def resolve_sequence_expansion_model(
     if option in _ADAPTIVE:
         if bias_flag is False:
             raise ValueError("Adaptive sequence expansion models require model bias.")
-        generator_layer_config = LinearLayerConfig(bias_flag=True)
-        generator = projection_stack_config(
-            generator_layer_config,
+        predictor = default_adaptive_projection(
             hidden_dim=_positive(
                 generator_hidden_dim, embedding_dim, "bias generator hidden dimension"
             ),
             num_layers=_positive(generator_num_layers, 1, "bias generator layer count"),
-        )
-        bias_config = AdditiveDynamicBiasConfig(
-            decay_schedule=WeightDecayScheduleOptions.DISABLED,
-            decay_rate=0.0,
-            decay_warmup_batches=0,
-            model_config=generator,
-        )
-        augmentation_config = AdaptiveParameterAugmentationConfig(
-            bias_config=bias_config,
-        )
-        predictor = AdaptiveLinearLayerConfig(
-            bias_flag=True,
-            adaptive_augmentation_config=augmentation_config,
         )
     if option in _STACKED:
         return projection_stack_config(
