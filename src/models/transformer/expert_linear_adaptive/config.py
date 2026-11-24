@@ -46,6 +46,7 @@ from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     WeightDecayScheduleOptions,
     WeightedBankDynamicBiasConfig,  # noqa: F401
     WeightInformedScoreAxisMaskConfig,  # noqa: F401
+    WeightNormalizationConfig,  # noqa: F401
     WeightNormalizationOptions,
     WeightNormalizationPositionOptions,
 )

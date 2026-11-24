@@ -1,12 +1,15 @@
 """Public BERT/GPT/ViT configuration and execution of appended memory sources."""
 
+import json
+
 import pytest
 import torch
 
 from emperor.layers import LayerStackConfig, RecurrentLayerConfig
 from emperor.linears import LinearLayerConfig
 from emperor.sampler import RouterConfig
-from models.catalog import model_package
+from model_runtime.packages.configuration import serialize_config_value
+from models.catalog import discover_model_packages, model_package
 from tests.support.attention import is_configured_attention
 
 PACKAGES = tuple(
@@ -19,6 +22,66 @@ PACKAGES = tuple(
         "expert_linear_adaptive",
     )
 )
+
+
+def test_expert_style_adaptive_generator_parses_for_every_source_memory_package():
+    generator = {
+        "type": "AdaptiveLinearLayerConfig",
+        "bias_flag": True,
+        "adaptive_augmentation_config": {
+            "type": "AdaptiveParameterAugmentationConfig",
+            "weight_config": {
+                "type": "BroadcastSumDynamicWeightConfig",
+                "generator_depth": 5,
+                "decay_schedule": "WeightDecayScheduleOptions.EXPONENTIAL",
+                "decay_rate": 0.0001,
+                "decay_warmup_batches": 5000,
+                "normalization_config": {
+                    "type": "WeightNormalizationConfig",
+                    "normalization_option": "WeightNormalizationOptions.SOFTSIGN",
+                    "normalization_position_option": "WeightNormalizationPositionOptions.DISABLED",
+                    "normalization_learnable_scale_flag": False,
+                },
+            },
+            "bias_config": {
+                "type": "GeneratorDynamicBiasConfig",
+                "decay_schedule": "WeightDecayScheduleOptions.DISABLED",
+                "decay_rate": 0.0,
+                "decay_warmup_batches": 0,
+            },
+            "model_config": {
+                "type": "LayerStackConfig",
+                "hidden_dim": 32,
+                "num_layers": 2,
+                "apply_output_postprocessing_flag": False,
+                "last_layer_bias_option": "LastLayerBiasOptions.DISABLED",
+                "layer_config": {
+                    "type": "LayerConfig",
+                    "activation": "ActivationOptions.GELU",
+                    "dropout_probability": 0.0,
+                    "layer_norm_position": "LayerNormPositionOptions.BEFORE",
+                    "layer_model_config": {
+                        "type": "LinearLayerConfig",
+                        "bias_flag": True,
+                    },
+                    "normalization": "NormalizationOptions.RMS_NORM",
+                },
+            },
+        },
+    }
+    raw = json.dumps(generator)
+    families = set()
+    for package in discover_model_packages():
+        spec = package.runtime_defaults_spec
+        for key in spec.supported_keys:
+            if key.endswith("_SOURCE_MEMORY_MODEL_CONFIG"):
+                parsed = spec.parse_value(key, raw)
+                assert json.loads(serialize_config_value(parsed)) == generator, (
+                    package.catalog_key,
+                    key,
+                )
+                families.add(package.catalog_key.split("/", 1)[0])
+    assert families == {"bert", "gpt", "mlp_mixer", "transformer", "vit"}
 
 
 def configuration(package_name, *, default_source_stack=False, **overrides):

@@ -8,12 +8,17 @@ from emperor.augmentations.adaptive_parameters import (  # noqa: F401
     AdaptiveParameterInputOrderOptions,
     AdditiveDynamicBiasConfig,
     AttentionGroupingConfig,
+    BroadcastSumDynamicWeightConfig,  # noqa: F401
+    GeneratorDynamicBiasConfig,  # noqa: F401
     MeanGroupingConfig,
     MeanStdGroupingConfig,
     RMSGroupingConfig,
     SumGroupingConfig,
     SummaryNormalizationOptions,
     WeightDecayScheduleOptions,
+    WeightNormalizationConfig,  # noqa: F401
+    WeightNormalizationOptions,  # noqa: F401
+    WeightNormalizationPositionOptions,  # noqa: F401
 )
 from emperor.config import ConfigBase  # noqa: F401
 from emperor.embedding.absolute import (
