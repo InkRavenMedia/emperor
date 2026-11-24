@@ -261,13 +261,15 @@ def _attention(
         model_dim=runtime.model_dim,
         residual_stack_options=residual_stack_options,
     )
-    source_memory_config = _source_memory.build_source_memory_config(attention_options)
     experts_config = _experts_config(
         runtime,
         runtime.model_dim,
         runtime.model_dim,
         experts,
         attention_expert_adaptive_options,
+    )
+    source_memory_config = _source_memory.build_source_memory_config(
+        attention_options, experts_config
     )
     use_kv_expert_models = self_attention
     if experts.use_kv_expert_models_flag is not None:

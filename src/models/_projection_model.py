@@ -1,5 +1,6 @@
 """Flat CLI controls shared by source memory and sequence expansion."""
 
+from copy import deepcopy
 from dataclasses import replace
 from enum import Enum, auto
 from typing import Any
@@ -8,6 +9,7 @@ from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     AdaptiveParameterAugmentationConfig,
     AdditiveDynamicBiasConfig,
+    SingleModelDynamicWeightConfig,
     WeightDecayScheduleOptions,
 )
 from emperor.config import ConfigBase
@@ -27,6 +29,7 @@ class ProjectionModelOptions(Enum):
     LINEAR = auto()
     LINEAR_STACK = auto()
     RECURRENT_LINEAR = auto()
+    ADAPTIVE_LINEAR = auto()
 
 
 def declare_projection_model_defaults(namespace: dict[str, Any]) -> None:
@@ -78,21 +81,57 @@ def projection_stack_config(
 
 
 def default_adaptive_projection(
-    *, hidden_dim: int, num_layers: int
+    *, hidden_dim: int, num_layers: int, bias_flag: bool = True
 ) -> AdaptiveLinearLayerConfig:
     generator = projection_stack_config(
         LinearLayerConfig(bias_flag=True), hidden_dim=hidden_dim, num_layers=num_layers
     )
-    augmentation = AdaptiveParameterAugmentationConfig(
-        bias_config=AdditiveDynamicBiasConfig(
-            decay_schedule=WeightDecayScheduleOptions.DISABLED,
-            decay_rate=0.0,
-            decay_warmup_batches=0,
-            model_config=generator,
-        ),
-    )
+    if bias_flag:
+        augmentation = AdaptiveParameterAugmentationConfig(
+            bias_config=AdditiveDynamicBiasConfig(
+                decay_schedule=WeightDecayScheduleOptions.DISABLED,
+                decay_rate=0.0,
+                decay_warmup_batches=0,
+                model_config=generator,
+            ),
+        )
+    else:
+        augmentation = AdaptiveParameterAugmentationConfig(
+            weight_config=SingleModelDynamicWeightConfig(
+                generator_depth=1,
+                decay_schedule=WeightDecayScheduleOptions.DISABLED,
+                decay_rate=0.0,
+                decay_warmup_batches=0,
+                model_config=generator,
+            ),
+        )
     return AdaptiveLinearLayerConfig(
-        bias_flag=True, adaptive_augmentation_config=augmentation
+        bias_flag=bias_flag, adaptive_augmentation_config=augmentation
+    )
+
+
+def _adaptive_memory_projection(
+    template_source: ConfigBase | None, bias_flag: bool | None
+) -> AdaptiveLinearLayerConfig:
+    template = (
+        LayerConfig.find_processing_linear_template(template_source)
+        if template_source is not None
+        else None
+    )
+    if isinstance(template, AdaptiveLinearLayerConfig):
+        augmentation = template.adaptive_augmentation_config
+        if augmentation is not None:
+            # Each memory row is already a chunk summary.
+            augmentation = replace(deepcopy(augmentation), grouping_config=None)
+            return replace(
+                template,
+                input_dim=None,
+                output_dim=None,
+                bias_flag=template.bias_flag if bias_flag is None else bias_flag,
+                adaptive_augmentation_config=augmentation,
+            )
+    return default_adaptive_projection(
+        hidden_dim=32, num_layers=1, bias_flag=bias_flag is not False
     )
 
 
@@ -104,7 +143,12 @@ def resolve_projection_model(
     stack_num_layers: int | None = None,
     stack_hidden_dim: int | None = None,
     recurrent_max_steps: int | None = None,
+    template_source: ConfigBase | None = None,
 ) -> ConfigBase | None:
+    if option is ProjectionModelOptions.ADAPTIVE_LINEAR:
+        if isinstance(config, AdaptiveLinearLayerConfig):
+            return config if bias_flag is None else replace(config, bias_flag=bias_flag)
+        return _adaptive_memory_projection(template_source, bias_flag)
     projection_bias = True
     if bias_flag is not None:
         projection_bias = bias_flag

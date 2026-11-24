@@ -61,6 +61,7 @@ def source_memory_defaults(
 
 def build_source_memory_config(
     options: Any,
+    template_source: ConfigBase | None = None,
 ) -> AttentionSourceMemoryConfig | None:
     # Each package's attention options own the existing enable flag.
     if not options.source_memory_flag:
@@ -80,6 +81,7 @@ def build_source_memory_config(
         stack_num_layers=options.source_memory_model_stack_num_layers,
         stack_hidden_dim=options.source_memory_model_stack_hidden_dim,
         recurrent_max_steps=options.source_memory_model_recurrent_max_steps,
+        template_source=template_source,
     )
     return replace(
         memory_config,
