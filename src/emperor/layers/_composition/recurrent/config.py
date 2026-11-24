@@ -8,7 +8,7 @@ from emperor.config import ConfigBase, optional_field
 from emperor.layers._options import LayerNormPositionOptions, NormalizationOptions
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable
 
     from emperor.halting import HaltingConfig
     from emperor.layers._composition.residual.config import ResidualConfig
@@ -16,22 +16,6 @@ if TYPE_CHECKING:
     from emperor.linears import LinearLayerConfig
     from emperor.memory import DynamicMemoryConfig
     from emperor.sampler import TokenSamplerConfig
-
-
-_TOKEN_PROCESSING_MODEL_FIELDS = (
-    "feed_forward_config",
-    "layer_config",
-    "layer_model_config",
-    "stack_config",
-    "experts_config",
-    "mixture_config",
-    "attention_config",
-    "self_attention_config",
-    "cross_attention_config",
-    "projection_model_config",
-    "mixing_model_config",
-    "model_config",
-)
 
 
 @dataclass(kw_only=True)
@@ -142,7 +126,9 @@ class RecurrentCompositionConfig(ConfigBase):
             or compression.scorer_config is not None
         ):
             return compression
-        template = self.__compression_scorer_template()
+        from emperor.layers._config import LayerConfig
+
+        template = LayerConfig.find_processing_linear_template(self)
         if template is None:
             return compression
         scorer = replace(
@@ -152,41 +138,6 @@ class RecurrentCompositionConfig(ConfigBase):
             bias_flag=True if template.bias_flag is None else template.bias_flag,
         )
         return replace(compression, scorer_config=scorer)
-
-    def __compression_scorer_template(self) -> LinearLayerConfig | None:
-        first_linear = None
-        for template, is_expert in self.__transition_linear_templates(self):
-            if is_expert:
-                return template
-            if first_linear is None:
-                first_linear = template
-        return first_linear
-
-    def __transition_linear_templates(
-        self, config: ConfigBase, *, inside_expert: bool = False
-    ) -> Iterator[tuple[LinearLayerConfig, bool]]:
-        from emperor.linears import LinearLayerConfig
-
-        if isinstance(config, LinearLayerConfig):
-            yield config, inside_expert
-            return
-        if isinstance(config, RecurrentCompositionConfig):
-            children = config._transition_configs()
-        else:
-            expert = getattr(config, "expert_model_config", None)
-            if isinstance(expert, ConfigBase):
-                yield from self.__transition_linear_templates(
-                    expert, inside_expert=True
-                )
-                return
-            children = (
-                getattr(config, name, None) for name in _TOKEN_PROCESSING_MODEL_FIELDS
-            )
-        for child in children:
-            if isinstance(child, ConfigBase):
-                yield from self.__transition_linear_templates(
-                    child, inside_expert=inside_expert
-                )
 
     def _transition_config_items(self) -> tuple[tuple[str, ConfigBase], ...]:
         return tuple(
