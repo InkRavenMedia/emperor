@@ -176,7 +176,9 @@ def _attention_config(
         model_dim=runtime.model_dim,
         residual_stack_options=residual_stack_options,
     )
-    source_memory_config = _source_memory.build_source_memory_config(options)
+    source_memory_config = _source_memory.build_source_memory_config(
+        options, projection_stack
+    )
     config_type = IndependentAttentionConfig
     if not independent:
         config_type = partial(
