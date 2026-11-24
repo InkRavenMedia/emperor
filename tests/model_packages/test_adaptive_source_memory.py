@@ -22,11 +22,15 @@ from tests.model_packages.test_grouped_attention_memory import (
     parse_overrides,
 )
 from tests.model_packages.test_memory_expert_parity import inputs_for
+from tests.model_packages.test_mlp_mixer_source_memory import (
+    configuration as mixer_config,
+)
 
+MEMORY_FLAGS = {"ATTN_SOURCE_MEMORY_FLAG", "TOKEN_MIXER_SOURCE_MEMORY_FLAG"}
 PACKAGES = [
     package.catalog_key
     for package in discover_model_packages()
-    if "ATTN_SOURCE_MEMORY_FLAG" in package.runtime_defaults_spec.supported_keys
+    if MEMORY_FLAGS.intersection(package.runtime_defaults_spec.supported_keys)
 ]
 
 
@@ -40,13 +44,14 @@ def fixed_random_state():
 @pytest.mark.parametrize("name", PACKAGES)
 def test_named_adaptive_memory_uses_separate_trainable_generator(name):
     family = name.split("/")[0]
+    prefix = "token-mixer" if family == "mlp_mixer" else "attn"
     overrides = parse_overrides(
         name,
-        "--attn-source-memory-flag",
+        f"--{prefix}-source-memory-flag",
         "true",
-        "--attn-source-memory-chunk-size",
+        f"--{prefix}-source-memory-chunk-size",
         "2",
-        "--attn-source-memory-model-option",
+        f"--{prefix}-source-memory-model-option",
         "ADAPTIVE_LINEAR",
     )
     if "adaptive" in name:
@@ -65,7 +70,11 @@ def test_named_adaptive_memory_uses_separate_trainable_generator(name):
     if name == "transformer/expert_linear_adaptive":
         overrides["encoder_attn_expert_adaptive_generator_depth"] = 4
         overrides["decoder_self_attn_expert_adaptive_generator_depth"] = 5
-    config = build_config(name, overrides)
+    config = (
+        mixer_config(name, **overrides)
+        if family == "mlp_mixer"
+        else build_config(name, overrides)
+    )
     model = model_package(name).build_model(config).eval()
     memories = [
         module
@@ -165,6 +174,28 @@ def test_memory_preserves_disabled_expert_generators():
     )
     assert isinstance(memory.cfg, AdaptiveLinearLayerConfig)
     assert memory.adaptive_behaviour is None
+
+
+@pytest.mark.parametrize(
+    "variant", ["linear", "linear_adaptive", "expert_linear", "expert_linear_adaptive"]
+)
+def test_mixer_accepts_one_token_per_adaptive_source_memory_chunk(variant):
+    name = f"mlp_mixer/{variant}"
+    options = dict(
+        token_mixer_source_memory_flag=True,
+        token_mixer_source_memory_model_option=ProjectionModelOptions.ADAPTIVE_LINEAR,
+    )
+    with pytest.raises(ValueError, match="--token-mixer-source-memory-chunk-size"):
+        model_package(name).build_model(mixer_config(name, **options))
+    config = mixer_config(name, **options, token_mixer_source_memory_chunk_size=1)
+    model = model_package(name).build_model(config).eval()
+    memory = next(
+        m for path, m in model.named_modules() if path.endswith(".source_memory")
+    )
+    assert memory.context.chunk_size == 1
+    assert isinstance(memory.model.cfg, AdaptiveLinearLayerConfig)
+    result = run_model(model, name, inputs_for(name))[0]
+    assert torch.isfinite(result).all()
 
 
 def test_plain_vit_can_use_bias_free_adaptive_memory():

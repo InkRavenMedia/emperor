@@ -63,6 +63,16 @@ class _EncoderSettings(Protocol):
     stack_residual_model_flag: Final[bool]
     stack_residual_rms_norm_epsilon: Final[float | None]
     token_mixer_soft_moe_config: Final[SoftMoEConfig | None]
+    token_mixer_source_memory_flag: Final[bool]
+    token_mixer_source_memory_test_time_training_learning_rate: Final[float | None]
+    token_mixer_source_memory_test_time_training_num_inner_steps: Final[int | None]
+
+    def build_token_mixer_source_memory(
+        self,
+        template_source: ConfigBase,
+        per_token_memory: Callable[[], DynamicMemoryConfig | None],
+        test_time_training: bool,
+    ) -> DynamicMemoryConfig | AttentionSourceMemoryConfig | None: ...
 
 
 _Settings = TypeVar("_Settings", bound=_EncoderSettings)
@@ -80,9 +90,7 @@ def build_token_attention(
     tokens: int,
     *,
     build_token_model: Callable[[_Settings, int], ConfigBase],
-    build_source_memory: Callable[
-        [_Settings], DynamicMemoryConfig | AttentionSourceMemoryConfig | None
-    ],
+    build_source_memory: Callable[[_Settings], DynamicMemoryConfig | None],
 ) -> MixerAttentionConfig:
     token_mixing_model_config = build_token_model(runtime, tokens)
     token_mixing_config = build_soft_moe_stack(
@@ -90,7 +98,18 @@ def build_token_attention(
         runtime.token_mixer_soft_moe_config,
         tokens,
     )
-    source_memory_config = build_source_memory(runtime)
+    source_memory_config = None
+    if runtime.token_mixer_source_memory_flag:
+        source_memory_config = runtime.build_token_mixer_source_memory(
+            token_mixing_config,
+            lambda: build_source_memory(runtime),
+            test_time_training=(
+                runtime.token_mixer_source_memory_test_time_training_learning_rate
+                is not None
+                or runtime.token_mixer_source_memory_test_time_training_num_inner_steps
+                is not None
+            ),
+        )
     return MixerAttentionConfig(
         embedding_dim=runtime.hidden_dim,
         sequence_length=tokens,

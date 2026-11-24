@@ -22,12 +22,15 @@ from models import _sequence_expansion
 from models._image_patches import ImagePatchEmbedding
 from models._recurrent_compression import SequenceRecurrentOptions
 from models.mlp_mixer._settings import ImageReadout
+from models.mlp_mixer._source_memory import TokenMixerSourceMemoryOptions
 from models.mlp_mixer.linear import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(
-    _sequence_expansion.SequenceExpansionOptions, SequenceRecurrentOptions
+    _sequence_expansion.SequenceExpansionOptions,
+    SequenceRecurrentOptions,
+    TokenMixerSourceMemoryOptions,
 ):
     residual_coefficient_activation: ActivationOptions = field(
         default=ActivationOptions.SIGMOID, kw_only=True

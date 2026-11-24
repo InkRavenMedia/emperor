@@ -40,16 +40,19 @@ from emperor.memory import (
     GatedResidualDynamicMemoryConfig,
     MemoryPositionOptions,
 )
-from models import _learned_grouping, _projection_model, _sequence_expansion
+from models import _learned_grouping, _sequence_expansion
 from models._image_patches import ImagePatchEmbedding
 from models._recurrent_compression import SequenceRecurrentOptions
 from models.mlp_mixer._settings import ImageReadout
+from models.mlp_mixer._source_memory import TokenMixerSourceMemoryOptions
 from models.mlp_mixer.expert_linear_adaptive import SETTINGS_VALIDATION
 
 
 @dataclass(frozen=True, slots=True)
 class RuntimeOptions(
-    _sequence_expansion.SequenceExpansionOptions, SequenceRecurrentOptions
+    _sequence_expansion.SequenceExpansionOptions,
+    SequenceRecurrentOptions,
+    TokenMixerSourceMemoryOptions,
 ):
     residual_coefficient_activation: ActivationOptions = field(
         default=ActivationOptions.SIGMOID, kw_only=True
@@ -64,28 +67,6 @@ class RuntimeOptions(
     embedding_dropout_probability: float = field(default=0.0, kw_only=True)
     recurrent_min_steps: int = field(default=1, kw_only=True)
     recurrent_ponder_cost_weight: float = field(default=1.0, kw_only=True)
-    token_mixer_source_memory_chunk_size: int | None = field(default=None, kw_only=True)
-    token_mixer_source_memory_grouping_method: type[GroupingConfig] | None = field(
-        default=None, kw_only=True
-    )
-    token_mixer_source_memory_model_config: ConfigBase | None = field(
-        default=None, kw_only=True
-    )
-    token_mixer_source_memory_model_option: (
-        _projection_model.ProjectionModelOptions | None
-    ) = field(default=None, kw_only=True)
-    token_mixer_source_memory_model_bias_flag: bool | None = field(
-        default=None, kw_only=True
-    )
-    token_mixer_source_memory_model_stack_num_layers: int | None = field(
-        default=None, kw_only=True
-    )
-    token_mixer_source_memory_model_stack_hidden_dim: int | None = field(
-        default=None, kw_only=True
-    )
-    token_mixer_source_memory_model_recurrent_max_steps: int | None = field(
-        default=None, kw_only=True
-    )
     token_mixer_soft_moe_config: SoftMoEConfig | None = field(
         default=None, kw_only=True
     )

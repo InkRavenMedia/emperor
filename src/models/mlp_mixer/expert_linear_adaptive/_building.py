@@ -3,10 +3,7 @@ from __future__ import annotations
 from functools import partial
 from typing import cast
 
-from emperor.attention import AttentionSourceMemoryConfig, MixerAttentionConfig
-from emperor.augmentations.adaptive_parameters import (
-    AdaptiveParameterGroupingScopeOptions,
-)
+from emperor.attention import MixerAttentionConfig
 from emperor.experts import (
     MixtureOfExpertsLayerConfig,
     MixtureOfExpertsModelConfig,
@@ -21,7 +18,6 @@ from emperor.layers import (
 from emperor.linears import LinearLayerConfig
 from emperor.patch import PatchConfig
 from emperor.sampler import RouterConfig, SamplerConfig
-from models import _projection_model
 from models._adaptive_generator_stack import build_generator_layers
 from models._expert_mixture import build_expert_mixture, build_expert_model
 from models._residual_stack import residual_source_from_settings
@@ -419,37 +415,6 @@ def _channel_mixing_model(runtime: RuntimeOptions):
 def _source_memory_config(runtime: RuntimeOptions):
     if not runtime.token_mixer_source_memory_flag:
         return None
-    if runtime.token_mixer_source_memory_chunk_size is not None:
-        chunk_size = runtime.token_mixer_source_memory_chunk_size
-        if type(chunk_size) is not int or chunk_size <= 0:
-            raise ValueError(
-                "token_mixer_source_memory_chunk_size must be a positive integer"
-            )
-        if (
-            runtime.token_mixer_source_memory_test_time_training_learning_rate
-            is not None
-            or runtime.token_mixer_source_memory_test_time_training_num_inner_steps
-            is not None
-        ):
-            raise ValueError(
-                "Chunked source memory does not support per-token memory test-time training"
-            )
-        source_memory_model_config = _projection_model.resolve_projection_model(
-            runtime.token_mixer_source_memory_model_config,
-            runtime.token_mixer_source_memory_model_option,
-            runtime.token_mixer_source_memory_model_bias_flag,
-            stack_num_layers=runtime.token_mixer_source_memory_model_stack_num_layers,
-            stack_hidden_dim=runtime.token_mixer_source_memory_model_stack_hidden_dim,
-            recurrent_max_steps=runtime.token_mixer_source_memory_model_recurrent_max_steps,
-        ) or LinearLayerConfig(bias_flag=True)
-        grouping_config = runtime.token_mixer_source_memory_grouping_method(
-            scope=AdaptiveParameterGroupingScopeOptions.SEQUENCE,
-            chunk_size=chunk_size,
-        )
-        return AttentionSourceMemoryConfig(
-            model_config=source_memory_model_config,
-            grouping_config=grouping_config,
-        )
     submodule_defaults = submodule_stack_options(runtime)
     components = _component_factory()
     return components.build_source_memory(runtime, submodule_defaults)
