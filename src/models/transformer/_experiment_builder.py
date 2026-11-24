@@ -12,6 +12,7 @@ from emperor.layers import (
 from models import _sequence_expansion
 from models._positional_embedding import supported_position_fields
 from models._recurrent_compression import configure_sequence_stacks
+from models._recurrent_variants import RecurrentVariantOptions
 
 if TYPE_CHECKING:
     from emperor.config import ModelConfig
@@ -89,6 +90,8 @@ def expanded_stacks(
     build_decoder: Callable[[_S], _Stack],
 ) -> tuple[_Stack, _Stack]:
     encoder_config = build_encoder(runtime)
+    if isinstance(runtime, RecurrentVariantOptions):
+        encoder_config = runtime.configure_stack(encoder_config)
     source_capacity = None
     if runtime.encoder_options.sequence_expansion_flag:
         source_capacity = _sequence_expansion.expanded_sequence_capacity(
@@ -98,6 +101,8 @@ def expanded_stacks(
         encoder_config, runtime.source_sequence_length
     )
     resolved_decoder_config = build_decoder(runtime)
+    if isinstance(runtime, RecurrentVariantOptions):
+        resolved_decoder_config = runtime.configure_stack(resolved_decoder_config)
     decoder_config = _sequence_expansion.with_expansion_attention_capacity(
         resolved_decoder_config, runtime.target_sequence_length, source_capacity
     )

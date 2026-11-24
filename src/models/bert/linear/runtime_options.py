@@ -27,7 +27,7 @@ from emperor.memory import (
 )
 from models import _attention_settings, _sequence_expansion
 from models import _attention_source_memory as _source_memory
-from models._recurrent_compression import CompressionOptions
+from models._recurrent_compression import SequenceResidualOptions
 from models._stack_options import resolve_controller_options
 from models.bert.linear._residual import ResidualStackOptions
 from models.bert.linear._residual import inherit_if_unset as inherit_if_unset
@@ -307,7 +307,7 @@ class VitOutputOptions:
 
 
 @dataclass(frozen=True)
-class RuntimeOptions(CompressionOptions):
+class RuntimeOptions(SequenceResidualOptions):
     batch_size: int
     learning_rate: float
     input_dim: int

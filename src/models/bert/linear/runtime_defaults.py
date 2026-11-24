@@ -8,18 +8,18 @@ import models.bert.linear.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_value_types
 from model_runtime.packages.soft_moe import resolve_soft_moe_runtime_defaults
 from models._recurrent_compression import (
-    bind_compression_options,
-    compression_from_config,
+    bind_sequence_options,
+    sequence_options_from_config,
 )
 from models.bert.linear._builder_adapter import linear_builder_kwargs_from_flat
+from models.bert.linear._config_defaults import linears_recurrent_controller_options
 from models.bert.linear.runtime_options import RuntimeOptions
 
 _RUNTIME_FIELDS = {field.name for field in fields(RuntimeOptions)}
 
 
-def runtime_from_config(config_module: ModuleType = config) -> RuntimeOptions:
+def _base_runtime(config_module: ModuleType) -> RuntimeOptions:
     return RuntimeOptions(
-        recurrent_compression_config=compression_from_config(config_module),
         batch_size=config_module.BATCH_SIZE,
         learning_rate=config_module.LEARNING_RATE,
         input_dim=config_module.INPUT_DIM,
@@ -62,7 +62,7 @@ def _runtime_with_fields(
     return replace(runtime, **builder_options)
 
 
-@bind_compression_options(config)
+@bind_sequence_options(config)
 def runtime_from_flat(
     flat_kwargs: dict[str, Any] | None = None,
     config_module: ModuleType = config,
@@ -75,8 +75,18 @@ def runtime_from_flat(
     )
     values = resolve_soft_moe_runtime_defaults(values, config_module)
     return _runtime_with_fields(
-        runtime_from_config(config_module),
+        _base_runtime(config_module),
         linear_builder_kwargs_from_flat(values, config_module),
+    )
+
+
+def runtime_from_config(config_module: ModuleType = config) -> RuntimeOptions:
+    return replace(
+        _base_runtime(config_module),
+        recurrent_controller_options=linears_recurrent_controller_options(
+            config_module, "main"
+        ),
+        **sequence_options_from_config(config_module),
     )
 
 

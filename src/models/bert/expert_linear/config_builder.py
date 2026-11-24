@@ -141,7 +141,7 @@ class BertExpertLinearConfigBuilder(_attention_settings.RuntimeBuilder[RuntimeOp
             core_config_dependencies
         ).build_encoder_config()
         return _sequence_expansion.with_expansion_attention_capacity(
-            encoder_config,
+            self.runtime.configure_stack(encoder_config),
             self.sequence_length,
         )
 

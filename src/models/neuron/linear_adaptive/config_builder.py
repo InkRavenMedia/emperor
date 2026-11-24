@@ -18,7 +18,7 @@ class NeuronLinearAdaptiveConfigBuilder(NeuronConfigBuilder):
                 "models.neuron.linear_adaptive NeuronLinearAdaptiveConfigBuilder "
                 "runtime must be RuntimeOptions"
             )
-        super().__init__(**runtime._as_construction_kwargs())
+        super().__init__(recurrent_options=runtime, **runtime._as_construction_kwargs())
         self._runtime = runtime
 
 

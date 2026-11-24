@@ -9,6 +9,7 @@ from emperor.layers import (
 )
 from emperor.parametric import ClipParameterOptions, GeneratorBiasMixtureConfig
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models._recurrent_variants import ParametricRecurrentOptions
 from models.parametric.parametric_generator import SETTINGS_VALIDATION
 
 from . import config
@@ -283,7 +284,7 @@ class ParametricGeneratorConstructionOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(ResolvedRuntimeOptions):
+class RuntimeOptions(ResolvedRuntimeOptions, ParametricRecurrentOptions):
     def construction_options(self) -> ParametricGeneratorConstructionOptions:
         inputs = replace(_DEFAULT_CONSTRUCTION_INPUTS, **self._values)
         return ParametricGeneratorConstructionOptions.from_inputs(inputs)

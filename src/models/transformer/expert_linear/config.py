@@ -1038,4 +1038,4 @@ DECODER_SEQUENCE_EXPANSION_POSITIONAL_EMBEDDING_CONFIG: Annotated[
 
 _component_defaults.declare_component_defaults(globals())
 
-_recurrent_compression.declare_compression_options(globals())
+_recurrent_compression.declare_sequence_options(globals())

@@ -5,6 +5,8 @@ from typing import Any, Final
 import models.experts.linear.config as config
 from model_runtime.packages.runtime_values import validate_runtime_default_value_types
 from models._expert_flat_options import ExpertFlatOptions
+from models._recurrent_variants import variant_updates
+from models._runtime_binding import bind_runtime_options
 from models.experts.linear import runtime_options as options
 from models.experts.linear._control_defaults import (
     expert_control_defaults,
@@ -38,6 +40,7 @@ def builder_kwargs_from_flat(
     return _ExpertOptions().builder_kwargs_from_flat(flat_kwargs, config_module)
 
 
+@bind_runtime_options(config, variant_updates)
 def runtime_from_flat(
     flat_kwargs: dict[str, Any] | None = None,
     config_module: ModuleType = config,

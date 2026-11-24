@@ -125,7 +125,7 @@ class GptBackendConfigBuilder:
         positional_embedding_config = self._build_positional_embedding_config()
         resolved_decoder_config = self._build_decoder_config()
         decoder_config = _sequence_expansion.with_expansion_attention_capacity(
-            resolved_decoder_config, self.sequence_length
+            self.runtime.configure_stack(resolved_decoder_config), self.sequence_length
         )
         boundary_config_dependencies = BoundaryConfigDependencies(
             input_dim=self.input_dim,

@@ -650,8 +650,16 @@ def test_removed_limits_are_not_exposed(flag):
     "variant",
     ["TinyRecursiveModelRecurrentConfig", "HierarchicalReasoningModelRecurrentConfig"],
 )
-def test_nested_recurrent_variants_have_capacity_for_all_expansion_calls(variant):
-    name = "transformer/linear"
+@pytest.mark.parametrize(
+    "name",
+    [
+        "transformer/linear",
+        "transformer/expert_linear",
+        "vit/expert_linear_adaptive",
+        "mlp_mixer/expert_linear_adaptive",
+    ],
+)
+def test_nested_recurrent_variants_have_capacity_for_all_expansion_calls(variant, name):
     overrides = parse_overrides(
         name,
         *LINEAR_ARGUMENTS,
@@ -675,9 +683,13 @@ def test_nested_recurrent_variants_have_capacity_for_all_expansion_calls(variant
         with torch.no_grad():
             module.count_predictor.weight_params.zero_()
             module.count_predictor.bias_params.copy_(torch.tensor([0.0, 2.0]))
-    logits, auxiliary_loss = execute(model, name)
-    assert logits.size(1) > 5
-    loss = logits.square().mean() + auxiliary_loss
+    outputs = execute(model, name)
+    logits, *losses = outputs if isinstance(outputs, tuple) else (outputs,)
+    if name.startswith("transformer"):
+        assert logits.size(1) > 5
+    else:
+        assert logits.shape[0] == 2
+    loss = logits.square().mean() + sum(losses)
     assert torch.isfinite(loss)
     loss.backward()
     assert all(

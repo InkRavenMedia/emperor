@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from emperor.config import ConfigBase, optional_field
-from emperor.layers import LayerConfig, LayerStackConfig, RecurrentLayerConfig
+from emperor.layers import LayerConfig, LayerStackConfig, RecurrentCompositionConfig
 
 
 @dataclass
@@ -9,7 +9,7 @@ class ExperimentConfig(ConfigBase):
     input_model_config: LayerConfig | None = optional_field(
         "Config for the input layer that maps input_dim to hidden_dim."
     )
-    model_config: LayerStackConfig | RecurrentLayerConfig | None = optional_field(
+    model_config: LayerStackConfig | RecurrentCompositionConfig | None = optional_field(
         "Config for the main hidden-dim layer stack, optionally wrapped in a "
         "recurrent layer."
     )

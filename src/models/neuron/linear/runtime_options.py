@@ -18,6 +18,7 @@ from emperor.neuron import (
     TerminalRoutingTreeDepthOptions,
 )
 from model_runtime.packages.runtime_values import ResolvedRuntimeOptions
+from models._recurrent_variants import RecurrentResidualOptions
 from models.neuron.linear import SETTINGS_VALIDATION
 from models.neuron.linear._hidden.runtime_options import (
     RuntimeOptions as HiddenRuntimeOptions,
@@ -119,7 +120,7 @@ class ClusterRouteHaltingOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions(ResolvedRuntimeOptions):
+class RuntimeOptions(ResolvedRuntimeOptions, RecurrentResidualOptions):
     """Package-owned outer neuron construction roles."""
 
     @property

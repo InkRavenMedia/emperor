@@ -757,7 +757,9 @@ def _ensure_main_control_dependencies(
         "dynamic_memory_options",
         "recurrent_controller_options",
     }
-    if not control_keys.intersection(builder_kwargs):
+    if not config_module.RECURRENT_FLAG and not control_keys.intersection(
+        builder_kwargs
+    ):
         return
     if "submodule_stack_options" not in builder_kwargs:
         builder_kwargs["submodule_stack_options"] = (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from emperor.config import ModelConfig
+from models._recurrent_variants import DEFAULT_VARIANT_OPTIONS, RecurrentVariantOptions
 from models.neuron._cluster_settings import NeuronClusterSettings
 from models.neuron.expert_linear_adaptive._hidden._hidden_model_config_factory import (
     HiddenModelConfigFactory,
@@ -29,12 +30,14 @@ class NeuronConfigBuilder(NeuronClusterSettings):
         self,
         *,
         hidden_runtime: HiddenRuntimeOptions,
+        recurrent_options: RecurrentVariantOptions = DEFAULT_VARIANT_OPTIONS,
         cluster_capacity_options: NeuronClusterCapacityOptions,
         terminal_options: NeuronTerminalOptions,
         terminal_router_options: NeuronSubmoduleStackOptions,
         terminal_sampler_options: NeuronTerminalSamplerOptions,
         cluster_halting_options: ClusterRouteHaltingOptions,
     ) -> None:
+        self.recurrent_options = recurrent_options
         self.hidden_runtime = hidden_runtime
         self.cluster_capacity_options = cluster_capacity_options
         self.terminal_options = terminal_options
@@ -55,7 +58,7 @@ class NeuronConfigBuilder(NeuronClusterSettings):
         )
         hidden_model_config = hidden_factory.build_hidden_model_config()
         neuron_cluster_config = neuron_control_factory.build(
-            hidden_model_config,
+            self.recurrent_options.configure_stack(hidden_model_config),
             runtime.stack_options.hidden_dim,
         )
 

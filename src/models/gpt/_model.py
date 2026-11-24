@@ -17,7 +17,7 @@ from emperor.layers import (
     LayerStackConfig,
     LayerState,
     NormalizationOptions,
-    RecurrentLayerConfig,
+    RecurrentCompositionConfig,
 )
 from emperor.transformer import TransformerDecoderLayerState
 from emperor.transformer.hierarchical import (
@@ -52,7 +52,7 @@ class _BoundarySettings(Protocol):
 class _ExperimentSettings(Protocol):
     boundary_config: Final[object]
     positional_embedding_config: Final[AbsolutePositionalEmbeddingConfig | None]
-    decoder_config: Final[LayerStackConfig | RecurrentLayerConfig | None]
+    decoder_config: Final[LayerStackConfig | RecurrentCompositionConfig | None]
     decoder_output_normalization: Final[NormalizationOptions]
     hierarchical_language_model_config: Final[HierarchicalLanguageModelConfig | None]
 

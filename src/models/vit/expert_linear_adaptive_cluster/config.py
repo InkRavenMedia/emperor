@@ -2967,4 +2967,4 @@ CALLBACK_NEURON_CLUSTER_OPTIMIZER_SYNC: Annotated[
     NeuronClusterOptimizerSyncCallback, _neuron_cluster
 ] = NeuronClusterOptimizerSyncCallback()
 
-_recurrent_compression.declare_compression_options(globals())
+_recurrent_compression.declare_sequence_options(globals())

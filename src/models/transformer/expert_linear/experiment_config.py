@@ -2,7 +2,11 @@ from dataclasses import dataclass, field
 
 from emperor.config import ConfigBase, optional_field
 from emperor.embedding.absolute import AbsolutePositionalEmbeddingConfig
-from emperor.layers import LayerStackConfig, NormalizationOptions, RecurrentLayerConfig
+from emperor.layers import (
+    LayerStackConfig,
+    NormalizationOptions,
+    RecurrentCompositionConfig,
+)
 
 
 @dataclass
@@ -19,11 +23,11 @@ class ExperimentConfig(ConfigBase):
     target_positional_embedding_config: AbsolutePositionalEmbeddingConfig | None = (
         optional_field("Target positions.")
     )
-    encoder_config: LayerStackConfig | RecurrentLayerConfig | None = optional_field(
-        "Encoder stack."
+    encoder_config: LayerStackConfig | RecurrentCompositionConfig | None = (
+        optional_field("Encoder stack.")
     )
-    decoder_config: LayerStackConfig | RecurrentLayerConfig | None = optional_field(
-        "Decoder stack."
+    decoder_config: LayerStackConfig | RecurrentCompositionConfig | None = (
+        optional_field("Decoder stack.")
     )
     vocab_size: int | None = optional_field("Vocabulary size.")
     model_dim: int | None = optional_field("Transformer width.")

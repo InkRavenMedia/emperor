@@ -21,6 +21,7 @@ from emperor.layers import (
     ResidualConfig,
 )
 from emperor.memory import DynamicMemoryConfig, MemoryPositionOptions
+from models._recurrent_variants import RecurrentResidualOptions
 from models._stack_options import resolve_expert_controller, resolve_expert_options
 from models.experts.linear import SETTINGS_VALIDATION
 from models.experts.linear._residual import ResidualStackOptions
@@ -295,7 +296,7 @@ class ExpertsAdaptiveGeneratorStackOptions:
 
 
 @dataclass(frozen=True, slots=True)
-class RuntimeOptions:
+class RuntimeOptions(RecurrentResidualOptions):
     batch_size: int
     learning_rate: float
     input_dim: int

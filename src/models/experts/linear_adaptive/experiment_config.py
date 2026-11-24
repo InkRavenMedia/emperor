@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from emperor.config import ConfigBase, optional_field
 from emperor.experts import MixtureOfExpertsModelConfig
-from emperor.layers import LayerConfig, RecurrentLayerConfig
+from emperor.layers import LayerConfig, RecurrentCompositionConfig
 
 
 @dataclass
@@ -10,7 +10,7 @@ class ExperimentConfig(ConfigBase):
     input_model_config: LayerConfig | None = optional_field(
         "Config for the input adaptive layer that maps input_dim to hidden_dim."
     )
-    model_config: MixtureOfExpertsModelConfig | RecurrentLayerConfig | None = (
+    model_config: MixtureOfExpertsModelConfig | RecurrentCompositionConfig | None = (
         optional_field(
             "Config for the MixtureOfExpertsModel, optionally wrapped in a "
             "recurrent layer."
