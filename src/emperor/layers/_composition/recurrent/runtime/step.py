@@ -103,7 +103,10 @@ class RecurrentStep(Module, Generic[RecurrentStateT], ABC):
         pass
 
     def fork(self, recurrent_state: RecurrentStateT) -> RecurrentStateT:
-        return replace(recurrent_state)
+        forked_residual_state = self.pipeline.fork_recurrent_residual_state(
+            recurrent_state.residual_state
+        )
+        return recurrent_state.with_forked_residual_state(forked_residual_state)
 
     def finalize(self, recurrent_state: RecurrentStateT) -> LayerState:
         hidden, loss = self.pipeline.halting.finalize_accumulation(

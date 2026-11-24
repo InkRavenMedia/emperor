@@ -60,6 +60,7 @@ class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelSta
         return HierarchicalReasoningModelState(
             fixed_input=state.hidden,
             high=high,
+            residual_state=self.pipeline.new_recurrent_residual_state(high),
             low=low,
             initial_loss=state.loss if include_caller_loss else None,
             auxiliary_losses=(),
@@ -84,21 +85,21 @@ class HierarchicalReasoningModelStep(RecurrentStep[HierarchicalReasoningModelSta
         recurrent_state: HierarchicalReasoningModelState,
         target_state: HierarchicalReasoningModelState | None = None,
     ) -> LayerState:
-        updates_high = self.__updates_high(recurrent_state.transition_index)
-        if updates_high:
-            transition_input = recurrent_state.high + recurrent_state.low
-            previous_hidden = recurrent_state.high
-        else:
-            low_input = recurrent_state.low + recurrent_state.high
-            transition_input = low_input + recurrent_state.fixed_input
-            previous_hidden = recurrent_state.low
-        transition_state = recurrent_state.layer_state_for_transition(transition_input)
-        block = self.high_model if updates_high else self.low_model
-        return self.pipeline.process_recurrent_transition(
-            transition_state,
-            run_model=lambda state: self.__run_block(state, block),
-            recurrent_state=recurrent_state,
-            previous_hidden=previous_hidden,
+        if self.__updates_high(recurrent_state.transition_index):
+            high_input = recurrent_state.high + recurrent_state.low
+            high_index = recurrent_state.transition_index // (self.low_cycles + 1)
+            return self.pipeline.process_recurrent_transition(
+                recurrent_state.layer_state_for_transition(high_input),
+                run_model=lambda state: self.__run_block(state, self.high_model),
+                recurrent_state=recurrent_state,
+                residual_step_index=high_index,
+                target_state=target_state,
+            )
+        low_input = (
+            recurrent_state.low + recurrent_state.high + recurrent_state.fixed_input
+        )
+        return self.__run_block(
+            recurrent_state.layer_state_for_transition(low_input), self.low_model
         )
 
     def __updates_high(self, transition_index: int) -> bool:

@@ -1,5 +1,5 @@
 import unittest
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
 import torch
@@ -8,13 +8,17 @@ from emperor.attention import AttentionLayerState
 from emperor.config import ConfigBase, optional_field
 from emperor.halting import HaltingBase, HaltingConfig, HaltingUsageTrackerManager
 from emperor.layers import (
+    ActivationOptions,
     AdditiveResidualConfig,
     AttentionResidualConfig,
     HierarchicalReasoningModelRecurrentConfig,
     LayerNormPositionOptions,
     LayerState,
     NormalizationOptions,
+    RecurrentCompressionConfig,
     TinyRecursiveModelRecurrentConfig,
+    WeightedBlendResidualConfig,
+    WeightedResidualConfig,
 )
 from emperor.layers._composition.recurrent.base import (
     RecurrentCompositionAbstract,
@@ -461,7 +465,7 @@ class TestHierarchicalReasoningModelRecurrentValidation(unittest.TestCase):
                 SimpleNamespace(cfg=self._config())
             )
 
-    def test_attention_rejection_precedes_halting_validation_and_preserves_rng(
+    def test_invalid_halting_with_high_state_attention_is_rejected_before_initialization(
         self,
     ) -> None:
         config = self._config()
@@ -472,8 +476,8 @@ class TestHierarchicalReasoningModelRecurrentValidation(unittest.TestCase):
         rng_state = torch.random.get_rng_state().clone()
 
         with self.assertRaisesRegex(
-            ValueError,
-            "AttentionResidualConfig is not supported.*forward-local residual state",
+            TypeError,
+            "instance of HaltingConfig",
         ):
             config.build()
 
@@ -490,12 +494,6 @@ class TestHierarchicalReasoningModelRecurrentValidation(unittest.TestCase):
             ),
             ("gate_config", object(), TypeError, "instance of GateConfig"),
             ("residual_config", object(), TypeError, "instance of ResidualConfig"),
-            (
-                "residual_config",
-                AttentionResidualConfig(block_size=1, rms_norm_epsilon=1e-6),
-                ValueError,
-                "AttentionResidualConfig is not supported",
-            ),
             ("halting_config", object(), TypeError, "instance of HaltingConfig"),
             ("memory_config", object(), TypeError, "instance of DynamicMemoryConfig"),
         )
@@ -1026,8 +1024,8 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         torch.testing.assert_close(tracker.last_step_count, torch.tensor(1.0))
         tracker_manager.detach(runtime.pipeline.halting.model)
 
-    def test_residual_uses_the_previous_low_and_high_target_states(self) -> None:
-        recurrent = HierarchicalReasoningModelRecurrentConfig(
+    def test_stateless_residuals_use_only_the_previous_high_state(self) -> None:
+        cfg = HierarchicalReasoningModelRecurrentConfig(
             recurrent_layer_norm_position=LayerNormPositionOptions.DISABLED,
             recurrent_normalization=NormalizationOptions.LAYER_NORM,
             input_dim=1,
@@ -1048,20 +1046,112 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
             iteration_increment=1,
             forward_calls_before_iteration_increment=1,
             initialization_standard_deviation=0.0,
-            residual_config=AdditiveResidualConfig(),
-        ).build()
-        with torch.no_grad():
-            recurrent.high_initial.fill_(2.0)
-            recurrent.low_initial.fill_(3.0)
-
-        result = recurrent(LayerState(hidden=torch.ones(1, 1)))
-
-        torch.testing.assert_close(recurrent.low_model.inputs[0], torch.tensor([[6.0]]))
-        torch.testing.assert_close(
-            recurrent.high_model.inputs[0],
-            torch.tensor([[12.0]]),
         )
-        torch.testing.assert_close(result.hidden, torch.tensor([[15.0]]))
+        for residual, expected in (
+            (None, 10.0),
+            (AdditiveResidualConfig(), 12.0),
+            (
+                WeightedResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                7.0,
+            ),
+            (
+                WeightedBlendResidualConfig(
+                    coefficient_activation=ActivationOptions.SIGMOID
+                ),
+                9.2,
+            ),
+        ):
+            with self.subTest(residual=type(residual).__name__):
+                recurrent = replace(cfg, residual_config=residual).build()
+                recurrent.high_initial.fill_(2.0)
+                recurrent.low_initial.fill_(3.0)
+                result = recurrent(LayerState(hidden=torch.ones(1, 1)))
+                torch.testing.assert_close(
+                    recurrent.low_model.inputs[0], torch.tensor([[6.0]])
+                )
+                torch.testing.assert_close(
+                    recurrent.high_model.inputs[0], torch.tensor([[9.0]])
+                )
+                torch.testing.assert_close(result.hidden, torch.tensor([[expected]]))
+
+    def test_both_blocks_use_slots_and_only_high_candidates_enter_residual_history(
+        self,
+    ) -> None:
+        cfg = replace(
+            self._smooth_oracle_config(high_cycles=2, initial_iterations=2),
+            low_cycles=3,
+            compression_config=RecurrentCompressionConfig(max_slots=2),
+            residual_config=AttentionResidualConfig(
+                block_size=1, rms_norm_epsilon=1e-6
+            ),
+        )
+        recurrent = cfg.build()
+        recurrent.high_initial.fill_(2.0)
+        recurrent.low_initial.fill_(3.0)
+        tokens = torch.ones(1, 5, 1)
+        sources_per_cycle = []
+
+        def record_sources(module, args, kwargs, output):
+            sources_per_cycle.append(kwargs["residual_state"].sources)
+
+        for connection in (
+            recurrent.pipeline.residual.connection,
+            *recurrent.pipeline.residual_schedule.subsequent_connections,
+        ):
+            connection.register_forward_hook(record_sources, with_kwargs=True)
+
+        result = recurrent(LayerState(tokens))
+        slot_shape = (1, 2, 1)
+        for block, expected_inputs in (
+            (recurrent.low_model, [6, 10, 14, 30.5, 47, 63.5]),
+            (recurrent.high_model, [17, 79]),
+        ):
+            for received, expected in zip(block.inputs, expected_inputs, strict=True):
+                torch.testing.assert_close(
+                    received, tokens.new_full(slot_shape, expected)
+                )
+        for history, expected_sources in zip(
+            sources_per_cycle, [[2, 27], [2, 27, 89]], strict=True
+        ):
+            for source, expected in zip(history, expected_sources, strict=True):
+                torch.testing.assert_close(source, tokens * expected)
+        torch.testing.assert_close(result.hidden, tokens * (118 / 3))
+
+    def test_smooth_growth_matches_high_state_attention_at_both_depths(self) -> None:
+        cfg = replace(
+            self._smooth_oracle_config(high_cycles=3, initial_iterations=2),
+            gradient_transition_count=4,
+            residual_config=AttentionResidualConfig(
+                block_size=2, rms_norm_epsilon=1e-6
+            ),
+        )
+        growing = replace(cfg, smooth_iteration_growth_flag=True).build()
+        shallow = cfg.build()
+        deep = replace(cfg, initial_iterations=3).build()
+        shallow.load_state_dict(growing.state_dict())
+        deep.load_state_dict(growing.state_dict())
+        tokens = torch.ones(1, 2, 1)
+        for _ in range(4):
+            growing(LayerState(tokens))
+        weight = growing.recurrent_iteration_schedule.snapshot().transition_weight
+        self.assertGreater(weight, 0)
+        self.assertLess(weight, 1)
+        actual = growing(LayerState(tokens)).hidden
+        expected = torch.lerp(
+            shallow(LayerState(tokens)).hidden, deep(LayerState(tokens)).hidden, weight
+        )
+        torch.testing.assert_close(actual, expected)
+        actual.sum().backward()
+        expected.sum().backward()
+        for name, parameter in growing.named_parameters():
+            gradients = [model.get_parameter(name).grad for model in (shallow, deep)]
+            gradients = [gradient for gradient in gradients if gradient is not None]
+            if gradients:
+                torch.testing.assert_close(parameter.grad, sum(gradients), msg=name)
+            else:
+                self.assertIsNone(parameter.grad, name)
 
     def test_halting_observes_high_states_and_stops_after_a_complete_cycle(
         self,
@@ -1137,7 +1227,7 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         self.assertEqual(result.hidden.shape, (1, 1))
         self.assertTrue(torch.isfinite(result.hidden).all())
 
-    def test_memory_config_is_shared_by_both_clocks_and_receives_gradients(
+    def test_memory_runs_only_on_the_high_update_and_receives_gradients(
         self,
     ) -> None:
         recurrent = HierarchicalReasoningModelRecurrentConfig(
@@ -1169,9 +1259,13 @@ class TestHierarchicalReasoningModelRecurrentRuntime(unittest.TestCase):
         ).build()
         inputs = torch.ones(1, 2, requires_grad=True)
 
+        memory_inputs = []
+        recurrent.pipeline.memory.model.register_forward_pre_hook(
+            lambda _, args: memory_inputs.append(args[0])
+        )
         recurrent(LayerState(hidden=inputs)).hidden.sum().backward()
 
-        self.assertIsNotNone(recurrent.pipeline.memory.model)
+        self.assertEqual(len(memory_inputs), 1)
         self.assertTrue(
             any(
                 parameter.grad is not None

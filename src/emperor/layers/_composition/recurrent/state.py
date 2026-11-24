@@ -9,6 +9,7 @@ from torch import Tensor, nn
 
 if TYPE_CHECKING:
     from emperor.halting import HaltingStateBase
+    from emperor.layers._composition.residual.base import ResidualState
     from emperor.layers._state import LayerState
 
 
@@ -19,6 +20,7 @@ class RecurrentState(ABC):
     transition_index: int
     halting_state: HaltingStateBase | None = None
     all_items_halted: bool = False
+    residual_state: ResidualState | None = None
 
     @property
     @abstractmethod
@@ -39,6 +41,9 @@ class RecurrentState(ABC):
         return output_state.align_recurrent_hidden(
             self.fixed_input, source_state=self.context_state
         )
+
+    def with_forked_residual_state(self, residual_state: ResidualState | None) -> Self:
+        return replace(self, residual_state=residual_state)
 
     @abstractmethod
     def detach(self) -> Self:

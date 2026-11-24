@@ -535,13 +535,24 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                 self.assertIs(model.step.pipeline.config, model.step.cfg)
                 self.assertFalse(hasattr(model, "execution"))
 
-    def test_each_variant_runs_the_outer_pipeline_once_per_transition(self):
+    def test_outer_pipeline_runs_at_each_variants_configured_depth(self):
         for config in _minimal_variant_configs():
             with self.subTest(variant=type(config).__name__):
                 model = config.build()
                 pipeline = model.pipeline
                 self.assertIsInstance(pipeline, LayerProcessingPipeline)
-                transitions = model.recurrent_iteration_schedule.active_transition_count
+                schedule = model.recurrent_iteration_schedule
+                expected_calls = (
+                    schedule.active_iterations
+                    if isinstance(
+                        config,
+                        (
+                            TinyRecursiveModelRecurrentConfig,
+                            HierarchicalReasoningModelRecurrentConfig,
+                        ),
+                    )
+                    else schedule.active_transition_count
+                )
                 state = LayerState(torch.ones(1, 2))
                 with (
                     patch.object(
@@ -556,7 +567,7 @@ class TestRecurrentCompositionConfig(unittest.TestCase):
                     ) as process_layer,
                 ):
                     self.assertIs(model(state), state)
-                self.assertEqual(process_transition.call_count, transitions)
+                self.assertEqual(process_transition.call_count, expected_calls)
                 process_layer.assert_not_called()
 
     def test_recurrent_controller_fields_belong_to_the_family_config(self) -> None:

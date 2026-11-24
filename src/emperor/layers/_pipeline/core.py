@@ -4,8 +4,10 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from emperor.layers._composition.recurrent.config import (
+    HierarchicalReasoningModelRecurrentConfig,
     RecurrentCompositionConfig,
     RecurrentLayerConfig,
+    TinyRecursiveModelRecurrentConfig,
 )
 from emperor.layers._composition.residual.variants.attention import AttentionResidual
 from emperor.layers._config import LayerConfig
@@ -30,9 +32,6 @@ if TYPE_CHECKING:
     from torch import Tensor
 
     from emperor.layers._composition.recurrent.state import RecurrentState
-    from emperor.layers._composition.recurrent.variants.standard.state import (
-        StandardRecurrentState,
-    )
     from emperor.layers._composition.residual.base import ResidualState
     from emperor.layers._state import LayerState
 
@@ -68,16 +67,22 @@ class LayerProcessingPipeline(Module):
         )
 
     def __build_recurrent_residual_schedule(self) -> RecurrentResidualSchedule | None:
-        if not isinstance(self.config, RecurrentLayerConfig):
-            return None
         connection = self.residual.connection
         if connection is None:
             return None
+        if isinstance(self.config, RecurrentLayerConfig):
+            step_count = self.config.max_steps
+        elif isinstance(self.config, TinyRecursiveModelRecurrentConfig):
+            step_count = self.config.answer_update_count
+        elif isinstance(self.config, HierarchicalReasoningModelRecurrentConfig):
+            step_count = self.config.high_cycles
+        else:
+            return None
         if isinstance(connection, AttentionResidual):
             return DepthwiseRecurrentResidualSchedule.from_connection(
-                connection, self.config.max_steps
+                connection, step_count
             )
-        return SharedRecurrentResidualSchedule(self.config.max_steps)
+        return SharedRecurrentResidualSchedule(step_count)
 
     def process_normal_layer(
         self,
@@ -106,7 +111,8 @@ class LayerProcessingPipeline(Module):
         *,
         recurrent_state: RecurrentState,
         previous_hidden: Tensor | None = None,
-        target_state: StandardRecurrentState | None = None,
+        target_state: RecurrentState | None = None,
+        residual_step_index: int | None = None,
     ) -> LayerState:
         state = self.normalization.before_model(state)
         state = self.memory.before_model(state)
@@ -116,6 +122,8 @@ class LayerProcessingPipeline(Module):
         state = self.normalization.after_model(state)
         state = self.postprocessing.process(state)
         residual_input = state.hidden
+        if residual_step_index is None:
+            residual_step_index = recurrent_state.transition_index
         if previous_hidden is None:
             previous_hidden = recurrent_state.output_hidden
         aligned_previous = output_state.align_recurrent_hidden(
@@ -124,7 +132,8 @@ class LayerProcessingPipeline(Module):
         state = self.residual.apply_recurrent_residual(
             state,
             aligned_previous,
-            recurrent_state,
+            recurrent_state.residual_state,
+            transition_index=residual_step_index,
             schedule=self.residual_schedule,
         )
         state = self.normalization.after_residual(state)
@@ -132,8 +141,8 @@ class LayerProcessingPipeline(Module):
             self.residual.advance_detached_state(
                 residual_input,
                 previous_hidden,
-                target_state,
-                transition_index=recurrent_state.transition_index,
+                target_state.residual_state,
+                transition_index=residual_step_index,
                 schedule=self.residual_schedule,
             )
         return state

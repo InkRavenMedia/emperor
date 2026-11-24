@@ -50,6 +50,7 @@ class TinyRecursiveModelStep(RecurrentStep[TinyRecursiveModelState]):
         return TinyRecursiveModelState(
             fixed_input=state.hidden,
             answer=answer,
+            residual_state=self.pipeline.new_recurrent_residual_state(answer),
             latent=latent,
             initial_loss=state.loss if include_caller_loss else None,
             auxiliary_losses=(),
@@ -74,21 +75,25 @@ class TinyRecursiveModelStep(RecurrentStep[TinyRecursiveModelState]):
         recurrent_state: TinyRecursiveModelState,
         target_state: TinyRecursiveModelState | None = None,
     ) -> LayerState:
-        updates_answer = self.__updates_answer(recurrent_state.transition_index)
-        if updates_answer:
-            transition_input = recurrent_state.answer + recurrent_state.latent
-            previous_hidden = recurrent_state.answer
-        else:
-            latent_input = recurrent_state.latent + recurrent_state.answer
-            transition_input = latent_input + recurrent_state.fixed_input
-            previous_hidden = recurrent_state.latent
-        transition_state = recurrent_state.layer_state_for_transition(transition_input)
-        return self.pipeline.process_recurrent_transition(
-            transition_state,
-            run_model=self.__run_block,
-            recurrent_state=recurrent_state,
-            previous_hidden=previous_hidden,
+        if self.__updates_answer(recurrent_state.transition_index):
+            answer_input = recurrent_state.answer + recurrent_state.latent
+            answer_index = recurrent_state.transition_index // (
+                self.latent_updates_per_answer_update + 1
+            )
+            return self.pipeline.process_recurrent_transition(
+                recurrent_state.layer_state_for_transition(answer_input),
+                run_model=self.__run_block,
+                recurrent_state=recurrent_state,
+                residual_step_index=answer_index,
+                target_state=target_state,
+            )
+        transition_input = (
+            recurrent_state.latent
+            + recurrent_state.answer
+            + recurrent_state.fixed_input
         )
+        transition_state = recurrent_state.layer_state_for_transition(transition_input)
+        return self.__run_block(transition_state)
 
     def __updates_answer(self, transition_index: int) -> bool:
         phase_index = transition_index % (self.latent_updates_per_answer_update + 1)

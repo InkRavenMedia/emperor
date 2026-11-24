@@ -14,6 +14,11 @@ from emperor._validation import (
     _validate_grouped_row_preservation,
 )
 from emperor.layers._composition.gate.validation import LayerGateValidator
+from emperor.layers._composition.recurrent.config import (
+    HierarchicalReasoningModelRecurrentConfig,
+    TinyRecursiveModelRecurrentConfig,
+)
+from emperor.layers._composition.residual.config import AttentionResidualConfig
 from emperor.layers._composition.residual.validation import (
     ResidualConnectionValidator,
 )
@@ -208,6 +213,14 @@ class RecurrentCompositionValidator(ValidatorBase):
     @staticmethod
     def _validate_residual_execution(config: RecurrentCompositionConfig) -> None:
         if config.residual_config is None:
+            return
+        if isinstance(
+            config,
+            (
+                TinyRecursiveModelRecurrentConfig,
+                HierarchicalReasoningModelRecurrentConfig,
+            ),
+        ) and isinstance(config.residual_config, AttentionResidualConfig):
             return
         residual_owner = config.residual_config.registry_owner()
         residual_owner.VALIDATOR.validate_stateless_execution(
