@@ -4,6 +4,12 @@ from dataclasses import replace
 from enum import Enum, auto
 from typing import Any
 
+from emperor.augmentations.adaptive_parameters import (
+    AdaptiveLinearLayerConfig,
+    AdaptiveParameterAugmentationConfig,
+    AdditiveDynamicBiasConfig,
+    WeightDecayScheduleOptions,
+)
 from emperor.config import ConfigBase
 from emperor.layers import (
     ActivationOptions,
@@ -68,6 +74,25 @@ def projection_stack_config(
         apply_output_postprocessing_flag=False,
         last_layer_bias_option=LastLayerBiasOptions.DEFAULT,
         layer_config=layer_config,
+    )
+
+
+def default_adaptive_projection(
+    *, hidden_dim: int, num_layers: int
+) -> AdaptiveLinearLayerConfig:
+    generator = projection_stack_config(
+        LinearLayerConfig(bias_flag=True), hidden_dim=hidden_dim, num_layers=num_layers
+    )
+    augmentation = AdaptiveParameterAugmentationConfig(
+        bias_config=AdditiveDynamicBiasConfig(
+            decay_schedule=WeightDecayScheduleOptions.DISABLED,
+            decay_rate=0.0,
+            decay_warmup_batches=0,
+            model_config=generator,
+        ),
+    )
+    return AdaptiveLinearLayerConfig(
+        bias_flag=True, adaptive_augmentation_config=augmentation
     )
 
 
