@@ -1,7 +1,10 @@
 import pytest
 import torch
 
-from emperor.augmentations.adaptive_parameters import MatrixWeightsMixtureConfig
+from emperor.augmentations.adaptive_parameters import (
+    MatrixBiasMixtureConfig,
+    MatrixWeightsMixtureConfig,
+)
 from models.catalog import model_package
 from tests.model_packages.test_attention_residual_options import walk
 
@@ -24,9 +27,9 @@ def test_selected_adaptive_boundary_contributes_once_with_its_gradient(name, bou
         "hidden_dim": 4,
         "output_dim": 2,
         "stack_num_layers": 1,
-        f"{boundary}_layer_weight_option": MatrixWeightsMixtureConfig,
-        f"{boundary}_layer_weight_mixture_num_experts": 3,
-        f"{boundary}_layer_weight_mixture_top_k": 1,
+        f"{boundary}_layer_bias_option": MatrixBiasMixtureConfig,
+        f"{boundary}_layer_bias_mixture_num_experts": 3,
+        f"{boundary}_layer_bias_mixture_top_k": 1,
     }
     if name.startswith("neuron/"):
         for axis in ("x", "y", "z"):
@@ -43,7 +46,7 @@ def test_selected_adaptive_boundary_contributes_once_with_its_gradient(name, bou
     configuration = package.build_configuration(config_overrides=values)
     adapter = getattr(configuration.experiment_config, boundary + "_model_config")
     (mixture,) = [
-        item for item in walk(adapter) if isinstance(item, MatrixWeightsMixtureConfig)
+        item for item in walk(adapter) if isinstance(item, MatrixBiasMixtureConfig)
     ]
     mixture.sampler_config.switch_loss_weight = 0.2
     model = package.build_model(configuration).eval()
@@ -99,18 +102,27 @@ def test_no_auxiliary_term_and_zero_valued_term_keep_distinct_public_results():
         package.build_configuration(config_overrides=dimensions)
     )
     assert isinstance(plain(inputs), torch.Tensor)
-    configured = package.build_configuration(
+    dense = package.build_configuration(
         config_overrides={
             **dimensions,
             "input_layer_weight_option": MatrixWeightsMixtureConfig,
             "input_layer_weight_mixture_num_experts": 3,
-            "input_layer_weight_mixture_top_k": 1,
+        }
+    )
+    dense_logits = package.build_model(dense)(inputs)
+    assert isinstance(dense_logits, torch.Tensor) and dense_logits.shape == (2, 2)
+    configured = package.build_configuration(
+        config_overrides={
+            **dimensions,
+            "input_layer_bias_option": MatrixBiasMixtureConfig,
+            "input_layer_bias_mixture_num_experts": 3,
+            "input_layer_bias_mixture_top_k": 1,
         }
     )
     (mixture,) = [
         item
         for item in walk(configured.experiment_config.input_model_config)
-        if isinstance(item, MatrixWeightsMixtureConfig)
+        if isinstance(item, MatrixBiasMixtureConfig)
     ]
     mixture.sampler_config.switch_loss_weight = 0.0
     logits, loss = package.build_model(configured)(inputs)

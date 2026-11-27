@@ -87,7 +87,11 @@ def staged_reference(model, members, context):
             ]
         )
 
-    weight = model.weight_params + mixture_reference(augmentation.weight_model)
+    bank = augmentation.weight_model
+    shares = affine(bank.model, context).softmax(-1)
+    weight = model.weight_params + (shares[:, :, None, None] * bank.parameter_bank).sum(
+        1
+    )
     bias = model.bias_params + mixture_reference(augmentation.bias_model)
     diagonal = affine(augmentation.diagonal_model.model, context)
     weight = weight + torch.nn.functional.pad(torch.diag_embed(diagonal), (0, 0, 0, 1))

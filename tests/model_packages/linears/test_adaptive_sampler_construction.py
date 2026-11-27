@@ -38,13 +38,11 @@ from models.catalog import model_package
                 "output_layer_weight_option": MatrixWeightsMixtureConfig,
                 "output_layer_weight_mixture_num_experts": 7,
             },
-            [3, 5, 7],
+            [5],
         ),
     ],
 )
-def test_builds_one_sampler_for_each_selected_mixture(
-    overrides, expected_expert_counts
-):
+def test_only_sampled_bias_mixtures_build_a_sampler(overrides, expected_expert_counts):
     package = model_package("linears/linear_adaptive")
     with patch.object(
         _adaptive_parameters, "SamplerConfig", wraps=SamplerConfig

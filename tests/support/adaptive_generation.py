@@ -47,12 +47,6 @@ def weight_mixture_config(**overrides):
                 input_dim=2,
                 output_dim=3,
                 num_experts=3,
-                top_k=2,
-                sampler_config=matrix_sampler_config(
-                    input_dim=overrides.get("input_dim", 2),
-                    num_experts=overrides.get("num_experts", 3),
-                    top_k=overrides.get("top_k") or 2,
-                ),
                 model_config=linear_stack_config(2, 3),
             )
             | overrides

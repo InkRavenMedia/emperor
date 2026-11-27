@@ -231,20 +231,15 @@ def build_mixture_generation(
     )
 
 
-class WeightGenerationSettings(
-    _FactorSources[GeneratorStackSource],
-    MixtureGenerationSettings[GeneratorStackSource],
-    Protocol,
-):
-    pass
+class WeightGenerationSettings(_FactorSources[GeneratorStackSource], Protocol):
+    mixture_num_experts: Final[int | None]
+    mixture_router_generator_stack: Final[GeneratorStackSource | None]
 
 
-_Mixture = TypeVar("_Mixture")
-_MixtureIn = TypeVar("_MixtureIn", contravariant=True)
 _Default = TypeVar("_Default")
 
 
-class _BuildWeight(Protocol[_MixtureIn, _GenerationCo]):
+class _BuildWeight(Protocol[_GenerationCo]):
     def __call__(
         self,
         *,
@@ -253,7 +248,8 @@ class _BuildWeight(Protocol[_MixtureIn, _GenerationCo]):
         input_factor_model_config: LayerStackConfig | None = ...,
         output_factor_model_config: LayerStackConfig | None = ...,
         coefficient_model_config: LayerStackConfig | None = ...,
-        mixture: _MixtureIn = ...,
+        num_experts: int | None = ...,
+        router_model_config: LayerStackConfig | None = ...,
     ) -> _GenerationCo: ...
 
 
@@ -263,15 +259,16 @@ def build_weight_generation(
     weight_option: type[DynamicWeightConfig] | None,
     weight_source: GeneratorStackSource | None,
     *,
-    weight_type: _BuildWeight[_Mixture, _Generation],
-    mixture_type: _BuildMixture[_Mixture],
+    weight_type: _BuildWeight[_Generation],
     default: Callable[[], _Default],
 ) -> _Generation | _Default:
     if weight_option is MatrixWeightsMixtureConfig:
-        mixture = build_mixture_generation(
-            options, factory.build_config_from_source, mixture_type
+        return weight_type(
+            num_experts=options.mixture_num_experts,
+            router_model_config=factory.build_config_from_source(
+                options.mixture_router_generator_stack
+            ),
         )
-        return weight_type(mixture=mixture)
     if weight_option is DiagonallyModulatedLowRankDynamicWeightConfig:
         factor_factory = factory.for_weight_source(weight_source)
         return build_factor_generation(

@@ -139,7 +139,7 @@ def test_vit_keeps_zero_valued_penalties_from_patch_projection_patch_and_head(pa
     assert [penalty.grad.item() for penalty in penalties] == [1.0, 1.0, 1.0]
 
 
-def test_transformer_sampler_only_built_for_matrix_mixtures():
+def test_transformer_dense_weight_mixture_does_not_build_a_sampler():
     from emperor.augmentations.adaptive_parameters import MatrixWeightsMixtureConfig
     from models import _adaptive_parameters
 
@@ -155,7 +155,7 @@ def test_transformer_sampler_only_built_for_matrix_mixtures():
                 "encoder_attn_weight_mixture_num_experts": 3,
             }
         )
-    assert [call.kwargs["num_experts"] for call in sampler.call_args_list] == [3]
+    sampler.assert_not_called()
 
 
 @pytest.mark.parametrize(

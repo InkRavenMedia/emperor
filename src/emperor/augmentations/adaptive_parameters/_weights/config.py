@@ -14,7 +14,6 @@ from emperor.config import ConfigBase, optional_field
 
 if TYPE_CHECKING:
     from emperor.layers import LayerStackConfig
-    from emperor.sampler import SamplerConfig
 
 
 @dataclass
@@ -172,11 +171,7 @@ class SoftWeightedBankDynamicWeightConfig(DynamicWeightConfig):
 @dataclass
 class MatrixWeightsMixtureConfig(DynamicWeightConfig):
     num_experts: int | None = optional_field(
-        "Number of complete parameter bank entries."
-    )
-    top_k: int | None = optional_field("Number of selected entries per context.")
-    sampler_config: "SamplerConfig | None" = optional_field(
-        "Required sampler and router; routing controls and loss weights must be explicit."
+        "Number of complete weight matrices mixed by softmax for each context."
     )
 
     def _registry_owner(self) -> type:

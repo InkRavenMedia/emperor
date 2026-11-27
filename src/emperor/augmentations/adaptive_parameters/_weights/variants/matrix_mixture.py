@@ -1,6 +1,7 @@
 from copy import deepcopy
 from dataclasses import replace
 
+import torch
 from torch import Tensor
 
 from emperor.augmentations.adaptive_parameters._weights.base import (
@@ -12,6 +13,8 @@ from emperor.augmentations.adaptive_parameters._weights.config import (
 from emperor.augmentations.adaptive_parameters._weights.validation import (
     MatrixWeightsMixtureValidator,
 )
+from emperor.layers import LayerStack, LayerStackConfig
+from emperor.nn import SoftSlotRouting
 
 
 class MatrixWeightsMixture(DynamicWeightAbstract):
@@ -25,26 +28,23 @@ class MatrixWeightsMixture(DynamicWeightAbstract):
         config = deepcopy(self._override_config(cfg, overrides))
         super().__init__(config)
         self.num_experts = self.cfg.num_experts
-        self.top_k = self.cfg.top_k
         self.parameter_bank_shape = (self.num_experts, self.input_dim, self.output_dim)
         self.parameter_bank = self._init_parameter_bank(self.parameter_bank_shape)
-        self.sampler = self.__init_sampler()
+        self.model = self.__init_router_model()
+        self.routing = SoftSlotRouting()
 
-    def __init_sampler(self):
-        self.VALIDATOR.validate_sampler_config(self.cfg.sampler_config)
-        return self.cfg.sampler_config.build()
-
-    def get_auxiliary_loss(self) -> Tensor:
-        return self.sampler.get_auxiliary_loss()
+    def __init_router_model(self) -> LayerStack:
+        model_overrides = LayerStackConfig(
+            input_dim=self.input_dim, output_dim=self.num_experts
+        )
+        return self.cfg.model_config.build(model_overrides)
 
     @classmethod
     def validate_owner_config(cls, cfg, *, input_dim, output_dim) -> None:
-        """Preflight the effective configuration without constructing parameters."""
         for name, value in (("input_dim", input_dim), ("output_dim", output_dim)):
             cls.VALIDATOR.validate_matching_value(name, getattr(cfg, name), value)
         owner_config = replace(cfg, input_dim=input_dim, output_dim=output_dim)
         cls.VALIDATOR.validate_initialization_config(owner_config)
-        cls.VALIDATOR.validate_routing_config(owner_config)
 
     def forward(
         self,
@@ -52,48 +52,18 @@ class MatrixWeightsMixture(DynamicWeightAbstract):
         context: Tensor,
     ) -> Tensor:
         self.VALIDATOR.validate_forward_inputs(self, weight_params, context)
-        self.VALIDATOR.validate_sampler_available(self.sampler)
-        skip_mask = self.__create_skip_mask(context)
-        probabilities, indices, skip_mask, _ = (
-            self.sampler.sample_probabilities_and_indices(context, skip_mask)
+        bank_logits = self.model.forward_hidden(context)
+        dispatch_weights = self.routing.compute_dispatch_weights(
+            bank_logits.unsqueeze(-1)
         )
-        probabilities = self.__apply_skip_mask(probabilities, skip_mask)
-        self.VALIDATOR.validate_route(self, probabilities, indices)
-        generated_parameters = self.__reduce_mixture(probabilities, indices)
-        decayed_parameters = self._maybe_apply_weight_decay(weight_params)
-        return decayed_parameters + generated_parameters
-
-    def __create_skip_mask(self, context: Tensor) -> Tensor | None:
-        if (
-            self.cfg.sampler_config.threshold != 0.0
-            or self.cfg.sampler_config.mutual_information_loss_weight != 0.0
-        ):
-            return context.new_ones((context.shape[0], 1))
-        return None
-
-    def __apply_skip_mask(
-        self, probabilities: Tensor, skip_mask: Tensor | None
-    ) -> Tensor:
-        if skip_mask is None:
-            return probabilities
-        mask_shape = (-1,) + (1,) * (probabilities.ndim - 1)
-        return probabilities * skip_mask.reshape(mask_shape)
-
-    def __reduce_mixture(self, probabilities: Tensor, indices: Tensor | None) -> Tensor:
-        selected_parameters = self.__select_parameters(indices)
-        weighted_parameters = self.__apply_probabilities(
-            selected_parameters, probabilities
+        pooling_dtype = torch.promote_types(
+            self.parameter_bank.dtype, dispatch_weights.dtype
         )
-        return weighted_parameters.sum(dim=1)
-
-    def __select_parameters(self, indices: Tensor | None) -> Tensor:
-        if indices is None:
-            return self.parameter_bank
-        expert_indices_per_context = indices.reshape(-1, self.top_k)
-        return self.parameter_bank[expert_indices_per_context]
-
-    def __apply_probabilities(
-        self, selected_parameters: Tensor, probabilities: Tensor
-    ) -> Tensor:
-        probability_shape = (-1, self.top_k) + (1,) * (self.parameter_bank.ndim - 1)
-        return selected_parameters * probabilities.reshape(probability_shape)
+        bank_vectors = self.parameter_bank.flatten(1).to(pooling_dtype)
+        pooled_bank_vectors = self.routing.pool_tokens_with_dispatch_weights(
+            bank_vectors, dispatch_weights.to(pooling_dtype)
+        )
+        weight_update = pooled_bank_vectors.reshape(-1, self.input_dim, self.output_dim)
+        update_dtype = torch.promote_types(self.parameter_bank.dtype, bank_logits.dtype)
+        decayed_weight_params = self._maybe_apply_weight_decay(weight_params)
+        return decayed_weight_params + weight_update.to(update_dtype)

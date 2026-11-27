@@ -367,9 +367,7 @@ def _resolve_generation(
         weight_output_factor_source=values.weight_output_factor_source,
         weight_mixture_num_experts=values.weight_mixture_num_experts,
         bias_mixture_num_experts=values.bias_mixture_num_experts,
-        weight_mixture_top_k=values.weight_mixture_top_k,
         bias_mixture_top_k=values.bias_mixture_top_k,
-        weight_mixture_normalize_probabilities_flag=values.weight_mixture_normalize_probabilities_flag,
         bias_mixture_normalize_probabilities_flag=values.bias_mixture_normalize_probabilities_flag,
         weight_input_factor_generator_stack=_generator_stack(
             values.weight_input_factor_generator_stack, factor_defaults

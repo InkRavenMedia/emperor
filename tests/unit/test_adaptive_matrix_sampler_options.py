@@ -1,4 +1,4 @@
-"""Adaptive matrix mixtures honor explicit routing and auxiliary-loss settings."""
+"""Adaptive bias matrices honor explicit routing and auxiliary-loss settings."""
 
 from copy import deepcopy
 
@@ -37,12 +37,9 @@ SAMPLER_OPTIONS = (
 )
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize("option", SAMPLER_OPTIONS)
-def test_sampler_options_must_be_explicit_before_parameter_initialization(
-    config_factory, option
-):
-    config = config_factory()
+def test_sampler_options_must_be_explicit_before_parameter_initialization(option):
+    config = bias_mixture_config()
     setattr(config.sampler_config, option, None)
     rng_state = torch.get_rng_state().clone()
     with pytest.raises(ValueError, match=option):
@@ -50,7 +47,6 @@ def test_sampler_options_must_be_explicit_before_parameter_initialization(
     torch.testing.assert_close(torch.get_rng_state(), rng_state, rtol=0, atol=0)
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize(
     "option, value",
     [
@@ -63,10 +59,8 @@ def test_sampler_options_must_be_explicit_before_parameter_initialization(
         ("model_config", None),
     ],
 )
-def test_router_fields_are_required_and_conflicts_fail_without_mutation(
-    config_factory, option, value
-):
-    config = config_factory()
+def test_router_fields_are_required_and_conflicts_fail_without_mutation(option, value):
+    config = bias_mixture_config()
     setattr(config.sampler_config.router_config, option, value)
     original = deepcopy(config)
     rng_state = torch.get_rng_state().clone()
@@ -76,12 +70,11 @@ def test_router_fields_are_required_and_conflicts_fail_without_mutation(
     torch.testing.assert_close(torch.get_rng_state(), rng_state, rtol=0, atol=0)
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize("loss_option", LOSS_OPTIONS)
-def test_configured_auxiliary_losses_reach_router_gradients(
-    config_factory, loss_option
-):
-    config = config_factory(sampler_config=matrix_sampler_config(**{loss_option: 0.5}))
+def test_configured_auxiliary_losses_reach_router_gradients(loss_option):
+    config = bias_mixture_config(
+        sampler_config=matrix_sampler_config(**{loss_option: 0.5})
+    )
     original = deepcopy(config)
     model = config.build().double()
     router = model.sampler.router.model[0].model
@@ -102,9 +95,8 @@ def test_configured_auxiliary_losses_reach_router_gradients(
     assert router.weight_params.grad.abs().sum() > 0
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
-def test_noise_and_random_sampling_options_are_preserved(config_factory):
-    config = config_factory(
+def test_noise_and_random_sampling_options_are_preserved():
+    config = bias_mixture_config(
         sampler_config=matrix_sampler_config(
             noisy_topk_flag=True,
             num_topk_samples=1,
@@ -123,12 +115,9 @@ def test_noise_and_random_sampling_options_are_preserved(config_factory):
     assert torch.isfinite(output).all()
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize("threshold, filter_above", [(0.9, False), (0.2, True)])
-def test_threshold_skips_generated_update_and_retains_base(
-    config_factory, threshold, filter_above
-):
-    model = config_factory(
+def test_threshold_skips_generated_update_and_retains_base(threshold, filter_above):
+    model = bias_mixture_config(
         sampler_config=matrix_sampler_config(
             threshold=threshold, filter_above_threshold=filter_above
         )
@@ -144,7 +133,7 @@ def test_threshold_skips_generated_update_and_retains_base(
 
 
 @pytest.mark.parametrize("grouped", [False, True])
-def test_layer_state_accumulates_both_matrix_losses_without_resampling(grouped):
+def test_layer_state_only_accumulates_the_sampled_bias_loss(grouped):
     config = linear_stack_config(2, 3)
     config.layer_config.layer_model_config = AdaptiveLinearLayerConfig(
         input_dim=2,
@@ -156,9 +145,7 @@ def test_layer_state_accumulates_both_matrix_losses_without_resampling(grouped):
             )
             if grouped
             else None,
-            weight_config=weight_mixture_config(
-                sampler_config=matrix_sampler_config(zero_centred_loss_weight=0.3)
-            ),
+            weight_config=weight_mixture_config(),
             bias_config=bias_mixture_config(
                 sampler_config=matrix_sampler_config(switch_loss_weight=0.2)
             ),
@@ -168,10 +155,13 @@ def test_layer_state_accumulates_both_matrix_losses_without_resampling(grouped):
     augmentation = model[0].model.adaptive_behaviour
     router_calls = []
     hooks = [
-        variant.sampler.router.model.register_forward_hook(
+        scorer.register_forward_hook(
             lambda _module, _inputs, _output: router_calls.append(True)
         )
-        for variant in (augmentation.weight_model, augmentation.bias_model)
+        for scorer in (
+            augmentation.weight_model.model,
+            augmentation.bias_model.sampler.router.model,
+        )
     ]
     initial_loss = torch.tensor(0.75, dtype=torch.float64)
     context = torch.tensor([[1.0, 0.5], [-0.5, 1.5]], dtype=torch.float64)
@@ -181,23 +171,17 @@ def test_layer_state_accumulates_both_matrix_losses_without_resampling(grouped):
         for hook in hooks:
             hook.remove()
     assert len(router_calls) == 2
-    expected = (
-        initial_loss
-        + augmentation.weight_model.sampler.get_auxiliary_loss()
-        + augmentation.bias_model.sampler.get_auxiliary_loss()
+    assert augmentation.weight_model.get_auxiliary_loss() is None
+    torch.testing.assert_close(
+        result.loss, initial_loss + augmentation.bias_model.get_auxiliary_loss()
     )
-    torch.testing.assert_close(result.loss, expected)
     result.loss.backward()
-    for variant in (augmentation.weight_model, augmentation.bias_model):
-        assert any(
-            parameter.grad is not None and parameter.grad.abs().sum() > 0
-            for parameter in variant.sampler.router.parameters()
-        )
-    next_result = model(LayerState(hidden=context * 0.5))
-    next_loss = (
-        augmentation.weight_model.sampler.get_auxiliary_loss()
-        + augmentation.bias_model.sampler.get_auxiliary_loss()
+    assert all(p.grad is None for p in augmentation.weight_model.parameters())
+    assert any(
+        p.grad is not None for p in augmentation.bias_model.sampler.router.parameters()
     )
+    next_result = model(LayerState(hidden=context * 0.5))
+    next_loss = augmentation.bias_model.get_auxiliary_loss()
     torch.testing.assert_close(next_result.loss, next_loss)
     next_result.loss.backward()
     if grouped:
