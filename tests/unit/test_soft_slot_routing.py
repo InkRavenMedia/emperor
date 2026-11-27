@@ -5,6 +5,26 @@ from emperor.nn import SoftSlotRouting
 
 
 @pytest.mark.parametrize("causal", [False, True])
+@pytest.mark.parametrize("masked", [False, True])
+def test_pool_shared_bank_matches_independent_routes_and_gradients(causal, masked):
+    logits = torch.randn(2, 3, 2, dtype=torch.float64, requires_grad=True)
+    bank = torch.randn(3, 4, dtype=torch.float64, requires_grad=True)
+    mask = torch.tensor([[[True], [True], [False]], [[True], [False], [True]]])
+    routing = SoftSlotRouting(mask if masked else None, causal_prefix_flag=causal)
+    actual = routing.pool_tokens_with_dispatch_weights(
+        bank, routing.compute_dispatch_weights(logits)
+    )
+    expected = routing.compress_tokens(bank.expand(2, -1, -1), logits)
+    torch.testing.assert_close(actual, expected)
+    for actual_grad, expected_grad in zip(
+        torch.autograd.grad(actual.square().sum(), (bank, logits)),
+        torch.autograd.grad(expected.square().sum(), (bank, logits)),
+        strict=True,
+    ):
+        torch.testing.assert_close(actual_grad, expected_grad)
+
+
+@pytest.mark.parametrize("causal", [False, True])
 @pytest.mark.parametrize("grouped", [False, True])
 def test_saved_route_matches_independent_token_mixtures_and_gradients(causal, grouped):
     generator = torch.Generator().manual_seed(17)
