@@ -52,10 +52,9 @@ class SoftSlotRoutingValidator:
         cls, tokens: object, weights: Tensor, active_token_mask: Tensor | None
     ) -> None:
         cls.validate_token_slot_layout(weights, active_token_mask)
-        if (
-            not isinstance(tokens, Tensor)
-            or tokens.ndim != 3
-            or tokens.shape[:2] != weights.shape[:2]
+        if not isinstance(tokens, Tensor) or not (
+            (tokens.ndim == 3 and tokens.shape[:2] == weights.shape[:2])
+            or (tokens.ndim == 2 and tokens.shape[0] == weights.shape[1])
         ):
             raise ValueError(
                 "Token features must match the batch and token axes of the route."
