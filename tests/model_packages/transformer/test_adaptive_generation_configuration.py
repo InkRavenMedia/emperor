@@ -77,7 +77,6 @@ def test_linear_package_builds_bank_and_mixed_factor_sources_from_scalars(
                 else WeightNormalizationOptions.DISABLED
             ),
             weight_mixture_num_experts=3,
-            weight_mixture_top_k=2,
             weight_decay_schedule=WeightDecayScheduleOptions.LINEAR,
             weight_decay_rate=0.25,
             weight_decay_warmup_batches=2,
@@ -178,7 +177,6 @@ def test_transformer_generators_build_forward_backward_inspection(key, weight_op
             else WeightNormalizationOptions.DISABLED
         ),
         weight_mixture_num_experts=3,
-        weight_mixture_top_k=2,
         weight_input_factor_source=LowRankFactorSourceOptions.SHARED_PARAMETER,
         bias_option=MatrixBiasMixtureConfig,
         bias_option_flag=True,

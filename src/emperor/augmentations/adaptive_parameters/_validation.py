@@ -1,5 +1,5 @@
 import math
-from dataclasses import fields
+from dataclasses import fields, replace
 from typing import TYPE_CHECKING
 
 from torch.types import Tensor
@@ -316,6 +316,11 @@ class AdaptiveParameterAugmentationValidator(
             if isinstance(
                 variant, (MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig)
             ):
+                if (
+                    isinstance(variant, MatrixWeightsMixtureConfig)
+                    and variant.model_config is None
+                ):
+                    variant = replace(variant, model_config=config.model_config)
                 variant_owner = variant.registry_owner()
                 variant_owner.validate_owner_config(
                     variant,

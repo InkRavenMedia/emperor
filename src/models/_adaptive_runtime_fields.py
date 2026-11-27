@@ -671,9 +671,7 @@ class GenerationValues:
     weight_output_factor_source: LowRankFactorSourceOptions | None
     weight_mixture_num_experts: int | None
     bias_mixture_num_experts: int | None
-    weight_mixture_top_k: int | None
     bias_mixture_top_k: int | None
-    weight_mixture_normalize_probabilities_flag: bool | None
     bias_mixture_normalize_probabilities_flag: bool | None
     weight_input_factor_generator_stack: OptionalStackValues
     weight_output_factor_generator_stack: OptionalStackValues

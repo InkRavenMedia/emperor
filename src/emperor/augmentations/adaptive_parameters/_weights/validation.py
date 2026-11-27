@@ -1,7 +1,6 @@
 from dataclasses import fields
 from typing import TYPE_CHECKING
 
-import torch
 from torch.types import Tensor
 
 from emperor._validation import ValidatorBase
@@ -426,128 +425,6 @@ class DepthMappingValidator(ValidatorBase):
 
 
 class MatrixWeightsMixtureValidator(DynamicWeightValidator):
-    OPTIONAL_FIELDS = {"model_config", "normalization_config"}
-
-    @classmethod
-    def validate(cls, model) -> None:
-        cls.validate_initialization_config(model.cfg)
-        cls.validate_routing_config(model.cfg)
-
-    @staticmethod
-    def validate_configuration(cfg):
-        if vars(cfg).keys() - {field.name for field in fields(cfg)} - {"_passed_args"}:
-            raise ValueError(
-                "Complete parameter bank config contains unsupported fields."
-            )
-        for name in ("input_dim", "output_dim", "num_experts", "top_k"):
-            value = getattr(cfg, name)
-            if type(value) is not int or value <= 0:
-                raise ValueError(
-                    f"{name} must be a positive integer, received {value!r}."
-                )
-        if cfg.top_k > cfg.num_experts:
-            raise ValueError("top_k cannot exceed num_experts.")
-
-    @staticmethod
-    def validate_route(model, probabilities, indices):
-        if indices is None:
-            if model.top_k != model.num_experts:
-                raise ValueError(
-                    "Missing indices require a full-bank route: top_k must equal num_experts."
-                )
-        else:
-            if not isinstance(indices, Tensor) or indices.dtype != torch.long:
-                raise TypeError("indices must be a torch.long Tensor.")
-            if indices.device != model.parameter_bank.device:
-                raise ValueError("indices must be on the parameter bank device.")
-            if indices.ndim not in (1, 2) or (indices.ndim == 1 and model.top_k != 1):
-                raise ValueError(
-                    "indices must have shape [contexts, top_k], or [contexts] for top-1."
-                )
-            if indices.ndim == 2 and indices.shape[1] != model.top_k:
-                raise ValueError("indices selection dimension must equal top_k.")
-            if torch.any((indices < 0) | (indices >= model.num_experts)):
-                raise ValueError("indices must lie within the parameter bank.")
-        if probabilities is None:
-            raise ValueError("Matrix mixture sampler must provide probabilities.")
-        if (
-            not isinstance(probabilities, Tensor)
-            or not probabilities.is_floating_point()
-        ):
-            raise TypeError("probabilities must be a floating-point Tensor.")
-        if probabilities.device != model.parameter_bank.device:
-            raise ValueError("probabilities must be on the parameter bank device.")
-        if probabilities.ndim not in (1, 2) or (
-            probabilities.ndim == 1 and model.top_k != 1
-        ):
-            raise ValueError(
-                "probabilities must have shape [contexts, top_k], or [contexts] for top-1."
-            )
-        if probabilities.ndim == 2 and probabilities.shape[1] != model.top_k:
-            raise ValueError("probabilities selection dimension must equal top_k.")
-        if indices is not None and probabilities.shape[0] != indices.shape[0]:
-            raise ValueError(
-                "probabilities and indices must have the same context count."
-            )
-        if not torch.isfinite(probabilities).all() or torch.any(probabilities < 0):
-            raise ValueError("probabilities must be finite and non-negative.")
-
-    @classmethod
-    def validate_initialization_config(cls, cfg) -> None:
-        cls.validate_configuration(cfg)
-        cls.validate_field_types(cfg)
-        cls.validate_normalization_config(cfg)
-        cls.validate_decay_parameters(cfg)
-        cls.validate_sampler_config(cfg.sampler_config)
-
-    @classmethod
-    def validate_sampler_fields(cls, sampler, cfg) -> None:
-        cls.validate_supported_fields(sampler)
-        cls.validate_field_types(sampler)
-        for name in ("num_experts", "top_k"):
-            value, expected = getattr(sampler, name), getattr(cfg, name)
-            if type(value) is not type(expected) or value != expected:
-                raise ValueError(
-                    f"sampler_config.{name} must match {expected!r}, received {value!r}."
-                )
-
-    @staticmethod
-    def validate_router_config(router_config) -> None:
-        from emperor.sampler import RouterConfig
-
-        if router_config is None:
-            raise ValueError(
-                "sampler_config.router_config is required for an adaptive matrix mixture."
-            )
-        if not isinstance(router_config, RouterConfig):
-            raise TypeError("sampler_config.router_config must be a RouterConfig.")
-
-    @classmethod
-    def validate_router_fields(cls, router, cfg) -> None:
-        cls.validate_supported_fields(router)
-        cls.validate_field_types(router)
-        for name, expected in (
-            ("input_dim", cfg.input_dim),
-            ("num_experts", cfg.num_experts),
-            ("noisy_topk_flag", cfg.sampler_config.noisy_topk_flag),
-        ):
-            value = getattr(router, name)
-            if type(value) is not type(expected) or value != expected:
-                raise ValueError(
-                    f"sampler_config.router_config.{name} must match {expected!r}, received {value!r}."
-                )
-
-    @classmethod
-    def validate_routing_config(cls, cfg) -> None:
-        sampler = cfg.sampler_config
-        cls.validate_sampler_fields(sampler, cfg)
-        cls.validate_router_config(sampler.router_config)
-        cls.validate_router_fields(sampler.router_config, cfg)
-        if sampler.router_config.model_config is None:
-            raise ValueError("sampler_config.router_config.model_config is required.")
-        cls.validate_generator_stack(sampler.router_config.model_config)
-        sampler.validate_for_router_input_dim()
-
     @staticmethod
     def validate_matching_value(name, value, expected):
         if value is not None and (
@@ -555,26 +432,26 @@ class MatrixWeightsMixtureValidator(DynamicWeightValidator):
         ):
             raise ValueError(f"{name} must match {expected!r}, received {value!r}.")
 
-    @staticmethod
-    def validate_supported_fields(cfg):
+    @classmethod
+    def validate(cls, model) -> None:
+        cls.validate_initialization_config(model.cfg)
+
+    @classmethod
+    def validate_initialization_config(cls, cfg) -> None:
         if vars(cfg).keys() - {field.name for field in fields(cfg)} - {"_passed_args"}:
-            raise ValueError(f"{type(cfg).__name__} contains unsupported fields.")
-
-    @staticmethod
-    def validate_sampler_config(sampler_config) -> None:
-        from emperor.sampler import SamplerConfig
-
-        if sampler_config is None:
             raise ValueError(
-                "sampler_config is required for an adaptive matrix mixture."
+                "Complete parameter bank config contains unsupported fields."
             )
-        if not isinstance(sampler_config, SamplerConfig):
-            raise TypeError("sampler_config must be a SamplerConfig.")
-
-    @staticmethod
-    def validate_sampler_available(sampler) -> None:
-        if sampler is None:
-            raise ValueError("Adaptive matrix mixture requires an initialized sampler.")
+        for name in ("input_dim", "output_dim", "num_experts"):
+            value = getattr(cfg, name)
+            if type(value) is not int or value <= 0:
+                raise ValueError(
+                    f"{name} must be a positive integer, received {value!r}."
+                )
+        cls.validate_field_types(cfg)
+        cls.validate_normalization_config(cfg)
+        cls.validate_decay_parameters(cfg)
+        cls.validate_generator_stack(cfg.model_config)
 
     @classmethod
     def validate_forward_inputs(cls, model, weight_params, context):

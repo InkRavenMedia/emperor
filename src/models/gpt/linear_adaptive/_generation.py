@@ -61,8 +61,6 @@ class WeightGenerationOptions:
     input_factor_source: LowRankFactorSourceOptions | None = None
     output_factor_source: LowRankFactorSourceOptions | None = None
     mixture_num_experts: int | None = None
-    mixture_top_k: int | None = None
-    mixture_normalize_probabilities_flag: bool | None = None
     input_factor_generator_stack: AdaptiveGeneratorStackSource | None = None
     output_factor_generator_stack: AdaptiveGeneratorStackSource | None = None
     coefficient_generator_stack: AdaptiveGeneratorStackSource | None = None
@@ -91,7 +89,8 @@ class WeightGenerationConfig:
     input_factor_model_config: LayerStackConfig | None = None
     output_factor_model_config: LayerStackConfig | None = None
     coefficient_model_config: LayerStackConfig | None = None
-    mixture: MixtureGenerationConfig = field(default_factory=MixtureGenerationConfig)
+    num_experts: int | None = None
+    router_model_config: LayerStackConfig | None = None
 
 
 class _GenerationSettings(
@@ -120,13 +119,12 @@ def build_weight_generation_config(
         weight_option,
         weight_source,
         weight_type=WeightGenerationConfig,
-        mixture_type=MixtureGenerationConfig,
         default=WeightGenerationConfig,
     )
 
 
 def build_mixture_generation_config(
-    options: WeightGenerationOptions | BiasGenerationOptions,
+    options: BiasGenerationOptions,
     factory: AdaptiveGeneratorStackConfigFactory,
 ) -> MixtureGenerationConfig:
     return build_mixture_generation(

@@ -41,10 +41,6 @@ class GenerationSettingsReader(Generic[_WeightOptions, _BiasOptions]):
             input_factor_source=self.__value("weight_input_factor_source"),
             output_factor_source=self.__value("weight_output_factor_source"),
             mixture_num_experts=self.__value("weight_mixture_num_experts"),
-            mixture_top_k=self.__value("weight_mixture_top_k"),
-            mixture_normalize_probabilities_flag=self.__value(
-                "weight_mixture_normalize_probabilities_flag"
-            ),
             input_factor_generator_stack=self.__stack_source(
                 "weight_input_factor_generator_stack"
             ),

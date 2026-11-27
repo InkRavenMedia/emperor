@@ -125,7 +125,6 @@ class AdaptiveAugmentationFactory:
             weight_option,
             options.generator_stack_source,
             weight_type=WeightGeneration,
-            mixture_type=MixtureGeneration,
             default=self.default_weight_generation,
         )
         weight_config = build_weight_config(

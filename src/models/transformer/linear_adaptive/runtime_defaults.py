@@ -322,11 +322,7 @@ def adaptive_options_from_config(
     bias_mixture_num_experts = getattr(
         config_module, f"{prefix}_BIAS_MIXTURE_NUM_EXPERTS"
     )
-    weight_mixture_top_k = getattr(config_module, f"{prefix}_WEIGHT_MIXTURE_TOP_K")
     bias_mixture_top_k = getattr(config_module, f"{prefix}_BIAS_MIXTURE_TOP_K")
-    weight_mixture_normalize_probabilities_flag = getattr(
-        config_module, f"{prefix}_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
-    )
     bias_mixture_normalize_probabilities_flag = getattr(
         config_module, f"{prefix}_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG"
     )
@@ -357,9 +353,7 @@ def adaptive_options_from_config(
         weight_output_factor_source=weight_output_factor_source,
         weight_mixture_num_experts=weight_mixture_num_experts,
         bias_mixture_num_experts=bias_mixture_num_experts,
-        weight_mixture_top_k=weight_mixture_top_k,
         bias_mixture_top_k=bias_mixture_top_k,
-        weight_mixture_normalize_probabilities_flag=weight_mixture_normalize_probabilities_flag,
         bias_mixture_normalize_probabilities_flag=bias_mixture_normalize_probabilities_flag,
         weight_input_factor_generator_stack_options=weight_input_factor_generator_stack_options,
         weight_output_factor_generator_stack_options=weight_output_factor_generator_stack_options,

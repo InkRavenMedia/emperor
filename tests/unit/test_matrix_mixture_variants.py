@@ -15,8 +15,17 @@ from emperor.augmentations.adaptive_parameters._biases.base import DynamicBiasAb
 from emperor.augmentations.adaptive_parameters._weights.base import (
     DynamicWeightAbstract,
 )
-from support.adaptive_generation import matrix_sampler_config
+from support.adaptive_generation import (
+    bias_mixture_config,
+    matrix_sampler_config,
+    weight_mixture_config,
+)
 from support.adaptive_grouping import linear_stack_config
+
+MIXTURE_CONFIGS = {
+    MatrixBiasMixtureConfig: bias_mixture_config,
+    MatrixWeightsMixtureConfig: weight_mixture_config,
+}
 
 
 @pytest.mark.parametrize(
@@ -33,11 +42,8 @@ def test_matrix_mixture_configuration_belongs_to_its_parameter_family(
 
     assert issubclass(config_type, base)
     assert config_type.__module__.endswith(f"{owner}.config")
-    assert {
-        "num_experts",
-        "top_k",
-        "sampler_config",
-    } <= config_type.__annotations__.keys()
+    assert "num_experts" in config_type.__annotations__
+    assert ("top_k" in config_type.__annotations__) == (base is DynamicBiasConfig)
     assert (
         config_type()
         .registry_owner()
@@ -58,40 +64,37 @@ def test_matrix_mixture_configuration_belongs_to_its_parameter_family(
 def test_matrix_mixture_runtime_and_validation_are_owned_by_each_family(
     config_type, base, owner
 ):
-    from emperor.sampler import RouterConfig
-
     variant = config_type().registry_owner()
     assert issubclass(variant, base)
     assert "forward" in vars(variant)
     assert not hasattr(variant, "compute_mixture")
     assert variant.VALIDATOR.__module__.endswith(f"{owner}.validation")
     assert not hasattr(variant.VALIDATOR, "resolve_config")
-    assert "validate_route" in vars(variant.VALIDATOR)
+    assert ("validate_route" in vars(variant.VALIDATOR)) == (
+        config_type is MatrixBiasMixtureConfig
+    )
 
-    model = config_type(
-        input_dim=2,
-        output_dim=3,
-        num_experts=3,
-        top_k=2,
-        sampler_config=matrix_sampler_config(
-            router_config=RouterConfig(
-                input_dim=2,
-                num_experts=3,
-                noisy_topk_flag=False,
-                model_config=linear_stack_config(2, 3),
-            )
-        ),
-    ).build()
+    model = MIXTURE_CONFIGS[config_type]().build()
     assert isinstance(model, base)
-    assert set(model.state_dict()) == {
-        "parameter_bank",
-        "sampler.sampler_model.default_loss",
-        "sampler.sampler_model.auxiliary_loss_model.default_loss",
-        "sampler.router.model.layers.0.model.weight_params",
-        "sampler.router.model.layers.0.model.bias_params",
-        "_decay_policy.decay_step",
-        "_decay_policy.warmup_step",
-    }
+    routing_state = (
+        {
+            "sampler.sampler_model.default_loss",
+            "sampler.sampler_model.auxiliary_loss_model.default_loss",
+            "sampler.router.model.layers.0.model.weight_params",
+            "sampler.router.model.layers.0.model.bias_params",
+        }
+        if config_type is MatrixBiasMixtureConfig
+        else {"model.layers.0.model.weight_params", "model.layers.0.model.bias_params"}
+    )
+    assert (
+        set(model.state_dict())
+        == {
+            "parameter_bank",
+            "_decay_policy.decay_step",
+            "_decay_policy.warmup_step",
+        }
+        | routing_state
+    )
 
 
 @pytest.mark.parametrize(
@@ -117,17 +120,8 @@ def test_matrix_mixture_validators_only_check_configuration(config_type):
     )
 
 
-@pytest.mark.parametrize(
-    "slot, config_type",
-    [
-        ("weight_config", MatrixWeightsMixtureConfig),
-        ("bias_config", MatrixBiasMixtureConfig),
-    ],
-)
 @pytest.mark.parametrize("top_k", [1, 2, 3])
-def test_owner_preflight_and_build_preserve_explicit_router_configuration(
-    slot, config_type, top_k
-):
+def test_owner_preflight_and_build_preserve_explicit_router_configuration(top_k):
     from copy import deepcopy
 
     from emperor.sampler import RouterConfig
@@ -140,7 +134,7 @@ def test_owner_preflight_and_build_preserve_explicit_router_configuration(
     router_config = RouterConfig(
         input_dim=2, num_experts=3, noisy_topk_flag=False, model_config=router_model
     )
-    source = config_type(
+    source = MatrixBiasMixtureConfig(
         num_experts=3,
         top_k=top_k,
         model_config=variant_model,
@@ -159,10 +153,10 @@ def test_owner_preflight_and_build_preserve_explicit_router_configuration(
         output_dim=3,
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-            model_config=parent_model, **{slot: source}
+            model_config=parent_model, bias_config=source
         ),
     ).build()
-    variant = getattr(layer.adaptive_behaviour, slot.replace("_config", "_model"))
+    variant = layer.adaptive_behaviour.bias_model
     sampler = variant.cfg.sampler_config
     assert sampler.num_experts == 3 and sampler.top_k == top_k
     assert sampler.normalize_probabilities_flag is (top_k > 1)
@@ -178,13 +172,6 @@ def test_owner_preflight_and_build_preserve_explicit_router_configuration(
 
 
 @pytest.mark.parametrize(
-    "slot, config_type",
-    [
-        ("weight_config", MatrixWeightsMixtureConfig),
-        ("bias_config", MatrixBiasMixtureConfig),
-    ],
-)
-@pytest.mark.parametrize(
     "invalid_options, error",
     [
         ({"num_experts": 4}, "num_experts.*match"),
@@ -195,9 +182,9 @@ def test_owner_preflight_and_build_preserve_explicit_router_configuration(
     ],
 )
 def test_parent_preflight_rejects_invalid_sampler_without_mutation_or_initialization(
-    slot, config_type, invalid_options, error
+    invalid_options, error
 ):
-    source = config_type(
+    source = MatrixBiasMixtureConfig(
         num_experts=3,
         top_k=2,
         sampler_config=matrix_sampler_config(**invalid_options),
@@ -207,7 +194,7 @@ def test_parent_preflight_rejects_invalid_sampler_without_mutation_or_initializa
         output_dim=3,
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-            model_config=linear_stack_config(2, 3), **{slot: source}
+            model_config=linear_stack_config(2, 3), bias_config=source
         ),
     )
     rng = torch.get_rng_state().clone()
@@ -219,13 +206,10 @@ def test_parent_preflight_rejects_invalid_sampler_without_mutation_or_initializa
     assert source.input_dim is None and source.output_dim is None
 
 
-@pytest.mark.parametrize(
-    "config_type", [MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig]
-)
 def test_forward_samples_once_and_uses_the_selected_probabilities_and_indices(
-    config_type, monkeypatch
+    monkeypatch,
 ):
-    model = config_type(
+    model = MatrixBiasMixtureConfig(
         input_dim=2,
         output_dim=3,
         num_experts=3,
@@ -279,30 +263,19 @@ def test_forward_samples_once_and_uses_the_selected_probabilities_and_indices(
 def test_forward_has_no_external_route_argument(config_type):
     import inspect
 
-    model = config_type(
-        input_dim=2,
-        output_dim=3,
-        num_experts=2,
-        top_k=2,
-        sampler_config=matrix_sampler_config(num_experts=2),
-        model_config=linear_stack_config(2, 2),
-    ).build()
+    model = MIXTURE_CONFIGS[config_type](num_experts=2).build()
     assert "route" not in inspect.signature(model.forward).parameters
     with pytest.raises(TypeError, match="unexpected keyword argument 'route'"):
         model(None, torch.ones(2, 2), route=(torch.ones(2, 2), None))
 
 
-@pytest.mark.parametrize(
-    "config_type", [MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig]
-)
 @pytest.mark.parametrize("sampler_options", [{}, {"sampler_config": None}])
 def test_matrix_mixture_requires_sampler_configuration_before_initialization(
-    config_type,
     sampler_options,
 ):
     rng = torch.get_rng_state().clone()
     with pytest.raises(ValueError, match="sampler_config.*required"):
-        config_type(
+        MatrixBiasMixtureConfig(
             input_dim=2,
             output_dim=3,
             num_experts=2,
@@ -313,24 +286,14 @@ def test_matrix_mixture_requires_sampler_configuration_before_initialization(
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
 
 
-@pytest.mark.parametrize(
-    "slot, config_type",
-    [
-        ("weight_config", MatrixWeightsMixtureConfig),
-        ("bias_config", MatrixBiasMixtureConfig),
-    ],
-)
-def test_owner_rejects_missing_mixture_sampler_before_parameter_initialization(
-    slot,
-    config_type,
-):
+def test_owner_rejects_missing_mixture_sampler_before_parameter_initialization():
     cfg = AdaptiveLinearLayerConfig(
         input_dim=2,
         output_dim=3,
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             model_config=linear_stack_config(2, 3),
-            **{slot: config_type(num_experts=3, top_k=2)},
+            bias_config=MatrixBiasMixtureConfig(num_experts=3, top_k=2),
         ),
     )
     rng = torch.get_rng_state().clone()
@@ -339,15 +302,12 @@ def test_owner_rejects_missing_mixture_sampler_before_parameter_initialization(
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
 
 
-@pytest.mark.parametrize(
-    "config_type", [MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig]
-)
-def test_matrix_mixture_requires_a_router_model_as_well_as_sampler_config(config_type):
+def test_matrix_mixture_requires_a_router_model_as_well_as_sampler_config():
     sampler_config = matrix_sampler_config(num_experts=2)
     sampler_config.router_config.model_config = None
     rng = torch.get_rng_state().clone()
     with pytest.raises((TypeError, ValueError), match="model_config|LayerStackConfig"):
-        config_type(
+        MatrixBiasMixtureConfig(
             input_dim=2,
             output_dim=3,
             num_experts=2,
@@ -378,9 +338,7 @@ def test_independent_mixture_selection_preserves_base_parameters(
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             model_config=linear_stack_config(2, 3),
-            weight_config=MatrixWeightsMixtureConfig(
-                num_experts=3, top_k=2, sampler_config=matrix_sampler_config()
-            )
+            weight_config=MatrixWeightsMixtureConfig(num_experts=3)
             if weight_enabled
             else None,
             bias_config=MatrixBiasMixtureConfig(
@@ -417,7 +375,10 @@ def test_independent_mixture_selection_preserves_base_parameters(
             assert variant.parameter_bank.grad is not None
             assert torch.isfinite(variant.parameter_bank.grad).all()
     if weight_enabled and bias_enabled:
-        assert augmentation.weight_model.sampler is not augmentation.bias_model.sampler
+        assert (
+            augmentation.weight_model.model
+            is not augmentation.bias_model.sampler.router.model
+        )
         assert augmentation.weight_model.num_experts == 3
         assert augmentation.bias_model.num_experts == 2
 
@@ -434,15 +395,11 @@ def test_mixture_adds_supplied_base_without_mutating_configuration(
 ):
     from copy import deepcopy
 
-    source = config_type(
-        num_experts=3,
-        top_k=2,
-        model_config=linear_stack_config(2, 3),
-        sampler_config=matrix_sampler_config(normalize_probabilities_flag=False),
-    )
+    source = MIXTURE_CONFIGS[config_type]()
+    source.input_dim = source.output_dim = None
     original = deepcopy(source)
     model = source.build(config_type(input_dim=2, output_dim=3)).double()
-    assert source == original and source.sampler_config is not model.cfg.sampler_config
+    assert source == original and source.model_config is not model.cfg.model_config
     context = torch.randn(4, 2, dtype=torch.float64, requires_grad=True)
     base = torch.full(base_shape, 1000.0, dtype=torch.float64, requires_grad=True)
     output = model(base, context)
@@ -477,7 +434,6 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
         SumGroupingConfig,
         WeightDecayScheduleOptions,
     )
-    from support.adaptive_generation import bias_mixture_config, weight_mixture_config
 
     config = AdaptiveLinearLayerConfig(
         input_dim=2,
@@ -485,9 +441,6 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
         bias_flag=True,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             weight_config=weight_mixture_config(
-                sampler_config=matrix_sampler_config(
-                    normalize_probabilities_flag=False
-                ),
                 decay_schedule=WeightDecayScheduleOptions.LINEAR,
                 decay_rate=0.25,
                 decay_warmup_batches=1,
@@ -514,8 +467,8 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
         layer.bias_params.fill_(3.0)
         weight.parameter_bank.fill_(0.5)
         bias.parameter_bank.fill_(0.25)
-        for variant in (weight, bias):
-            router = variant.sampler.router.model[0].model
+        for scorer in (weight.model, bias.sampler.router.model):
+            router = scorer[0].model
             router.weight_params.zero_()
             router.bias_params.copy_(
                 torch.tensor([0.2, 0.3, 0.5], dtype=torch.float64).log()
@@ -525,7 +478,7 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
     inputs = torch.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=torch.float64)
     for weight_factor, bias_factor in ((1.0, 1.0), (1.0, 0.5), (0.75, 0.25)):
         expected = (
-            inputs @ (base_weight * weight_factor + 0.4) + base_bias * bias_factor + 0.2
+            inputs @ (base_weight * weight_factor + 0.5) + base_bias * bias_factor + 0.2
         )
         output = layer(inputs)
         torch.testing.assert_close(output, expected)
@@ -551,7 +504,7 @@ def test_linear_matrix_mixtures_retain_base_parameters_and_decay_independently()
     restored.load_state_dict(layer.state_dict(), strict=True)
     layer.eval()
     restored.eval()
-    expected = inputs @ (base_weight * 0.5 + 0.4) + base_bias * 0.125 + 0.2
+    expected = inputs @ (base_weight * 0.5 + 0.5) + base_bias * 0.125 + 0.2
     torch.testing.assert_close(layer(inputs), expected)
     torch.testing.assert_close(restored(inputs), expected)
     torch.testing.assert_close(layer(inputs), expected)
@@ -573,23 +526,17 @@ def test_matrix_mixture_decay_schedules_scale_only_the_base(config_type, schedul
     from emperor.augmentations.adaptive_parameters import WeightDecayScheduleOptions
 
     schedule = WeightDecayScheduleOptions[schedule_name]
-    model = (
-        config_type(
-            input_dim=2,
-            output_dim=3,
-            num_experts=3,
-            top_k=3,
-            sampler_config=matrix_sampler_config(
-                top_k=3, normalize_probabilities_flag=False
-            ),
-            model_config=linear_stack_config(2, 3),
-            decay_schedule=schedule,
-            decay_rate=0.25,
-            decay_warmup_batches=2,
-        )
-        .build()
-        .double()
+    config = MIXTURE_CONFIGS[config_type](
+        decay_schedule=schedule,
+        decay_rate=0.25,
+        decay_warmup_batches=2,
     )
+    if config_type is MatrixBiasMixtureConfig:
+        config.top_k = 3
+        config.sampler_config = matrix_sampler_config(
+            top_k=3, normalize_probabilities_flag=False
+        )
+    model = config.build().double()
     with torch.no_grad():
         model.parameter_bank.fill_(1.25)
     base = torch.full_like(model.parameter_bank[0], 2.0, requires_grad=True)
@@ -631,14 +578,8 @@ def test_invalid_matrix_decay_config_fails_before_parameter_initialization(
 ):
     from emperor.augmentations.adaptive_parameters import WeightDecayScheduleOptions
 
-    config = config_type(
+    config = MIXTURE_CONFIGS[config_type](
         **{
-            "input_dim": 2,
-            "output_dim": 3,
-            "num_experts": 3,
-            "top_k": 2,
-            "sampler_config": matrix_sampler_config(),
-            "model_config": linear_stack_config(2, 3),
             "decay_schedule": WeightDecayScheduleOptions.LINEAR,
             "decay_rate": 0.25,
             "decay_warmup_batches": 0,
@@ -654,23 +595,15 @@ def test_invalid_matrix_decay_config_fails_before_parameter_initialization(
 @pytest.mark.parametrize(
     "config_type", [MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig]
 )
-def test_matrix_mixture_requires_base_parameters_before_sampling(
-    config_type, monkeypatch
-):
-    model = config_type(
-        input_dim=2,
-        output_dim=3,
-        num_experts=3,
-        top_k=2,
-        sampler_config=matrix_sampler_config(),
-        model_config=linear_stack_config(2, 3),
-    ).build()
-    sampler_calls = []
-    monkeypatch.setattr(
-        model.sampler,
-        "sample_probabilities_and_indices",
-        lambda _: sampler_calls.append(True),
+def test_matrix_mixture_requires_base_parameters_before_routing(config_type):
+    model = MIXTURE_CONFIGS[config_type]().build()
+    scorer = (
+        model.model
+        if config_type is MatrixWeightsMixtureConfig
+        else model.sampler.router.model
     )
+    sampler_calls = []
+    scorer.register_forward_pre_hook(lambda *_args: sampler_calls.append(True))
     with pytest.raises((TypeError, ValueError), match="weight_params|bias_params"):
         model(None, torch.ones(2, 2))
     assert not sampler_calls

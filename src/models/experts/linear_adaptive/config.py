@@ -1828,11 +1828,7 @@ WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
 ] = None
 WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
 BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
-WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
 BIAS_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
-WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _main_adaptive_generation
-] = None
 BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _main_adaptive_generation
 ] = None
@@ -2063,11 +2059,7 @@ ROUTER_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[
 ROUTER_BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _router_adaptive_generation] = (
     None
 )
-ROUTER_WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _router_adaptive_generation] = None
 ROUTER_BIAS_MIXTURE_TOP_K: Annotated[int | None, _router_adaptive_generation] = None
-ROUTER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _router_adaptive_generation
-] = None
 ROUTER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _router_adaptive_generation
 ] = None
@@ -2298,14 +2290,8 @@ INPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[
 INPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: Annotated[
     int | None, _input_layer_adaptive_generation
 ] = None
-INPUT_LAYER_WEIGHT_MIXTURE_TOP_K: Annotated[
-    int | None, _input_layer_adaptive_generation
-] = None
 INPUT_LAYER_BIAS_MIXTURE_TOP_K: Annotated[
     int | None, _input_layer_adaptive_generation
-] = None
-INPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _input_layer_adaptive_generation
 ] = None
 INPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _input_layer_adaptive_generation
@@ -2537,14 +2523,8 @@ OUTPUT_LAYER_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[
 OUTPUT_LAYER_BIAS_MIXTURE_NUM_EXPERTS: Annotated[
     int | None, _output_layer_adaptive_generation
 ] = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_TOP_K: Annotated[
-    int | None, _output_layer_adaptive_generation
-] = None
 OUTPUT_LAYER_BIAS_MIXTURE_TOP_K: Annotated[
     int | None, _output_layer_adaptive_generation
-] = None
-OUTPUT_LAYER_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _output_layer_adaptive_generation
 ] = None
 OUTPUT_LAYER_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _output_layer_adaptive_generation

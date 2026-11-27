@@ -88,7 +88,7 @@ def test_callable_generation_records_keep_their_selected_mixture():
     mixture = CallableMixture(num_experts=3, top_k=2)
     weight = parameters.build_weight_config(
         MatrixWeightsMixtureConfig,
-        generation=CallableWeight(mixture=mixture),
+        generation=CallableWeight(num_experts=3),
         generator_depth=1,
         decay_schedule=WeightDecayScheduleOptions.DISABLED,
         decay_rate=0.0,
@@ -105,7 +105,7 @@ def test_callable_generation_records_keep_their_selected_mixture():
         decay_warmup_batches=0,
         bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
     )
-    assert (weight.num_experts, weight.top_k) == (3, 2)
+    assert weight.num_experts == 3
     assert (bias.num_experts, bias.top_k) == (3, 2)
 
 
@@ -162,7 +162,6 @@ def test_unsupported_weight_normalization_is_rejected_by_package_builders(
         weight_normalization_option=normalization,
         weight_bank_expansion_factor=BankExpansionFactorOptions.FACTOR_OF_ONE,
         weight_mixture_num_experts=3,
-        weight_mixture_top_k=2,
     )
     if normalization is WeightNormalizationOptions.DISABLED:
         configuration = package.build_configuration(config_overrides=overrides)
@@ -207,7 +206,6 @@ def test_generation_settings_reach_executable_adaptive_layers(
             bias_option_flag=True,
             bias_option=MatrixBiasMixtureConfig,
             weight_mixture_num_experts=3,
-            weight_mixture_top_k=2,
             bias_mixture_num_experts=5,
             bias_mixture_top_k=3,
             weight_mixture_router_generator_stack_independent_flag=True,
@@ -237,9 +235,9 @@ def test_generation_settings_reach_executable_adaptive_layers(
         assert (biases.num_experts, biases.top_k) == (5, 3)
         assert biases.sampler_config.router_config.model_config.hidden_dim == 9
         if weight_option is MatrixWeightsMixtureConfig:
-            assert (weights.num_experts, weights.top_k) == (3, 2)
-            assert weights.sampler_config.router_config.model_config.hidden_dim == 7
-            assert weights.sampler_config is not biases.sampler_config
+            assert weights.num_experts == 3
+            assert weights.model_config.hidden_dim == 7
+            assert not hasattr(weights, "sampler_config")
         elif weight_option is DiagonallyModulatedLowRankDynamicWeightConfig:
             assert type(weights.generator_depth) is int
             assert weights.generator_depth == 32
@@ -313,7 +311,6 @@ def test_grouping_summaries_can_generate_mixture_parameters(package_name, method
         weight_option_flag=True,
         weight_option=MatrixWeightsMixtureConfig,
         weight_mixture_num_experts=3,
-        weight_mixture_top_k=2,
         grouping_scope=AdaptiveParameterGroupingScopeOptions.ROWS,
         chunk_size=4,
         grouping_method=method,
@@ -376,7 +373,6 @@ def test_new_options_are_visible_in_configuration_schema(package_name):
     for key in (
         "weight_mixture_num_experts",
         "bias_mixture_num_experts",
-        "weight_mixture_top_k",
         "bias_mixture_top_k",
         "weight_input_factor_source",
         "weight_output_factor_source",
@@ -673,7 +669,6 @@ def test_role_generation_and_grouping_overrides_remain_local(
                 weight_normalization_learnable_scale_flag=False,
                 generator_depth=5,
                 weight_mixture_num_experts=5,
-                weight_mixture_top_k=2,
                 grouping_scope=AdaptiveParameterGroupingScopeOptions.ROWS,
                 grouping_method=MeanGroupingConfig,
                 chunk_size=3,
@@ -820,7 +815,6 @@ def test_complete_models_run_with_new_parameter_generators(
         bias_option_flag=True,
         bias_option=MatrixBiasMixtureConfig,
         weight_mixture_num_experts=3,
-        weight_mixture_top_k=2,
         bias_mixture_num_experts=3,
         bias_mixture_top_k=2,
         weight_input_factor_source=LowRankFactorSourceOptions.SHARED_PARAMETER,
