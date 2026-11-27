@@ -115,6 +115,10 @@ class _WeightBankDiagnostics:
             SoftWeightedBankDynamicWeight,
         )
 
+        if isinstance(bank_module, MatrixWeightsMixture):
+            bank_logits = bank_module.routing.compute_dispatch_weights(
+                bank_logits.unsqueeze(-1)
+            ).squeeze(-1)
         if isinstance(bank_module, (MatrixWeightsMixture, MatrixBiasMixture)):
             # The observation already contains the selected probability mass.
             return _BankDistributionSummary(
@@ -263,16 +267,10 @@ class WeightBankUtilizationMonitorCallback(Callback):
                 self.history_size
             )
             from .._biases.variants.matrix_mixture import MatrixBiasMixture
-            from .._weights.variants.matrix_mixture import MatrixWeightsMixture
 
-            if isinstance(bank_module, (MatrixWeightsMixture, MatrixBiasMixture)):
-                reduction_method = (
-                    "_MatrixWeightsMixture__reduce_mixture"
-                    if isinstance(bank_module, MatrixWeightsMixture)
-                    else "_MatrixBiasMixture__reduce_mixture"
-                )
+            if isinstance(bank_module, MatrixBiasMixture):
                 self.__wrap_mixture_reduction(
-                    module_name, bank_module, reduction_method
+                    module_name, bank_module, "_MatrixBiasMixture__reduce_mixture"
                 )
                 continue
             generator_model = bank_module.model

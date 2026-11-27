@@ -964,25 +964,10 @@ class AdaptiveRuntimeDefaults(RuntimeFieldFactory, Generic[_Values]):
                     getattr(self.config, f"{prefix.upper()}BIAS_MIXTURE_NUM_EXPERTS"),
                 )
             ),
-            weight_mixture_top_k=reader.read(
-                self._optional_integer_field(
-                    f"{prefix}weight_mixture_top_k",
-                    getattr(self.config, f"{prefix.upper()}WEIGHT_MIXTURE_TOP_K"),
-                )
-            ),
             bias_mixture_top_k=reader.read(
                 self._optional_integer_field(
                     f"{prefix}bias_mixture_top_k",
                     getattr(self.config, f"{prefix.upper()}BIAS_MIXTURE_TOP_K"),
-                )
-            ),
-            weight_mixture_normalize_probabilities_flag=reader.read(
-                self._optional_boolean_field(
-                    f"{prefix}weight_mixture_normalize_probabilities_flag",
-                    getattr(
-                        self.config,
-                        f"{prefix.upper()}WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG",
-                    ),
                 )
             ),
             bias_mixture_normalize_probabilities_flag=reader.read(

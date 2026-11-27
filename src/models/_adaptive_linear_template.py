@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from emperor.augmentations.adaptive_parameters import (
     AdaptiveLinearLayerConfig,
     MatrixBiasMixtureConfig,
-    MatrixWeightsMixtureConfig,
 )
 from emperor.config import ConfigBase
 
@@ -38,16 +37,10 @@ class AdaptiveLinearLayerTemplateConfig(AdaptiveLinearLayerConfig):
         augmentation = self.adaptive_augmentation_config
         if augmentation is None:
             return
-        for parameter in (augmentation.weight_config, augmentation.bias_config):
-            if isinstance(
-                parameter, (MatrixWeightsMixtureConfig, MatrixBiasMixtureConfig)
-            ):
-                self.__inherit_router_defaults(parameter)
+        if isinstance(augmentation.bias_config, MatrixBiasMixtureConfig):
+            self.__inherit_router_defaults(augmentation.bias_config)
 
-    def __inherit_router_defaults(
-        self,
-        mixture: MatrixWeightsMixtureConfig | MatrixBiasMixtureConfig,
-    ) -> None:
+    def __inherit_router_defaults(self, mixture: MatrixBiasMixtureConfig) -> None:
         sampler = mixture.sampler_config
         if sampler is None or sampler.router_config is None:
             return

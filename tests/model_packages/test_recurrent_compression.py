@@ -74,9 +74,9 @@ def test_recurrent_scorer_inherits_each_adaptive_generator(component, option, va
         adaptive_parameters.MatrixWeightsMixtureConfig,
         adaptive_parameters.MatrixBiasMixtureConfig,
     ):
-        options.update(
-            {f"{component}_mixture_num_experts": 2, f"{component}_mixture_top_k": 2}
-        )
+        options[f"{component}_mixture_num_experts"] = 2
+    if variant is adaptive_parameters.MatrixBiasMixtureConfig:
+        options["bias_mixture_top_k"] = 2
     package = model_package("linears/linear_adaptive")
     owner = package.build_configuration(
         config_overrides=options

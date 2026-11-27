@@ -73,9 +73,7 @@ class _ParameterSettings(Protocol[_SourceCo, _StackCo]):
     weight_output_factor_source: Final[LowRankFactorSourceOptions | None]
     weight_mixture_num_experts: Final[int | None]
     bias_mixture_num_experts: Final[int | None]
-    weight_mixture_top_k: Final[int | None]
     bias_mixture_top_k: Final[int | None]
-    weight_mixture_normalize_probabilities_flag: Final[bool | None]
     bias_mixture_normalize_probabilities_flag: Final[bool | None]
     weight_input_factor_generator_stack_options: Final[_SourceCo]
     weight_output_factor_generator_stack_options: Final[_SourceCo]
@@ -170,19 +168,15 @@ class AdaptiveAugmentationFactory(Generic[_Source, _Stack]):
         weight_option = None
         if options.weight_option_flag:
             weight_option = options.weight_option
-        weight_sampler_config = None
+        router_model_config = None
         if weight_option is MatrixWeightsMixtureConfig:
-            weight_sampler_config = self.__mixture_sampler(
-                options.weight_mixture_num_experts,
-                options.weight_mixture_top_k,
-                options.weight_mixture_normalize_probabilities_flag,
+            router_model_config = self.__component_generator(
                 options.weight_mixture_router_generator_stack_options,
                 weight_stack_options,
             )
         weight_inputs = _WeightInputs(
             num_experts=options.weight_mixture_num_experts,
-            top_k=options.weight_mixture_top_k,
-            sampler_config=weight_sampler_config,
+            router_model_config=router_model_config,
             generator_depth=options.generator_depth,
             input_factor_source=options.weight_input_factor_source,
             output_factor_source=options.weight_output_factor_source,
@@ -306,8 +300,7 @@ _WEIGHT_VARIANTS = (
 @dataclass(frozen=True, slots=True)
 class _WeightInputs:
     num_experts: int | None
-    top_k: int | None
-    sampler_config: SamplerConfig | None
+    router_model_config: LayerStackConfig | None
     generator_depth: int
     input_factor_source: LowRankFactorSourceOptions | None
     output_factor_source: LowRankFactorSourceOptions | None
@@ -336,9 +329,8 @@ class _WeightInputs:
             input_factor_model_config=self.input_factor_model_config,
             output_factor_model_config=self.output_factor_model_config,
             coefficient_model_config=self.coefficient_model_config,
-            mixture=MixtureGeneration(
-                self.num_experts, self.top_k, self.sampler_config
-            ),
+            num_experts=self.num_experts,
+            router_model_config=self.router_model_config,
         )
         return build_weight_config(
             option,

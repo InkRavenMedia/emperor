@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import partial
 from typing import Final, Protocol, TypeVar
 
@@ -49,7 +49,8 @@ class WeightGeneration:
     input_factor_model_config: LayerStackConfig | None = None
     output_factor_model_config: LayerStackConfig | None = None
     coefficient_model_config: LayerStackConfig | None = None
-    mixture: MixtureGeneration = field(default_factory=MixtureGeneration)
+    num_experts: int | None = None
+    router_model_config: LayerStackConfig | None = None
 
 
 class _Mixture(Protocol):
@@ -64,7 +65,8 @@ class _Generation(Protocol):
     input_factor_model_config: Final[LayerStackConfig | None]
     output_factor_model_config: Final[LayerStackConfig | None]
     coefficient_model_config: Final[LayerStackConfig | None]
-    mixture: Final[_Mixture]
+    num_experts: Final[int | None]
+    router_model_config: Final[LayerStackConfig | None]
 
 
 class _MaskDimensions(Protocol):
@@ -138,15 +140,12 @@ def build_weight_config(
     if weight_option is MatrixWeightsMixtureConfig:
         if generation is None:
             generation = WeightGeneration()
-        mixture = generation.mixture
         return MatrixWeightsMixtureConfig(
             decay_schedule=decay_schedule,
             decay_rate=decay_rate,
             decay_warmup_batches=decay_warmup_batches,
-            model_config=model_config,
-            num_experts=mixture.num_experts,
-            top_k=mixture.top_k,
-            sampler_config=mixture.sampler_config,
+            model_config=generation.router_model_config or model_config,
+            num_experts=generation.num_experts,
         )
     if (
         weight_option is LayeredWeightedBankDynamicWeightConfig

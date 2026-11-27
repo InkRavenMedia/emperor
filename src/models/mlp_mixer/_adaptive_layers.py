@@ -43,8 +43,6 @@ class _Settings(AdaptiveSettings, Protocol):
     weight_input_factor_source: Final[LowRankFactorSourceOptions | None]
     weight_output_factor_source: Final[LowRankFactorSourceOptions | None]
     weight_mixture_num_experts: Final[int | None]
-    weight_mixture_top_k: Final[int | None]
-    weight_mixture_normalize_probabilities_flag: Final[bool | None]
     bias_mixture_num_experts: Final[int | None]
     bias_mixture_top_k: Final[int | None]
     bias_mixture_normalize_probabilities_flag: Final[bool | None]
@@ -127,13 +125,12 @@ class AdaptiveLayerFactory:
         runtime = self._runtime
         if implementation is MatrixWeightsMixtureConfig:
             router_source = weight_mixture_router_generator_stack_source(runtime)
-            mixture = self.__mixture(
-                router_source,
-                runtime.weight_mixture_num_experts,
-                runtime.weight_mixture_top_k,
-                runtime.weight_mixture_normalize_probabilities_flag,
+            return WeightGeneration(
+                num_experts=runtime.weight_mixture_num_experts,
+                router_model_config=self.__independent_generator(
+                    router_source, self._options.generator_stack
+                ),
             )
-            return WeightGeneration(mixture=mixture)
         defaults = (
             options.generator_stack.resolve(self._options.generator_stack)
             or self._options.generator_stack

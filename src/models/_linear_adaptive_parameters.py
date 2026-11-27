@@ -43,9 +43,7 @@ class AdaptiveGenerationOptions(Protocol):
     weight_output_factor_source: Final[LowRankFactorSourceOptions | None]
     weight_mixture_num_experts: Final[int | None]
     bias_mixture_num_experts: Final[int | None]
-    weight_mixture_top_k: Final[int | None]
     bias_mixture_top_k: Final[int | None]
-    weight_mixture_normalize_probabilities_flag: Final[bool | None]
     bias_mixture_normalize_probabilities_flag: Final[bool | None]
     weight_input_factor_generator_stack: Final[GeneratorStackOptions | None]
     weight_output_factor_generator_stack: Final[GeneratorStackOptions | None]
@@ -270,13 +268,12 @@ class AdaptiveParameterConfigFactory:
         options: AdaptiveGenerationOptions,
     ) -> WeightGeneration | None:
         if option is MatrixWeightsMixtureConfig:
-            mixture = self.__mixture(
-                options.weight_mixture_num_experts,
-                options.weight_mixture_top_k,
-                options.weight_mixture_normalize_probabilities_flag,
-                options.weight_mixture_router_generator_stack,
+            return WeightGeneration(
+                num_experts=options.weight_mixture_num_experts,
+                router_model_config=self.__build_independent_generator_stack(
+                    options.weight_mixture_router_generator_stack
+                ),
             )
-            return WeightGeneration(mixture=mixture)
         if option is not DiagonallyModulatedLowRankDynamicWeightConfig:
             return None
         input_factor = self.__build_independent_generator_stack(

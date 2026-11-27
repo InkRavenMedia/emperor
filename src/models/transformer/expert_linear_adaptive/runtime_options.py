@@ -309,9 +309,7 @@ class AdaptiveParameterOptions:
     weight_output_factor_source: LowRankFactorSourceOptions | None = None
     weight_mixture_num_experts: int | None = None
     bias_mixture_num_experts: int | None = None
-    weight_mixture_top_k: int | None = None
     bias_mixture_top_k: int | None = None
-    weight_mixture_normalize_probabilities_flag: bool | None = None
     bias_mixture_normalize_probabilities_flag: bool | None = None
     weight_input_factor_generator_stack_options: ControllerStackOptions = (
         ControllerStackOptions()

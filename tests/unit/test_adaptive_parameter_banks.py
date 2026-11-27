@@ -11,16 +11,12 @@ from support.adaptive_generation import (
 
 
 @pytest.mark.parametrize("with_indices", [True, False])
-@pytest.mark.parametrize(
-    "kind", ["MatrixWeightsMixtureConfig", "MatrixBiasMixtureConfig"]
-)
-def test_singleton_bank_preserves_independent_contexts(kind, with_indices, monkeypatch):
-    from emperor.augmentations import adaptive_parameters
+def test_singleton_bias_bank_preserves_independent_contexts(with_indices, monkeypatch):
+    from emperor.augmentations.adaptive_parameters import MatrixBiasMixtureConfig
     from support.adaptive_grouping import linear_stack_config
 
-    config_type = getattr(adaptive_parameters, kind)
     model = (
-        config_type(
+        MatrixBiasMixtureConfig(
             input_dim=2,
             output_dim=3,
             num_experts=1,
@@ -55,9 +51,7 @@ def test_singleton_bank_preserves_independent_contexts(kind, with_indices, monke
     assert model.parameter_bank.grad.abs().sum() > 0
 
 
-def test_independent_banks_add_to_base_with_one_route_per_selected_variant(
-    monkeypatch,
-):
+def test_independent_banks_add_dense_weight_and_sparse_bias_updates_to_base():
     from emperor.augmentations.adaptive_parameters import (
         AdaptiveLinearLayerConfig,
         AdaptiveParameterAugmentationConfig,
@@ -79,45 +73,34 @@ def test_independent_banks_add_to_base_with_one_route_per_selected_variant(
     weight = model.adaptive_behaviour.weight_model
     bias = model.adaptive_behaviour.bias_model
     with torch.no_grad():
-        for variant, distribution in (
-            (weight, [0.25, 0.05, 0.7]),
-            (bias, [0.6, 0.3, 0.1]),
+        for scorer, distribution in (
+            (weight.model, [0.25, 0.05, 0.7]),
+            (bias.sampler.router.model, [0.6, 0.3, 0.1]),
         ):
-            router = variant.sampler.router.model[0].model
+            router = scorer[0].model
             router.weight_params.zero_()
             router.bias_params.copy_(torch.tensor(distribution).log())
-    calls = []
-    for label, variant in (("weight", weight), ("bias", bias)):
-        original = variant.sampler.sample_probabilities_and_indices
-
-        def observe(*args, _label=label, _original=original, **kwargs):
-            calls.append(_label)
-            return _original(*args, **kwargs)
-
-        monkeypatch.setattr(
-            variant.sampler, "sample_probabilities_and_indices", observe
-        )
     x = torch.tensor([[2.0, 1.0], [-1.0, 3.0]], dtype=torch.float64)
     expected_weight = (
-        0.7 * weight.parameter_bank[2] + 0.25 * weight.parameter_bank[0]
-    ) / (0.95 + 1e-6)
+        0.25 * weight.parameter_bank[0]
+        + 0.05 * weight.parameter_bank[1]
+        + 0.7 * weight.parameter_bank[2]
+    )
     expected_bias = 0.6 * bias.parameter_bank[0]
     torch.testing.assert_close(
         model(x),
         x @ (model.weight_params + expected_weight) + model.bias_params + expected_bias,
     )
-    assert calls == ["weight", "bias"]
     assert model.weight_params is not None and model.bias_params is not None
     assert "weight_params" in model.state_dict() and "bias_params" in model.state_dict()
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize("experts,k", [(1, 1), (3, 1), (3, 2), (3, 3)])
 @pytest.mark.parametrize("normalize", [False, True])
 def test_routes_follow_existing_sampler_probabilities_and_gradients(
-    experts, k, normalize, config_factory
+    experts, k, normalize
 ):
-    cfg = config_factory(
+    cfg = bias_mixture_config(
         num_experts=experts,
         top_k=k,
         sampler_config=matrix_sampler_config(
@@ -162,6 +145,68 @@ def test_routes_follow_existing_sampler_probabilities_and_gradients(
             assert actual_grads[1][index].count_nonzero() == 0
 
 
+@pytest.mark.parametrize("expert_count", [1, 4])
+def test_dense_weight_router_trains_from_task_loss_for_every_token(expert_count):
+    mixture = (
+        weight_mixture_config(input_dim=4, output_dim=5, num_experts=expert_count)
+        .build()
+        .double()
+    )
+    sequences = torch.eye(4, dtype=torch.float64)[[[0, 1, 2], [3, 1, 0]], :]
+    tokens = sequences.flatten(0, 1).requires_grad_()
+    with torch.no_grad():
+        scorer = mixture.model[0].model
+        scorer.weight_params.copy_(torch.eye(4, expert_count, dtype=torch.float64))
+        scorer.bias_params.zero_()
+        mixture.parameter_bank.copy_(
+            torch.arange(expert_count * 20).reshape(expert_count, 4, 5) / 20
+        )
+    base = torch.zeros(4, 5, dtype=torch.float64)
+    scores = tokens @ scorer.weight_params + scorer.bias_params
+    shares = scores.softmax(-1)
+    expected = torch.einsum(
+        "bte,eio->btio", shares.reshape(2, 3, expert_count), mixture.parameter_bank
+    )
+    actual = mixture(base, tokens).reshape(2, 3, 4, 5)
+    torch.testing.assert_close(actual, expected)
+    if expert_count > 1:
+        assert not torch.allclose(actual[0, 0], actual[0, 1])
+    assert mixture.get_auxiliary_loss() is None
+    task_loss = torch.einsum("bti,btio->bto", sequences, actual).square().mean()
+    task_loss.backward()
+    assert (mixture.parameter_bank.grad.flatten(1).abs().sum(1) > 0).all()
+    if expert_count > 1:
+        assert scorer.weight_params.grad.abs().sum() > 0
+
+
+def test_dense_weight_mixture_rejects_top_k_router_checkpoint():
+    mixture = weight_mixture_config().build()
+    top_k_checkpoint = {
+        ("sampler.router." + key if key.startswith("model.") else key): value
+        for key, value in mixture.state_dict().items()
+    }
+    with pytest.raises(
+        RuntimeError, match=r"Unexpected key\(s\).*sampler\.router\.model\."
+    ):
+        mixture.load_state_dict(top_k_checkpoint)
+
+
+@pytest.mark.parametrize(
+    "bank_dtype,router_dtype",
+    [(torch.float32, torch.float64), (torch.float64, torch.float32)],
+)
+def test_full_weight_bank_preserves_mixed_precision_per_token(bank_dtype, router_dtype):
+    model = weight_mixture_config(input_dim=4, output_dim=5, num_experts=4)
+    mixture = model.build().to(bank_dtype)
+    mixture.model.to(router_dtype)
+    tokens = torch.linspace(-1, 1, 64, dtype=router_dtype).reshape(16, 4)
+    probabilities = mixture.model.forward_hidden(tokens).softmax(-1)
+    base = torch.zeros_like(mixture.parameter_bank[0])
+    actual = mixture(base, tokens)
+    expected = (probabilities[:, :, None, None] * mixture.parameter_bank).sum(dim=1)
+    torch.testing.assert_close(actual, expected, rtol=2e-7, atol=1e-7)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -179,7 +224,7 @@ def test_routes_follow_existing_sampler_probabilities_and_gradients(
 def test_invalid_or_disagreeing_sampler_options_fail_before_initialization(kwargs):
     rng = torch.get_rng_state().clone()
     with pytest.raises((ValueError, TypeError)):
-        weight_mixture_config(sampler_config=matrix_sampler_config(**kwargs)).build()
+        bias_mixture_config(sampler_config=matrix_sampler_config(**kwargs)).build()
     torch.testing.assert_close(torch.get_rng_state(), rng, rtol=0, atol=0)
 
 
@@ -209,11 +254,10 @@ def test_invalid_weight_mixture_configuration_fails_early(kwargs):
         (torch.ones(2, 2), None),
     ],
 )
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 def test_malformed_sampler_routes_cannot_broadcast_silently(
-    bad_probs, bad_indices, config_factory, monkeypatch
+    bad_probs, bad_indices, monkeypatch
 ):
-    model = config_factory().build()
+    model = bias_mixture_config().build()
     monkeypatch.setattr(
         model.sampler,
         "sample_probabilities_and_indices",
@@ -294,7 +338,7 @@ def test_parametric_application_rejects_a_second_parameter_set_owner():
         ParametricLayerConfig,
     )
 
-    provider = weight_mixture_config().build()
+    sampler = matrix_sampler_config()
     cfg = ParametricLayerConfig(
         input_dim=2,
         output_dim=3,
@@ -306,8 +350,8 @@ def test_parametric_application_rejects_a_second_parameter_set_owner():
             weighted_parameters_flag=True,
         ),
         routing_initialization_mode=AdaptiveRouterOptions.SHARED_ROUTER,
-        router_config=provider.cfg.sampler_config.router_config,
-        sampler_config=provider.cfg.sampler_config,
+        router_config=sampler.router_config,
+        sampler_config=sampler,
         adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
             weight_config=weight_mixture_config()
         ),
@@ -323,13 +367,7 @@ def test_adaptive_and_parametric_matrix_implementations_are_separate():
     from emperor.augmentations import adaptive_parameters
     from emperor.augmentations.adaptive_parameters import MatrixWeightsMixtureConfig
 
-    expected = {
-        "input_dim",
-        "output_dim",
-        "num_experts",
-        "top_k",
-        "sampler_config",
-    }
+    expected = {"input_dim", "output_dim", "num_experts", "model_config"}
     assert expected <= {field.name for field in fields(MatrixWeightsMixtureConfig)}
     assert "clip_parameter_option" not in {
         field.name for field in fields(MatrixWeightsMixtureConfig)

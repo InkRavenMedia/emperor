@@ -1939,11 +1939,7 @@ WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
 ] = None
 WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
 BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _main_adaptive_generation] = None
-WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
 BIAS_MIXTURE_TOP_K: Annotated[int | None, _main_adaptive_generation] = None
-WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _main_adaptive_generation
-] = None
 BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _main_adaptive_generation
 ] = None
@@ -2188,11 +2184,7 @@ FF_WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
 ] = None
 FF_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _ff_adaptive_generation] = None
 FF_BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _ff_adaptive_generation] = None
-FF_WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _ff_adaptive_generation] = None
 FF_BIAS_MIXTURE_TOP_K: Annotated[int | None, _ff_adaptive_generation] = None
-FF_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _ff_adaptive_generation
-] = None
 FF_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _ff_adaptive_generation
 ] = None
@@ -2437,11 +2429,7 @@ ATTN_WEIGHT_OUTPUT_FACTOR_SOURCE: Annotated[
 ] = None
 ATTN_WEIGHT_MIXTURE_NUM_EXPERTS: Annotated[int | None, _attn_adaptive_generation] = None
 ATTN_BIAS_MIXTURE_NUM_EXPERTS: Annotated[int | None, _attn_adaptive_generation] = None
-ATTN_WEIGHT_MIXTURE_TOP_K: Annotated[int | None, _attn_adaptive_generation] = None
 ATTN_BIAS_MIXTURE_TOP_K: Annotated[int | None, _attn_adaptive_generation] = None
-ATTN_WEIGHT_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
-    bool | None, _attn_adaptive_generation
-] = None
 ATTN_BIAS_MIXTURE_NORMALIZE_PROBABILITIES_FLAG: Annotated[
     bool | None, _attn_adaptive_generation
 ] = None

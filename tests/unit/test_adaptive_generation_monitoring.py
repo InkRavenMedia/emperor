@@ -24,7 +24,7 @@ class ObservedModule(nn.Module):
             output_dim=3,
             bias_flag=True,
             adaptive_augmentation_config=AdaptiveParameterAugmentationConfig(
-                weight_config=weight_mixture_config(top_k=1),
+                weight_config=weight_mixture_config(),
                 bias_config=bias_mixture_config(top_k=1),
             ),
         ).build()
@@ -49,7 +49,7 @@ def test_paired_parameter_and_actual_selected_bank_observations_cleanup(exceptio
     matrix_models = (augmentation.weight_model, augmentation.bias_model)
     original_instance_keys = [set(vars(model)) for model in matrix_models]
     with torch.no_grad():
-        router = augmentation.weight_model.sampler.router.model[0].model
+        router = augmentation.weight_model.model[0].model
         router.weight_params.zero_()
         router.bias_params.copy_(torch.tensor([0.1, 0.2, 0.7]).log())
         bias_router = augmentation.bias_model.sampler.router.model[0].model
@@ -67,8 +67,10 @@ def test_paired_parameter_and_actual_selected_bank_observations_cleanup(exceptio
     assert prefix + "bias/batch/output_mean" in module.metrics
     assert prefix + "weight/batch/weight_bank_l2_norm" in module.metrics
     bank_prefix = "linear.adaptive_behaviour.weight_model/bank/"
-    assert module.metrics[bank_prefix + "active_slots"] == 1
-    assert module.metrics[bank_prefix + "slot_0/utilization"] == 0
+    assert module.metrics[bank_prefix + "active_slots"] == 3
+    torch.testing.assert_close(
+        module.metrics[bank_prefix + "slot_0/utilization"], torch.tensor(0.1)
+    )
     torch.testing.assert_close(
         module.metrics[bank_prefix + "slot_2/utilization"], torch.tensor(0.7)
     )
@@ -97,12 +99,11 @@ def test_paired_parameter_and_actual_selected_bank_observations_cleanup(exceptio
     assert not callbacks[1]._last_bank_logits
 
 
-@pytest.mark.parametrize("config_factory", [weight_mixture_config, bias_mixture_config])
 @pytest.mark.parametrize("top_k", [1, 2, 3])
 def test_bank_monitor_observes_sampler_routes_without_changing_outputs_or_gradients(
-    config_factory, top_k, monkeypatch
+    top_k, monkeypatch
 ):
-    bank = config_factory(top_k=top_k).build()
+    bank = bias_mixture_config(top_k=top_k).build()
     module = nn.Module()
     module.bank = bank
     context = torch.tensor([[1.0, 2.0], [-1.0, 0.5]], requires_grad=True)
