@@ -62,6 +62,13 @@ class SoftSlotRouting:
             self.mask_inactive_tokens(combine).reshape_as(slot_logits),
         )
 
+    def compute_dispatch_weights(self, slot_logits: Tensor) -> Tensor:
+        """Normalize each slot across its sources when only pooling is needed."""
+        self.VALIDATOR.validate_token_slot_layout(slot_logits, self.active_token_mask)
+        scores = self.prepare_scoring_features(slot_logits.flatten(2))
+        dispatch = self.__compute_dispatch_weights(scores)
+        return self.mask_inactive_tokens(dispatch).reshape_as(slot_logits)
+
     def __compute_dispatch_weights(self, scores: Tensor) -> Tensor:
         if self.causal_prefix_flag:
             return self.__compute_prefix_update_weights(scores)
@@ -92,9 +99,12 @@ class SoftSlotRouting:
     def pool_tokens_with_dispatch_weights(
         self, tokens: Tensor, dispatch_weights: Tensor
     ) -> Tensor:
+        """Pool batched tokens or a shared [sources, features] bank for each route."""
         self.VALIDATOR.validate_pooling_inputs(
             tokens, dispatch_weights, self.active_token_mask
         )
+        if tokens.ndim == 2:
+            tokens = tokens.unsqueeze(0)
         with torch.autocast(device_type=tokens.device.type, enabled=False):
             token_features = self.mask_inactive_tokens(tokens).to(
                 dispatch_weights.dtype
