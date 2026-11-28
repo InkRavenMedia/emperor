@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import Any, Generic, Protocol, TypeVar
 
@@ -65,13 +65,22 @@ class ControlOverrides(Generic[_Role, _Stack, _Layer, _Memory, _Recurrent]):
     default_memory: Callable[[_Role], _Memory]
     default_recurrent: Callable[[_Role], _Recurrent]
 
+    def __stack_defaults(self, role: _Role, stack_key: str) -> _Stack:
+        defaults = self.default_stack(role)
+        if (
+            stack_key == "feed_forward_stack_options"
+            and "ff_num_layers" in self.supplied
+        ):
+            return replace(defaults, num_layers=self.supplied["ff_num_layers"])
+        return defaults
+
     def __apply(
         self, role: _Role, *, group: str, prefix: str, stack_key: str, stack_prefix: str
     ) -> None:
         stack = self.stack(
             option_key=stack_key,
             provided=self.supplied.get(stack_key),
-            defaults_factory=partial(self.default_stack, role),
+            defaults_factory=partial(self.__stack_defaults, role, stack_key),
             flat_prefix=stack_prefix,
         )
         self.__store(stack_key, stack)
