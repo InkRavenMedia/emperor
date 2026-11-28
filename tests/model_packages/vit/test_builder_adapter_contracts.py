@@ -29,6 +29,21 @@ class _RecordingConfig(ModuleType):
 
 
 class VitBuilderAdapterContracts(unittest.TestCase):
+    def test_feed_forward_depth_reaches_the_stack_with_other_flat_overrides(self):
+        for variant, adapter_name in _VIT_VARIANTS:
+            with self.subTest(variant=variant):
+                adapter_module = import_module(f"models.vit.{variant}._builder_adapter")
+                config_module = import_module(f"models.vit.{variant}.config")
+                resolved = getattr(adapter_module, adapter_name)(
+                    {"ff_num_layers": 1, "ff_stack_hidden_dim": 32},
+                    config_module,
+                )
+
+                self.assertEqual(resolved["feed_forward_options"].num_layers, 1)
+                stack = resolved["feed_forward_stack_options"]
+                self.assertEqual(stack.num_layers, 1)
+                self.assertEqual(stack.hidden_dim, 32)
+
     def test_flat_values_override_supplied_groups_without_mutating_the_input(
         self,
     ) -> None:

@@ -339,9 +339,12 @@ def _bert_builder_kwargs(
         consumed,
         builder_key="feed_forward_stack_options",
         flat_prefix="ff_stack",
-        default=config_defaults.linears_submodule_stack_options(
-            config_module,
-            config_defaults.LinearRole.FEED_FORWARD,
+        default=replace(
+            config_defaults.linears_submodule_stack_options(
+                config_module,
+                config_defaults.LinearRole.FEED_FORWARD,
+            ),
+            num_layers=kwargs.get("ff_num_layers", config_module.FF_NUM_LAYERS),
         ),
     )
     _set_layer_controller_option(
